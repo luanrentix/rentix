@@ -19,7 +19,14 @@ type Property = {
 
 type RentixTenant = Tenant;
 
-type ContractStatus = "Active" | "Inactive";
+type ContractStatus =
+  | "Active"
+  | "Inactive"
+  | "Canceled"
+  | "Finished"
+  | "Deleted";
+
+type ContractFilterStatus = "All" | ContractStatus;
 
 type Contract = {
   id: number;
@@ -30,6 +37,8 @@ type Contract = {
   startDate: string;
   endDate: string;
   rentValue: number;
+  status?: ContractStatus;
+  deletedAt?: string | null;
 };
 
 export default function ContractsPage() {
@@ -39,12 +48,18 @@ export default function ContractsPage() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formError, setFormError] = useState("");
+  const [editingContractId, setEditingContractId] = useState<number | null>(null);
+  const [contractToDelete, setContractToDelete] = useState<Contract | null>(null);
+  const [statusFilter, setStatusFilter] = useState<ContractFilterStatus>("All");
 
   const [propertyId, setPropertyId] = useState("");
   const [tenantId, setTenantId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [rentValue, setRentValue] = useState("");
+  const [contractStatus, setContractStatus] = useState<ContractStatus>("Active");
+
+  const isEditing = editingContractId !== null;
 
   useEffect(() => {
     const storedContracts = localStorage.getItem(CONTRACTS_STORAGE_KEY);
@@ -52,11 +67,19 @@ export default function ContractsPage() {
     const storedTenants = localStorage.getItem(TENANTS_STORAGE_KEY);
 
     if (storedContracts) {
-      const parsedContracts = JSON.parse(storedContracts) as Contract[];
+      const parsedContracts = JSON.parse(storedContracts) as Partial<Contract>[];
 
-      const normalizedContracts = parsedContracts.map((contract) => ({
-        ...contract,
+      const normalizedContracts: Contract[] = parsedContracts.map((contract) => ({
+        id: contract.id || Date.now(),
+        propertyId: contract.propertyId || "",
+        propertyName: contract.propertyName || "",
+        tenantId: contract.tenantId || 0,
+        tenantName: contract.tenantName || "",
+        startDate: contract.startDate || "",
+        endDate: contract.endDate || "",
         rentValue: Number(contract.rentValue || 0),
+        status: contract.status || getAutomaticContractStatus(contract.endDate || ""),
+        deletedAt: contract.deletedAt || null,
       }));
 
       setContracts(normalizedContracts);
@@ -87,12 +110,21 @@ export default function ContractsPage() {
       const hasActiveContract = contracts.some(
         (contract) =>
           String(contract.propertyId) === String(property.id) &&
-          getContractStatus(contract.endDate) === "Active"
+          getDisplayContractStatus(contract) === "Active" &&
+          contract.status !== "Deleted"
       );
 
       return property.status === "Available" && !hasActiveContract;
     });
   }, [properties, contracts]);
+
+  const filteredContracts = useMemo(() => {
+    if (statusFilter === "All") return contracts;
+
+    return contracts.filter(
+      (contract) => getDisplayContractStatus(contract) === statusFilter
+    );
+  }, [contracts, statusFilter]);
 
   function resetForm() {
     setPropertyId("");
@@ -100,21 +132,30 @@ export default function ContractsPage() {
     setStartDate("");
     setEndDate("");
     setRentValue("");
+    setContractStatus("Active");
     setFormError("");
+    setEditingContractId(null);
     setIsFormOpen(false);
   }
 
   function handleOpenCreateForm() {
-    setPropertyId("");
-    setTenantId("");
-    setStartDate("");
-    setEndDate("");
-    setRentValue("");
+    resetForm();
+    setIsFormOpen(true);
+  }
+
+  function handleEditContract(contract: Contract) {
+    setEditingContractId(contract.id);
+    setPropertyId(contract.propertyId);
+    setTenantId(String(contract.tenantId));
+    setStartDate(contract.startDate);
+    setEndDate(contract.endDate);
+    setRentValue(String(contract.rentValue || ""));
+    setContractStatus(contract.status || getAutomaticContractStatus(contract.endDate));
     setFormError("");
     setIsFormOpen(true);
   }
 
-  function handleCreateContract(event: React.FormEvent<HTMLFormElement>) {
+  function handleSubmitContract(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError("");
 
@@ -151,6 +192,33 @@ export default function ContractsPage() {
       return;
     }
 
+    if (isEditing) {
+      setContracts((currentContracts) =>
+        currentContracts.map((contract) =>
+          contract.id === editingContractId
+            ? {
+                ...contract,
+                propertyId: selectedProperty.id,
+                propertyName: selectedProperty.name,
+                tenantId: selectedTenant.id,
+                tenantName: selectedTenant.name,
+                startDate,
+                endDate,
+                rentValue: Number(rentValue),
+                status: contractStatus,
+                deletedAt:
+                  contractStatus === "Deleted"
+                    ? contract.deletedAt || new Date().toISOString()
+                    : null,
+              }
+            : contract
+        )
+      );
+
+      resetForm();
+      return;
+    }
+
     const newContract: Contract = {
       id: Date.now(),
       propertyId: selectedProperty.id,
@@ -160,6 +228,8 @@ export default function ContractsPage() {
       startDate,
       endDate,
       rentValue: Number(rentValue),
+      status: contractStatus,
+      deletedAt: contractStatus === "Deleted" ? new Date().toISOString() : null,
     };
 
     setContracts((currentContracts) => [newContract, ...currentContracts]);
@@ -177,6 +247,24 @@ export default function ContractsPage() {
     if (selectedProperty) {
       setRentValue(String(selectedProperty.rentValue || ""));
     }
+  }
+
+  function handleSoftDeleteContract() {
+    if (!contractToDelete) return;
+
+    setContracts((currentContracts) =>
+      currentContracts.map((contract) =>
+        contract.id === contractToDelete.id
+          ? {
+              ...contract,
+              status: "Deleted",
+              deletedAt: new Date().toISOString(),
+            }
+          : contract
+      )
+    );
+
+    setContractToDelete(null);
   }
 
   return (
@@ -202,13 +290,32 @@ export default function ContractsPage() {
         </div>
 
         <div className="rounded-3xl border border-orange-100 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-6 py-5">
-            <h2 className="text-2xl font-black text-slate-950">
-              Contratos cadastrados
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              {contracts.length} contrato(s) cadastrado(s)
-            </p>
+          <div className="flex flex-col gap-4 border-b border-slate-100 px-6 py-5 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <h2 className="text-2xl font-black text-slate-950">
+                Contratos cadastrados
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Exibindo {filteredContracts.length} de {contracts.length} contrato(s)
+              </p>
+            </div>
+
+            <FormField label="Filtrar por status">
+              <select
+                value={statusFilter}
+                onChange={(event) =>
+                  setStatusFilter(event.target.value as ContractFilterStatus)
+                }
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 md:w-64"
+              >
+                <option value="All">Todos</option>
+                <option value="Active">Ativos</option>
+                <option value="Inactive">Inativos</option>
+                <option value="Canceled">Cancelados</option>
+                <option value="Finished">Finalizados</option>
+                <option value="Deleted">Excluídos</option>
+              </select>
+            </FormField>
           </div>
 
           <div className="overflow-hidden">
@@ -233,18 +340,28 @@ export default function ContractsPage() {
                   <th className="px-6 py-4 text-sm font-black text-slate-700">
                     Status
                   </th>
+                  <th className="px-6 py-4 text-right text-sm font-black text-slate-700">
+                    Ações
+                  </th>
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-100">
-                {contracts.map((contract) => (
-                  <tr key={contract.id} className="transition hover:bg-slate-50">
+                {filteredContracts.map((contract) => (
+                  <tr
+                    key={contract.id}
+                    className={`transition hover:bg-slate-50 ${
+                      getDisplayContractStatus(contract) === "Deleted"
+                        ? "bg-slate-50 opacity-70"
+                        : ""
+                    }`}
+                  >
                     <td className="px-6 py-4 font-black text-slate-900">
-                      {contract.propertyName}
+                      {contract.propertyName || "Não informado"}
                     </td>
 
                     <td className="px-6 py-4 text-sm font-semibold text-slate-600">
-                      {contract.tenantName}
+                      {contract.tenantName || "Não informado"}
                     </td>
 
                     <td className="px-6 py-4 text-sm font-semibold text-slate-600">
@@ -260,18 +377,39 @@ export default function ContractsPage() {
                     </td>
 
                     <td className="px-6 py-4">
-                      <StatusBadge status={getContractStatus(contract.endDate)} />
+                      <StatusBadge status={getDisplayContractStatus(contract)} />
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleEditContract(contract)}
+                          className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+                        >
+                          Editar
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setContractToDelete(contract)}
+                          disabled={getDisplayContractStatus(contract) === "Deleted"}
+                          className="rounded-xl bg-red-50 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Excluir
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
 
-                {contracts.length === 0 && (
+                {filteredContracts.length === 0 && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="px-6 py-10 text-center text-sm font-semibold text-slate-500"
                     >
-                      Nenhum contrato cadastrado.
+                      Nenhum contrato encontrado para este filtro.
                     </td>
                   </tr>
                 )}
@@ -286,7 +424,7 @@ export default function ContractsPage() {
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-8 py-6">
                 <div>
                   <h2 className="text-2xl font-black text-slate-950">
-                    Novo contrato
+                    {isEditing ? "Editar contrato" : "Novo contrato"}
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
                     Preencha os dados do contrato.
@@ -302,7 +440,7 @@ export default function ContractsPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleCreateContract}>
+              <form onSubmit={handleSubmitContract}>
                 <div className="p-8">
                   {formError && (
                     <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-black text-red-600">
@@ -321,6 +459,16 @@ export default function ContractsPage() {
                         className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                       >
                         <option value="">Selecione um imóvel</option>
+
+                        {isEditing &&
+                          properties
+                            .filter((property) => property.id === propertyId)
+                            .map((property) => (
+                              <option key={property.id} value={property.id}>
+                                {property.name}
+                              </option>
+                            ))}
+
                         {availableProperties.map((property) => (
                           <option key={property.id} value={property.id}>
                             {property.name}
@@ -387,6 +535,23 @@ export default function ContractsPage() {
                         className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                       />
                     </FormField>
+
+                    <FormField label="Status">
+                      <select
+                        value={contractStatus}
+                        onChange={(event) =>
+                          setContractStatus(event.target.value as ContractStatus)
+                        }
+                        required
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                      >
+                        <option value="Active">Ativo</option>
+                        <option value="Inactive">Inativo</option>
+                        <option value="Canceled">Cancelado</option>
+                        <option value="Finished">Finalizado</option>
+                        <option value="Deleted">Excluído</option>
+                      </select>
+                    </FormField>
                   </div>
                 </div>
 
@@ -403,10 +568,58 @@ export default function ContractsPage() {
                     type="submit"
                     className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
                   >
-                    Criar contrato
+                    {isEditing ? "Salvar alterações" : "Criar contrato"}
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {contractToDelete && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-[2rem] border border-red-100 bg-white p-8 shadow-2xl">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 text-3xl">
+                🗑️
+              </div>
+
+              <div className="mt-5 text-center">
+                <h3 className="text-2xl font-black text-slate-950">
+                  Excluir contrato?
+                </h3>
+
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
+                  Este contrato não será apagado definitivamente. Ele ficará
+                  registrado como excluído para manter o histórico do sistema.
+                </p>
+
+                <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
+                  <p className="text-sm font-black text-slate-900">
+                    {contractToDelete.propertyName || "Contrato"}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                    {contractToDelete.tenantName || "Inquilino não informado"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-8 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setContractToDelete(null)}
+                  className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSoftDeleteContract}
+                  className="rounded-2xl bg-red-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600"
+                >
+                  Sim, excluir
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -441,6 +654,18 @@ function StatusBadge({ status }: { status: ContractStatus }) {
       label: "Inativo",
       className: "bg-slate-100 text-slate-600",
     },
+    Canceled: {
+      label: "Cancelado",
+      className: "bg-red-100 text-red-700",
+    },
+    Finished: {
+      label: "Finalizado",
+      className: "bg-blue-100 text-blue-700",
+    },
+    Deleted: {
+      label: "Excluído",
+      className: "bg-zinc-200 text-zinc-700",
+    },
   };
 
   return (
@@ -452,7 +677,17 @@ function StatusBadge({ status }: { status: ContractStatus }) {
   );
 }
 
-function getContractStatus(endDate: string): ContractStatus {
+function getDisplayContractStatus(contract: Contract): ContractStatus {
+  if (contract.status === "Deleted") return "Deleted";
+  if (contract.status === "Canceled") return "Canceled";
+  if (contract.status === "Finished") return "Finished";
+  if (contract.status === "Inactive") return "Inactive";
+  if (contract.status === "Active") return getAutomaticContractStatus(contract.endDate);
+
+  return getAutomaticContractStatus(contract.endDate);
+}
+
+function getAutomaticContractStatus(endDate: string): ContractStatus {
   if (!endDate) return "Inactive";
 
   const today = new Date();
