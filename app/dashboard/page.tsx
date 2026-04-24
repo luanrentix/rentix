@@ -32,14 +32,15 @@ type Tenant = {
   document: string;
 };
 
-type ContractStatus = "Active" | "Finished";
+type ContractStatus = "Active" | "Finished" | "Inactive" | "Canceled" | "Deleted";
 
 type Contract = {
   id: string;
   propertyId: string;
   tenantId: string;
   startDate: string;
-  value: number;
+  value?: number;
+  rentValue?: number;
   status: ContractStatus;
 };
 
@@ -76,7 +77,7 @@ export default function DashboardPage() {
 
   const monthlyRevenue = contracts
     .filter((contract) => contract.status === "Active")
-    .reduce((total, contract) => total + contract.value, 0);
+    .reduce((total, contract) => total + getContractValue(contract), 0);
 
   const occupancyRate =
     totalProperties > 0
@@ -115,11 +116,11 @@ export default function DashboardPage() {
       .slice(0, 4)
       .map((contract, index) => {
         const property = properties.find(
-          (propertyItem) => propertyItem.id === contract.propertyId
+          (propertyItem) => String(propertyItem.id) === String(contract.propertyId)
         );
 
         const tenant = tenants.find(
-          (tenantItem) => tenantItem.id === contract.tenantId
+          (tenantItem) => String(tenantItem.id) === String(contract.tenantId)
         );
 
         return {
@@ -129,7 +130,7 @@ export default function DashboardPage() {
           dueDate: `${String(5 + index * 5).padStart(2, "0")}/${String(
             new Date().getMonth() + 1
           ).padStart(2, "0")}/${new Date().getFullYear()}`,
-          amount: contract.value,
+          amount: getContractValue(contract),
         };
       });
   }, [contracts, properties, tenants]);
@@ -184,10 +185,7 @@ export default function DashboardPage() {
           <MetricCard
             icon="💰"
             title="Receita mensal"
-            value={monthlyRevenue.toLocaleString("pt-BR", {
-              style: "currency",
-              currency: "BRL",
-            })}
+            value={formatCurrency(monthlyRevenue)}
             detail="Receita recorrente"
           />
         </div>
@@ -221,7 +219,7 @@ export default function DashboardPage() {
                   />
                   <Tooltip
                     formatter={(value) =>
-                      Number(value).toLocaleString("pt-BR", {
+                      Number(value || 0).toLocaleString("pt-BR", {
                         style: "currency",
                         currency: "BRL",
                       })
@@ -321,10 +319,7 @@ export default function DashboardPage() {
                         {payment.dueDate}
                       </p>
                       <p className="text-sm font-semibold text-slate-700">
-                        {payment.amount.toLocaleString("pt-BR", {
-                          style: "currency",
-                          currency: "BRL",
-                        })}
+                        {formatCurrency(payment.amount)}
                       </p>
                     </div>
                   </div>
@@ -387,20 +382,14 @@ export default function DashboardPage() {
           <SummaryCard
             icon="💵"
             title="Receita anual"
-            value={annualRevenueProjection.toLocaleString("pt-BR", {
-              style: "currency",
-              currency: "BRL",
-            })}
+            value={formatCurrency(annualRevenueProjection)}
             detail="Projeção com contratos ativos"
           />
 
           <SummaryCard
             icon="📈"
             title="Ticket médio"
-            value={averageTicket.toLocaleString("pt-BR", {
-              style: "currency",
-              currency: "BRL",
-            })}
+            value={formatCurrency(averageTicket)}
             detail="Por contrato ativo"
           />
 
@@ -477,4 +466,15 @@ function SummaryCard({ icon, title, value, detail }: SummaryCardProps) {
       </div>
     </div>
   );
+}
+
+function getContractValue(contract: Contract) {
+  return Number(contract.value ?? contract.rentValue ?? 0);
+}
+
+function formatCurrency(value?: number) {
+  return Number(value || 0).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
 }
