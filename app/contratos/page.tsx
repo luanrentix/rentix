@@ -103,6 +103,20 @@ export default function ContractsPage() {
     if (!isLoaded) return;
 
     localStorage.setItem(CONTRACTS_STORAGE_KEY, JSON.stringify(contracts));
+
+    setProperties((currentProperties) => {
+      const updatedProperties = syncPropertiesWithContracts(
+        contracts,
+        currentProperties
+      );
+
+      localStorage.setItem(
+        PROPERTIES_STORAGE_KEY,
+        JSON.stringify(updatedProperties)
+      );
+
+      return updatedProperties;
+    });
   }, [contracts, isLoaded]);
 
   const availableProperties = useMemo(() => {
@@ -114,9 +128,15 @@ export default function ContractsPage() {
           contract.status !== "Deleted"
       );
 
-      return property.status === "Available" && !hasActiveContract;
+      const isCurrentEditingProperty =
+        isEditing && String(property.id) === String(propertyId);
+
+      return (
+        (property.status === "Available" && !hasActiveContract) ||
+        isCurrentEditingProperty
+      );
     });
-  }, [properties, contracts]);
+  }, [properties, contracts, isEditing, propertyId]);
 
   const filteredContracts = useMemo(() => {
     if (statusFilter === "All") return contracts;
@@ -460,15 +480,6 @@ export default function ContractsPage() {
                       >
                         <option value="">Selecione um imóvel</option>
 
-                        {isEditing &&
-                          properties
-                            .filter((property) => property.id === propertyId)
-                            .map((property) => (
-                              <option key={property.id} value={property.id}>
-                                {property.name}
-                              </option>
-                            ))}
-
                         {availableProperties.map((property) => (
                           <option key={property.id} value={property.id}>
                             {property.name}
@@ -675,6 +686,25 @@ function StatusBadge({ status }: { status: ContractStatus }) {
       {statusConfig[status].label}
     </span>
   );
+}
+
+function syncPropertiesWithContracts(
+  contracts: Contract[],
+  properties: Property[]
+): Property[] {
+  return properties.map((property) => {
+    const hasActiveContract = contracts.some(
+      (contract) =>
+        String(contract.propertyId) === String(property.id) &&
+        getDisplayContractStatus(contract) === "Active" &&
+        contract.status !== "Deleted"
+    );
+
+    return {
+      ...property,
+      status: hasActiveContract ? "Rented" : "Available",
+    };
+  });
 }
 
 function getDisplayContractStatus(contract: Contract): ContractStatus {
