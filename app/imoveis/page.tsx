@@ -54,6 +54,8 @@ export default function PropertiesPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
   const [propertyToDelete, setPropertyToDelete] = useState<Property | null>(null);
+  const [blockedPropertyToDelete, setBlockedPropertyToDelete] =
+    useState<Property | null>(null);
 
   const [type, setType] = useState<PropertyType>("Apartment");
   const [name, setName] = useState("");
@@ -273,7 +275,7 @@ export default function PropertiesPage() {
     if (!property) return;
 
     if (property.status === "Rented") {
-      alert("Este imóvel está alugado e não pode ser excluído.");
+      setBlockedPropertyToDelete(property);
       return;
     }
 
@@ -282,6 +284,10 @@ export default function PropertiesPage() {
 
   function handleCancelDeleteProperty() {
     setPropertyToDelete(null);
+  }
+
+  function handleCloseBlockedDeleteProperty() {
+    setBlockedPropertyToDelete(null);
   }
 
   function handleConfirmDeleteProperty() {
@@ -683,6 +689,44 @@ export default function PropertiesPage() {
                   className="rounded-2xl bg-red-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600"
                 >
                   Sim, excluir
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {blockedPropertyToDelete && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-[2rem] border border-orange-100 bg-white p-8 shadow-2xl">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 text-3xl">
+                ⚠️
+              </div>
+
+              <div className="mt-5 text-center">
+                <h3 className="text-2xl font-black text-slate-950">
+                  Imóvel alugado
+                </h3>
+
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
+                  Este imóvel está alugado e não pode ser excluído.
+                </p>
+
+                <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
+                  <p className="text-sm font-black text-slate-900">
+                    {blockedPropertyToDelete.name}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                    {blockedPropertyToDelete.address || "Endereço não informado"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-8">
+                <button
+                  onClick={handleCloseBlockedDeleteProperty}
+                  className="w-full rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                >
+                  Entendi
                 </button>
               </div>
             </div>
