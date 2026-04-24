@@ -2,440 +2,478 @@
 
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/app-shell";
+import { Tenant, initialTenants } from "@/data/tenants";
+
+const CONTRACTS_STORAGE_KEY = "rentix_contracts";
+const PROPERTIES_STORAGE_KEY = "rentix_properties";
+const TENANTS_STORAGE_KEY = "rentix_tenants";
 
 type PropertyStatus = "Available" | "Rented";
 
 type Property = {
   id: string;
   name: string;
-  address: string;
-  rentValue: number;
+  rentValue?: number;
   status: PropertyStatus;
 };
 
-type Tenant = {
-  id: string;
-  name: string;
-  phone: string;
-  document: string;
-};
+type RentixTenant = Tenant;
 
-type ContractStatus = "Active" | "Finished";
+type ContractStatus = "Active" | "Inactive";
 
 type Contract = {
-  id: string;
+  id: number;
   propertyId: string;
-  tenantId: string;
+  propertyName: string;
+  tenantId: number;
+  tenantName: string;
   startDate: string;
-  value: number;
-  status: ContractStatus;
+  endDate: string;
+  rentValue: number;
 };
 
-type StatusFilter = "All" | ContractStatus;
-
 export default function ContractsPage() {
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [tenants, setTenants] = useState<RentixTenant[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [formError, setFormError] = useState("");
 
   const [propertyId, setPropertyId] = useState("");
   const [tenantId, setTenantId] = useState("");
   const [startDate, setStartDate] = useState("");
-  const [value, setValue] = useState("");
-  const [status, setStatus] = useState<ContractStatus>("Active");
-
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
+  const [endDate, setEndDate] = useState("");
+  const [rentValue, setRentValue] = useState("");
 
   useEffect(() => {
-    const storedProperties = localStorage.getItem("rentix_properties");
-    const storedTenants = localStorage.getItem("rentix_tenants");
-    const storedContracts = localStorage.getItem("rentix_contracts");
+    const storedContracts = localStorage.getItem(CONTRACTS_STORAGE_KEY);
+    const storedProperties = localStorage.getItem(PROPERTIES_STORAGE_KEY);
+    const storedTenants = localStorage.getItem(TENANTS_STORAGE_KEY);
 
-    if (storedProperties) setProperties(JSON.parse(storedProperties));
-    if (storedTenants) setTenants(JSON.parse(storedTenants));
-    if (storedContracts) setContracts(JSON.parse(storedContracts));
+    if (storedContracts) {
+      const parsedContracts = JSON.parse(storedContracts) as Contract[];
+
+      const normalizedContracts = parsedContracts.map((contract) => ({
+        ...contract,
+        rentValue: Number(contract.rentValue || 0),
+      }));
+
+      setContracts(normalizedContracts);
+    }
+
+    if (storedProperties) {
+      setProperties(JSON.parse(storedProperties) as Property[]);
+    }
+
+    if (storedTenants) {
+      const parsedTenants = JSON.parse(storedTenants) as RentixTenant[];
+      setTenants(parsedTenants.length > 0 ? parsedTenants : initialTenants);
+    } else {
+      setTenants(initialTenants);
+    }
+
+    setIsLoaded(true);
   }, []);
 
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    localStorage.setItem(CONTRACTS_STORAGE_KEY, JSON.stringify(contracts));
+  }, [contracts, isLoaded]);
+
   const availableProperties = useMemo(() => {
-    return properties.filter((property) => property.status === "Available");
-  }, [properties]);
+    return properties.filter((property) => {
+      const hasActiveContract = contracts.some(
+        (contract) =>
+          String(contract.propertyId) === String(property.id) &&
+          getContractStatus(contract.endDate) === "Active"
+      );
 
-  const filteredContracts = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
-
-    return contracts.filter((contract) => {
-      const propertyName = getPropertyName(contract.propertyId).toLowerCase();
-      const tenantName = getTenantName(contract.tenantId).toLowerCase();
-
-      const matchesSearch =
-        propertyName.includes(normalizedSearch) ||
-        tenantName.includes(normalizedSearch);
-
-      const matchesStatus =
-        statusFilter === "All" || contract.status === statusFilter;
-
-      return matchesSearch && matchesStatus;
+      return property.status === "Available" && !hasActiveContract;
     });
-  }, [contracts, properties, tenants, search, statusFilter]);
-
-  function saveProperties(updatedProperties: Property[]) {
-    setProperties(updatedProperties);
-    localStorage.setItem("rentix_properties", JSON.stringify(updatedProperties));
-  }
-
-  function saveContracts(updatedContracts: Contract[]) {
-    setContracts(updatedContracts);
-    localStorage.setItem("rentix_contracts", JSON.stringify(updatedContracts));
-  }
-
-  function getPropertyName(id: string) {
-    return (
-      properties.find((property) => property.id === id)?.name ||
-      "Imóvel não encontrado"
-    );
-  }
-
-  function getTenantName(id: string) {
-    return (
-      tenants.find((tenant) => tenant.id === id)?.name ||
-      "Inquilino não encontrado"
-    );
-  }
+  }, [properties, contracts]);
 
   function resetForm() {
     setPropertyId("");
     setTenantId("");
     setStartDate("");
-    setValue("");
-    setStatus("Active");
+    setEndDate("");
+    setRentValue("");
+    setFormError("");
+    setIsFormOpen(false);
   }
 
-  function handleCreateContract() {
-    if (!propertyId || !tenantId || !startDate || !value) {
-      alert("Preencha todos os campos.");
-      return;
-    }
+  function handleOpenCreateForm() {
+    setPropertyId("");
+    setTenantId("");
+    setStartDate("");
+    setEndDate("");
+    setRentValue("");
+    setFormError("");
+    setIsFormOpen(true);
+  }
+
+  function handleCreateContract(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError("");
 
     const selectedProperty = properties.find(
-      (property) => property.id === propertyId
+      (property) => String(property.id) === String(propertyId)
+    );
+
+    const selectedTenant = tenants.find(
+      (tenant) => String(tenant.id) === String(tenantId)
     );
 
     if (!selectedProperty) {
-      alert("Selecione um imóvel válido.");
+      setFormError("Selecione um imóvel válido.");
       return;
     }
 
-    if (selectedProperty.status === "Rented") {
-      alert("Este imóvel já está alugado e não pode receber outro contrato.");
+    if (!selectedTenant) {
+      setFormError("Selecione um inquilino válido.");
+      return;
+    }
+
+    if (!startDate || !endDate) {
+      setFormError("Informe a data de início e a data de fim do contrato.");
+      return;
+    }
+
+    if (new Date(endDate) < new Date(startDate)) {
+      setFormError("A data de fim não pode ser menor que a data de início.");
+      return;
+    }
+
+    if (!rentValue || Number(rentValue) <= 0) {
+      setFormError("Informe um valor de aluguel válido.");
       return;
     }
 
     const newContract: Contract = {
-      id: crypto.randomUUID(),
-      propertyId,
-      tenantId,
+      id: Date.now(),
+      propertyId: selectedProperty.id,
+      propertyName: selectedProperty.name,
+      tenantId: selectedTenant.id,
+      tenantName: selectedTenant.name,
       startDate,
-      value: Number(value),
-      status,
+      endDate,
+      rentValue: Number(rentValue),
     };
 
-    const updatedContracts = [...contracts, newContract];
-
-    const updatedProperties = properties.map((property) =>
-      property.id === propertyId && status === "Active"
-        ? { ...property, status: "Rented" as PropertyStatus }
-        : property
-    );
-
-    saveContracts(updatedContracts);
-    saveProperties(updatedProperties);
+    setContracts((currentContracts) => [newContract, ...currentContracts]);
     resetForm();
   }
 
-  function handleFinishContract(contractId: string) {
-    const contract = contracts.find((item) => item.id === contractId);
+  function handlePropertyChange(selectedPropertyId: string) {
+    setPropertyId(selectedPropertyId);
+    setFormError("");
 
-    if (!contract) return;
-
-    const updatedContracts = contracts.map((item) =>
-      item.id === contractId
-        ? { ...item, status: "Finished" as ContractStatus }
-        : item
+    const selectedProperty = properties.find(
+      (property) => String(property.id) === String(selectedPropertyId)
     );
 
-    const updatedProperties = properties.map((property) =>
-      property.id === contract.propertyId
-        ? { ...property, status: "Available" as PropertyStatus }
-        : property
-    );
-
-    saveContracts(updatedContracts);
-    saveProperties(updatedProperties);
-  }
-
-  function handleDeleteContract(contractId: string) {
-    const contract = contracts.find((item) => item.id === contractId);
-
-    if (!contract) return;
-
-    const confirmDelete = confirm("Deseja realmente excluir este contrato?");
-
-    if (!confirmDelete) return;
-
-    const updatedContracts = contracts.filter((item) => item.id !== contractId);
-
-    const updatedProperties = properties.map((property) =>
-      property.id === contract.propertyId
-        ? { ...property, status: "Available" as PropertyStatus }
-        : property
-    );
-
-    saveContracts(updatedContracts);
-    saveProperties(updatedProperties);
+    if (selectedProperty) {
+      setRentValue(String(selectedProperty.rentValue || ""));
+    }
   }
 
   return (
     <AppShell>
       <div className="space-y-8">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Contratos</h1>
-          <p className="mt-1 text-slate-500">
-            Gerencie os contratos de locação dos imóveis cadastrados.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-5 text-xl font-semibold text-slate-900">
-            Novo contrato
-          </h2>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Imóvel disponível
-              </label>
-              <select
-                value={propertyId}
-                onChange={(event) => setPropertyId(event.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-              >
-                <option value="">Selecione um imóvel</option>
-
-                {availableProperties.map((property) => (
-                  <option key={property.id} value={property.id}>
-                    {property.name} - {property.address}
-                  </option>
-                ))}
-              </select>
-
-              {availableProperties.length === 0 && (
-                <p className="mt-2 text-sm text-red-500">
-                  Nenhum imóvel disponível para contrato.
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Inquilino
-              </label>
-              <select
-                value={tenantId}
-                onChange={(event) => setTenantId(event.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-              >
-                <option value="">Selecione um inquilino</option>
-
-                {tenants.map((tenant) => (
-                  <option key={tenant.id} value={tenant.id}>
-                    {tenant.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Data de início
-              </label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(event) => setStartDate(event.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Valor do aluguel
-              </label>
-              <input
-                type="number"
-                value={value}
-                onChange={(event) => setValue(event.target.value)}
-                placeholder="Ex: 1200"
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Status
-              </label>
-              <select
-                value={status}
-                onChange={(event) =>
-                  setStatus(event.target.value as ContractStatus)
-                }
-                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-              >
-                <option value="Active">Ativo</option>
-                <option value="Finished">Finalizado</option>
-              </select>
-            </div>
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <h1 className="text-4xl font-black tracking-tight text-slate-950">
+              Contratos
+            </h1>
+            <p className="mt-2 text-slate-500">
+              Gerencie os contratos de locação.
+            </p>
           </div>
 
           <button
-            onClick={handleCreateContract}
-            className="mt-6 rounded-xl bg-emerald-600 px-6 py-3 font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+            type="button"
+            onClick={handleOpenCreateForm}
+            className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
           >
-            Criar contrato
+            + Novo contrato
           </button>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-slate-900">
-                Contratos cadastrados
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Exibindo {filteredContracts.length} de {contracts.length} contratos.
-              </p>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Buscar
-                </label>
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar por imóvel ou inquilino"
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 md:w-72"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Status
-                </label>
-                <select
-                  value={statusFilter}
-                  onChange={(event) =>
-                    setStatusFilter(event.target.value as StatusFilter)
-                  }
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 md:w-44"
-                >
-                  <option value="All">Todos</option>
-                  <option value="Active">Ativos</option>
-                  <option value="Finished">Finalizados</option>
-                </select>
-              </div>
-            </div>
+        <div className="rounded-3xl border border-orange-100 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-6 py-5">
+            <h2 className="text-2xl font-black text-slate-950">
+              Contratos cadastrados
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              {contracts.length} contrato(s) cadastrado(s)
+            </p>
           </div>
 
-          {contracts.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center">
-              <p className="text-slate-500">Nenhum contrato cadastrado ainda.</p>
-            </div>
-          ) : filteredContracts.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center">
-              <p className="text-slate-500">
-                Nenhum contrato encontrado com os filtros aplicados.
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-hidden rounded-xl border border-slate-200">
-              <table className="w-full border-collapse bg-white text-left">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-4 py-3 text-sm font-semibold text-slate-600">
-                      Imóvel
-                    </th>
-                    <th className="px-4 py-3 text-sm font-semibold text-slate-600">
-                      Inquilino
-                    </th>
-                    <th className="px-4 py-3 text-sm font-semibold text-slate-600">
-                      Início
-                    </th>
-                    <th className="px-4 py-3 text-sm font-semibold text-slate-600">
-                      Valor
-                    </th>
-                    <th className="px-4 py-3 text-sm font-semibold text-slate-600">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-sm font-semibold text-slate-600">
-                      Ações
-                    </th>
+          <div className="overflow-hidden">
+            <table className="w-full text-left">
+              <thead className="bg-orange-50">
+                <tr>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                    Imóvel
+                  </th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                    Inquilino
+                  </th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                    Início
+                  </th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                    Fim
+                  </th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                    Valor
+                  </th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                    Status
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-slate-100">
+                {contracts.map((contract) => (
+                  <tr key={contract.id} className="transition hover:bg-slate-50">
+                    <td className="px-6 py-4 font-black text-slate-900">
+                      {contract.propertyName}
+                    </td>
+
+                    <td className="px-6 py-4 text-sm font-semibold text-slate-600">
+                      {contract.tenantName}
+                    </td>
+
+                    <td className="px-6 py-4 text-sm font-semibold text-slate-600">
+                      {formatDate(contract.startDate)}
+                    </td>
+
+                    <td className="px-6 py-4 text-sm font-semibold text-slate-600">
+                      {formatDate(contract.endDate)}
+                    </td>
+
+                    <td className="px-6 py-4 text-sm font-black text-slate-900">
+                      {formatCurrency(contract.rentValue)}
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <StatusBadge status={getContractStatus(contract.endDate)} />
+                    </td>
                   </tr>
-                </thead>
+                ))}
 
-                <tbody>
-                  {filteredContracts.map((contract) => (
-                    <tr key={contract.id} className="border-t border-slate-100">
-                      <td className="px-4 py-3 text-sm text-slate-700">
-                        {getPropertyName(contract.propertyId)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-700">
-                        {getTenantName(contract.tenantId)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-700">
-                        {contract.startDate}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-700">
-                        R$ {contract.value.toLocaleString("pt-BR")}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                            contract.status === "Active"
-                              ? "bg-emerald-100 text-emerald-700"
-                              : "bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          {contract.status === "Active" ? "Ativo" : "Finalizado"}
-                        </span>
-                      </td>
-                      <td className="space-x-2 px-4 py-3">
-                        {contract.status === "Active" && (
-                          <button
-                            onClick={() => handleFinishContract(contract.id)}
-                            className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-200"
-                          >
-                            Finalizar
-                          </button>
-                        )}
-
-                        <button
-                          onClick={() => handleDeleteContract(contract.id)}
-                          className="rounded-lg bg-red-50 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-100"
-                        >
-                          Excluir
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                {contracts.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-6 py-10 text-center text-sm font-semibold text-slate-500"
+                    >
+                      Nenhum contrato cadastrado.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
+
+        {isFormOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
+            <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-8 py-6">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-950">
+                    Novo contrato
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Preencha os dados do contrato.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-600 transition hover:bg-red-50 hover:text-red-600"
+                >
+                  ×
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateContract}>
+                <div className="p-8">
+                  {formError && (
+                    <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-black text-red-600">
+                      {formError}
+                    </div>
+                  )}
+
+                  <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                    <FormField label="Imóvel">
+                      <select
+                        value={propertyId}
+                        onChange={(event) =>
+                          handlePropertyChange(event.target.value)
+                        }
+                        required
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                      >
+                        <option value="">Selecione um imóvel</option>
+                        {availableProperties.map((property) => (
+                          <option key={property.id} value={property.id}>
+                            {property.name}
+                          </option>
+                        ))}
+                      </select>
+                    </FormField>
+
+                    <FormField label="Inquilino">
+                      <select
+                        value={tenantId}
+                        onChange={(event) => {
+                          setTenantId(event.target.value);
+                          setFormError("");
+                        }}
+                        required
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                      >
+                        <option value="">Selecione um inquilino</option>
+                        {tenants.map((tenant) => (
+                          <option key={tenant.id} value={tenant.id}>
+                            {tenant.name}
+                          </option>
+                        ))}
+                      </select>
+                    </FormField>
+
+                    <FormField label="Valor aluguel">
+                      <input
+                        type="number"
+                        value={rentValue}
+                        onChange={(event) => {
+                          setRentValue(event.target.value);
+                          setFormError("");
+                        }}
+                        placeholder="Ex: 1800"
+                        required
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                      />
+                    </FormField>
+
+                    <FormField label="Data início">
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(event) => {
+                          setStartDate(event.target.value);
+                          setFormError("");
+                        }}
+                        required
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                      />
+                    </FormField>
+
+                    <FormField label="Data fim">
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(event) => {
+                          setEndDate(event.target.value);
+                          setFormError("");
+                        }}
+                        required
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                      />
+                    </FormField>
+                  </div>
+                </div>
+
+                <div className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-100 bg-white px-8 py-6">
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="rounded-2xl bg-slate-100 px-6 py-4 text-sm font-black text-slate-600 transition hover:bg-slate-200"
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    type="submit"
+                    className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                  >
+                    Criar contrato
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </AppShell>
   );
+}
+
+type FormFieldProps = {
+  label: string;
+  children: React.ReactNode;
+};
+
+function FormField({ label, children }: FormFieldProps) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-black text-slate-700">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: ContractStatus }) {
+  const statusConfig = {
+    Active: {
+      label: "Ativo",
+      className: "bg-emerald-100 text-emerald-700",
+    },
+    Inactive: {
+      label: "Inativo",
+      className: "bg-slate-100 text-slate-600",
+    },
+  };
+
+  return (
+    <span
+      className={`rounded-full px-3 py-1 text-xs font-black ${statusConfig[status].className}`}
+    >
+      {statusConfig[status].label}
+    </span>
+  );
+}
+
+function getContractStatus(endDate: string): ContractStatus {
+  if (!endDate) return "Inactive";
+
+  const today = new Date();
+  const contractEndDate = new Date(`${endDate}T23:59:59`);
+
+  return contractEndDate >= today ? "Active" : "Inactive";
+}
+
+function formatCurrency(value?: number) {
+  const safeValue = Number(value || 0);
+
+  return safeValue.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+}
+
+function formatDate(value: string) {
+  if (!value) return "-";
+
+  const [year, month, day] = value.split("-");
+
+  return `${day}/${month}/${year}`;
 }
