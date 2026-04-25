@@ -33,9 +33,21 @@ type Charge = {
   amount: number;
   status: "Pending" | "Paid" | "Overdue";
   manual?: boolean;
+  issueDate?: string;
+  installmentNumber?: number;
+  installmentTotal?: number;
+  installmentGroupId?: string;
 };
 
 type StatusFilter = "All" | "Pending" | "Paid" | "Overdue";
+type ChargeLaunchType = "single" | "installment";
+
+type InstallmentPreview = {
+  id: string;
+  installmentNumber: number;
+  amount: string;
+  dueDate: string;
+};
 
 export default function AccountsReceivablePage() {
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -54,7 +66,16 @@ export default function AccountsReceivablePage() {
   const [formTenant, setFormTenant] = useState("");
   const [formProperty, setFormProperty] = useState("");
   const [formAmount, setFormAmount] = useState("");
-  const [formDate, setFormDate] = useState("");
+  const [formIssueDate, setFormIssueDate] = useState("");
+  const [formDueDate, setFormDueDate] = useState("");
+  const [formLaunchType, setFormLaunchType] =
+    useState<ChargeLaunchType>("single");
+  const [formInstallmentQuantity, setFormInstallmentQuantity] = useState("2");
+  const [installmentPreview, setInstallmentPreview] = useState<
+    InstallmentPreview[]
+  >([]);
+
+  const [newTenantName, setNewTenantName] = useState("");
 
   useEffect(() => {
     const c = localStorage.getItem("rentix_contracts");
@@ -85,6 +106,15 @@ export default function AccountsReceivablePage() {
   useEffect(() => {
     localStorage.setItem("rentix_receivable_status_filter", statusFilter);
   }, [statusFilter]);
+
+  useEffect(() => {
+    if (formLaunchType !== "installment") {
+      setInstallmentPreview([]);
+      return;
+    }
+
+    generateInstallmentPreview();
+  }, [formLaunchType, formAmount, formDueDate, formInstallmentQuantity]);
 
   function normalizeAmount(value: unknown) {
     if (typeof value === "number") {
@@ -255,6 +285,25 @@ export default function AccountsReceivablePage() {
     return "Todos";
   }
 
+  function getLocalDateValue(date: Date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  }
+
+  function addDaysToDate(dateValue: string, days: number) {
+    const date = new Date(`${dateValue}T00:00:00`);
+    date.setDate(date.getDate() + days);
+
+    return getLocalDateValue(date);
+  }
+
+  function formatAmountInput(value: number) {
+    return value.toFixed(2).replace(".", ",");
+  }
+
   function markPaid(id: string) {
     const updated = [...paid, id];
 
@@ -278,7 +327,12 @@ export default function AccountsReceivablePage() {
     setFormTenant("");
     setFormProperty("");
     setFormAmount("");
-    setFormDate("");
+    setFormIssueDate("");
+    setFormDueDate("");
+    setFormLaunchType("single");
+    setFormInstallmentQuantity("2");
+    setInstallmentPreview([]);
+    setNewTenantName("");
   }
 
   function closeCreateModal() {
@@ -286,25 +340,120 @@ export default function AccountsReceivablePage() {
     setIsCreateOpen(false);
   }
 
+  function createTenantInline() {
+    const trimmedTenantName = newTenantName.trim();
+
+    if (!trimmedTenantName) return;
+
+    const newTenant: Tenant = {
+      id: `tenant-${Date.now()}`,
+      name: trimmedTenantName,
+    };
+
+    const updatedTenants = [...tenants, newTenant];
+
+    setTenants(updatedTenants);
+    setFormTenant(newTenant.id);
+    setNewTenantName("");
+
+    localStorage.setItem("rentix_tenants", JSON.stringify(updatedTenants));
+  }
+
+  function generateInstallmentPreview() {
+    const totalAmount = normalizeAmount(formAmount);
+    const quantity = Number(formInstallmentQuantity);
+
+    if (!formDueDate || totalAmount <= 0 || !Number.isFinite(quantity)) {
+      setInstallmentPreview([]);
+      return;
+    }
+
+    const normalizedQuantity = Math.max(2, Math.trunc(quantity));
+    const installmentAmount = totalAmount / normalizedQuantity;
+
+    const generatedInstallments = Array.from(
+      { length: normalizedQuantity },
+      (_, index) => ({
+        id: `preview-${index + 1}`,
+        installmentNumber: index + 1,
+        amount: formatAmountInput(installmentAmount),
+        dueDate: addDaysToDate(formDueDate, index * 30),
+      }),
+    );
+
+    setInstallmentPreview(generatedInstallments);
+  }
+
+  function updateInstallmentAmount(id: string, amount: string) {
+    setInstallmentPreview((currentInstallments) =>
+      currentInstallments.map((installment) =>
+        installment.id === id ? { ...installment, amount } : installment,
+      ),
+    );
+  }
+
+  function updateInstallmentDueDate(id: string, dueDate: string) {
+    setInstallmentPreview((currentInstallments) =>
+      currentInstallments.map((installment) =>
+        installment.id === id ? { ...installment, dueDate } : installment,
+      ),
+    );
+  }
+
   function createManualCharge() {
-    if (!formTenant || !formProperty || !formAmount || !formDate) return;
+    if (!formTenant || !formAmount || !formIssueDate || !formDueDate) return;
 
     const tenant = tenants.find((item) => item.id === formTenant);
     const property = properties.find((item) => item.id === formProperty);
 
-    if (!tenant || !property) return;
+    if (!tenant) return;
 
-    const newCharge: Charge = {
-      id: `manual-${Date.now()}`,
-      property: property.name,
+    const chargeProperty = property?.name || "Sem imóvel vinculado";
+    const issueDate = new Date(formIssueDate).toISOString();
+
+    if (formLaunchType === "single") {
+      const newCharge: Charge = {
+        id: `manual-${Date.now()}`,
+        property: chargeProperty,
+        tenant: tenant.name,
+        dueDate: new Date(formDueDate).toISOString(),
+        issueDate,
+        amount: normalizeAmount(formAmount),
+        status: "Pending",
+        manual: true,
+      };
+
+      const updatedManualCharges = [...manualCharges, newCharge];
+
+      setManualCharges(updatedManualCharges);
+      localStorage.setItem(
+        "rentix_manual_charges",
+        JSON.stringify(updatedManualCharges),
+      );
+
+      closeCreateModal();
+      return;
+    }
+
+    if (installmentPreview.length === 0) return;
+
+    const installmentGroupId = `installment-${Date.now()}`;
+
+    const newCharges: Charge[] = installmentPreview.map((installment) => ({
+      id: `${installmentGroupId}-${installment.installmentNumber}`,
+      property: chargeProperty,
       tenant: tenant.name,
-      dueDate: new Date(formDate).toISOString(),
-      amount: normalizeAmount(formAmount),
+      dueDate: new Date(installment.dueDate).toISOString(),
+      issueDate,
+      amount: normalizeAmount(installment.amount),
       status: "Pending",
       manual: true,
-    };
+      installmentNumber: installment.installmentNumber,
+      installmentTotal: installmentPreview.length,
+      installmentGroupId,
+    }));
 
-    const updatedManualCharges = [...manualCharges, newCharge];
+    const updatedManualCharges = [...manualCharges, ...newCharges];
 
     setManualCharges(updatedManualCharges);
     localStorage.setItem(
@@ -487,6 +636,12 @@ export default function AccountsReceivablePage() {
 
                       <td className="px-5 py-4 text-sm text-slate-600">
                         {charge.tenant}
+                        {charge.installmentNumber && charge.installmentTotal && (
+                          <span className="ml-2 rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">
+                            {charge.installmentNumber}/
+                            {charge.installmentTotal}
+                          </span>
+                        )}
                       </td>
 
                       <td className="px-5 py-4 text-center text-sm text-slate-600">
@@ -633,7 +788,7 @@ export default function AccountsReceivablePage() {
 
       {isCreateOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
+          <div className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
             <div className="border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-white p-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -647,8 +802,7 @@ export default function AccountsReceivablePage() {
                     </h2>
 
                     <p className="mt-1 text-sm text-slate-500">
-                      Cadastre uma conta a receber manual sem alterar os
-                      contratos.
+                      Cadastre uma conta a receber avulsa, única ou parcelada.
                     </p>
                   </div>
                 </div>
@@ -663,7 +817,79 @@ export default function AccountsReceivablePage() {
               </div>
             </div>
 
-            <div className="space-y-5 p-6">
+            <div className="max-h-[calc(92vh-120px)] space-y-5 overflow-y-auto p-6">
+              <div>
+                <label className="mb-2 block text-sm font-bold text-slate-700">
+                  Tipo de lançamento
+                </label>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormLaunchType("single")}
+                    className={`rounded-2xl border px-4 py-3 text-left transition ${
+                      formLaunchType === "single"
+                        ? "border-emerald-500 bg-emerald-50 ring-4 ring-emerald-100"
+                        : "border-slate-200 bg-white hover:bg-slate-50"
+                    }`}
+                  >
+                    <p className="text-sm font-black text-slate-900">
+                      Conta única
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Lançamento avulso com apenas um vencimento.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFormLaunchType("installment")}
+                    className={`rounded-2xl border px-4 py-3 text-left transition ${
+                      formLaunchType === "installment"
+                        ? "border-emerald-500 bg-emerald-50 ring-4 ring-emerald-100"
+                        : "border-slate-200 bg-white hover:bg-slate-50"
+                    }`}
+                  >
+                    <p className="text-sm font-black text-slate-900">
+                      Sequência de parcelas
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Divide o valor total em parcelas editáveis.
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                  <div>
+                    <label className="mb-2 block text-sm font-bold text-slate-700">
+                      Novo inquilino
+                    </label>
+
+                    <input
+                      placeholder="Digite o nome para cadastrar rápido..."
+                      value={newTenantName}
+                      onChange={(event) => setNewTenantName(event.target.value)}
+                      className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={createTenantInline}
+                    className="h-12 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
+                  >
+                    Cadastrar inquilino
+                  </button>
+                </div>
+
+                <p className="mt-2 text-xs text-slate-500">
+                  O inquilino cadastrado aqui será salvo junto ao módulo de
+                  inquilinos e selecionado automaticamente.
+                </p>
+              </div>
+
               <div>
                 <label className="mb-2 block text-sm font-bold text-slate-700">
                   Inquilino
@@ -686,6 +912,9 @@ export default function AccountsReceivablePage() {
               <div>
                 <label className="mb-2 block text-sm font-bold text-slate-700">
                   Imóvel
+                  <span className="ml-1 text-xs font-semibold text-slate-400">
+                    opcional
+                  </span>
                 </label>
 
                 <select
@@ -693,7 +922,7 @@ export default function AccountsReceivablePage() {
                   onChange={(event) => setFormProperty(event.target.value)}
                   className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
                 >
-                  <option value="">Selecione o imóvel</option>
+                  <option value="">Sem imóvel vinculado</option>
                   {properties.map((property) => (
                     <option key={property.id} value={property.id}>
                       {property.name}
@@ -702,10 +931,10 @@ export default function AccountsReceivablePage() {
                 </select>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-3">
                 <div>
                   <label className="mb-2 block text-sm font-bold text-slate-700">
-                    Valor
+                    Valor total
                   </label>
 
                   <input
@@ -718,17 +947,105 @@ export default function AccountsReceivablePage() {
 
                 <div>
                   <label className="mb-2 block text-sm font-bold text-slate-700">
-                    Vencimento
+                    Data de lançamento
                   </label>
 
                   <input
                     type="date"
-                    value={formDate}
-                    onChange={(event) => setFormDate(event.target.value)}
+                    value={formIssueDate}
+                    onChange={(event) => setFormIssueDate(event.target.value)}
+                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                    Primeiro vencimento
+                  </label>
+
+                  <input
+                    type="date"
+                    value={formDueDate}
+                    onChange={(event) => setFormDueDate(event.target.value)}
                     className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
                   />
                 </div>
               </div>
+
+              {formLaunchType === "installment" && (
+                <div className="space-y-4 rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
+                  <div className="grid gap-4 md:grid-cols-[220px_1fr] md:items-end">
+                    <div>
+                      <label className="mb-2 block text-sm font-bold text-slate-700">
+                        Quantidade de parcelas
+                      </label>
+
+                      <input
+                        type="number"
+                        min={2}
+                        value={formInstallmentQuantity}
+                        onChange={(event) =>
+                          setFormInstallmentQuantity(event.target.value)
+                        }
+                        className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                      />
+                    </div>
+
+                    <div className="rounded-xl bg-white p-4 text-sm text-slate-600 ring-1 ring-emerald-100">
+                      O sistema divide o valor total em parcelas iguais e gera os
+                      vencimentos automaticamente de 30 em 30 dias. Você pode
+                      ajustar valor e vencimento antes de salvar.
+                    </div>
+                  </div>
+
+                  {installmentPreview.length > 0 && (
+                    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                      <div className="grid grid-cols-[90px_1fr_1fr] bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500">
+                        <span>Parcela</span>
+                        <span>Valor</span>
+                        <span>Vencimento</span>
+                      </div>
+
+                      <div className="divide-y divide-slate-100">
+                        {installmentPreview.map((installment) => (
+                          <div
+                            key={installment.id}
+                            className="grid grid-cols-[90px_1fr_1fr] gap-3 px-4 py-3"
+                          >
+                            <div className="flex items-center text-sm font-black text-slate-900">
+                              {installment.installmentNumber}/
+                              {installmentPreview.length}
+                            </div>
+
+                            <input
+                              value={installment.amount}
+                              onChange={(event) =>
+                                updateInstallmentAmount(
+                                  installment.id,
+                                  event.target.value,
+                                )
+                              }
+                              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                            />
+
+                            <input
+                              type="date"
+                              value={installment.dueDate}
+                              onChange={(event) =>
+                                updateInstallmentDueDate(
+                                  installment.id,
+                                  event.target.value,
+                                )
+                              }
+                              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 md:flex-row md:justify-end">
                 <button

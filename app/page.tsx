@@ -153,7 +153,7 @@ export default function LoginPage() {
           </div>
 
           <p className="relative z-10 mt-auto pb-10 text-center text-base font-black text-white">
-            Rentix created by Luan H. L. Santos © 2026
+            Rentix © 2026
           </p>
         </section>
 
