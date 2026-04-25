@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
@@ -10,11 +10,28 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  const [remember, setRemember] = useState(false);
+
+  // ✅ NOVO (mostrar senha)
+  const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    const savedEmail = localStorage.getItem("rentix_remember_email");
+
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRemember(true);
+    }
+  }, []);
+
   function handleLogin() {
     const validEmail = "luan@rentix.com";
     const validPassword = "123";
 
-    if (email.trim().toLowerCase() === validEmail && password === validPassword) {
+    if (
+      email.trim().toLowerCase() === validEmail &&
+      password === validPassword
+    ) {
       localStorage.setItem("rentix_logged", "true");
 
       localStorage.setItem(
@@ -24,6 +41,12 @@ export default function LoginPage() {
           email: validEmail,
         })
       );
+
+      if (remember) {
+        localStorage.setItem("rentix_remember_email", email);
+      } else {
+        localStorage.removeItem("rentix_remember_email");
+      }
 
       router.push("/dashboard");
       return;
@@ -62,6 +85,7 @@ export default function LoginPage() {
               </h2>
 
               <div className="space-y-5">
+                {/* EMAIL */}
                 <div className="flex h-[62px] items-center rounded-2xl border border-slate-200 bg-white shadow-[0_3px_10px_rgba(15,23,42,0.10)]">
                   <div className="flex h-full w-[64px] items-center justify-center text-2xl">
                     ✉
@@ -76,13 +100,14 @@ export default function LoginPage() {
                   />
                 </div>
 
+                {/* SENHA */}
                 <div className="flex h-[62px] items-center rounded-2xl border border-slate-200 bg-white shadow-[0_3px_10px_rgba(15,23,42,0.10)]">
                   <div className="flex h-full w-[64px] items-center justify-center text-2xl">
                     🔒
                   </div>
 
                   <input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     placeholder="Senha"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
@@ -92,11 +117,29 @@ export default function LoginPage() {
                     className="h-full flex-1 bg-white px-2 text-sm font-bold text-slate-700 outline-none placeholder:text-slate-400"
                   />
 
-                  <div className="flex h-full w-[64px] items-center justify-center text-xl">
-                    🙈
-                  </div>
+                  {/* BOTÃO VISUALIZAR SENHA */}
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="flex h-full w-[64px] items-center justify-center text-xl transition hover:bg-slate-50"
+                  >
+                    {showPassword ? "🙉" : "🙈"}
+                  </button>
                 </div>
 
+                {/* CHECKBOX */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={remember}
+                    onChange={(event) => setRemember(event.target.checked)}
+                  />
+                  <span className="text-sm font-bold text-slate-600">
+                    Salvar credenciais
+                  </span>
+                </div>
+
+                {/* BOTÃO */}
                 <button
                   type="button"
                   onClick={handleLogin}
@@ -135,35 +178,6 @@ export default function LoginPage() {
                 Controle imóveis, inquilinos, contratos, vencimentos e receitas
                 em uma plataforma moderna e profissional.
               </p>
-
-              <div className="mt-11 grid grid-cols-3 gap-4">
-                <div className="rounded-2xl border border-orange-100 bg-white px-6 py-5 shadow-[0_4px_8px_rgba(15,23,42,0.08)]">
-                  <h3 className="text-base font-black text-slate-950">
-                    Imóveis
-                  </h3>
-                  <p className="mt-2 text-sm font-bold text-[#ff4b00]">
-                    Controle total
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-orange-100 bg-white px-6 py-5 shadow-[0_4px_8px_rgba(15,23,42,0.08)]">
-                  <h3 className="text-base font-black text-slate-950">
-                    Contratos
-                  </h3>
-                  <p className="mt-2 text-sm font-bold text-[#ff4b00]">
-                    Integração real
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-orange-100 bg-white px-6 py-5 shadow-[0_4px_8px_rgba(15,23,42,0.08)]">
-                  <h3 className="text-base font-black text-slate-950">
-                    Financeiro
-                  </h3>
-                  <p className="mt-2 text-sm font-bold text-[#ff4b00]">
-                    Automático
-                  </p>
-                </div>
-              </div>
             </div>
           </div>
         </section>
