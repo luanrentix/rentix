@@ -55,9 +55,9 @@ export default function AppShell({ children }: AppShellProps) {
             <div className="cursor-pointer border-b border-orange-100 px-4 py-5 transition hover:bg-orange-50">
               <div className="flex items-center justify-center">
                 <img
-                  src="/logo.png"
+                  src="/logo-rentix.png"
                   alt="Rentix"
-                  className="h-12 w-12 object-contain"
+                  className="h-32 w-32 object-contain"
                 />
               </div>
 
