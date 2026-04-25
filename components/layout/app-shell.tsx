@@ -23,6 +23,7 @@ export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+  const [isSidebarLocked, setIsSidebarLocked] = useState(false);
 
   function isActiveRoute(href: string) {
     return pathname === href || pathname.startsWith(`${href}/`);
@@ -34,18 +35,22 @@ export default function AppShell({ children }: AppShellProps) {
     window.location.href = "/";
   }
 
+  const isSidebarOpen = isSidebarExpanded || isSidebarLocked;
+
   return (
     <AuthGuard>
       <div className="flex min-h-screen bg-[#f8fafc] text-slate-900">
-        {/* SIDEBAR */}
         <aside
-          onMouseEnter={() => setIsSidebarExpanded(true)}
-          onMouseLeave={() => setIsSidebarExpanded(false)}
+          onMouseEnter={() => {
+            if (!isSidebarLocked) setIsSidebarExpanded(true);
+          }}
+          onMouseLeave={() => {
+            if (!isSidebarLocked) setIsSidebarExpanded(false);
+          }}
           className={`fixed left-0 top-0 z-30 flex h-screen flex-col border-r border-orange-100 bg-white transition-all duration-300 ${
-            isSidebarExpanded ? "w-72" : "w-20"
+            isSidebarOpen ? "w-72" : "w-20"
           }`}
         >
-          {/* LOGO */}
           <Link href="/dashboard">
             <div className="cursor-pointer border-b border-orange-100 px-4 py-5 transition hover:bg-orange-50">
               <div className="flex items-center justify-center">
@@ -56,7 +61,7 @@ export default function AppShell({ children }: AppShellProps) {
                 />
               </div>
 
-              {isSidebarExpanded && (
+              {isSidebarOpen && (
                 <div className="mt-4 text-center">
                   <h1 className="text-2xl font-black text-slate-950">
                     Rentix
@@ -69,7 +74,22 @@ export default function AppShell({ children }: AppShellProps) {
             </div>
           </Link>
 
-          {/* MENU */}
+          {isSidebarOpen && (
+            <div className="border-b border-orange-100 px-4 py-3">
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={isSidebarLocked}
+                  onChange={(event) => {
+                    setIsSidebarLocked(event.target.checked);
+                    setIsSidebarExpanded(event.target.checked);
+                  }}
+                />
+                Fixar
+              </label>
+            </div>
+          )}
+
           <nav className="flex-1 space-y-2 overflow-y-auto px-2 py-6">
             {menuItems.map((item) => {
               const isActive = isActiveRoute(item.href);
@@ -78,7 +98,7 @@ export default function AppShell({ children }: AppShellProps) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  title={!isSidebarExpanded ? item.label : undefined}
+                  title={!isSidebarOpen ? item.label : undefined}
                   className={`group flex items-center rounded-2xl px-3 py-4 text-sm font-bold transition ${
                     isActive
                       ? "bg-orange-500 text-white shadow-md shadow-orange-100"
@@ -95,19 +115,16 @@ export default function AppShell({ children }: AppShellProps) {
                     {item.icon}
                   </span>
 
-                  {isSidebarExpanded && (
-                    <span className="ml-4">{item.label}</span>
-                  )}
+                  {isSidebarOpen && <span className="ml-4">{item.label}</span>}
                 </Link>
               );
             })}
           </nav>
         </aside>
 
-        {/* CONTENT */}
         <div
           className={`flex min-h-screen flex-1 flex-col transition-all duration-300 ${
-            isSidebarExpanded ? "ml-72" : "ml-20"
+            isSidebarOpen ? "ml-72" : "ml-20"
           }`}
         >
           <header className="sticky top-0 z-20 flex h-24 items-center justify-between border-b border-slate-200 bg-white/90 px-8 backdrop-blur">
@@ -115,9 +132,7 @@ export default function AppShell({ children }: AppShellProps) {
               <p className="text-sm font-semibold text-orange-600">
                 Bem-vindo
               </p>
-              <h2 className="text-2xl font-black text-slate-950">
-                Rentix
-              </h2>
+              <h2 className="text-2xl font-black text-slate-950">Rentix</h2>
             </div>
 
             <div className="relative flex items-center gap-4">
@@ -137,9 +152,7 @@ export default function AppShell({ children }: AppShellProps) {
               {isUserMenuOpen && (
                 <div className="absolute right-0 top-16 w-64 rounded-3xl border border-orange-100 bg-white p-3 shadow-xl">
                   <div className="mb-2 rounded-2xl bg-orange-50 px-4 py-3">
-                    <p className="text-sm font-black text-slate-900">
-                      Luan
-                    </p>
+                    <p className="text-sm font-black text-slate-900">Luan</p>
                     <p className="text-xs text-slate-500">
                       luan@Rentix.com
                     </p>

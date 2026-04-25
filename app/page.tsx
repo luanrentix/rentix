@@ -12,7 +12,7 @@ export default function LoginPage() {
 
   function handleLogin() {
     const validEmail = "luan@rentix.com";
-    const validPassword = "123456";
+    const validPassword = "123";
 
     if (email.trim().toLowerCase() === validEmail && password === validPassword) {
       localStorage.setItem("rentix_logged", "true");
