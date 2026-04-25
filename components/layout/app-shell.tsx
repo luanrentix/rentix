@@ -22,6 +22,7 @@ const menuItems = [
 export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
 
   function isActiveRoute(href: string) {
     return pathname === href || pathname.startsWith(`${href}/`);
@@ -36,33 +37,40 @@ export default function AppShell({ children }: AppShellProps) {
   return (
     <AuthGuard>
       <div className="flex min-h-screen bg-[#f8fafc] text-slate-900">
-        <aside className="fixed left-0 top-0 z-30 flex h-screen w-72 flex-col border-r border-orange-100 bg-white">
+        {/* SIDEBAR */}
+        <aside
+          onMouseEnter={() => setIsSidebarExpanded(true)}
+          onMouseLeave={() => setIsSidebarExpanded(false)}
+          className={`fixed left-0 top-0 z-30 flex h-screen flex-col border-r border-orange-100 bg-white transition-all duration-300 ${
+            isSidebarExpanded ? "w-72" : "w-20"
+          }`}
+        >
+          {/* LOGO */}
           <Link href="/dashboard">
-            <div className="cursor-pointer border-b border-orange-100 px-5 py-6 transition hover:bg-orange-50">
-              <div className="rounded-3xl bg-gradient-to-br from-orange-50 via-white to-orange-100 p-4 shadow-sm">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-white shadow-md ring-1 ring-orange-100">
-                    <img
-                      src="/logo.png"
-                      alt="Rentix"
-                      className="h-16 w-16 object-contain"
-                    />
-                  </div>
-
-                  <div>
-                    <h1 className="text-3xl font-black tracking-tight text-slate-950">
-                      Rentix
-                    </h1>
-                    <p className="mt-1 text-sm font-semibold text-orange-600">
-                      Gestão de Locações
-                    </p>
-                  </div>
-                </div>
+            <div className="cursor-pointer border-b border-orange-100 px-4 py-5 transition hover:bg-orange-50">
+              <div className="flex items-center justify-center">
+                <img
+                  src="/logo.png"
+                  alt="Rentix"
+                  className="h-12 w-12 object-contain"
+                />
               </div>
+
+              {isSidebarExpanded && (
+                <div className="mt-4 text-center">
+                  <h1 className="text-2xl font-black text-slate-950">
+                    Rentix
+                  </h1>
+                  <p className="text-xs font-semibold text-orange-600">
+                    Gestão de Locações
+                  </p>
+                </div>
+              )}
             </div>
           </Link>
 
-          <nav className="flex-1 space-y-2 overflow-y-auto px-4 py-6">
+          {/* MENU */}
+          <nav className="flex-1 space-y-2 overflow-y-auto px-2 py-6">
             {menuItems.map((item) => {
               const isActive = isActiveRoute(item.href);
 
@@ -70,7 +78,8 @@ export default function AppShell({ children }: AppShellProps) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`group flex items-center gap-4 rounded-2xl px-5 py-4 text-sm font-bold transition ${
+                  title={!isSidebarExpanded ? item.label : undefined}
+                  className={`group flex items-center rounded-2xl px-3 py-4 text-sm font-bold transition ${
                     isActive
                       ? "bg-orange-500 text-white shadow-md shadow-orange-100"
                       : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
@@ -86,20 +95,27 @@ export default function AppShell({ children }: AppShellProps) {
                     {item.icon}
                   </span>
 
-                  <span>{item.label}</span>
+                  {isSidebarExpanded && (
+                    <span className="ml-4">{item.label}</span>
+                  )}
                 </Link>
               );
             })}
           </nav>
         </aside>
 
-        <div className="ml-72 flex min-h-screen flex-1 flex-col">
+        {/* CONTENT */}
+        <div
+          className={`flex min-h-screen flex-1 flex-col transition-all duration-300 ${
+            isSidebarExpanded ? "ml-72" : "ml-20"
+          }`}
+        >
           <header className="sticky top-0 z-20 flex h-24 items-center justify-between border-b border-slate-200 bg-white/90 px-8 backdrop-blur">
             <div>
               <p className="text-sm font-semibold text-orange-600">
                 Bem-vindo
               </p>
-              <h2 className="text-2xl font-black tracking-tight text-slate-950">
+              <h2 className="text-2xl font-black text-slate-950">
                 Rentix
               </h2>
             </div>
@@ -113,37 +129,31 @@ export default function AppShell({ children }: AppShellProps) {
               <button
                 type="button"
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 text-lg font-black text-white shadow-md shadow-orange-100 transition hover:scale-105"
+                className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 text-lg font-black text-white shadow-md transition hover:scale-105"
               >
                 L
               </button>
 
               {isUserMenuOpen && (
-                <div className="absolute right-0 top-16 w-64 rounded-3xl border border-orange-100 bg-white p-3 shadow-xl shadow-slate-200">
+                <div className="absolute right-0 top-16 w-64 rounded-3xl border border-orange-100 bg-white p-3 shadow-xl">
                   <div className="mb-2 rounded-2xl bg-orange-50 px-4 py-3">
                     <p className="text-sm font-black text-slate-900">
                       Luan
                     </p>
-                    <p className="text-xs font-semibold text-slate-500">
+                    <p className="text-xs text-slate-500">
                       luan@Rentix.com
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-orange-50 hover:text-orange-600"
-                  >
-                    <span>⚙️</span>
-                    <span>Configurações</span>
+                  <button className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-slate-600 hover:bg-orange-50 hover:text-orange-600">
+                    ⚙️ Configurações
                   </button>
 
                   <button
-                    type="button"
                     onClick={handleLogout}
-                    className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-slate-600 transition hover:bg-red-50 hover:text-red-600"
+                    className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-slate-600 hover:bg-red-50 hover:text-red-600"
                   >
-                    <span>↩️</span>
-                    <span>Sair</span>
+                    ↩️ Sair
                   </button>
                 </div>
               )}
