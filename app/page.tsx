@@ -55,37 +55,40 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen overflow-hidden bg-white">
-      <div className="grid min-h-screen grid-cols-[42%_58%]">
-        <section className="relative flex min-h-screen flex-col bg-gradient-to-br from-[#ff4b00] via-[#f04400] to-[#d93200] px-9 pt-10">
-          <div className="absolute -bottom-24 -left-20 h-[430px] w-[430px] rounded-full border border-white/15" />
-          <div className="absolute -bottom-5 -left-8 h-[300px] w-[300px] rounded-full border border-white/10" />
-
-          <div className="relative z-10 flex items-center gap-5">
-            <div className="flex h-35 w-35 items-center justify-center rounded-[22px] bg-white shadow-lg">
-              <Image src="/logo-rentix.png" alt="Rentix" width={82} height={82} priority />
+    <main className="min-h-screen bg-white">
+      {/* RESPONSIVO AQUI */}
+      <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[42%_58%]">
+        
+        {/* LADO ESQUERDO */}
+        <section className="relative flex flex-col bg-gradient-to-br from-[#ff4b00] via-[#f04400] to-[#d93200] px-6 pt-8 lg:px-9 lg:pt-10">
+          
+          <div className="relative z-10 flex flex-col items-center gap-4 text-center lg:flex-row lg:text-left">
+            <div className="flex h-24 w-24 items-center justify-center rounded-[22px] bg-white shadow-lg lg:h-35 lg:w-35">
+              <Image src="/logo-rentix.png" alt="Rentix" width={70} height={70} priority />
             </div>
 
             <div>
-              <h1 className="text-[48px] font-black leading-none text-white">
+              <h1 className="text-3xl font-black text-white lg:text-[48px]">
                 Rentix
               </h1>
-              <p className="mt-2 text-sm font-bold text-white">
+              <p className="mt-1 text-sm font-bold text-white">
                 Sistema de Gestão de Locações
               </p>
             </div>
           </div>
 
           <div className="relative z-10 mt-6 flex justify-center">
-            <div className="w-full max-w-[525px] rounded-[30px] bg-white px-10 py-11 shadow-2xl">
-              <h2 className="mb-9 text-center text-[34px] font-light tracking-[-1px] text-slate-950">
+            <div className="w-full max-w-md rounded-[30px] bg-white px-6 py-8 shadow-2xl lg:max-w-[525px] lg:px-10 lg:py-11">
+              
+              <h2 className="mb-6 text-center text-2xl font-light text-slate-950 lg:text-[34px]">
                 Bem-vindo ao{" "}
                 <span className="font-black text-[#ff4b00]">Rentix!</span>
               </h2>
 
-              <div className="space-y-5">
-                <div className="flex h-[62px] items-center rounded-2xl border border-slate-200 bg-white shadow-[0_3px_10px_rgba(15,23,42,0.10)]">
-                  <div className="flex h-full w-[64px] items-center justify-center text-2xl">
+              <div className="space-y-4">
+                
+                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white">
+                  <div className="flex h-full w-12 items-center justify-center text-xl lg:w-[64px] lg:text-2xl">
                     ✉
                   </div>
 
@@ -94,12 +97,12 @@ export default function LoginPage() {
                     placeholder="E-mail"
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
-                    className="h-full flex-1 rounded-r-2xl bg-white px-2 text-sm font-bold text-slate-700 outline-none placeholder:text-slate-400"
+                    className="flex-1 bg-white px-2 text-sm font-bold text-slate-700 outline-none"
                   />
                 </div>
 
-                <div className="flex h-[62px] items-center rounded-2xl border border-slate-200 bg-white shadow-[0_3px_10px_rgba(15,23,42,0.10)]">
-                  <div className="flex h-full w-[64px] items-center justify-center text-2xl">
+                <div className="flex h-[56px] items-center rounded-2xl border border-slate-200 bg-white">
+                  <div className="flex h-full w-12 items-center justify-center text-xl lg:w-[64px] lg:text-2xl">
                     🔒
                   </div>
 
@@ -111,13 +114,13 @@ export default function LoginPage() {
                     onKeyDown={(event) => {
                       if (event.key === "Enter") handleLogin();
                     }}
-                    className="h-full flex-1 bg-white px-2 text-sm font-bold text-slate-700 outline-none placeholder:text-slate-400"
+                    className="flex-1 bg-white px-2 text-sm font-bold text-slate-700 outline-none"
                   />
 
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="flex h-full w-[64px] items-center justify-center text-xl transition hover:bg-slate-50"
+                    className="flex h-full w-12 items-center justify-center text-lg lg:w-[64px] lg:text-xl"
                   >
                     {showPassword ? "🙉" : "🙈"}
                   </button>
@@ -137,7 +140,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={handleLogin}
-                  className="h-[60px] w-full rounded-2xl bg-[#ff4b00] text-base font-black text-white shadow-[0_14px_30px_rgba(255,75,0,0.28)] transition hover:bg-[#e94400]"
+                  className="h-12 w-full rounded-2xl bg-[#ff4b00] text-sm font-black text-white"
                 >
                   Entrar
                 </button>
@@ -145,90 +148,37 @@ export default function LoginPage() {
 
               <button
                 type="button"
-                className="mt-6 w-full text-center text-sm font-black text-[#ff4b00]"
+                className="mt-4 w-full text-center text-sm font-black text-[#ff4b00]"
               >
                 Esqueceu sua senha?
               </button>
             </div>
           </div>
 
-          <p className="relative z-10 mt-auto pb-10 text-center text-base font-black text-white">
+          <p className="mt-6 pb-6 text-center text-sm font-black text-white lg:mt-auto lg:pb-10">
             Rentix © 2026
           </p>
         </section>
 
-        <section className="flex min-h-screen items-center justify-center bg-white px-10">
+        {/* LADO DIREITO (DESKTOP APENAS) */}
+        <section className="hidden lg:flex min-h-screen items-center justify-center bg-white px-10">
           <div className="w-full max-w-[705px] rounded-[32px] bg-[#fff6ec] p-10">
             <div className="rounded-[30px] border border-slate-100 bg-white px-8 pb-8 pt-0 text-center shadow-sm">
               <div className="mx-auto -mt-2 mb-9 flex h-32 w-32 items-center justify-center rounded-[30px] bg-[#ffedd2] text-[66px]">
                 🏠
               </div>
 
-              <h2 className="mx-auto max-w-[650px] text-[34px] font-black leading-tight tracking-[-1px] text-slate-950">
+              <h2 className="text-[34px] font-black text-slate-950">
                 Gestão de locações simples, rápida e inteligente.
               </h2>
 
-              <p className="mx-auto mt-7 max-w-[620px] text-lg leading-8 text-slate-600">
-                Controle imóveis, inquilinos, contratos, vencimentos e receitas
-                em uma plataforma moderna e profissional.
+              <p className="mt-7 text-lg text-slate-600">
+                Controle imóveis, inquilinos, contratos e receitas.
               </p>
             </div>
           </div>
         </section>
       </div>
-
-      {loginError && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-md">
-          <div className="w-full max-w-[460px] overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-red-100">
-            <div className="bg-gradient-to-r from-red-50 via-white to-orange-50 px-7 py-6">
-              <div className="flex items-start justify-between gap-5">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500 text-2xl text-white shadow-lg shadow-red-500/25">
-                    ⚠️
-                  </div>
-
-                  <div>
-                    <h2 className="text-xl font-black text-slate-950">
-                      Acesso não autorizado
-                    </h2>
-                    <p className="mt-1 text-sm font-medium text-slate-500">
-                      Verifique seu e-mail e senha para continuar.
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setLoginError(false)}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 hover:text-slate-900"
-                  aria-label="Fechar aviso"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-
-            <div className="px-7 pb-7 pt-5">
-              <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3">
-                <p className="text-sm font-bold text-red-700">
-                  E-mail ou senha inválidos.
-                </p>
-                <p className="mt-1 text-xs font-medium text-red-500">
-                  Tente novamente ou revise as credenciais informadas.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setLoginError(false)}
-                className="mt-5 h-12 w-full rounded-2xl bg-[#ff4b00] text-sm font-black text-white shadow-[0_12px_24px_rgba(255,75,0,0.24)] transition hover:bg-[#e94400]"
-              >
-                Entendi
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }
