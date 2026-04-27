@@ -12,11 +12,12 @@ type AppShellProps = {
 const menuItems = [
   { label: "Dashboard", href: "/dashboard", icon: "🏠" },
   { label: "Imóveis", href: "/imoveis", icon: "🏢" },
-  { label: "Inquilinos", href: "/inquilinos", icon: "👥" },
+  { label: "Pessoas", href: "/inquilinos", icon: "👥" }, // ✅ ALTERADO AQUI
   { label: "Contratos", href: "/contratos", icon: "📄" },
   { label: "Financeiro", href: "/financeiro", icon: "💰" },
   { label: "Contas a Receber", href: "/contas-receber", icon: "📥" },
   { label: "Contas a Pagar", href: "/contas-pagar", icon: "📤" },
+  { label: "Agenda", href: "/agenda", icon: "📅" },
 ];
 
 export default function AppShell({ children }: AppShellProps) {

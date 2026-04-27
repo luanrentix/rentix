@@ -6,7 +6,10 @@ import { Tenant, initialTenants } from "@/data/tenants";
 
 const STORAGE_KEY = "rentix_tenants";
 
+type PersonType = "Individual" | "Company";
+
 type RentixTenant = Tenant & {
+  personType?: PersonType;
   cpf?: string;
   zipCode?: string;
   state?: string;
@@ -27,6 +30,20 @@ type ViaCepResponse = {
   erro?: boolean;
 };
 
+type BrasilApiCnpjResponse = {
+  cnpj?: string;
+  razao_social?: string;
+  nome_fantasia?: string;
+  cep?: string;
+  uf?: string;
+  municipio?: string;
+  logradouro?: string;
+  numero?: string;
+  bairro?: string;
+  complemento?: string;
+  ddd_telefone_1?: string;
+};
+
 export default function TenantsPage() {
   const [tenants, setTenants] = useState<RentixTenant[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -38,6 +55,8 @@ export default function TenantsPage() {
   );
 
   const [tenantName, setTenantName] = useState("");
+  const [tenantPersonType, setTenantPersonType] =
+    useState<PersonType>("Individual");
   const [tenantCpf, setTenantCpf] = useState("");
   const [tenantPhone, setTenantPhone] = useState("");
   const [tenantZipCode, setTenantZipCode] = useState("");
@@ -49,6 +68,8 @@ export default function TenantsPage() {
   const [tenantComplement, setTenantComplement] = useState("");
   const [tenantIsTenant, setTenantIsTenant] = useState(true);
   const [cpfError, setCpfError] = useState("");
+  const [isCnpjLoading, setIsCnpjLoading] = useState(false);
+  const [cnpjSearchError, setCnpjSearchError] = useState("");
 
   const isEditing = editingTenantId !== null;
 
@@ -60,6 +81,11 @@ export default function TenantsPage() {
 
       const normalizedTenants = parsedTenants.map((tenant) => ({
         ...tenant,
+        personType:
+          tenant.personType ||
+          ((tenant.cpf || tenant.document || "").replace(/\D/g, "").length > 11
+            ? "Company"
+            : "Individual"),
         cpf: tenant.cpf || tenant.document || "",
         document: tenant.document || tenant.cpf || "",
         zipCode: tenant.zipCode || "",
@@ -95,6 +121,7 @@ export default function TenantsPage() {
 
   function resetForm() {
     setTenantName("");
+    setTenantPersonType("Individual");
     setTenantCpf("");
     setTenantPhone("");
     setTenantZipCode("");
@@ -106,6 +133,8 @@ export default function TenantsPage() {
     setTenantComplement("");
     setTenantIsTenant(true);
     setCpfError("");
+    setIsCnpjLoading(false);
+    setCnpjSearchError("");
     setEditingTenantId(null);
     setIsFormOpen(false);
   }
@@ -147,36 +176,109 @@ export default function TenantsPage() {
   }
 
   function handleCpfChange(value: string) {
-    const formattedCpf = formatCpf(value);
-    setTenantCpf(formattedCpf);
+    const formattedDocument =
+      tenantPersonType === "Company" ? formatCnpj(value) : formatCpf(value);
 
-    if (formattedCpf.replace(/\D/g, "").length < 11) {
+    setTenantCpf(formattedDocument);
+
+    const documentDigits = formattedDocument.replace(/\D/g, "");
+    const minimumLength = tenantPersonType === "Company" ? 14 : 11;
+
+    if (documentDigits.length < minimumLength) {
       setCpfError("");
       return;
     }
 
-    if (!isValidCpf(formattedCpf)) {
-      setCpfError("CPF inválido.");
+    if (!isValidDocument(formattedDocument, tenantPersonType)) {
+      setCpfError(
+        tenantPersonType === "Company" ? "CNPJ inválido." : "CPF inválido."
+      );
       return;
     }
 
-    const normalizedCpf = formattedCpf.replace(/\D/g, "");
-
-    const cpfAlreadyExists = tenants.some((tenant) => {
-      const currentTenantCpf = (tenant.cpf || tenant.document || "").replace(
+    const documentAlreadyExists = tenants.some((tenant) => {
+      const currentTenantDocument = (tenant.cpf || tenant.document || "").replace(
         /\D/g,
         ""
       );
 
-      return currentTenantCpf === normalizedCpf && tenant.id !== editingTenantId;
+      return (
+        currentTenantDocument === documentDigits &&
+        tenant.id !== editingTenantId
+      );
     });
 
-    if (cpfAlreadyExists) {
-      setCpfError("Já existe um inquilino cadastrado com este CPF.");
+    if (documentAlreadyExists) {
+      setCpfError(
+        tenantPersonType === "Company"
+          ? "Já existe uma pessoa cadastrada com este CNPJ."
+          : "Já existe uma pessoa cadastrada com este CPF."
+      );
       return;
     }
 
     setCpfError("");
+  }
+
+  function handlePersonTypeChange(personType: PersonType) {
+    setTenantPersonType(personType);
+    setTenantCpf("");
+    setCpfError("");
+    setCnpjSearchError("");
+  }
+
+  async function handleCnpjSearch() {
+    const cleanCnpj = tenantCpf.replace(/\D/g, "");
+
+    if (tenantPersonType !== "Company") return;
+
+    if (cleanCnpj.length !== 14) {
+      setCnpjSearchError("Informe um CNPJ com 14 números para buscar os dados.");
+      return;
+    }
+
+    if (!isValidCnpj(cleanCnpj)) {
+      setCnpjSearchError("CNPJ inválido. Verifique o número informado.");
+      return;
+    }
+
+    try {
+      setIsCnpjLoading(true);
+      setCnpjSearchError("");
+
+      const response = await fetch(
+        `https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`
+      );
+
+      if (!response.ok) {
+        setCnpjSearchError("Empresa não encontrada para o CNPJ informado.");
+        return;
+      }
+
+      const data = (await response.json()) as BrasilApiCnpjResponse;
+
+      const companyName =
+        data.razao_social?.trim() || data.nome_fantasia?.trim() || tenantName;
+
+      setTenantName(companyName);
+      setTenantCpf(formatCnpj(data.cnpj || cleanCnpj));
+
+      if (data.ddd_telefone_1) {
+        setTenantPhone(formatPhone(data.ddd_telefone_1));
+      }
+
+      setTenantZipCode(data.cep ? formatZipCode(data.cep) : tenantZipCode);
+      setTenantState(data.uf || tenantState);
+      setTenantCity(data.municipio || tenantCity);
+      setTenantStreet(data.logradouro || tenantStreet);
+      setTenantNumber(data.numero || tenantNumber);
+      setTenantNeighborhood(data.bairro || tenantNeighborhood);
+      setTenantComplement(data.complemento || tenantComplement);
+    } catch {
+      setCnpjSearchError("Não foi possível consultar o CNPJ no momento.");
+    } finally {
+      setIsCnpjLoading(false);
+    }
   }
 
   function handlePhoneChange(value: string) {
@@ -186,24 +288,33 @@ export default function TenantsPage() {
   function handleSubmitTenant(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!isValidCpf(tenantCpf)) {
-      setCpfError("CPF inválido.");
+    if (!isValidDocument(tenantCpf, tenantPersonType)) {
+      setCpfError(
+        tenantPersonType === "Company" ? "CNPJ inválido." : "CPF inválido."
+      );
       return;
     }
 
-    const normalizedCpf = tenantCpf.replace(/\D/g, "");
+    const normalizedDocument = tenantCpf.replace(/\D/g, "");
 
-    const cpfAlreadyExists = tenants.some((tenant) => {
-      const currentTenantCpf = (tenant.cpf || tenant.document || "").replace(
+    const documentAlreadyExists = tenants.some((tenant) => {
+      const currentTenantDocument = (tenant.cpf || tenant.document || "").replace(
         /\D/g,
         ""
       );
 
-      return currentTenantCpf === normalizedCpf && tenant.id !== editingTenantId;
+      return (
+        currentTenantDocument === normalizedDocument &&
+        tenant.id !== editingTenantId
+      );
     });
 
-    if (cpfAlreadyExists) {
-      setCpfError("Já existe um inquilino cadastrado com este CPF.");
+    if (documentAlreadyExists) {
+      setCpfError(
+        tenantPersonType === "Company"
+          ? "Já existe uma pessoa cadastrada com este CNPJ."
+          : "Já existe uma pessoa cadastrada com este CPF."
+      );
       return;
     }
 
@@ -214,6 +325,7 @@ export default function TenantsPage() {
             ? {
                 ...tenant,
                 name: tenantName,
+                personType: tenantPersonType,
                 cpf: tenantCpf,
                 document: tenantCpf,
                 phone: tenantPhone,
@@ -237,6 +349,7 @@ export default function TenantsPage() {
     const newTenant: RentixTenant = {
       id: Date.now(),
       name: tenantName,
+      personType: tenantPersonType,
       cpf: tenantCpf,
       document: tenantCpf,
       phone: tenantPhone,
@@ -255,9 +368,19 @@ export default function TenantsPage() {
   }
 
   function handleEditTenant(tenant: RentixTenant) {
+    const currentDocument = tenant.cpf || tenant.document || "";
+    const currentPersonType =
+      tenant.personType ||
+      (currentDocument.replace(/\D/g, "").length > 11 ? "Company" : "Individual");
+
     setEditingTenantId(tenant.id);
     setTenantName(tenant.name);
-    setTenantCpf(formatCpf(tenant.cpf || tenant.document || ""));
+    setTenantPersonType(currentPersonType);
+    setTenantCpf(
+      currentPersonType === "Company"
+        ? formatCnpj(currentDocument)
+        : formatCpf(currentDocument)
+    );
     setTenantPhone(formatPhone(tenant.phone));
     setTenantZipCode(tenant.zipCode || "");
     setTenantState(tenant.state || "");
@@ -295,10 +418,10 @@ export default function TenantsPage() {
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h1 className="text-4xl font-black tracking-tight text-slate-950">
-              Inquilinos
+              Pessoas
             </h1>
             <p className="mt-2 text-slate-500">
-              Gerencie os inquilinos cadastrados
+              Gerencie as pessoas cadastradas
             </p>
           </div>
 
@@ -307,17 +430,17 @@ export default function TenantsPage() {
             onClick={handleOpenCreateForm}
             className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
           >
-            + Novo inquilino
+            + Nova pessoa
           </button>
         </div>
 
         <div className="rounded-3xl border border-orange-100 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-6 py-5">
             <h2 className="text-2xl font-black text-slate-950">
-              Lista de inquilinos
+              Lista de pessoas
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              {tenants.length} inquilino(s) cadastrado(s)
+              {tenants.length} pessoa(s) cadastrada(s)
             </p>
           </div>
 
@@ -332,7 +455,7 @@ export default function TenantsPage() {
                     Telefone
                   </th>
                   <th className="px-6 py-4 text-sm font-black text-slate-700">
-                    CPF
+                    CPF/CNPJ
                   </th>
                   <th className="px-6 py-4 text-sm font-black text-slate-700">
                     Cidade
@@ -358,7 +481,10 @@ export default function TenantsPage() {
                     </td>
 
                     <td className="px-6 py-4 text-sm font-semibold text-slate-600">
-                      {formatCpf(tenant.cpf || tenant.document)}
+                      {formatDocument(
+                        tenant.cpf || tenant.document,
+                        tenant.personType
+                      )}
                     </td>
 
                     <td className="px-6 py-4 text-sm font-semibold text-slate-600">
@@ -407,7 +533,7 @@ export default function TenantsPage() {
                       colSpan={6}
                       className="px-6 py-10 text-center text-sm font-semibold text-slate-500"
                     >
-                      Nenhum inquilino cadastrado.
+                      Nenhuma pessoa cadastrada.
                     </td>
                   </tr>
                 )}
@@ -422,10 +548,10 @@ export default function TenantsPage() {
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-8 py-6">
                 <div>
                   <h2 className="text-2xl font-black text-slate-950">
-                    {isEditing ? "Editar inquilino" : "Novo inquilino"}
+                    {isEditing ? "Editar pessoa" : "Nova pessoa"}
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Preencha os dados pessoais e endereço do inquilino.
+                    Preencha os dados pessoais e endereço da pessoa.
                   </p>
                 </div>
 
@@ -446,26 +572,54 @@ export default function TenantsPage() {
                     </h3>
 
                     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                      <FormField label="Nome completo">
+                      <FormField label="Nome completo / Razão social">
                         <input
                           type="text"
                           value={tenantName}
                           onChange={(event) => setTenantName(event.target.value)}
-                          placeholder="Ex: João Silva"
+                          placeholder={
+                            tenantPersonType === "Company"
+                              ? "Ex: Empresa LTDA"
+                              : "Ex: João Silva"
+                          }
                           required
                           className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         />
                       </FormField>
 
-                      <FormField label="CPF">
+                      <FormField label="Tipo de pessoa">
+                        <select
+                          value={tenantPersonType}
+                          onChange={(event) =>
+                            handlePersonTypeChange(event.target.value as PersonType)
+                          }
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        >
+                          <option value="Individual">Pessoa física</option>
+                          <option value="Company">Pessoa jurídica</option>
+                        </select>
+                      </FormField>
+
+                      <FormField
+                        label={tenantPersonType === "Company" ? "CNPJ" : "CPF"}
+                      >
                         <input
                           type="text"
                           value={tenantCpf}
                           onChange={(event) =>
                             handleCpfChange(event.target.value)
                           }
-                          placeholder="Ex: 123.456.789-00"
-                          maxLength={14}
+                          onBlur={() => {
+                            if (tenantPersonType === "Company") {
+                              handleCnpjSearch();
+                            }
+                          }}
+                          placeholder={
+                            tenantPersonType === "Company"
+                              ? "Ex: 12.345.678/0001-90"
+                              : "Ex: 123.456.789-00"
+                          }
+                          maxLength={tenantPersonType === "Company" ? 18 : 14}
                           required
                           className={`w-full rounded-2xl border px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:ring-2 ${
                             cpfError
@@ -473,9 +627,27 @@ export default function TenantsPage() {
                               : "border-slate-200 focus:border-orange-500 focus:ring-orange-100"
                           }`}
                         />
+
+                        {tenantPersonType === "Company" && (
+                          <button
+                            type="button"
+                            onClick={handleCnpjSearch}
+                            disabled={isCnpjLoading}
+                            className="mt-3 w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isCnpjLoading ? "Buscando CNPJ..." : "Buscar dados da empresa"}
+                          </button>
+                        )}
+
                         {cpfError && (
                           <p className="mt-2 text-xs font-bold text-red-500">
                             {cpfError}
+                          </p>
+                        )}
+
+                        {cnpjSearchError && tenantPersonType === "Company" && (
+                          <p className="mt-2 text-xs font-bold text-red-500">
+                            {cnpjSearchError}
                           </p>
                         )}
                       </FormField>
@@ -633,7 +805,7 @@ export default function TenantsPage() {
                     disabled={Boolean(cpfError)}
                     className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {isEditing ? "Salvar alterações" : "Cadastrar inquilino"}
+                    {isEditing ? "Salvar alterações" : "Cadastrar pessoa"}
                   </button>
                 </div>
               </form>
@@ -650,11 +822,11 @@ export default function TenantsPage() {
 
               <div className="mt-5 text-center">
                 <h3 className="text-2xl font-black text-slate-950">
-                  Excluir inquilino?
+                  Excluir pessoa?
                 </h3>
 
                 <p className="mt-3 text-sm font-semibold text-slate-500">
-                  Esta ação removerá o inquilino do sistema.
+                  Esta ação removerá a pessoa do sistema.
                 </p>
 
                 <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
@@ -662,7 +834,10 @@ export default function TenantsPage() {
                     {tenantToDelete.name}
                   </p>
                   <p className="text-xs text-slate-500">
-                    {tenantToDelete.cpf || tenantToDelete.document}
+                    {formatDocument(
+                      tenantToDelete.cpf || tenantToDelete.document,
+                      tenantToDelete.personType
+                    )}
                   </p>
                 </div>
               </div>
@@ -717,6 +892,34 @@ function formatCpf(value: string) {
     .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3-$4");
 }
 
+function formatCnpj(value: string) {
+  const digits = String(value ?? "").replace(/\D/g, "").slice(0, 14);
+
+  return digits
+    .replace(/^(\d{2})(\d)/, "$1.$2")
+    .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3/$4")
+    .replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/, "$1.$2.$3/$4-$5");
+}
+
+function formatDocument(value: string, personType?: PersonType) {
+  const digits = String(value ?? "").replace(/\D/g, "");
+
+  if (personType === "Company" || digits.length > 11) {
+    return formatCnpj(value);
+  }
+
+  return formatCpf(value);
+}
+
+function isValidDocument(value: string, personType: PersonType) {
+  if (personType === "Company") {
+    return isValidCnpj(value);
+  }
+
+  return isValidCpf(value);
+}
+
 function formatPhone(value?: string) {
   const digits = String(value ?? "").replace(/\D/g, "").slice(0, 11);
 
@@ -766,4 +969,33 @@ function isValidCpf(value: string) {
   if (secondCheckDigit === 10) secondCheckDigit = 0;
 
   return secondCheckDigit === Number(cpf[10]);
+}
+
+function isValidCnpj(value: string) {
+  const cnpj = value.replace(/\D/g, "");
+
+  if (cnpj.length !== 14) return false;
+  if (/^(\d)\1{13}$/.test(cnpj)) return false;
+
+  const calculateDigit = (base: string, weights: number[]) => {
+    const sum = weights.reduce(
+      (total, weight, index) => total + Number(base[index]) * weight,
+      0
+    );
+
+    const rest = sum % 11;
+
+    return rest < 2 ? 0 : 11 - rest;
+  };
+
+  const firstWeights = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const secondWeights = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+
+  const firstCheckDigit = calculateDigit(cnpj.slice(0, 12), firstWeights);
+  const secondCheckDigit = calculateDigit(cnpj.slice(0, 13), secondWeights);
+
+  return (
+    firstCheckDigit === Number(cnpj[12]) &&
+    secondCheckDigit === Number(cnpj[13])
+  );
 }

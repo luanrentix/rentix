@@ -21,9 +21,12 @@ type Property = {
   name: string;
 };
 
+type PersonType = "Individual" | "Company";
+
 type Tenant = {
   id: string;
   name: string;
+  personType?: PersonType;
   cpf?: string;
   phone?: string;
   isTenant?: boolean;
@@ -108,7 +111,22 @@ const paymentMethodOptions: PaymentMethodOption[] = [
   { value: "Other", label: "Outros" },
 ];
 
+type BrasilApiCnpjResponse = {
+  cnpj?: string;
+  razao_social?: string;
+  nome_fantasia?: string;
+  cep?: string;
+  uf?: string;
+  municipio?: string;
+  logradouro?: string;
+  numero?: string;
+  bairro?: string;
+  complemento?: string;
+  ddd_telefone_1?: string;
+};
+
 type TenantFormData = {
+  personType: PersonType;
   name: string;
   cpf: string;
   phone: string;
@@ -123,6 +141,7 @@ type TenantFormData = {
 };
 
 const initialTenantFormData: TenantFormData = {
+  personType: "Individual",
   name: "",
   cpf: "",
   phone: "",
@@ -171,6 +190,8 @@ export default function AccountsReceivablePage() {
   );
   const [isZipCodeLoading, setIsZipCodeLoading] = useState(false);
   const [zipCodeError, setZipCodeError] = useState("");
+  const [isCnpjLoading, setIsCnpjLoading] = useState(false);
+  const [cnpjSearchError, setCnpjSearchError] = useState("");
   const [chargeFormError, setChargeFormError] = useState("");
   const [editingChargeId, setEditingChargeId] = useState<string | null>(null);
   const [chargePendingDeletion, setChargePendingDeletion] =
@@ -263,6 +284,24 @@ export default function AccountsReceivablePage() {
       .replace(/(\d{3})(\d)/, "$1.$2")
       .replace(/(\d{3})(\d)/, "$1.$2")
       .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+  }
+
+  function formatCnpj(value: string) {
+    return onlyNumbers(value)
+      .slice(0, 14)
+      .replace(/^(\d{2})(\d)/, "$1.$2")
+      .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+      .replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3/$4")
+      .replace(
+        /^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/,
+        "$1.$2.$3/$4-$5",
+      );
+  }
+
+  function formatDocument(value: string, personType: PersonType) {
+    if (personType === "Company") return formatCnpj(value);
+
+    return formatCpf(value);
   }
 
   function formatPhone(value: string) {
@@ -1163,6 +1202,8 @@ export default function AccountsReceivablePage() {
     setChargeFormError("");
     setTenantFormData(initialTenantFormData);
     setZipCodeError("");
+    setCnpjSearchError("");
+    setIsCnpjLoading(false);
     setIsZipCodeLoading(false);
     setIsTenantCreateOpen(false);
   }
@@ -1276,12 +1317,16 @@ export default function AccountsReceivablePage() {
   function openTenantCreateModal() {
     setTenantFormData(initialTenantFormData);
     setZipCodeError("");
+    setCnpjSearchError("");
+    setIsCnpjLoading(false);
     setIsTenantCreateOpen(true);
   }
 
   function closeTenantCreateModal() {
     setTenantFormData(initialTenantFormData);
     setZipCodeError("");
+    setCnpjSearchError("");
+    setIsCnpjLoading(false);
     setIsTenantCreateOpen(false);
   }
 
@@ -1295,6 +1340,71 @@ export default function AccountsReceivablePage() {
     }));
   }
 
+  function updateTenantPersonType(personType: PersonType) {
+    setTenantFormData((currentData) => ({
+      ...currentData,
+      personType,
+      cpf: "",
+    }));
+    setZipCodeError("");
+    setCnpjSearchError("");
+  }
+
+  async function searchCompanyByCnpj() {
+    const cleanCnpj = onlyNumbers(tenantFormData.cpf);
+
+    if (tenantFormData.personType !== "Company") return;
+
+    if (cleanCnpj.length !== 14) {
+      setCnpjSearchError("Informe um CNPJ com 14 números para buscar os dados.");
+      return;
+    }
+
+    if (!isValidCnpj(cleanCnpj)) {
+      setCnpjSearchError("CNPJ inválido. Verifique o número informado.");
+      return;
+    }
+
+    try {
+      setIsCnpjLoading(true);
+      setCnpjSearchError("");
+
+      const response = await fetch(
+        `https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`,
+      );
+
+      if (!response.ok) {
+        setCnpjSearchError("Empresa não encontrada para o CNPJ informado.");
+        return;
+      }
+
+      const data = (await response.json()) as BrasilApiCnpjResponse;
+
+      setTenantFormData((currentData) => ({
+        ...currentData,
+        name:
+          data.razao_social?.trim() ||
+          data.nome_fantasia?.trim() ||
+          currentData.name,
+        cpf: formatCnpj(data.cnpj || cleanCnpj),
+        phone: data.ddd_telefone_1
+          ? formatPhone(data.ddd_telefone_1)
+          : currentData.phone,
+        zipCode: data.cep ? formatZipCode(data.cep) : currentData.zipCode,
+        state: data.uf || currentData.state,
+        city: data.municipio || currentData.city,
+        street: data.logradouro || currentData.street,
+        number: data.numero || currentData.number,
+        district: data.bairro || currentData.district,
+        complement: data.complemento || currentData.complement,
+      }));
+    } catch {
+      setCnpjSearchError("Não foi possível consultar o CNPJ no momento.");
+    } finally {
+      setIsCnpjLoading(false);
+    }
+  }
+
   function createTenantFromModal() {
     const trimmedTenantName = tenantFormData.name.trim();
 
@@ -1303,6 +1413,7 @@ export default function AccountsReceivablePage() {
     const newTenant: Tenant = {
       id: `tenant-${Date.now()}`,
       name: trimmedTenantName,
+      personType: tenantFormData.personType,
       cpf: tenantFormData.cpf.trim(),
       phone: tenantFormData.phone.trim(),
       isTenant: tenantFormData.isTenant,
@@ -3059,36 +3170,40 @@ export default function AccountsReceivablePage() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-2xl font-black text-slate-950">
-                    Novo inquilino
+                    Nova pessoa
                   </h2>
 
                   <p className="mt-1 text-sm text-slate-500">
-                    Preencha os dados pessoais e endereço do inquilino.
+                    Preencha os dados pessoais e endereço da pessoa.
                   </p>
                 </div>
 
                 <button
                   onClick={closeTenantCreateModal}
                   className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-700 transition hover:bg-slate-200"
-                  aria-label="Fechar cadastro de inquilino"
+                  aria-label="Fechar cadastro de pessoa"
                 >
                   ×
                 </button>
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-6 py-5 md:px-8">
-              <div className="grid gap-5 md:grid-cols-3">
+            <div className="flex-1 space-y-7 overflow-y-auto px-6 py-6 md:px-8">
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                 <div>
                   <label className="mb-2 block text-sm font-black text-slate-800">
-                    Nome completo
+                    Nome completo / Razão social
                   </label>
 
                   <input
-                    placeholder="Ex: João Silva"
                     value={tenantFormData.name}
                     onChange={(event) =>
                       updateTenantFormData("name", event.target.value)
+                    }
+                    placeholder={
+                      tenantFormData.personType === "Company"
+                        ? "Ex: Empresa LTDA"
+                        : "Ex: João Silva"
                     }
                     className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
                   />
@@ -3096,17 +3211,69 @@ export default function AccountsReceivablePage() {
 
                 <div>
                   <label className="mb-2 block text-sm font-black text-slate-800">
-                    CPF
+                    Tipo de pessoa
+                  </label>
+
+                  <select
+                    value={tenantFormData.personType}
+                    onChange={(event) =>
+                      updateTenantPersonType(event.target.value as PersonType)
+                    }
+                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                  >
+                    <option value="Individual">Pessoa física</option>
+                    <option value="Company">Pessoa jurídica</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-black text-slate-800">
+                    {tenantFormData.personType === "Company" ? "CNPJ" : "CPF"}
                   </label>
 
                   <input
-                    placeholder="Ex: 123.456.789-00"
                     value={tenantFormData.cpf}
                     onChange={(event) =>
-                      updateTenantFormData("cpf", formatCpf(event.target.value))
+                      updateTenantFormData(
+                        "cpf",
+                        formatDocument(
+                          event.target.value,
+                          tenantFormData.personType,
+                        ),
+                      )
                     }
+                    onBlur={() => {
+                      if (tenantFormData.personType === "Company") {
+                        searchCompanyByCnpj();
+                      }
+                    }}
+                    placeholder={
+                      tenantFormData.personType === "Company"
+                        ? "Ex: 12.345.678/0001-90"
+                        : "Ex: 123.456.789-00"
+                    }
+                    maxLength={tenantFormData.personType === "Company" ? 18 : 14}
                     className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
                   />
+
+                  {tenantFormData.personType === "Company" && (
+                    <button
+                      type="button"
+                      onClick={searchCompanyByCnpj}
+                      disabled={isCnpjLoading}
+                      className="mt-3 w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isCnpjLoading
+                        ? "Buscando CNPJ..."
+                        : "Buscar dados da empresa"}
+                    </button>
+                  )}
+
+                  {cnpjSearchError && tenantFormData.personType === "Company" && (
+                    <p className="mt-2 text-xs font-bold text-red-500">
+                      {cnpjSearchError}
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -3115,20 +3282,17 @@ export default function AccountsReceivablePage() {
                   </label>
 
                   <input
-                    placeholder="Ex: (69) 99999-0000"
                     value={tenantFormData.phone}
                     onChange={(event) =>
-                      updateTenantFormData(
-                        "phone",
-                        formatPhone(event.target.value),
-                      )
+                      updateTenantFormData("phone", formatPhone(event.target.value))
                     }
+                    placeholder="Ex: (69) 99999-0000"
                     className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
                   />
                 </div>
               </div>
 
-              <label className="mt-5 flex cursor-pointer gap-3 rounded-2xl border border-orange-100 bg-orange-50/30 p-5 transition hover:bg-orange-50">
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-orange-100 bg-orange-50/50 px-5 py-4 transition hover:bg-orange-50">
                 <input
                   type="checkbox"
                   checked={tenantFormData.isTenant}
@@ -3139,178 +3303,204 @@ export default function AccountsReceivablePage() {
                 />
 
                 <span>
-                  <span className="block text-sm font-black text-slate-950">
+                  <span className="block text-sm font-black text-slate-800">
                     Esta pessoa é inquilino
                   </span>
 
-                  <span className="mt-1 block text-xs font-semibold text-slate-600">
+                  <span className="mt-1 block text-xs font-semibold text-slate-500">
                     Quando desmarcado, esta pessoa não poderá ser vinculada a
                     contratos de aluguel.
                   </span>
                 </span>
               </label>
 
-              <div className="mt-8">
+              <div>
                 <h3 className="text-sm font-black uppercase tracking-wide text-orange-600">
                   Endereço
                 </h3>
+              </div>
 
-                <div className="mt-4 grid gap-5 md:grid-cols-4">
-                  <div>
-                    <label className="mb-2 block text-sm font-black text-slate-800">
-                      CEP
-                    </label>
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                <div>
+                  <label className="mb-2 block text-sm font-black text-slate-800">
+                    CEP
+                  </label>
 
+                  <div className="flex gap-2">
                     <input
-                      placeholder="Ex: 76940-000"
                       value={tenantFormData.zipCode}
-                      onBlur={verifyZipCode}
-                      onChange={(event) => {
-                        setZipCodeError("");
+                      onChange={(event) =>
                         updateTenantFormData(
                           "zipCode",
                           formatZipCode(event.target.value),
-                        );
-                      }}
-                      className={`h-14 w-full rounded-2xl border bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-4 ${
-                        zipCodeError
-                          ? "border-red-300 focus:border-red-500 focus:ring-red-100"
-                          : "border-slate-200 focus:border-orange-500 focus:ring-orange-100"
-                      }`}
-                    />
-
-                    {isZipCodeLoading && (
-                      <p className="mt-2 text-xs font-bold text-orange-600">
-                        Consultando CEP...
-                      </p>
-                    )}
-
-                    {zipCodeError && (
-                      <p className="mt-2 text-xs font-bold text-red-600">
-                        {zipCodeError}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-black text-slate-800">
-                      Estado
-                    </label>
-
-                    <input
-                      placeholder="UF"
-                      value={tenantFormData.state}
-                      onChange={(event) =>
-                        updateTenantFormData(
-                          "state",
-                          event.target.value.toUpperCase().slice(0, 2),
                         )
                       }
+                      onBlur={verifyZipCode}
+                      placeholder="Ex: 76940-000"
                       className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
                     />
+
+                    <button
+                      type="button"
+                      onClick={verifyZipCode}
+                      disabled={isZipCodeLoading}
+                      className="h-14 rounded-2xl bg-orange-500 px-4 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 disabled:bg-orange-300"
+                    >
+                      {isZipCodeLoading ? "..." : "Buscar"}
+                    </button>
                   </div>
 
-                  <div>
-                    <label className="mb-2 block text-sm font-black text-slate-800">
-                      Cidade
-                    </label>
-
-                    <input
-                      placeholder="Cidade"
-                      value={tenantFormData.city}
-                      onChange={(event) =>
-                        updateTenantFormData("city", event.target.value)
-                      }
-                      className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-black text-slate-800">
-                      Logradouro
-                    </label>
-
-                    <input
-                      placeholder="Rua, avenida..."
-                      value={tenantFormData.street}
-                      onChange={(event) =>
-                        updateTenantFormData("street", event.target.value)
-                      }
-                      className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
-                    />
-                  </div>
+                  {zipCodeError && (
+                    <p className="mt-2 text-xs font-bold text-red-500">
+                      {zipCodeError}
+                    </p>
+                  )}
                 </div>
 
-                <div className="mt-5 grid gap-5 md:grid-cols-3">
-                  <div>
-                    <label className="mb-2 block text-sm font-black text-slate-800">
-                      Número
-                    </label>
+                <div>
+                  <label className="mb-2 block text-sm font-black text-slate-800">
+                    Estado
+                  </label>
 
-                    <input
-                      placeholder="Número da casa"
-                      value={tenantFormData.number}
-                      onChange={(event) =>
-                        updateTenantFormData("number", event.target.value)
-                      }
-                      className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
-                    />
-                  </div>
+                  <input
+                    value={tenantFormData.state}
+                    onChange={(event) =>
+                      updateTenantFormData("state", event.target.value.toUpperCase())
+                    }
+                    placeholder="UF"
+                    maxLength={2}
+                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                  />
+                </div>
 
-                  <div>
-                    <label className="mb-2 block text-sm font-black text-slate-800">
-                      Bairro
-                    </label>
+                <div>
+                  <label className="mb-2 block text-sm font-black text-slate-800">
+                    Cidade
+                  </label>
 
-                    <input
-                      placeholder="Bairro"
-                      value={tenantFormData.district}
-                      onChange={(event) =>
-                        updateTenantFormData("district", event.target.value)
-                      }
-                      className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
-                    />
-                  </div>
+                  <input
+                    value={tenantFormData.city}
+                    onChange={(event) =>
+                      updateTenantFormData("city", event.target.value)
+                    }
+                    placeholder="Cidade"
+                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                  />
+                </div>
 
-                  <div>
-                    <label className="mb-2 block text-sm font-black text-slate-800">
-                      Complemento
-                    </label>
+                <div>
+                  <label className="mb-2 block text-sm font-black text-slate-800">
+                    Logradouro
+                  </label>
 
-                    <input
-                      placeholder="Apartamento, bloco, referência..."
-                      value={tenantFormData.complement}
-                      onChange={(event) =>
-                        updateTenantFormData("complement", event.target.value)
-                      }
-                      className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
-                    />
-                  </div>
+                  <input
+                    value={tenantFormData.street}
+                    onChange={(event) =>
+                      updateTenantFormData("street", event.target.value)
+                    }
+                    placeholder="Rua, avenida..."
+                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-black text-slate-800">
+                    Número
+                  </label>
+
+                  <input
+                    value={tenantFormData.number}
+                    onChange={(event) =>
+                      updateTenantFormData("number", event.target.value)
+                    }
+                    placeholder="Número da casa"
+                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-black text-slate-800">
+                    Bairro
+                  </label>
+
+                  <input
+                    value={tenantFormData.district}
+                    onChange={(event) =>
+                      updateTenantFormData("district", event.target.value)
+                    }
+                    placeholder="Bairro"
+                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-black text-slate-800">
+                    Complemento
+                  </label>
+
+                  <input
+                    value={tenantFormData.complement}
+                    onChange={(event) =>
+                      updateTenantFormData("complement", event.target.value)
+                    }
+                    placeholder="Apartamento, bloco, referência..."
+                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                  />
                 </div>
               </div>
             </div>
 
-            <div className="border-t border-slate-100 bg-white px-6 py-5 md:px-8">
-              <div className="flex flex-col-reverse gap-3 md:flex-row md:justify-end">
-                <button
-                  onClick={closeTenantCreateModal}
-                  className="rounded-2xl bg-slate-100 px-7 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200"
-                >
-                  Cancelar
-                </button>
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white px-6 py-5 md:flex-row md:justify-end md:px-8">
+              <button
+                type="button"
+                onClick={closeTenantCreateModal}
+                className="rounded-2xl bg-slate-100 px-6 py-4 text-sm font-black text-slate-600 transition hover:bg-slate-200"
+              >
+                Cancelar
+              </button>
 
-                <button
-                  onClick={createTenantFromModal}
-                  className="rounded-2xl bg-orange-500 px-7 py-4 text-sm font-black text-white shadow-lg shadow-orange-500/20 transition hover:bg-orange-600"
-                >
-                  Cadastrar inquilino
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={createTenantFromModal}
+                className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+              >
+                Cadastrar pessoa
+              </button>
             </div>
           </div>
         </div>
       )}
+
     </AppShell>
+  );
+}
+
+function isValidCnpj(value: string) {
+  const cnpj = value.replace(/\D/g, "");
+
+  if (cnpj.length !== 14) return false;
+  if (/^(\d)\1{13}$/.test(cnpj)) return false;
+
+  const calculateDigit = (base: string, weights: number[]) => {
+    const sum = weights.reduce(
+      (total, weight, index) => total + Number(base[index]) * weight,
+      0,
+    );
+
+    const rest = sum % 11;
+
+    return rest < 2 ? 0 : 11 - rest;
+  };
+
+  const firstWeights = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const secondWeights = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+
+  const firstCheckDigit = calculateDigit(cnpj.slice(0, 12), firstWeights);
+  const secondCheckDigit = calculateDigit(cnpj.slice(0, 13), secondWeights);
+
+  return (
+    firstCheckDigit === Number(cnpj[12]) &&
+    secondCheckDigit === Number(cnpj[13])
   );
 }
 
