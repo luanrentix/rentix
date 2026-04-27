@@ -24,6 +24,16 @@ type Property = {
 type Tenant = {
   id: string;
   name: string;
+  cpf?: string;
+  phone?: string;
+  isTenant?: boolean;
+  zipCode?: string;
+  state?: string;
+  city?: string;
+  street?: string;
+  number?: string;
+  district?: string;
+  complement?: string;
 };
 
 type Charge = {
@@ -41,6 +51,7 @@ type Charge = {
 };
 
 type StatusFilter = "All" | "Pending" | "Paid" | "Overdue";
+type ReportDueFilter = "All" | "Overdue" | "DueToday" | "Upcoming" | "DateRange";
 type ChargeLaunchType = "single" | "installment";
 
 type InstallmentPreview = {
@@ -50,14 +61,91 @@ type InstallmentPreview = {
   dueDate: string;
 };
 
+type PaymentMethod =
+  | "Cash"
+  | "Pix"
+  | "CreditCard"
+  | "DebitCard"
+  | "BankSlip"
+  | "BankTransfer"
+  | "Other";
+
+type PaymentAllocation = {
+  id: string;
+  method: PaymentMethod;
+  amount: number;
+};
+
+type PaymentEntry = {
+  id: string;
+  method: PaymentMethod;
+  amount: string;
+};
+
+type ChargePayment = {
+  chargeId: string;
+  paidAt: string;
+  method: PaymentMethod;
+  paymentItems?: PaymentAllocation[];
+  interest: number;
+  discount: number;
+  amountPaid: number;
+  note?: string;
+};
+
+type PaymentMethodOption = {
+  value: PaymentMethod;
+  label: string;
+};
+
+const paymentMethodOptions: PaymentMethodOption[] = [
+  { value: "Cash", label: "Dinheiro" },
+  { value: "Pix", label: "Pix" },
+  { value: "CreditCard", label: "Cartão de crédito" },
+  { value: "DebitCard", label: "Cartão de débito" },
+  { value: "BankSlip", label: "Boleto bancário" },
+  { value: "BankTransfer", label: "Transferência bancária" },
+  { value: "Other", label: "Outros" },
+];
+
+type TenantFormData = {
+  name: string;
+  cpf: string;
+  phone: string;
+  isTenant: boolean;
+  zipCode: string;
+  state: string;
+  city: string;
+  street: string;
+  number: string;
+  district: string;
+  complement: string;
+};
+
+const initialTenantFormData: TenantFormData = {
+  name: "",
+  cpf: "",
+  phone: "",
+  isTenant: true,
+  zipCode: "",
+  state: "",
+  city: "",
+  street: "",
+  number: "",
+  district: "",
+  complement: "",
+};
+
 export default function AccountsReceivablePage() {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [paid, setPaid] = useState<string[]>([]);
+  const [paymentRecords, setPaymentRecords] = useState<ChargePayment[]>([]);
   const [manualCharges, setManualCharges] = useState<Charge[]>([]);
 
-  const [isSearchOpen, setIsSearchOpen] = useState(true);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [autoOpenSearch, setAutoOpenSearch] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isTenantCreateOpen, setIsTenantCreateOpen] = useState(false);
 
@@ -70,6 +158,7 @@ export default function AccountsReceivablePage() {
   const [formAmount, setFormAmount] = useState("");
   const [formIssueDate, setFormIssueDate] = useState("");
   const [formDueDate, setFormDueDate] = useState("");
+  const [formPaymentDate, setFormPaymentDate] = useState("");
   const [formLaunchType, setFormLaunchType] =
     useState<ChargeLaunchType>("single");
   const [formInstallmentQuantity, setFormInstallmentQuantity] = useState("2");
@@ -77,7 +166,38 @@ export default function AccountsReceivablePage() {
     InstallmentPreview[]
   >([]);
 
-  const [newTenantName, setNewTenantName] = useState("");
+  const [tenantFormData, setTenantFormData] = useState<TenantFormData>(
+    initialTenantFormData,
+  );
+  const [isZipCodeLoading, setIsZipCodeLoading] = useState(false);
+  const [zipCodeError, setZipCodeError] = useState("");
+  const [chargeFormError, setChargeFormError] = useState("");
+  const [editingChargeId, setEditingChargeId] = useState<string | null>(null);
+  const [chargePendingDeletion, setChargePendingDeletion] =
+    useState<Charge | null>(null);
+  const [chargePendingPaymentReversal, setChargePendingPaymentReversal] =
+    useState<Charge | null>(null);
+  const [chargePendingPaymentReceipt, setChargePendingPaymentReceipt] =
+    useState<Charge | null>(null);
+  const [isPaymentConfirmationOpen, setIsPaymentConfirmationOpen] =
+    useState(false);
+  const [paymentInterest, setPaymentInterest] = useState("");
+  const [paymentDiscount, setPaymentDiscount] = useState("");
+  const [paymentFinalAmount, setPaymentFinalAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("Cash");
+  const [paymentEntries, setPaymentEntries] = useState<PaymentEntry[]>([]);
+  const [paymentNote, setPaymentNote] = useState("");
+  const [paymentFormError, setPaymentFormError] = useState("");
+
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [reportTenantId, setReportTenantId] = useState("");
+  const [reportStatusFilter, setReportStatusFilter] =
+    useState<StatusFilter>("All");
+  const [reportDueFilter, setReportDueFilter] =
+    useState<ReportDueFilter>("All");
+  const [reportStartDate, setReportStartDate] = useState("");
+  const [reportEndDate, setReportEndDate] = useState("");
+  const [reportFormError, setReportFormError] = useState("");
 
   useEffect(() => {
     const c = localStorage.getItem("rentix_contracts");
@@ -85,8 +205,12 @@ export default function AccountsReceivablePage() {
     const t = localStorage.getItem("rentix_tenants");
     const paidData = localStorage.getItem("rentix_paid_charges");
     const manualData = localStorage.getItem("rentix_manual_charges");
+    const paymentData = localStorage.getItem("rentix_charge_payments");
     const savedStatusFilter = localStorage.getItem(
       "rentix_receivable_status_filter",
+    );
+    const savedAutoOpenSearch = localStorage.getItem(
+      "rentix_auto_open_search",
     );
 
     if (c) setContracts(JSON.parse(c));
@@ -94,6 +218,7 @@ export default function AccountsReceivablePage() {
     if (t) setTenants(JSON.parse(t));
     if (paidData) setPaid(JSON.parse(paidData));
     if (manualData) setManualCharges(JSON.parse(manualData));
+    if (paymentData) setPaymentRecords(JSON.parse(paymentData));
 
     if (
       savedStatusFilter === "All" ||
@@ -102,6 +227,16 @@ export default function AccountsReceivablePage() {
       savedStatusFilter === "Overdue"
     ) {
       setStatusFilter(savedStatusFilter);
+    }
+
+    if (savedAutoOpenSearch !== null) {
+      const parsedAutoOpenSearch = JSON.parse(savedAutoOpenSearch) as boolean;
+
+      setAutoOpenSearch(parsedAutoOpenSearch);
+      setIsSearchOpen(parsedAutoOpenSearch);
+    } else {
+      setAutoOpenSearch(true);
+      setIsSearchOpen(true);
     }
   }, []);
 
@@ -117,6 +252,79 @@ export default function AccountsReceivablePage() {
 
     generateInstallmentPreview();
   }, [formLaunchType, formAmount, formDueDate, formInstallmentQuantity]);
+
+  function onlyNumbers(value: string) {
+    return value.replace(/\D/g, "");
+  }
+
+  function formatCpf(value: string) {
+    return onlyNumbers(value)
+      .slice(0, 11)
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+  }
+
+  function formatPhone(value: string) {
+    const numbers = onlyNumbers(value).slice(0, 11);
+
+    if (numbers.length <= 10) {
+      return numbers
+        .replace(/(\d{2})(\d)/, "($1) $2")
+        .replace(/(\d{4})(\d)/, "$1-$2");
+    }
+
+    return numbers
+      .replace(/(\d{2})(\d)/, "($1) $2")
+      .replace(/(\d{5})(\d)/, "$1-$2");
+  }
+
+  function formatZipCode(value: string) {
+    return onlyNumbers(value)
+      .slice(0, 8)
+      .replace(/(\d{5})(\d)/, "$1-$2");
+  }
+
+  async function verifyZipCode() {
+    const zipCode = onlyNumbers(tenantFormData.zipCode);
+
+    if (zipCode.length === 0) {
+      setZipCodeError("");
+      return;
+    }
+
+    if (zipCode.length !== 8) {
+      setZipCodeError("CEP inválido. Digite 8 números.");
+      return;
+    }
+
+    try {
+      setIsZipCodeLoading(true);
+      setZipCodeError("");
+
+      const response = await fetch(`https://viacep.com.br/ws/${zipCode}/json/`);
+      const data = await response.json();
+
+      if (data.erro) {
+        setZipCodeError("CEP não encontrado.");
+        return;
+      }
+
+      setTenantFormData((currentData) => ({
+        ...currentData,
+        zipCode: formatZipCode(zipCode),
+        state: data.uf || currentData.state,
+        city: data.localidade || currentData.city,
+        street: data.logradouro || currentData.street,
+        district: data.bairro || currentData.district,
+        complement: currentData.complement,
+      }));
+    } catch {
+      setZipCodeError("Não foi possível consultar o CEP agora.");
+    } finally {
+      setIsZipCodeLoading(false);
+    }
+  }
 
   function normalizeAmount(value: unknown) {
     if (typeof value === "number") {
@@ -205,7 +413,18 @@ export default function AccountsReceivablePage() {
   }, [manualCharges, paid]);
 
   const charges = useMemo<Charge[]>(() => {
-    return [...automaticCharges, ...manualChargesWithStatus];
+    const manualChargeIds = new Set(
+      manualChargesWithStatus.map((charge) => String(charge.id)),
+    );
+
+    const automaticChargesWithoutManualAdjustments = automaticCharges.filter(
+      (charge) => !manualChargeIds.has(String(charge.id)),
+    );
+
+    return [
+      ...automaticChargesWithoutManualAdjustments,
+      ...manualChargesWithStatus,
+    ];
   }, [automaticCharges, manualChargesWithStatus]);
 
   const filteredCharges = useMemo(() => {
@@ -234,8 +453,8 @@ export default function AccountsReceivablePage() {
   const totalPaid = useMemo(() => {
     return filteredCharges
       .filter((charge) => charge.status === "Paid")
-      .reduce((total, charge) => total + charge.amount, 0);
-  }, [filteredCharges]);
+      .reduce((total, charge) => total + getChargePaidAmount(charge), 0);
+  }, [filteredCharges, paymentRecords]);
 
   const totalOverdue = useMemo(() => {
     return filteredCharges
@@ -248,6 +467,10 @@ export default function AccountsReceivablePage() {
       tenant.name.toLowerCase().includes(search.toLowerCase()),
     );
   }, [tenants, search]);
+
+  const isEditingPaidCharge = editingChargeId
+    ? paid.includes(editingChargeId)
+    : false;
 
   function formatCurrency(value: number) {
     return new Intl.NumberFormat("pt-BR", {
@@ -287,6 +510,15 @@ export default function AccountsReceivablePage() {
     return "Todos";
   }
 
+  function getReportDueFilterLabel(filter: ReportDueFilter) {
+    if (filter === "Overdue") return "Vencidas";
+    if (filter === "DueToday") return "Vencendo hoje";
+    if (filter === "Upcoming") return "A vencer";
+    if (filter === "DateRange") return "Por período";
+
+    return "Todos os vencimentos";
+  }
+
   function getLocalDateValue(date: Date) {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -306,11 +538,604 @@ export default function AccountsReceivablePage() {
     return value.toFixed(2).replace(".", ",");
   }
 
-  function markPaid(id: string) {
-    const updated = [...paid, id];
+  function getPaymentMethodLabel(method: PaymentMethod) {
+    return (
+      paymentMethodOptions.find((option) => option.value === method)?.label ||
+      "Outros"
+    );
+  }
 
-    setPaid(updated);
-    localStorage.setItem("rentix_paid_charges", JSON.stringify(updated));
+  function calculatePaymentAmount(
+    charge: Charge,
+    interest: number,
+    discount: number,
+  ) {
+    return Math.max(charge.amount + interest - discount, 0);
+  }
+
+  function updatePaymentFinalAmountFromAdjustments(
+    charge: Charge,
+    interestValue: string,
+    discountValue: string,
+  ) {
+    const interest = normalizeAmount(interestValue);
+    const discount = normalizeAmount(discountValue);
+    const finalAmount = calculatePaymentAmount(charge, interest, discount);
+
+    const formattedFinalAmount = formatAmountInput(finalAmount);
+
+    setPaymentFinalAmount(formattedFinalAmount);
+    updatePaymentEntriesFromFinalAmount(formattedFinalAmount);
+  }
+
+  function updatePaymentAdjustmentsFromFinalAmount(
+    charge: Charge,
+    finalAmountValue: string,
+  ) {
+    const finalAmount = normalizeAmount(finalAmountValue);
+    const difference = finalAmount - charge.amount;
+
+    if (!Number.isFinite(finalAmount) || finalAmount <= 0) {
+      setPaymentInterest("");
+      setPaymentDiscount("");
+      return;
+    }
+
+    if (difference > 0) {
+      setPaymentInterest(formatAmountInput(difference));
+      setPaymentDiscount("");
+      return;
+    }
+
+    if (difference < 0) {
+      setPaymentInterest("");
+      setPaymentDiscount(formatAmountInput(Math.abs(difference)));
+      return;
+    }
+
+    setPaymentInterest("");
+    setPaymentDiscount("");
+  }
+
+  function updatePaymentEntriesFromFinalAmount(finalAmount: string) {
+    setPaymentEntries((currentEntries) => {
+      if (currentEntries.length !== 1) return currentEntries;
+
+      return currentEntries.map((entry) => ({
+        ...entry,
+        amount: finalAmount,
+      }));
+    });
+  }
+
+  function addPaymentEntry() {
+    setPaymentFormError("");
+    setPaymentEntries((currentEntries) => [
+      ...currentEntries,
+      {
+        id: `payment-entry-${Date.now()}`,
+        method: "Pix",
+        amount: "",
+      },
+    ]);
+  }
+
+  function removePaymentEntry(entryId: string) {
+    setPaymentFormError("");
+    setPaymentEntries((currentEntries) =>
+      currentEntries.length > 1
+        ? currentEntries.filter((entry) => entry.id !== entryId)
+        : currentEntries,
+    );
+  }
+
+  function updatePaymentEntryMethod(entryId: string, method: PaymentMethod) {
+    setPaymentFormError("");
+    setPaymentEntries((currentEntries) =>
+      currentEntries.map((entry) =>
+        entry.id === entryId ? { ...entry, method } : entry,
+      ),
+    );
+  }
+
+  function updatePaymentEntryAmount(entryId: string, amount: string) {
+    setPaymentFormError("");
+    setPaymentEntries((currentEntries) =>
+      currentEntries.map((entry) =>
+        entry.id === entryId ? { ...entry, amount } : entry,
+      ),
+    );
+  }
+
+  function getPaymentEntriesTotal() {
+    return paymentEntries.reduce(
+      (total, entry) => total + normalizeAmount(entry.amount),
+      0,
+    );
+  }
+
+  function getChargePayment(chargeId: string) {
+    return paymentRecords.find(
+      (paymentRecord) => String(paymentRecord.chargeId) === String(chargeId),
+    );
+  }
+
+  function getChargePaidAmount(charge: Charge) {
+    return getChargePayment(charge.id)?.amountPaid ?? charge.amount;
+  }
+
+  function getDateInputValue(dateValue?: string) {
+    if (!dateValue) return "";
+
+    return getLocalDateValue(new Date(dateValue));
+  }
+
+  function getStartOfDay(date: Date) {
+    const normalizedDate = new Date(date);
+    normalizedDate.setHours(0, 0, 0, 0);
+
+    return normalizedDate;
+  }
+
+  function getEndOfDay(date: Date) {
+    const normalizedDate = new Date(date);
+    normalizedDate.setHours(23, 59, 59, 999);
+
+    return normalizedDate;
+  }
+
+  function openReportModal() {
+    setReportTenantId(selectedTenant ? String(selectedTenant.id) : "");
+    setReportStatusFilter(statusFilter);
+    setReportDueFilter("All");
+    setReportStartDate("");
+    setReportEndDate("");
+    setReportFormError("");
+    setIsReportOpen(true);
+  }
+
+  function closeReportModal() {
+    setIsReportOpen(false);
+    setReportFormError("");
+  }
+
+  function getReportFilteredCharges() {
+    const today = getStartOfDay(new Date());
+    const startDate = reportStartDate
+      ? getStartOfDay(new Date(`${reportStartDate}T00:00:00`))
+      : null;
+    const endDate = reportEndDate
+      ? getEndOfDay(new Date(`${reportEndDate}T00:00:00`))
+      : null;
+    const selectedReportTenant = tenants.find(
+      (tenant) => String(tenant.id) === String(reportTenantId),
+    );
+
+    return charges.filter((charge) => {
+      const dueDate = getStartOfDay(new Date(charge.dueDate));
+
+      if (
+        selectedReportTenant &&
+        charge.tenant.toLowerCase() !== selectedReportTenant.name.toLowerCase()
+      ) {
+        return false;
+      }
+
+      if (reportStatusFilter !== "All" && charge.status !== reportStatusFilter) {
+        return false;
+      }
+
+      if (reportDueFilter === "Overdue" && charge.status !== "Overdue") {
+        return false;
+      }
+
+      if (reportDueFilter === "DueToday" && dueDate.getTime() !== today.getTime()) {
+        return false;
+      }
+
+      if (
+        reportDueFilter === "Upcoming" &&
+        (dueDate < today || charge.status === "Paid")
+      ) {
+        return false;
+      }
+
+      if (reportDueFilter === "DateRange") {
+        if (startDate && dueDate < startDate) return false;
+        if (endDate && dueDate > endDate) return false;
+      }
+
+      return true;
+    });
+  }
+
+  function getReportTotalAmount(reportCharges: Charge[]) {
+    return reportCharges.reduce(
+      (total, charge) =>
+        total +
+        (charge.status === "Paid" ? getChargePaidAmount(charge) : charge.amount),
+      0,
+    );
+  }
+
+  function escapeHtml(value: string) {
+    return value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function openAccountsReceivableReport(shouldPrint: boolean) {
+    setReportFormError("");
+
+    if (reportDueFilter === "DateRange" && !reportStartDate && !reportEndDate) {
+      setReportFormError(
+        "Informe ao menos uma data inicial ou final para gerar relatório por período.",
+      );
+      return;
+    }
+
+    if (reportStartDate && reportEndDate && reportStartDate > reportEndDate) {
+      setReportFormError("A data inicial não pode ser maior que a data final.");
+      return;
+    }
+
+    const reportCharges = getReportFilteredCharges();
+
+    if (reportCharges.length === 0) {
+      setReportFormError("Nenhuma conta encontrada para os filtros informados.");
+      return;
+    }
+
+    const selectedReportTenant = tenants.find(
+      (tenant) => String(tenant.id) === String(reportTenantId),
+    );
+    const pendingTotal = reportCharges
+      .filter((charge) => charge.status === "Pending")
+      .reduce((total, charge) => total + charge.amount, 0);
+    const paidTotal = reportCharges
+      .filter((charge) => charge.status === "Paid")
+      .reduce((total, charge) => total + getChargePaidAmount(charge), 0);
+    const overdueTotal = reportCharges
+      .filter((charge) => charge.status === "Overdue")
+      .reduce((total, charge) => total + charge.amount, 0);
+    const grandTotal = getReportTotalAmount(reportCharges);
+
+    const filterSummary = [
+      `Pessoa: ${selectedReportTenant?.name || "Todas"}`,
+      `Status: ${getStatusFilterLabel(reportStatusFilter)}`,
+      `Vencimento: ${getReportDueFilterLabel(reportDueFilter)}`,
+      reportDueFilter === "DateRange" && reportStartDate
+        ? `De: ${formatDate(`${reportStartDate}T00:00:00`)}`
+        : "",
+      reportDueFilter === "DateRange" && reportEndDate
+        ? `Até: ${formatDate(`${reportEndDate}T00:00:00`)}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+
+    const rows = reportCharges
+      .map((charge) => {
+        const payment = getChargePayment(charge.id);
+        const amount =
+          charge.status === "Paid" ? getChargePaidAmount(charge) : charge.amount;
+        const paymentMethods = payment?.paymentItems?.length
+          ? payment.paymentItems
+              .map(
+                (item) =>
+                  `${getPaymentMethodLabel(item.method)} (${formatCurrency(item.amount)})`,
+              )
+              .join(", ")
+          : payment
+            ? getPaymentMethodLabel(payment.method)
+            : "-";
+
+        return `
+          <tr>
+            <td>${escapeHtml(charge.property)}</td>
+            <td>${escapeHtml(charge.tenant)}</td>
+            <td>${formatDate(charge.dueDate)}</td>
+            <td>${formatCurrency(amount)}</td>
+            <td>${getStatusLabel(charge.status)}</td>
+            <td>${payment?.paidAt ? formatDate(payment.paidAt) : "-"}</td>
+            <td>${escapeHtml(paymentMethods)}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    const reportWindow = window.open("", "_blank", "width=1200,height=800");
+
+    if (!reportWindow) {
+      setReportFormError(
+        "Não foi possível abrir o relatório. Verifique se o navegador bloqueou pop-ups.",
+      );
+      return;
+    }
+
+    reportWindow.document.write(`
+      <!doctype html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8" />
+          <title>Relatório de Contas a Receber</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; margin: 0; color: #0f172a; background: #f1f5f9; }
+            .report-toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 10px; padding: 14px 24px; background: rgba(255, 255, 255, 0.96); border-bottom: 1px solid #e2e8f0; backdrop-filter: blur(10px); }
+            .toolbar-button { border: 0; border-radius: 12px; padding: 11px 18px; font-size: 13px; font-weight: 800; cursor: pointer; transition: 0.2s ease; }
+            .toolbar-button.print { background: #059669; color: #ffffff; box-shadow: 0 8px 18px rgba(5, 150, 105, 0.2); }
+            .toolbar-button.print:hover { background: #047857; }
+            .toolbar-button.close { background: #e2e8f0; color: #0f172a; }
+            .toolbar-button.close:hover { background: #cbd5e1; }
+            .report-page { width: min(1180px, calc(100% - 48px)); margin: 28px auto; padding: 32px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 18px; box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12); }
+            .header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #e2e8f0; padding-bottom: 18px; }
+            .brand { font-size: 13px; font-weight: 700; color: #ea580c; text-transform: uppercase; letter-spacing: 0.08em; }
+            h1 { margin: 6px 0 0; font-size: 26px; }
+            .meta { margin-top: 8px; font-size: 12px; color: #64748b; line-height: 1.6; }
+            .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 22px 0; }
+            .card { border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px; background: #f8fafc; }
+            .card span { display: block; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase; }
+            .card strong { display: block; margin-top: 6px; font-size: 16px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+            th { background: #fff7ed; color: #0f172a; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+            th, td { border: 1px solid #e2e8f0; padding: 9px; font-size: 12px; vertical-align: top; }
+            tr:nth-child(even) td { background: #f8fafc; }
+            .footer { margin-top: 24px; font-size: 11px; color: #64748b; text-align: center; }
+            @media print {
+              body { margin: 0; background: #ffffff; }
+              .no-print { display: none !important; }
+              .report-page { width: 100%; margin: 0; padding: 18px; border: 0; border-radius: 0; box-shadow: none; }
+              .summary { grid-template-columns: repeat(4, 1fr); }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="report-toolbar no-print">
+            <button class="toolbar-button print" type="button" onclick="window.print()">Imprimir</button>
+            <button class="toolbar-button close" type="button" onclick="window.close()">Fechar relatório</button>
+          </div>
+
+          <main class="report-page">
+          <div class="header">
+            <div>
+              <div class="brand">Rentix · Financeiro</div>
+              <h1>Relatório de Contas a Receber</h1>
+              <div class="meta">${escapeHtml(filterSummary)}</div>
+            </div>
+            <div class="meta">
+              Gerado em:<br />
+              <strong>${new Date().toLocaleString("pt-BR")}</strong>
+            </div>
+          </div>
+
+          <div class="summary">
+            <div class="card"><span>Quantidade</span><strong>${reportCharges.length}</strong></div>
+            <div class="card"><span>Total geral</span><strong>${formatCurrency(grandTotal)}</strong></div>
+            <div class="card"><span>Total pago</span><strong>${formatCurrency(paidTotal)}</strong></div>
+            <div class="card"><span>Total vencido</span><strong>${formatCurrency(overdueTotal)}</strong></div>
+          </div>
+
+          <div class="summary">
+            <div class="card"><span>Total pendente</span><strong>${formatCurrency(pendingTotal)}</strong></div>
+            <div class="card"><span>Status</span><strong>${getStatusFilterLabel(reportStatusFilter)}</strong></div>
+            <div class="card"><span>Vencimento</span><strong>${getReportDueFilterLabel(reportDueFilter)}</strong></div>
+            <div class="card"><span>Pessoa</span><strong>${escapeHtml(selectedReportTenant?.name || "Todas")}</strong></div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Imóvel</th>
+                <th>Inquilino/Pessoa</th>
+                <th>Vencimento</th>
+                <th>Valor</th>
+                <th>Status</th>
+                <th>Pagamento</th>
+                <th>Forma de pagamento</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+
+          <div class="footer">Relatório gerado pelo módulo Contas a Receber do Rentix.</div>
+          </main>
+          ${
+            shouldPrint
+              ? `<script>
+            window.onload = function () {
+              window.focus();
+              window.print();
+            };
+          </script>`
+              : ""
+          }
+        </body>
+      </html>
+    `);
+    reportWindow.document.close();
+  }
+
+  function viewAccountsReceivableReport() {
+    openAccountsReceivableReport(false);
+  }
+
+  function generateAccountsReceivablePdf() {
+    openAccountsReceivableReport(true);
+  }
+
+  function openCreateModal() {
+    const today = new Date();
+    const dueDate = new Date();
+
+    dueDate.setDate(today.getDate() + 30);
+
+    setFormIssueDate(getLocalDateValue(today));
+    setFormDueDate(getLocalDateValue(dueDate));
+    setFormPaymentDate("");
+    setFormLaunchType("single");
+    setEditingChargeId(null);
+    setChargeFormError("");
+    setIsCreateOpen(true);
+  }
+
+  function openEditCharge(charge: Charge) {
+    const tenant = tenants.find(
+      (item) => item.name.toLowerCase() === charge.tenant.toLowerCase(),
+    );
+    const property = properties.find(
+      (item) => item.name.toLowerCase() === charge.property.toLowerCase(),
+    );
+
+    const paymentRecord = getChargePayment(charge.id);
+
+    setEditingChargeId(charge.id);
+    setFormTenant(tenant ? String(tenant.id) : "");
+    setFormProperty(property ? String(property.id) : "");
+    setFormAmount(formatAmountInput(charge.amount));
+    setFormIssueDate(
+      getDateInputValue(charge.issueDate) || getLocalDateValue(new Date()),
+    );
+    setFormDueDate(getDateInputValue(charge.dueDate));
+    setFormPaymentDate(
+      paymentRecord?.paidAt
+        ? getDateInputValue(paymentRecord.paidAt)
+        : getLocalDateValue(new Date()),
+    );
+    setFormLaunchType("single");
+    setFormInstallmentQuantity("2");
+    setInstallmentPreview([]);
+    setChargeFormError("");
+    setIsCreateOpen(true);
+  }
+
+  function openReceivePaymentModal(charge: Charge) {
+    setChargePendingPaymentReceipt(charge);
+    setPaymentInterest("");
+    setPaymentDiscount("");
+    setPaymentFinalAmount(formatAmountInput(charge.amount));
+    setPaymentMethod("Cash");
+    setPaymentEntries([
+      {
+        id: `payment-entry-${Date.now()}`,
+        method: "Cash",
+        amount: formatAmountInput(charge.amount),
+      },
+    ]);
+    setPaymentNote("");
+    setPaymentFormError("");
+  }
+
+  function closeReceivePaymentModal() {
+    setChargePendingPaymentReceipt(null);
+    setIsPaymentConfirmationOpen(false);
+    setPaymentInterest("");
+    setPaymentDiscount("");
+    setPaymentFinalAmount("");
+    setPaymentMethod("Cash");
+    setPaymentEntries([]);
+    setPaymentNote("");
+    setPaymentFormError("");
+  }
+
+  function confirmReceivePayment() {
+    if (!chargePendingPaymentReceipt) return;
+
+    const interest = normalizeAmount(paymentInterest);
+    const discount = normalizeAmount(paymentDiscount);
+    const amountPaid = normalizeAmount(paymentFinalAmount);
+    const paymentEntriesTotal = getPaymentEntriesTotal();
+
+    if (interest < 0 || discount < 0) {
+      setPaymentFormError(
+        "Informe juros e desconto com valores válidos para receber a cobrança.",
+      );
+      return;
+    }
+
+    if (amountPaid <= 0) {
+      setPaymentFormError("O valor final recebido precisa ser maior que zero.");
+      return;
+    }
+
+    if (paymentEntries.length === 0) {
+      setPaymentFormError("Informe ao menos uma forma de pagamento.");
+      return;
+    }
+
+    const hasInvalidPaymentEntry = paymentEntries.some(
+      (entry) => normalizeAmount(entry.amount) <= 0,
+    );
+
+    if (hasInvalidPaymentEntry) {
+      setPaymentFormError(
+        "Informe valores válidos em todas as formas de pagamento.",
+      );
+      return;
+    }
+
+    if (Math.abs(paymentEntriesTotal - amountPaid) > 0.01) {
+      setPaymentFormError(
+        "A soma das formas de pagamento precisa ser igual ao valor final recebido.",
+      );
+      return;
+    }
+
+    setPaymentFormError("");
+    setIsPaymentConfirmationOpen(true);
+  }
+
+  function closePaymentConfirmation() {
+    setIsPaymentConfirmationOpen(false);
+  }
+
+  function finishReceivePayment() {
+    if (!chargePendingPaymentReceipt) return;
+
+    const interest = normalizeAmount(paymentInterest);
+    const discount = normalizeAmount(paymentDiscount);
+    const amountPaid = normalizeAmount(paymentFinalAmount);
+
+    const updatedPaid = paid.includes(chargePendingPaymentReceipt.id)
+      ? paid
+      : [...paid, chargePendingPaymentReceipt.id];
+
+    const paymentRecord: ChargePayment = {
+      chargeId: chargePendingPaymentReceipt.id,
+      paidAt: new Date().toISOString(),
+      method: paymentEntries[0]?.method || paymentMethod,
+      paymentItems: paymentEntries.map((entry) => ({
+        id: entry.id,
+        method: entry.method,
+        amount: normalizeAmount(entry.amount),
+      })),
+      interest,
+      discount,
+      amountPaid,
+      note: paymentNote.trim(),
+    };
+
+    const updatedPaymentRecords = [
+      ...paymentRecords.filter(
+        (currentPaymentRecord) =>
+          String(currentPaymentRecord.chargeId) !==
+          String(chargePendingPaymentReceipt.id),
+      ),
+      paymentRecord,
+    ];
+
+    setPaid(updatedPaid);
+    setPaymentRecords(updatedPaymentRecords);
+    localStorage.setItem("rentix_paid_charges", JSON.stringify(updatedPaid));
+    localStorage.setItem(
+      "rentix_charge_payments",
+      JSON.stringify(updatedPaymentRecords),
+    );
+
+    closeReceivePaymentModal();
   }
 
   function clearTenantFilter() {
@@ -331,43 +1156,171 @@ export default function AccountsReceivablePage() {
     setFormAmount("");
     setFormIssueDate("");
     setFormDueDate("");
+    setFormPaymentDate("");
     setFormLaunchType("single");
     setFormInstallmentQuantity("2");
     setInstallmentPreview([]);
-    setNewTenantName("");
+    setChargeFormError("");
+    setTenantFormData(initialTenantFormData);
+    setZipCodeError("");
+    setIsZipCodeLoading(false);
     setIsTenantCreateOpen(false);
   }
 
   function closeCreateModal() {
     resetCreateForm();
+    setEditingChargeId(null);
     setIsCreateOpen(false);
   }
 
+  function openDeleteChargeConfirmation() {
+    if (!editingChargeId) return;
+
+    const charge = manualCharges.find(
+      (item) => String(item.id) === String(editingChargeId),
+    );
+
+    if (!charge) {
+      setChargeFormError(
+        "Esta cobrança não pode ser excluída porque foi gerada automaticamente por contrato.",
+      );
+      return;
+    }
+
+    setChargePendingDeletion(charge);
+  }
+
+  function closeDeleteChargeConfirmation() {
+    setChargePendingDeletion(null);
+  }
+
+  function openPaymentReversalConfirmation() {
+    if (!editingChargeId) return;
+
+    const charge = charges.find(
+      (item) => String(item.id) === String(editingChargeId),
+    );
+
+    if (!charge || !paid.includes(charge.id)) {
+      setChargeFormError(
+        "Esta cobrança não está marcada como paga para voltar para pagamento.",
+      );
+      return;
+    }
+
+    setChargePendingPaymentReversal(charge);
+  }
+
+  function closePaymentReversalConfirmation() {
+    setChargePendingPaymentReversal(null);
+  }
+
+  function confirmPaymentReversal() {
+    if (!chargePendingPaymentReversal) return;
+
+    const updatedPaid = paid.filter(
+      (paidChargeId) =>
+        String(paidChargeId) !== String(chargePendingPaymentReversal.id),
+    );
+
+    const updatedPaymentRecords = paymentRecords.filter(
+      (paymentRecord) =>
+        String(paymentRecord.chargeId) !==
+        String(chargePendingPaymentReversal.id),
+    );
+
+    setPaid(updatedPaid);
+    setPaymentRecords(updatedPaymentRecords);
+    localStorage.setItem("rentix_paid_charges", JSON.stringify(updatedPaid));
+    localStorage.setItem(
+      "rentix_charge_payments",
+      JSON.stringify(updatedPaymentRecords),
+    );
+
+    setChargePendingPaymentReversal(null);
+    closeCreateModal();
+  }
+
+  function confirmDeleteCharge() {
+    if (!chargePendingDeletion) return;
+
+    const updatedManualCharges = manualCharges.filter(
+      (charge) => String(charge.id) !== String(chargePendingDeletion.id),
+    );
+    const updatedPaid = paid.filter(
+      (paidChargeId) =>
+        String(paidChargeId) !== String(chargePendingDeletion.id),
+    );
+    const updatedPaymentRecords = paymentRecords.filter(
+      (paymentRecord) =>
+        String(paymentRecord.chargeId) !== String(chargePendingDeletion.id),
+    );
+
+    setManualCharges(updatedManualCharges);
+    setPaid(updatedPaid);
+    setPaymentRecords(updatedPaymentRecords);
+    localStorage.setItem(
+      "rentix_manual_charges",
+      JSON.stringify(updatedManualCharges),
+    );
+    localStorage.setItem("rentix_paid_charges", JSON.stringify(updatedPaid));
+    localStorage.setItem(
+      "rentix_charge_payments",
+      JSON.stringify(updatedPaymentRecords),
+    );
+
+    setChargePendingDeletion(null);
+    closeCreateModal();
+  }
+
   function openTenantCreateModal() {
-    setNewTenantName("");
+    setTenantFormData(initialTenantFormData);
+    setZipCodeError("");
     setIsTenantCreateOpen(true);
   }
 
   function closeTenantCreateModal() {
-    setNewTenantName("");
+    setTenantFormData(initialTenantFormData);
+    setZipCodeError("");
     setIsTenantCreateOpen(false);
   }
 
+  function updateTenantFormData<K extends keyof TenantFormData>(
+    field: K,
+    value: TenantFormData[K],
+  ) {
+    setTenantFormData((currentData) => ({
+      ...currentData,
+      [field]: value,
+    }));
+  }
+
   function createTenantFromModal() {
-    const trimmedTenantName = newTenantName.trim();
+    const trimmedTenantName = tenantFormData.name.trim();
 
     if (!trimmedTenantName) return;
 
     const newTenant: Tenant = {
       id: `tenant-${Date.now()}`,
       name: trimmedTenantName,
+      cpf: tenantFormData.cpf.trim(),
+      phone: tenantFormData.phone.trim(),
+      isTenant: tenantFormData.isTenant,
+      zipCode: tenantFormData.zipCode.trim(),
+      state: tenantFormData.state.trim(),
+      city: tenantFormData.city.trim(),
+      street: tenantFormData.street.trim(),
+      number: tenantFormData.number.trim(),
+      district: tenantFormData.district.trim(),
+      complement: tenantFormData.complement.trim(),
     };
 
     const updatedTenants = [...tenants, newTenant];
 
     setTenants(updatedTenants);
     setFormTenant(newTenant.id);
-    setNewTenantName("");
+    setTenantFormData(initialTenantFormData);
+    setZipCodeError("");
     setIsTenantCreateOpen(false);
 
     localStorage.setItem("rentix_tenants", JSON.stringify(updatedTenants));
@@ -414,30 +1367,119 @@ export default function AccountsReceivablePage() {
     );
   }
 
-  function createManualCharge() {
-    if (!formTenant || !formAmount || !formIssueDate || !formDueDate) return;
+  function saveManualCharge() {
+    setChargeFormError("");
 
-    const tenant = tenants.find((item) => item.id === formTenant);
-    const property = properties.find((item) => item.id === formProperty);
+    const normalizedAmount = normalizeAmount(formAmount);
 
-    if (!tenant) return;
+    if (isEditingPaidCharge) {
+      if (!editingChargeId) return;
+
+      if (!formPaymentDate) {
+        setChargeFormError(
+          "Informe a data de pagamento para salvar os ajustes.",
+        );
+        return;
+      }
+
+      const currentPaymentRecord = getChargePayment(editingChargeId);
+      const currentCharge = charges.find(
+        (charge) => String(charge.id) === String(editingChargeId),
+      );
+
+      const updatedPaymentRecord: ChargePayment = {
+        chargeId: editingChargeId,
+        paidAt: new Date(`${formPaymentDate}T00:00:00`).toISOString(),
+        method: currentPaymentRecord?.method || "Cash",
+        interest: currentPaymentRecord?.interest || 0,
+        discount: currentPaymentRecord?.discount || 0,
+        amountPaid:
+          currentPaymentRecord?.amountPaid || currentCharge?.amount || 0,
+        note: currentPaymentRecord?.note || "",
+      };
+
+      const updatedPaymentRecords = [
+        ...paymentRecords.filter(
+          (paymentRecord) =>
+            String(paymentRecord.chargeId) !== String(editingChargeId),
+        ),
+        updatedPaymentRecord,
+      ];
+
+      setPaymentRecords(updatedPaymentRecords);
+      localStorage.setItem(
+        "rentix_charge_payments",
+        JSON.stringify(updatedPaymentRecords),
+      );
+
+      closeCreateModal();
+      return;
+    }
+
+    if (!formTenant) {
+      setChargeFormError(
+        "Selecione um inquilino/pessoa para salvar a cobrança.",
+      );
+      return;
+    }
+
+    if (normalizedAmount <= 0) {
+      setChargeFormError(
+        "Informe um valor total válido para salvar a cobrança.",
+      );
+      return;
+    }
+
+    if (!formIssueDate) {
+      setChargeFormError(
+        "Informe a data de lançamento para salvar a cobrança.",
+      );
+      return;
+    }
+
+    if (!formDueDate) {
+      setChargeFormError(
+        "Informe o primeiro vencimento para salvar a cobrança.",
+      );
+      return;
+    }
+
+    const tenant = tenants.find((item) => String(item.id) === formTenant);
+    const property = properties.find(
+      (item) => String(item.id) === formProperty,
+    );
+
+    if (!tenant) {
+      setChargeFormError(
+        "Inquilino/pessoa não encontrado. Selecione novamente.",
+      );
+      return;
+    }
 
     const chargeProperty = property?.name || "Sem imóvel vinculado";
-    const issueDate = new Date(formIssueDate).toISOString();
+    const issueDate = new Date(`${formIssueDate}T00:00:00`).toISOString();
 
     if (formLaunchType === "single") {
-      const newCharge: Charge = {
-        id: `manual-${Date.now()}`,
+      const savedCharge: Charge = {
+        id: editingChargeId || `manual-${Date.now()}`,
         property: chargeProperty,
         tenant: tenant.name,
-        dueDate: new Date(formDueDate).toISOString(),
+        dueDate: new Date(`${formDueDate}T00:00:00`).toISOString(),
         issueDate,
-        amount: normalizeAmount(formAmount),
+        amount: normalizedAmount,
         status: "Pending",
         manual: true,
       };
 
-      const updatedManualCharges = [...manualCharges, newCharge];
+      const alreadyExists = manualCharges.some(
+        (charge) => String(charge.id) === String(savedCharge.id),
+      );
+
+      const updatedManualCharges = alreadyExists
+        ? manualCharges.map((charge) =>
+            String(charge.id) === String(savedCharge.id) ? savedCharge : charge,
+          )
+        : [...manualCharges, savedCharge];
 
       setManualCharges(updatedManualCharges);
       localStorage.setItem(
@@ -449,7 +1491,24 @@ export default function AccountsReceivablePage() {
       return;
     }
 
-    if (installmentPreview.length === 0) return;
+    if (installmentPreview.length === 0) {
+      setChargeFormError(
+        "Gere ao menos uma parcela válida para salvar a cobrança.",
+      );
+      return;
+    }
+
+    const hasInvalidInstallment = installmentPreview.some(
+      (installment) =>
+        normalizeAmount(installment.amount) <= 0 || !installment.dueDate,
+    );
+
+    if (hasInvalidInstallment) {
+      setChargeFormError(
+        "Revise os valores e vencimentos das parcelas antes de salvar.",
+      );
+      return;
+    }
 
     const installmentGroupId = `installment-${Date.now()}`;
 
@@ -457,7 +1516,7 @@ export default function AccountsReceivablePage() {
       id: `${installmentGroupId}-${installment.installmentNumber}`,
       property: chargeProperty,
       tenant: tenant.name,
-      dueDate: new Date(installment.dueDate).toISOString(),
+      dueDate: new Date(`${installment.dueDate}T00:00:00`).toISOString(),
       issueDate,
       amount: normalizeAmount(installment.amount),
       status: "Pending",
@@ -494,9 +1553,20 @@ export default function AccountsReceivablePage() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-4">
-          <Card title="Total a Receber" value={formatCurrency(totalReceivable)} />
-          <Card title="Total Recebido" value={formatCurrency(totalPaid)} green />
-          <Card title="Total Vencido" value={formatCurrency(totalOverdue)} red />
+          <Card
+            title="Total a Receber"
+            value={formatCurrency(totalReceivable)}
+          />
+          <Card
+            title="Total Recebido"
+            value={formatCurrency(totalPaid)}
+            green
+          />
+          <Card
+            title="Total Vencido"
+            value={formatCurrency(totalOverdue)}
+            red
+          />
           <Card title="Cobranças" value={filteredCharges.length} />
         </div>
 
@@ -582,10 +1652,17 @@ export default function AccountsReceivablePage() {
 
               <div className="flex flex-wrap gap-2">
                 <button
-                  onClick={() => setIsCreateOpen(true)}
+                  onClick={openCreateModal}
                   className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
                 >
                   Nova cobrança
+                </button>
+
+                <button
+                  onClick={openReportModal}
+                  className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
+                >
+                  Relatório PDF
                 </button>
 
                 <button
@@ -650,12 +1727,13 @@ export default function AccountsReceivablePage() {
 
                       <td className="px-5 py-4 text-sm text-slate-600">
                         {charge.tenant}
-                        {charge.installmentNumber && charge.installmentTotal && (
-                          <span className="ml-2 rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">
-                            {charge.installmentNumber}/
-                            {charge.installmentTotal}
-                          </span>
-                        )}
+                        {charge.installmentNumber &&
+                          charge.installmentTotal && (
+                            <span className="ml-2 rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">
+                              {charge.installmentNumber}/
+                              {charge.installmentTotal}
+                            </span>
+                          )}
                       </td>
 
                       <td className="px-5 py-4 text-center text-sm text-slate-600">
@@ -678,16 +1756,34 @@ export default function AccountsReceivablePage() {
 
                       <td className="px-5 py-4 text-center">
                         {charge.status !== "Paid" ? (
-                          <button
-                            onClick={() => markPaid(charge.id)}
-                            className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
-                          >
-                            Pagar
-                          </button>
+                          <div className="flex flex-wrap justify-center gap-2">
+                            <button
+                              onClick={() => openEditCharge(charge)}
+                              className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-200"
+                            >
+                              Editar
+                            </button>
+
+                            <button
+                              onClick={() => openReceivePaymentModal(charge)}
+                              className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
+                            >
+                              Receber
+                            </button>
+                          </div>
                         ) : (
-                          <span className="text-sm font-semibold text-emerald-600">
-                            Recebido
-                          </span>
+                          <div className="flex flex-wrap justify-center gap-2">
+                            <button
+                              onClick={() => openEditCharge(charge)}
+                              className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-200"
+                            >
+                              Editar
+                            </button>
+
+                            <span className="inline-flex items-center text-sm font-semibold text-emerald-600">
+                              Pago
+                            </span>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -698,6 +1794,223 @@ export default function AccountsReceivablePage() {
           </div>
         </div>
       </div>
+
+      {isReportOpen && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
+            <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-xl shadow-lg shadow-slate-900/20">
+                    📄
+                  </div>
+
+                  <div>
+                    <h2 className="text-xl font-black text-slate-900">
+                      Relatório de contas a receber
+                    </h2>
+
+                    <p className="mt-1 text-sm text-slate-500">
+                      Visualize o relatório na tela ou gere um PDF com filtros por pessoa,
+                      status, vencidas, a vencer ou período.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closeReportModal}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 hover:text-slate-900"
+                  aria-label="Fechar relatório"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 space-y-5 overflow-y-auto p-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                    Pessoa/Inquilino
+                  </label>
+
+                  <select
+                    value={reportTenantId}
+                    onChange={(event) => {
+                      setReportFormError("");
+                      setReportTenantId(event.target.value);
+                    }}
+                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100"
+                  >
+                    <option value="">Todas as pessoas</option>
+                    {tenants.map((tenant) => (
+                      <option key={tenant.id} value={tenant.id}>
+                        {tenant.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                    Status
+                  </label>
+
+                  <select
+                    value={reportStatusFilter}
+                    onChange={(event) => {
+                      setReportFormError("");
+                      setReportStatusFilter(event.target.value as StatusFilter);
+                    }}
+                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100"
+                  >
+                    <option value="All">Todos</option>
+                    <option value="Pending">Pendente</option>
+                    <option value="Paid">Pago</option>
+                    <option value="Overdue">Vencido</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-bold text-slate-700">
+                  Filtro de vencimento
+                </label>
+
+                <div className="grid gap-3 md:grid-cols-5">
+                  {([
+                    "All",
+                    "Overdue",
+                    "DueToday",
+                    "Upcoming",
+                    "DateRange",
+                  ] as ReportDueFilter[]).map((filter) => (
+                    <button
+                      key={filter}
+                      type="button"
+                      onClick={() => {
+                        setReportFormError("");
+                        setReportDueFilter(filter);
+                      }}
+                      className={`rounded-2xl border px-3 py-3 text-sm font-bold transition ${
+                        reportDueFilter === filter
+                          ? "border-slate-900 bg-slate-900 text-white shadow-sm"
+                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      {getReportDueFilterLabel(filter)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {reportDueFilter === "DateRange" && (
+                <div className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm font-bold text-slate-700">
+                      Data inicial
+                    </label>
+
+                    <input
+                      type="date"
+                      value={reportStartDate}
+                      onChange={(event) => {
+                        setReportFormError("");
+                        setReportStartDate(event.target.value);
+                      }}
+                      className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-bold text-slate-700">
+                      Data final
+                    </label>
+
+                    <input
+                      type="date"
+                      value={reportEndDate}
+                      onChange={(event) => {
+                        setReportFormError("");
+                        setReportEndDate(event.target.value);
+                      }}
+                      className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-black text-slate-900">
+                  Prévia do relatório
+                </p>
+
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+                    <p className="text-xs font-bold uppercase text-slate-500">
+                      Registros
+                    </p>
+                    <p className="mt-1 text-xl font-black text-slate-900">
+                      {getReportFilteredCharges().length}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+                    <p className="text-xs font-bold uppercase text-slate-500">
+                      Total filtrado
+                    </p>
+                    <p className="mt-1 text-xl font-black text-slate-900">
+                      {formatCurrency(getReportTotalAmount(getReportFilteredCharges()))}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+                    <p className="text-xs font-bold uppercase text-slate-500">
+                      Tipo
+                    </p>
+                    <p className="mt-1 text-sm font-black text-slate-900">
+                      {getReportDueFilterLabel(reportDueFilter)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {reportFormError && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                  {reportFormError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white p-5 md:flex-row md:justify-end">
+              <button
+                type="button"
+                onClick={closeReportModal}
+                className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={viewAccountsReceivableReport}
+                className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100"
+              >
+                Visualizar relatório
+              </button>
+
+              <button
+                type="button"
+                onClick={generateAccountsReceivablePdf}
+                className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
+              >
+                Gerar PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isSearchOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
@@ -731,7 +2044,7 @@ export default function AccountsReceivablePage() {
               </div>
             </div>
 
-            <div className="space-y-5 p-6">
+            <div className="flex-1 space-y-5 overflow-y-auto p-6">
               <div>
                 <label className="mb-2 block text-sm font-bold text-slate-700">
                   Nome do inquilino
@@ -780,6 +2093,34 @@ export default function AccountsReceivablePage() {
                 </div>
               </div>
 
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:bg-slate-100">
+                <input
+                  type="checkbox"
+                  checked={autoOpenSearch}
+                  onChange={(event) => {
+                    const value = event.target.checked;
+
+                    setAutoOpenSearch(value);
+                    localStorage.setItem(
+                      "rentix_auto_open_search",
+                      JSON.stringify(value),
+                    );
+                  }}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-orange-500"
+                />
+
+                <span>
+                  <span className="block text-sm font-black text-slate-800">
+                    Abrir busca automaticamente ao entrar na tela
+                  </span>
+
+                  <span className="mt-1 block text-xs font-semibold text-slate-500">
+                    Desmarque esta opção para não abrir a busca toda vez que
+                    acessar Contas a Receber.
+                  </span>
+                </span>
+              </label>
+
               <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 md:flex-row md:justify-end">
                 <button
                   onClick={clearTenantFilter}
@@ -812,11 +2153,13 @@ export default function AccountsReceivablePage() {
 
                   <div>
                     <h2 className="text-xl font-black text-slate-900">
-                      Nova cobrança
+                      {editingChargeId ? "Editar cobrança" : "Nova cobrança"}
                     </h2>
 
                     <p className="mt-1 text-sm text-slate-500">
-                      Cadastre uma conta a receber avulsa, única ou parcelada.
+                      {editingChargeId
+                        ? "Ajuste os dados da conta a receber selecionada."
+                        : "Cadastre uma conta a receber avulsa, única ou parcelada."}
                     </p>
                   </div>
                 </div>
@@ -832,47 +2175,55 @@ export default function AccountsReceivablePage() {
             </div>
 
             <div className="max-h-[calc(92vh-120px)] space-y-5 overflow-y-auto p-6">
-              <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">
-                  Tipo de lançamento
-                </label>
+              {!editingChargeId && (
+                <div>
+                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                    Tipo de lançamento
+                  </label>
 
-                <div className="grid gap-3 md:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => setFormLaunchType("single")}
-                    className={`rounded-2xl border px-4 py-3 text-left transition ${
-                      formLaunchType === "single"
-                        ? "border-emerald-500 bg-emerald-50 ring-4 ring-emerald-100"
-                        : "border-slate-200 bg-white hover:bg-slate-50"
-                    }`}
-                  >
-                    <p className="text-sm font-black text-slate-900">
-                      Conta única
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Lançamento avulso com apenas um vencimento.
-                    </p>
-                  </button>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setChargeFormError("");
+                        setFormLaunchType("single");
+                      }}
+                      className={`rounded-2xl border px-4 py-3 text-left transition ${
+                        formLaunchType === "single"
+                          ? "border-emerald-500 bg-emerald-50 ring-4 ring-emerald-100"
+                          : "border-slate-200 bg-white hover:bg-slate-50"
+                      }`}
+                    >
+                      <p className="text-sm font-black text-slate-900">
+                        Conta única
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Lançamento avulso com apenas um vencimento.
+                      </p>
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setFormLaunchType("installment")}
-                    className={`rounded-2xl border px-4 py-3 text-left transition ${
-                      formLaunchType === "installment"
-                        ? "border-emerald-500 bg-emerald-50 ring-4 ring-emerald-100"
-                        : "border-slate-200 bg-white hover:bg-slate-50"
-                    }`}
-                  >
-                    <p className="text-sm font-black text-slate-900">
-                      Sequência de parcelas
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Divide o valor total em parcelas editáveis.
-                    </p>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setChargeFormError("");
+                        setFormLaunchType("installment");
+                      }}
+                      className={`rounded-2xl border px-4 py-3 text-left transition ${
+                        formLaunchType === "installment"
+                          ? "border-emerald-500 bg-emerald-50 ring-4 ring-emerald-100"
+                          : "border-slate-200 bg-white hover:bg-slate-50"
+                      }`}
+                    >
+                      <p className="text-sm font-black text-slate-900">
+                        Sequência de parcelas
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Divide o valor total em parcelas editáveis.
+                      </p>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
@@ -883,8 +2234,16 @@ export default function AccountsReceivablePage() {
 
                     <select
                       value={formTenant}
-                      onChange={(event) => setFormTenant(event.target.value)}
-                      className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                      disabled={isEditingPaidCharge}
+                      onChange={(event) => {
+                        setChargeFormError("");
+                        setFormTenant(event.target.value);
+                      }}
+                      className={`h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 ${
+                        isEditingPaidCharge
+                          ? "cursor-not-allowed bg-slate-100 text-slate-500"
+                          : "bg-white text-slate-900"
+                      }`}
                     >
                       <option value="">Selecione o inquilino/pessoa</option>
                       {tenants.map((tenant) => (
@@ -895,18 +2254,21 @@ export default function AccountsReceivablePage() {
                     </select>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={openTenantCreateModal}
-                    className="h-12 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
-                  >
-                    NOVO
-                  </button>
+                  {!isEditingPaidCharge && (
+                    <button
+                      type="button"
+                      onClick={openTenantCreateModal}
+                      className="h-12 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
+                    >
+                      NOVO
+                    </button>
+                  )}
                 </div>
 
                 <p className="mt-2 text-xs text-slate-500">
-                  Use o botão NOVO para abrir o cadastro de inquilino/pessoa e
-                  selecionar automaticamente no lançamento.
+                  {isEditingPaidCharge
+                    ? "Cobrança paga não permite alteração de inquilino/pessoa."
+                    : "Use o botão NOVO para abrir o cadastro completo de inquilino e selecionar automaticamente no lançamento."}
                 </p>
               </div>
 
@@ -920,8 +2282,16 @@ export default function AccountsReceivablePage() {
 
                 <select
                   value={formProperty}
-                  onChange={(event) => setFormProperty(event.target.value)}
-                  className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                  disabled={isEditingPaidCharge}
+                  onChange={(event) => {
+                    setChargeFormError("");
+                    setFormProperty(event.target.value);
+                  }}
+                  className={`h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 ${
+                    isEditingPaidCharge
+                      ? "cursor-not-allowed bg-slate-100 text-slate-500"
+                      : "bg-white text-slate-900"
+                  }`}
                 >
                   <option value="">Sem imóvel vinculado</option>
                   {properties.map((property) => (
@@ -941,8 +2311,16 @@ export default function AccountsReceivablePage() {
                   <input
                     placeholder="Ex: 1500,00"
                     value={formAmount}
-                    onChange={(event) => setFormAmount(event.target.value)}
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                    disabled={isEditingPaidCharge}
+                    onChange={(event) => {
+                      setChargeFormError("");
+                      setFormAmount(event.target.value);
+                    }}
+                    className={`h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 ${
+                      isEditingPaidCharge
+                        ? "cursor-not-allowed bg-slate-100 text-slate-500"
+                        : "bg-white text-slate-900"
+                    }`}
                   />
                 </div>
 
@@ -954,8 +2332,16 @@ export default function AccountsReceivablePage() {
                   <input
                     type="date"
                     value={formIssueDate}
-                    onChange={(event) => setFormIssueDate(event.target.value)}
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                    disabled={isEditingPaidCharge}
+                    onChange={(event) => {
+                      setChargeFormError("");
+                      setFormIssueDate(event.target.value);
+                    }}
+                    className={`h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 ${
+                      isEditingPaidCharge
+                        ? "cursor-not-allowed bg-slate-100 text-slate-500"
+                        : "bg-white text-slate-900"
+                    }`}
                   />
                 </div>
 
@@ -967,13 +2353,44 @@ export default function AccountsReceivablePage() {
                   <input
                     type="date"
                     value={formDueDate}
-                    onChange={(event) => setFormDueDate(event.target.value)}
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                    disabled={isEditingPaidCharge}
+                    onChange={(event) => {
+                      setChargeFormError("");
+                      setFormDueDate(event.target.value);
+                    }}
+                    className={`h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 ${
+                      isEditingPaidCharge
+                        ? "cursor-not-allowed bg-slate-100 text-slate-500"
+                        : "bg-white text-slate-900"
+                    }`}
                   />
                 </div>
               </div>
 
-              {formLaunchType === "installment" && (
+              {isEditingPaidCharge && (
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
+                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                    Data de pagamento
+                  </label>
+
+                  <input
+                    type="date"
+                    value={formPaymentDate}
+                    onChange={(event) => {
+                      setChargeFormError("");
+                      setFormPaymentDate(event.target.value);
+                    }}
+                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 md:max-w-xs"
+                  />
+
+                  <p className="mt-2 text-xs font-semibold text-slate-500">
+                    Para cobrança paga, somente a data de pagamento pode ser
+                    ajustada antes de salvar.
+                  </p>
+                </div>
+              )}
+
+              {!editingChargeId && formLaunchType === "installment" && (
                 <div className="space-y-4 rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
                   <div className="grid gap-4 md:grid-cols-[220px_1fr] md:items-end">
                     <div>
@@ -993,8 +2410,8 @@ export default function AccountsReceivablePage() {
                     </div>
 
                     <div className="rounded-xl bg-white p-4 text-sm text-slate-600 ring-1 ring-emerald-100">
-                      O sistema divide o valor total em parcelas iguais e gera os
-                      vencimentos automaticamente de 30 em 30 dias. Você pode
+                      O sistema divide o valor total em parcelas iguais e gera
+                      os vencimentos automaticamente de 30 em 30 dias. Você pode
                       ajustar valor e vencimento antes de salvar.
                     </div>
                   </div>
@@ -1048,89 +2465,845 @@ export default function AccountsReceivablePage() {
                 </div>
               )}
 
-              <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 md:flex-row md:justify-end">
-                <button
-                  onClick={closeCreateModal}
-                  className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
-                >
-                  Cancelar
-                </button>
+              {chargeFormError && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                  {chargeFormError}
+                </div>
+              )}
 
-                <button
-                  onClick={createManualCharge}
-                  className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
-                >
-                  Salvar cobrança
-                </button>
+              <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 md:flex-row md:items-center md:justify-between">
+                {editingChargeId && (
+                  <div className="flex flex-col-reverse gap-3 md:flex-row">
+                    {!isEditingPaidCharge && (
+                      <button
+                        type="button"
+                        onClick={openDeleteChargeConfirmation}
+                        className="rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-red-700"
+                      >
+                        Excluir cobrança
+                      </button>
+                    )}
+
+                    {isEditingPaidCharge && (
+                      <button
+                        type="button"
+                        onClick={openPaymentReversalConfirmation}
+                        className="rounded-xl bg-amber-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-amber-600"
+                      >
+                        Voltar para pagamento
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex flex-col-reverse gap-3 md:ml-auto md:flex-row md:justify-end">
+                  {!isEditingPaidCharge && (
+                    <button
+                      onClick={closeCreateModal}
+                      className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+                    >
+                      Cancelar
+                    </button>
+                  )}
+
+                  <button
+                    onClick={saveManualCharge}
+                    className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
+                  >
+                    {editingChargeId ? "Salvar ajustes" : "Salvar cobrança"}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {isTenantCreateOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
-            <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white p-6">
+      {chargePendingPaymentReceipt && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
+            <div className="border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-white p-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-xl shadow-lg shadow-slate-900/20">
-                    👤
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-xl shadow-lg shadow-emerald-600/20">
+                    💵
                   </div>
 
                   <div>
                     <h2 className="text-xl font-black text-slate-900">
-                      Cadastro de Inquilino/Pessoa
+                      Receber cobrança
                     </h2>
 
                     <p className="mt-1 text-sm text-slate-500">
-                      Cadastre e vincule automaticamente ao lançamento.
+                      Informe os dados do pagamento para confirmar o
+                      recebimento.
                     </p>
                   </div>
                 </div>
 
                 <button
-                  onClick={closeTenantCreateModal}
+                  type="button"
+                  onClick={closeReceivePaymentModal}
                   className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 hover:text-slate-900"
-                  aria-label="Fechar cadastro de inquilino"
+                  aria-label="Fechar recebimento"
                 >
                   ✕
                 </button>
               </div>
             </div>
 
-            <div className="space-y-5 p-6">
+            <div className="flex-1 space-y-5 overflow-y-auto p-6">
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
+                  Cobrança selecionada
+                </p>
+
+                <div className="mt-3 grid gap-3 text-sm text-slate-700 md:grid-cols-2">
+                  <p>
+                    <span className="font-black text-slate-950">
+                      Inquilino:
+                    </span>{" "}
+                    {chargePendingPaymentReceipt.tenant}
+                  </p>
+
+                  <p>
+                    <span className="font-black text-slate-950">Imóvel:</span>{" "}
+                    {chargePendingPaymentReceipt.property}
+                  </p>
+
+                  <p>
+                    <span className="font-black text-slate-950">
+                      Vencimento:
+                    </span>{" "}
+                    {formatDate(chargePendingPaymentReceipt.dueDate)}
+                  </p>
+
+                  <p>
+                    <span className="font-black text-slate-950">
+                      Valor original:
+                    </span>{" "}
+                    {formatCurrency(chargePendingPaymentReceipt.amount)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <div>
+                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                    Juros
+                    <span className="ml-1 text-xs font-semibold text-slate-400">
+                      se houver
+                    </span>
+                  </label>
+
+                  <input
+                    placeholder="Ex: 25,00"
+                    value={paymentInterest}
+                    onChange={(event) => {
+                      const value = event.target.value;
+
+                      setPaymentFormError("");
+                      setPaymentInterest(value);
+
+                      if (chargePendingPaymentReceipt) {
+                        updatePaymentFinalAmountFromAdjustments(
+                          chargePendingPaymentReceipt,
+                          value,
+                          paymentDiscount,
+                        );
+                      }
+                    }}
+                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                    Desconto
+                    <span className="ml-1 text-xs font-semibold text-slate-400">
+                      se houver
+                    </span>
+                  </label>
+
+                  <input
+                    placeholder="Ex: 50,00"
+                    value={paymentDiscount}
+                    onChange={(event) => {
+                      const value = event.target.value;
+
+                      setPaymentFormError("");
+                      setPaymentDiscount(value);
+
+                      if (chargePendingPaymentReceipt) {
+                        updatePaymentFinalAmountFromAdjustments(
+                          chargePendingPaymentReceipt,
+                          paymentInterest,
+                          value,
+                        );
+                      }
+                    }}
+                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                    Valor final
+                  </label>
+
+                  <input
+                    placeholder="Ex: 250,00"
+                    value={paymentFinalAmount}
+                    onChange={(event) => {
+                      const value = event.target.value;
+
+                      setPaymentFormError("");
+                      setPaymentFinalAmount(value);
+                      updatePaymentEntriesFromFinalAmount(value);
+
+                      if (chargePendingPaymentReceipt) {
+                        updatePaymentAdjustmentsFromFinalAmount(
+                          chargePendingPaymentReceipt,
+                          value,
+                        );
+                      }
+                    }}
+                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900">
+                      Formas de pagamento
+                    </h3>
+
+                    <p className="mt-1 text-xs font-semibold text-slate-500">
+                      Permite receber com um ou mais tipos, como Pix e cartão de
+                      débito no mesmo recebimento.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={addPaymentEntry}
+                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
+                  >
+                    Adicionar forma
+                  </button>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {paymentEntries.map((entry, index) => (
+                    <div
+                      key={entry.id}
+                      className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-3 md:grid-cols-[1fr_180px_auto] md:items-end"
+                    >
+                      <div>
+                        <label className="mb-2 block text-sm font-bold text-slate-700">
+                          Tipo do pagamento {index + 1}
+                        </label>
+
+                        <select
+                          value={entry.method}
+                          onChange={(event) =>
+                            updatePaymentEntryMethod(
+                              entry.id,
+                              event.target.value as PaymentMethod,
+                            )
+                          }
+                          className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                        >
+                          {paymentMethodOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-bold text-slate-700">
+                          Valor
+                        </label>
+
+                        <input
+                          placeholder="Ex: 100,00"
+                          value={entry.amount}
+                          onChange={(event) =>
+                            updatePaymentEntryAmount(entry.id, event.target.value)
+                          }
+                          className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => removePaymentEntry(entry.id)}
+                        disabled={paymentEntries.length === 1}
+                        className="h-12 rounded-xl bg-red-50 px-4 text-sm font-bold text-red-600 ring-1 ring-red-100 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-700 ring-1 ring-slate-200">
+                  Total informado nas formas de pagamento: {formatCurrency(getPaymentEntriesTotal())}
+                </div>
+              </div>
+
               <div>
                 <label className="mb-2 block text-sm font-bold text-slate-700">
-                  Nome do inquilino/pessoa
+                  Observação
+                  <span className="ml-1 text-xs font-semibold text-slate-400">
+                    opcional
+                  </span>
                 </label>
 
                 <input
-                  placeholder="Digite o nome completo..."
-                  value={newTenantName}
-                  onChange={(event) => setNewTenantName(event.target.value)}
+                  placeholder="Ex: Pix + cartão de débito / comprovante enviado pelo WhatsApp"
+                  value={paymentNote}
+                  onChange={(event) => setPaymentNote(event.target.value)}
                   className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
                 />
               </div>
 
-              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-slate-600">
-                Após salvar, o cadastro será gravado no módulo de inquilinos e
-                selecionado automaticamente nesta nova cobrança.
+              {paymentFormError && (
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                  {paymentFormError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white p-5 md:flex-row md:justify-end">
+              <button
+                type="button"
+                onClick={closeReceivePaymentModal}
+                className="rounded-2xl bg-slate-100 px-6 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmReceivePayment}
+                className="rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700"
+              >
+                Confirmar recebimento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isPaymentConfirmationOpen && chargePendingPaymentReceipt && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[94vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
+            <div className="flex-1 overflow-y-auto p-6 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 text-3xl ring-1 ring-emerald-100">
+                ✅
               </div>
 
-              <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 md:flex-row md:justify-end">
+              <h2 className="mt-5 text-xl font-black text-slate-950">
+                Confirmar recebimento?
+              </h2>
+
+              <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
+                Confira os dados antes de concluir. Depois de confirmar, a
+                cobrança será marcada como paga.
+              </p>
+
+              <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-left">
+                <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
+                  Cobrança selecionada
+                </p>
+
+                <div className="mt-3 space-y-2 text-sm text-slate-700">
+                  <p>
+                    <span className="font-black text-slate-950">Inquilino:</span>{" "}
+                    {chargePendingPaymentReceipt.tenant}
+                  </p>
+
+                  <p>
+                    <span className="font-black text-slate-950">Imóvel:</span>{" "}
+                    {chargePendingPaymentReceipt.property}
+                  </p>
+
+                  <p>
+                    <span className="font-black text-slate-950">Vencimento:</span>{" "}
+                    {formatDate(chargePendingPaymentReceipt.dueDate)}
+                  </p>
+
+                  <p>
+                    <span className="font-black text-slate-950">Valor original:</span>{" "}
+                    {formatCurrency(chargePendingPaymentReceipt.amount)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                  Dados do recebimento
+                </p>
+
+                <div className="mt-3 space-y-2 text-sm text-slate-700">
+                  <p>
+                    <span className="font-black text-slate-950">Juros:</span>{" "}
+                    {formatCurrency(normalizeAmount(paymentInterest))}
+                  </p>
+
+                  <p>
+                    <span className="font-black text-slate-950">Desconto:</span>{" "}
+                    {formatCurrency(normalizeAmount(paymentDiscount))}
+                  </p>
+
+                  <p>
+                    <span className="font-black text-slate-950">Valor final:</span>{" "}
+                    {formatCurrency(normalizeAmount(paymentFinalAmount))}
+                  </p>
+
+                  <div>
+                    <p className="font-black text-slate-950">Formas de pagamento:</p>
+                    <div className="mt-2 space-y-1">
+                      {paymentEntries.map((entry) => (
+                        <p key={entry.id}>
+                          {getPaymentMethodLabel(entry.method)} · {formatCurrency(normalizeAmount(entry.amount))}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+
+                  {paymentNote.trim() && (
+                    <p>
+                      <span className="font-black text-slate-950">Observação:</span>{" "}
+                      {paymentNote.trim()}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white p-5 md:flex-row md:justify-end">
+              <button
+                type="button"
+                onClick={closePaymentConfirmation}
+                className="rounded-2xl bg-slate-100 px-6 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+              >
+                Conferir novamente
+              </button>
+
+              <button
+                type="button"
+                onClick={finishReceivePayment}
+                className="rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700"
+              >
+                Sim, confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {chargePendingDeletion && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
+            <div className="p-6 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-3xl ring-1 ring-red-100">
+                ⚠️
+              </div>
+
+              <h2 className="mt-5 text-xl font-black text-slate-950">
+                Excluir cobrança?
+              </h2>
+
+              <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
+                Esta ação removerá a cobrança selecionada do contas a receber.
+                Depois de confirmar, ela não aparecerá mais na listagem.
+              </p>
+
+              <div className="mt-5 rounded-2xl border border-red-100 bg-red-50 p-4 text-left">
+                <p className="text-xs font-black uppercase tracking-wide text-red-600">
+                  Cobrança selecionada
+                </p>
+
+                <div className="mt-3 space-y-2 text-sm text-slate-700">
+                  <p>
+                    <span className="font-black text-slate-950">
+                      Inquilino:
+                    </span>{" "}
+                    {chargePendingDeletion.tenant}
+                  </p>
+
+                  <p>
+                    <span className="font-black text-slate-950">Imóvel:</span>{" "}
+                    {chargePendingDeletion.property}
+                  </p>
+
+                  <p>
+                    <span className="font-black text-slate-950">
+                      Vencimento:
+                    </span>{" "}
+                    {formatDate(chargePendingDeletion.dueDate)}
+                  </p>
+
+                  <p>
+                    <span className="font-black text-slate-950">Valor:</span>{" "}
+                    {formatCurrency(chargePendingDeletion.amount)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white p-5 md:flex-row md:justify-end">
+              <button
+                type="button"
+                onClick={closeDeleteChargeConfirmation}
+                className="rounded-2xl bg-slate-100 px-6 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmDeleteCharge}
+                className="rounded-2xl bg-red-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-red-600/20 transition hover:bg-red-700"
+              >
+                Sim, excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {chargePendingPaymentReversal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
+            <div className="p-6 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 text-3xl ring-1 ring-amber-100">
+                ↩️
+              </div>
+
+              <h2 className="mt-5 text-xl font-black text-slate-950">
+                Voltar cobrança para pagamento?
+              </h2>
+
+              <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
+                Esta ação removerá o status de pago da cobrança selecionada.
+                Depois de confirmar, ela voltará para pendente ou vencida,
+                conforme a data de vencimento.
+              </p>
+
+              <div className="mt-5 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-left">
+                <p className="text-xs font-black uppercase tracking-wide text-amber-600">
+                  Cobrança selecionada
+                </p>
+
+                <div className="mt-3 space-y-2 text-sm text-slate-700">
+                  <p>
+                    <span className="font-black text-slate-950">
+                      Inquilino:
+                    </span>{" "}
+                    {chargePendingPaymentReversal.tenant}
+                  </p>
+
+                  <p>
+                    <span className="font-black text-slate-950">Imóvel:</span>{" "}
+                    {chargePendingPaymentReversal.property}
+                  </p>
+
+                  <p>
+                    <span className="font-black text-slate-950">
+                      Vencimento:
+                    </span>{" "}
+                    {formatDate(chargePendingPaymentReversal.dueDate)}
+                  </p>
+
+                  <p>
+                    <span className="font-black text-slate-950">Valor:</span>{" "}
+                    {formatCurrency(chargePendingPaymentReversal.amount)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white p-5 md:flex-row md:justify-end">
+              <button
+                type="button"
+                onClick={closePaymentReversalConfirmation}
+                className="rounded-2xl bg-slate-100 px-6 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmPaymentReversal}
+                className="rounded-2xl bg-amber-500 px-6 py-3 text-sm font-black text-white shadow-lg shadow-amber-500/20 transition hover:bg-amber-600"
+              >
+                Sim, voltar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isTenantCreateOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-0 backdrop-blur-sm md:p-4">
+          <div className="flex max-h-screen w-full max-w-6xl flex-col overflow-hidden rounded-none bg-white shadow-2xl ring-1 ring-slate-200 md:max-h-[94vh] md:rounded-3xl">
+            <div className="border-b border-slate-100 bg-white px-6 py-5 md:px-8">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-950">
+                    Novo inquilino
+                  </h2>
+
+                  <p className="mt-1 text-sm text-slate-500">
+                    Preencha os dados pessoais e endereço do inquilino.
+                  </p>
+                </div>
+
                 <button
                   onClick={closeTenantCreateModal}
-                  className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-700 transition hover:bg-slate-200"
+                  aria-label="Fechar cadastro de inquilino"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-5 md:px-8">
+              <div className="grid gap-5 md:grid-cols-3">
+                <div>
+                  <label className="mb-2 block text-sm font-black text-slate-800">
+                    Nome completo
+                  </label>
+
+                  <input
+                    placeholder="Ex: João Silva"
+                    value={tenantFormData.name}
+                    onChange={(event) =>
+                      updateTenantFormData("name", event.target.value)
+                    }
+                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-black text-slate-800">
+                    CPF
+                  </label>
+
+                  <input
+                    placeholder="Ex: 123.456.789-00"
+                    value={tenantFormData.cpf}
+                    onChange={(event) =>
+                      updateTenantFormData("cpf", formatCpf(event.target.value))
+                    }
+                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-black text-slate-800">
+                    Telefone
+                  </label>
+
+                  <input
+                    placeholder="Ex: (69) 99999-0000"
+                    value={tenantFormData.phone}
+                    onChange={(event) =>
+                      updateTenantFormData(
+                        "phone",
+                        formatPhone(event.target.value),
+                      )
+                    }
+                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                  />
+                </div>
+              </div>
+
+              <label className="mt-5 flex cursor-pointer gap-3 rounded-2xl border border-orange-100 bg-orange-50/30 p-5 transition hover:bg-orange-50">
+                <input
+                  type="checkbox"
+                  checked={tenantFormData.isTenant}
+                  onChange={(event) =>
+                    updateTenantFormData("isTenant", event.target.checked)
+                  }
+                  className="mt-1 h-5 w-5 rounded border-slate-300 accent-orange-500"
+                />
+
+                <span>
+                  <span className="block text-sm font-black text-slate-950">
+                    Esta pessoa é inquilino
+                  </span>
+
+                  <span className="mt-1 block text-xs font-semibold text-slate-600">
+                    Quando desmarcado, esta pessoa não poderá ser vinculada a
+                    contratos de aluguel.
+                  </span>
+                </span>
+              </label>
+
+              <div className="mt-8">
+                <h3 className="text-sm font-black uppercase tracking-wide text-orange-600">
+                  Endereço
+                </h3>
+
+                <div className="mt-4 grid gap-5 md:grid-cols-4">
+                  <div>
+                    <label className="mb-2 block text-sm font-black text-slate-800">
+                      CEP
+                    </label>
+
+                    <input
+                      placeholder="Ex: 76940-000"
+                      value={tenantFormData.zipCode}
+                      onBlur={verifyZipCode}
+                      onChange={(event) => {
+                        setZipCodeError("");
+                        updateTenantFormData(
+                          "zipCode",
+                          formatZipCode(event.target.value),
+                        );
+                      }}
+                      className={`h-14 w-full rounded-2xl border bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:ring-4 ${
+                        zipCodeError
+                          ? "border-red-300 focus:border-red-500 focus:ring-red-100"
+                          : "border-slate-200 focus:border-orange-500 focus:ring-orange-100"
+                      }`}
+                    />
+
+                    {isZipCodeLoading && (
+                      <p className="mt-2 text-xs font-bold text-orange-600">
+                        Consultando CEP...
+                      </p>
+                    )}
+
+                    {zipCodeError && (
+                      <p className="mt-2 text-xs font-bold text-red-600">
+                        {zipCodeError}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-black text-slate-800">
+                      Estado
+                    </label>
+
+                    <input
+                      placeholder="UF"
+                      value={tenantFormData.state}
+                      onChange={(event) =>
+                        updateTenantFormData(
+                          "state",
+                          event.target.value.toUpperCase().slice(0, 2),
+                        )
+                      }
+                      className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-black text-slate-800">
+                      Cidade
+                    </label>
+
+                    <input
+                      placeholder="Cidade"
+                      value={tenantFormData.city}
+                      onChange={(event) =>
+                        updateTenantFormData("city", event.target.value)
+                      }
+                      className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-black text-slate-800">
+                      Logradouro
+                    </label>
+
+                    <input
+                      placeholder="Rua, avenida..."
+                      value={tenantFormData.street}
+                      onChange={(event) =>
+                        updateTenantFormData("street", event.target.value)
+                      }
+                      className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-5 md:grid-cols-3">
+                  <div>
+                    <label className="mb-2 block text-sm font-black text-slate-800">
+                      Número
+                    </label>
+
+                    <input
+                      placeholder="Número da casa"
+                      value={tenantFormData.number}
+                      onChange={(event) =>
+                        updateTenantFormData("number", event.target.value)
+                      }
+                      className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-black text-slate-800">
+                      Bairro
+                    </label>
+
+                    <input
+                      placeholder="Bairro"
+                      value={tenantFormData.district}
+                      onChange={(event) =>
+                        updateTenantFormData("district", event.target.value)
+                      }
+                      className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-black text-slate-800">
+                      Complemento
+                    </label>
+
+                    <input
+                      placeholder="Apartamento, bloco, referência..."
+                      value={tenantFormData.complement}
+                      onChange={(event) =>
+                        updateTenantFormData("complement", event.target.value)
+                      }
+                      className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 bg-white px-6 py-5 md:px-8">
+              <div className="flex flex-col-reverse gap-3 md:flex-row md:justify-end">
+                <button
+                  onClick={closeTenantCreateModal}
+                  className="rounded-2xl bg-slate-100 px-7 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200"
                 >
                   Cancelar
                 </button>
 
                 <button
                   onClick={createTenantFromModal}
-                  className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
+                  className="rounded-2xl bg-orange-500 px-7 py-4 text-sm font-black text-white shadow-lg shadow-orange-500/20 transition hover:bg-orange-600"
                 >
-                  Salvar e vincular
+                  Cadastrar inquilino
                 </button>
               </div>
             </div>
@@ -1158,11 +3331,7 @@ function Card({
 
       <h2
         className={`mt-2 text-2xl font-black ${
-          green
-            ? "text-emerald-600"
-            : red
-              ? "text-red-600"
-              : "text-slate-900"
+          green ? "text-emerald-600" : red ? "text-red-600" : "text-slate-900"
         }`}
       >
         {value}
