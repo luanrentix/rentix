@@ -17,7 +17,9 @@ type Property = {
   status: PropertyStatus;
 };
 
-type RentixTenant = Tenant;
+type RentixTenant = Tenant & {
+  isTenant?: boolean;
+};
 
 type ContractStatus =
   | "Active"
@@ -48,8 +50,12 @@ export default function ContractsPage() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formError, setFormError] = useState("");
-  const [editingContractId, setEditingContractId] = useState<number | null>(null);
-  const [contractToDelete, setContractToDelete] = useState<Contract | null>(null);
+  const [editingContractId, setEditingContractId] = useState<number | null>(
+    null
+  );
+  const [contractToDelete, setContractToDelete] = useState<Contract | null>(
+    null
+  );
   const [statusFilter, setStatusFilter] = useState<ContractFilterStatus>("All");
 
   const [propertyId, setPropertyId] = useState("");
@@ -57,7 +63,8 @@ export default function ContractsPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [rentValue, setRentValue] = useState("");
-  const [contractStatus, setContractStatus] = useState<ContractStatus>("Active");
+  const [contractStatus, setContractStatus] =
+    useState<ContractStatus>("Active");
 
   const isEditing = editingContractId !== null;
 
@@ -69,18 +76,22 @@ export default function ContractsPage() {
     if (storedContracts) {
       const parsedContracts = JSON.parse(storedContracts) as Partial<Contract>[];
 
-      const normalizedContracts: Contract[] = parsedContracts.map((contract) => ({
-        id: contract.id || Date.now(),
-        propertyId: contract.propertyId || "",
-        propertyName: contract.propertyName || "",
-        tenantId: contract.tenantId || 0,
-        tenantName: contract.tenantName || "",
-        startDate: contract.startDate || "",
-        endDate: contract.endDate || "",
-        rentValue: Number(contract.rentValue || 0),
-        status: contract.status || getAutomaticContractStatus(contract.endDate || ""),
-        deletedAt: contract.deletedAt || null,
-      }));
+      const normalizedContracts: Contract[] = parsedContracts.map(
+        (contract) => ({
+          id: contract.id || Date.now(),
+          propertyId: contract.propertyId || "",
+          propertyName: contract.propertyName || "",
+          tenantId: contract.tenantId || 0,
+          tenantName: contract.tenantName || "",
+          startDate: contract.startDate || "",
+          endDate: contract.endDate || "",
+          rentValue: Number(contract.rentValue || 0),
+          status:
+            contract.status ||
+            getAutomaticContractStatus(contract.endDate || ""),
+          deletedAt: contract.deletedAt || null,
+        })
+      );
 
       setContracts(normalizedContracts);
     }
@@ -138,6 +149,10 @@ export default function ContractsPage() {
     });
   }, [properties, contracts, isEditing, propertyId]);
 
+  const availableTenants = useMemo(() => {
+    return tenants.filter((tenant) => tenant.isTenant !== false);
+  }, [tenants]);
+
   const filteredContracts = useMemo(() => {
     if (statusFilter === "All") return contracts;
 
@@ -170,7 +185,9 @@ export default function ContractsPage() {
     setStartDate(contract.startDate);
     setEndDate(contract.endDate);
     setRentValue(String(contract.rentValue || ""));
-    setContractStatus(contract.status || getAutomaticContractStatus(contract.endDate));
+    setContractStatus(
+      contract.status || getAutomaticContractStatus(contract.endDate)
+    );
     setFormError("");
     setIsFormOpen(true);
   }
@@ -194,6 +211,11 @@ export default function ContractsPage() {
 
     if (!selectedTenant) {
       setFormError("Selecione um inquilino válido.");
+      return;
+    }
+
+    if (selectedTenant.isTenant === false) {
+      setFormError("Esta pessoa não está marcada como inquilino.");
       return;
     }
 
@@ -316,7 +338,8 @@ export default function ContractsPage() {
                 Contratos cadastrados
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Exibindo {filteredContracts.length} de {contracts.length} contrato(s)
+                Exibindo {filteredContracts.length} de {contracts.length}{" "}
+                contrato(s)
               </p>
             </div>
 
@@ -413,7 +436,9 @@ export default function ContractsPage() {
                         <button
                           type="button"
                           onClick={() => setContractToDelete(contract)}
-                          disabled={getDisplayContractStatus(contract) === "Deleted"}
+                          disabled={
+                            getDisplayContractStatus(contract) === "Deleted"
+                          }
                           className="rounded-xl bg-red-50 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Excluir
@@ -499,7 +524,7 @@ export default function ContractsPage() {
                         className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                       >
                         <option value="">Selecione um inquilino</option>
-                        {tenants.map((tenant) => (
+                        {availableTenants.map((tenant) => (
                           <option key={tenant.id} value={tenant.id}>
                             {tenant.name}
                           </option>
@@ -712,7 +737,9 @@ function getDisplayContractStatus(contract: Contract): ContractStatus {
   if (contract.status === "Canceled") return "Canceled";
   if (contract.status === "Finished") return "Finished";
   if (contract.status === "Inactive") return "Inactive";
-  if (contract.status === "Active") return getAutomaticContractStatus(contract.endDate);
+  if (contract.status === "Active") {
+    return getAutomaticContractStatus(contract.endDate);
+  }
 
   return getAutomaticContractStatus(contract.endDate);
 }
