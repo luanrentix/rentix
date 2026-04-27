@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import AppShell from "@/components/layout/app-shell";
 
 type Contract = {
@@ -146,7 +147,7 @@ export default function AccountsReceivablePage() {
     );
   }
 
-  const automaticCharges = useMemo(() => {
+  const automaticCharges = useMemo<Charge[]>(() => {
     const today = new Date();
 
     return contracts
@@ -183,7 +184,7 @@ export default function AccountsReceivablePage() {
       });
   }, [contracts, properties, tenants, paid]);
 
-  const manualChargesWithStatus = useMemo(() => {
+  const manualChargesWithStatus = useMemo<Charge[]>(() => {
     const today = new Date();
 
     return manualCharges.map((charge) => {
@@ -202,7 +203,7 @@ export default function AccountsReceivablePage() {
     });
   }, [manualCharges, paid]);
 
-  const charges = useMemo(() => {
+  const charges = useMemo<Charge[]>(() => {
     return [...automaticCharges, ...manualChargesWithStatus];
   }, [automaticCharges, manualChargesWithStatus]);
 
@@ -1077,7 +1078,7 @@ function Card({
   red,
 }: {
   title: string;
-  value: React.ReactNode;
+  value: ReactNode;
   green?: boolean;
   red?: boolean;
 }) {
