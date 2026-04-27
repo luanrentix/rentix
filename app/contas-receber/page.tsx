@@ -59,6 +59,7 @@ export default function AccountsReceivablePage() {
 
   const [isSearchOpen, setIsSearchOpen] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isTenantCreateOpen, setIsTenantCreateOpen] = useState(false);
 
   const [search, setSearch] = useState("");
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
@@ -334,6 +335,7 @@ export default function AccountsReceivablePage() {
     setFormInstallmentQuantity("2");
     setInstallmentPreview([]);
     setNewTenantName("");
+    setIsTenantCreateOpen(false);
   }
 
   function closeCreateModal() {
@@ -341,7 +343,17 @@ export default function AccountsReceivablePage() {
     setIsCreateOpen(false);
   }
 
-  function createTenantInline() {
+  function openTenantCreateModal() {
+    setNewTenantName("");
+    setIsTenantCreateOpen(true);
+  }
+
+  function closeTenantCreateModal() {
+    setNewTenantName("");
+    setIsTenantCreateOpen(false);
+  }
+
+  function createTenantFromModal() {
     const trimmedTenantName = newTenantName.trim();
 
     if (!trimmedTenantName) return;
@@ -356,6 +368,7 @@ export default function AccountsReceivablePage() {
     setTenants(updatedTenants);
     setFormTenant(newTenant.id);
     setNewTenantName("");
+    setIsTenantCreateOpen(false);
 
     localStorage.setItem("rentix_tenants", JSON.stringify(updatedTenants));
   }
@@ -865,49 +878,36 @@ export default function AccountsReceivablePage() {
                 <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
                   <div>
                     <label className="mb-2 block text-sm font-bold text-slate-700">
-                      Novo inquilino
+                      Inquilino/Pessoa
                     </label>
 
-                    <input
-                      placeholder="Digite o nome para cadastrar rápido..."
-                      value={newTenantName}
-                      onChange={(event) => setNewTenantName(event.target.value)}
-                      className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
-                    />
+                    <select
+                      value={formTenant}
+                      onChange={(event) => setFormTenant(event.target.value)}
+                      className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                    >
+                      <option value="">Selecione o inquilino/pessoa</option>
+                      {tenants.map((tenant) => (
+                        <option key={tenant.id} value={tenant.id}>
+                          {tenant.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <button
                     type="button"
-                    onClick={createTenantInline}
+                    onClick={openTenantCreateModal}
                     className="h-12 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
                   >
-                    Cadastrar inquilino
+                    NOVO
                   </button>
                 </div>
 
                 <p className="mt-2 text-xs text-slate-500">
-                  O inquilino cadastrado aqui será salvo junto ao módulo de
-                  inquilinos e selecionado automaticamente.
+                  Use o botão NOVO para abrir o cadastro de inquilino/pessoa e
+                  selecionar automaticamente no lançamento.
                 </p>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">
-                  Inquilino
-                </label>
-
-                <select
-                  value={formTenant}
-                  onChange={(event) => setFormTenant(event.target.value)}
-                  className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
-                >
-                  <option value="">Selecione o inquilino</option>
-                  {tenants.map((tenant) => (
-                    <option key={tenant.id} value={tenant.id}>
-                      {tenant.name}
-                    </option>
-                  ))}
-                </select>
               </div>
 
               <div>
@@ -1061,6 +1061,76 @@ export default function AccountsReceivablePage() {
                   className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
                 >
                   Salvar cobrança
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isTenantCreateOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
+            <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-xl shadow-lg shadow-slate-900/20">
+                    👤
+                  </div>
+
+                  <div>
+                    <h2 className="text-xl font-black text-slate-900">
+                      Cadastro de Inquilino/Pessoa
+                    </h2>
+
+                    <p className="mt-1 text-sm text-slate-500">
+                      Cadastre e vincule automaticamente ao lançamento.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={closeTenantCreateModal}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 hover:text-slate-900"
+                  aria-label="Fechar cadastro de inquilino"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-5 p-6">
+              <div>
+                <label className="mb-2 block text-sm font-bold text-slate-700">
+                  Nome do inquilino/pessoa
+                </label>
+
+                <input
+                  placeholder="Digite o nome completo..."
+                  value={newTenantName}
+                  onChange={(event) => setNewTenantName(event.target.value)}
+                  className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                />
+              </div>
+
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-slate-600">
+                Após salvar, o cadastro será gravado no módulo de inquilinos e
+                selecionado automaticamente nesta nova cobrança.
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 md:flex-row md:justify-end">
+                <button
+                  onClick={closeTenantCreateModal}
+                  className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  onClick={createTenantFromModal}
+                  className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
+                >
+                  Salvar e vincular
                 </button>
               </div>
             </div>
