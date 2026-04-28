@@ -40,6 +40,24 @@ type CompanySettings = {
   state: string;
 };
 
+type ResetModuleKey =
+  | "properties"
+  | "people"
+  | "contracts"
+  | "accountsReceivable"
+  | "accountsPayable"
+  | "schedule";
+
+type ResetOptions = Record<ResetModuleKey, boolean>;
+
+type ResetModuleOption = {
+  key: ResetModuleKey;
+  label: string;
+  description: string;
+  icon: string;
+  storageKeys: string[];
+};
+
 const menuItems = [
   { label: "Dashboard", href: "/dashboard", icon: "🏠" },
   { label: "Imóveis", href: "/imoveis", icon: "🏢" },
@@ -58,6 +76,70 @@ const pixKeyTypeOptions: { label: string; value: PixKeyType }[] = [
   { label: "Telefone", value: "phone" },
   { label: "Chave aleatória", value: "random" },
 ];
+
+const resetModuleOptions: ResetModuleOption[] = [
+  {
+    key: "properties",
+    label: "Imóveis",
+    description: "Remove imóveis cadastrados e seus filtros locais.",
+    icon: "🏢",
+    storageKeys: ["rentix_properties"],
+  },
+  {
+    key: "people",
+    label: "Pessoas",
+    description: "Remove pessoas, inquilinos e dados locais relacionados.",
+    icon: "👥",
+    storageKeys: ["rentix_tenants", "rentix_people"],
+  },
+  {
+    key: "contracts",
+    label: "Contratos",
+    description: "Remove contratos e pendências de integração com cobranças.",
+    icon: "📄",
+    storageKeys: ["rentix_contracts", "rentix_new_charge_from_contract"],
+  },
+  {
+    key: "accountsReceivable",
+    label: "Contas a Receber",
+    description: "Remove cobranças, parcelas, pagamentos recebidos e filtros financeiros.",
+    icon: "📥",
+    storageKeys: [
+      "rentix_manual_charges",
+      "rentix_paid_charges",
+      "rentix_charge_payments",
+      "rentix_receivable_status_filter",
+    ],
+  },
+  {
+    key: "accountsPayable",
+    label: "Contas a Pagar",
+    description: "Remove contas a pagar e pagamentos registrados localmente.",
+    icon: "📤",
+    storageKeys: [
+      "rentix_accounts_payable",
+      "rentix_payables",
+      "rentix_paid_payables",
+      "rentix_payable_payments",
+    ],
+  },
+  {
+    key: "schedule",
+    label: "Agenda",
+    description: "Remove compromissos, eventos e agendamentos locais.",
+    icon: "📅",
+    storageKeys: ["rentix_schedule", "rentix_agenda", "rentix_calendar_events"],
+  },
+];
+
+const defaultResetOptions: ResetOptions = {
+  properties: false,
+  people: false,
+  contracts: false,
+  accountsReceivable: false,
+  accountsPayable: false,
+  schedule: false,
+};
 
 const defaultUserSettings: UserSettings = {
   name: "Luan",
@@ -179,6 +261,10 @@ export default function AppShell({ children }: AppShellProps) {
   const [passwordSettings, setPasswordSettings] = useState<PasswordSettings>(defaultPasswordSettings);
   const [successMessage, setSuccessMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [resetOptions, setResetOptions] = useState<ResetOptions>(defaultResetOptions);
+  const [resetConfirmationText, setResetConfirmationText] = useState("");
+  const [resetError, setResetError] = useState("");
 
   const userInitials = useMemo(() => getInitialLetters(userSettings.name), [userSettings.name]);
 
@@ -227,6 +313,54 @@ export default function AppShell({ children }: AppShellProps) {
     setSuccessMessage("");
     setPasswordError("");
     setPasswordSettings(defaultPasswordSettings);
+    handleCloseResetModal();
+  }
+
+  function handleOpenResetModal() {
+    setResetOptions(defaultResetOptions);
+    setResetConfirmationText("");
+    setResetError("");
+    setIsResetModalOpen(true);
+  }
+
+  function handleCloseResetModal() {
+    setIsResetModalOpen(false);
+    setResetOptions(defaultResetOptions);
+    setResetConfirmationText("");
+    setResetError("");
+  }
+
+  function handleToggleResetOption(key: ResetModuleKey) {
+    setResetError("");
+    setResetOptions((currentOptions) => ({
+      ...currentOptions,
+      [key]: !currentOptions[key],
+    }));
+  }
+
+  function handleConfirmResetData() {
+    const selectedModules = resetModuleOptions.filter(
+      (option) => resetOptions[option.key]
+    );
+
+    if (selectedModules.length === 0) {
+      setResetError("Selecione pelo menos um módulo para limpar.");
+      return;
+    }
+
+    if (resetConfirmationText.trim().toUpperCase() !== "CONFIRMAR") {
+      setResetError('Digite "CONFIRMAR" para liberar a limpeza dos dados selecionados.');
+      return;
+    }
+
+    selectedModules.forEach((moduleOption) => {
+      moduleOption.storageKeys.forEach((storageKey) => {
+        localStorage.removeItem(storageKey);
+      });
+    });
+
+    handleCloseResetModal();
+    window.location.reload();
   }
 
   function validatePasswordChange() {
@@ -536,6 +670,14 @@ export default function AppShell({ children }: AppShellProps) {
                       👤 Dados do usuário
                     </button>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={handleOpenResetModal}
+                    className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600"
+                  >
+                    🗑️ Resetar dados de teste
+                  </button>
                 </aside>
 
                 <section className="min-h-0 overflow-y-auto p-5 lg:p-8">
@@ -1022,6 +1164,134 @@ export default function AppShell({ children }: AppShellProps) {
             </div>
           </div>
         )}
+
+        {isResetModalOpen && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+            <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-[2rem] border border-red-100 bg-white shadow-2xl">
+              <div className="border-b border-red-100 bg-gradient-to-r from-red-50 via-white to-white px-6 py-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-red-100 text-2xl">
+                      🗑️
+                    </div>
+                    <div>
+                      <div className="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-black uppercase tracking-wide text-red-700">
+                        Ação crítica
+                      </div>
+                      <h2 className="mt-3 text-2xl font-black text-slate-950">
+                        Resetar dados de teste
+                      </h2>
+                      <p className="mt-1 text-sm font-medium leading-6 text-slate-500">
+                        Selecione os módulos que deseja limpar. Essa ação remove os dados locais do navegador e não pode ser desfeita.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleCloseResetModal}
+                    className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-xl font-black text-slate-500 shadow-sm transition hover:bg-red-50 hover:text-red-600"
+                    aria-label="Fechar reset de dados"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto p-6">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {resetModuleOptions.map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() => handleToggleResetOption(option.key)}
+                      className={`rounded-3xl border p-4 text-left transition ${
+                        resetOptions[option.key]
+                          ? "border-red-300 bg-red-50 shadow-sm shadow-red-100"
+                          : "border-slate-200 bg-white hover:border-red-200 hover:bg-red-50/40"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={`flex h-11 w-11 items-center justify-center rounded-2xl text-xl ${
+                            resetOptions[option.key] ? "bg-red-500 text-white" : "bg-slate-100"
+                          }`}
+                        >
+                          {option.icon}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-black text-slate-900">
+                              {option.label}
+                            </p>
+                            <span
+                              className={`flex h-5 w-5 items-center justify-center rounded-md border text-xs font-black ${
+                                resetOptions[option.key]
+                                  ? "border-red-500 bg-red-500 text-white"
+                                  : "border-slate-300 bg-white text-transparent"
+                              }`}
+                            >
+                              ✓
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                            {option.description}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-5 rounded-3xl border border-amber-100 bg-amber-50 px-4 py-4">
+                  <p className="text-sm font-black text-amber-800">
+                    Confirmação obrigatória
+                  </p>
+                  <p className="mt-1 text-sm font-semibold leading-6 text-amber-700">
+                    Para evitar exclusão acidental, digite <strong>CONFIRMAR</strong> no campo abaixo.
+                  </p>
+
+                  <input
+                    type="text"
+                    value={resetConfirmationText}
+                    onChange={(event) => {
+                      setResetConfirmationText(event.target.value);
+                      setResetError("");
+                    }}
+                    placeholder="Digite CONFIRMAR"
+                    className="mt-3 w-full rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-black uppercase outline-none transition placeholder:normal-case placeholder:font-semibold focus:border-red-400 focus:ring-4 focus:ring-red-100"
+                  />
+                </div>
+
+                {resetError && (
+                  <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                    {resetError}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white px-6 py-5 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={handleCloseResetModal}
+                  className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleConfirmResetData}
+                  className="rounded-2xl bg-red-500 px-6 py-3 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600"
+                >
+                  Confirmar limpeza
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </AuthGuard>
   );
