@@ -5,6 +5,8 @@ import AppShell from "@/components/layout/app-shell";
 
 type PropertyStatus = "Available" | "Rented";
 
+type PropertyFilterStatus = "All" | PropertyStatus | "Active" | "Inactive";
+
 type PropertyType =
   | "Apartment"
   | "House"
@@ -28,6 +30,7 @@ type Property = {
   address: string;
   rentValue: number;
   status: PropertyStatus;
+  isActive: boolean;
 };
 
 type ViaCepResponse = {
@@ -56,6 +59,8 @@ export default function PropertiesPage() {
   const [propertyToDelete, setPropertyToDelete] = useState<Property | null>(null);
   const [blockedPropertyToDelete, setBlockedPropertyToDelete] =
     useState<Property | null>(null);
+  const [blockedInactiveProperty, setBlockedInactiveProperty] =
+    useState<Property | null>(null);
 
   const [type, setType] = useState<PropertyType>("Apartment");
   const [name, setName] = useState("");
@@ -69,11 +74,10 @@ export default function PropertiesPage() {
   const [rentValue, setRentValue] = useState("");
   const [propertyStatus, setPropertyStatus] =
     useState<PropertyStatus>("Available");
+  const [isActive, setIsActive] = useState(true);
 
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"All" | PropertyStatus>(
-    "All"
-  );
+  const [statusFilter, setStatusFilter] = useState<PropertyFilterStatus>("Active");
 
   useEffect(() => {
     const storedProperties = localStorage.getItem("rentix_properties");
@@ -96,6 +100,7 @@ export default function PropertiesPage() {
           address: property.address || "",
           rentValue: property.rentValue || 0,
           status: property.status || "Available",
+          isActive: property.isActive ?? true,
         })
       );
 
@@ -118,7 +123,10 @@ export default function PropertiesPage() {
         property.neighborhood.toLowerCase().includes(normalizedSearch);
 
       const matchesStatus =
-        statusFilter === "All" || property.status === statusFilter;
+        statusFilter === "All" ||
+        property.status === statusFilter ||
+        (statusFilter === "Active" && property.isActive) ||
+        (statusFilter === "Inactive" && !property.isActive);
 
       return matchesSearch && matchesStatus;
     });
@@ -155,6 +163,7 @@ export default function PropertiesPage() {
     setComplement("");
     setRentValue("");
     setPropertyStatus("Available");
+    setIsActive(true);
     setEditingPropertyId(null);
   }
 
@@ -207,6 +216,51 @@ export default function PropertiesPage() {
     return addressParts.join(", ");
   }
 
+  function propertyHasLinkedContract(propertyId: string) {
+    const storedContracts = localStorage.getItem("rentix_contracts");
+
+    if (!storedContracts) return false;
+
+    try {
+      const parsedContracts = JSON.parse(storedContracts) as Array<
+        Record<string, unknown>
+      >;
+
+      return parsedContracts.some((contract) => {
+        const contractPropertyId =
+          contract.propertyId ||
+          contract.property_id ||
+          contract.property ||
+          contract.propertyCode ||
+          contract.property_id_fk;
+
+        return String(contractPropertyId || "") === propertyId;
+      });
+    } catch {
+      return false;
+    }
+  }
+
+  function getEditingProperty() {
+    if (!editingPropertyId) return null;
+
+    return properties.find((property) => property.id === editingPropertyId) || null;
+  }
+
+  function handleActiveChange(checked: boolean) {
+    if (!checked && editingPropertyId && propertyHasLinkedContract(editingPropertyId)) {
+      const property = getEditingProperty();
+
+      if (property) {
+        setBlockedInactiveProperty(property);
+      }
+
+      return;
+    }
+
+    setIsActive(checked);
+  }
+
   function handleSaveProperty() {
     if (
       !type ||
@@ -220,6 +274,16 @@ export default function PropertiesPage() {
       !rentValue
     ) {
       alert("Preencha todos os campos obrigatórios.");
+      return;
+    }
+
+    if (!isActive && editingPropertyId && propertyHasLinkedContract(editingPropertyId)) {
+      const property = getEditingProperty();
+
+      if (property) {
+        setBlockedInactiveProperty(property);
+      }
+
       return;
     }
 
@@ -237,6 +301,7 @@ export default function PropertiesPage() {
       address: buildAddress(),
       rentValue: Number(rentValue),
       status: propertyStatus,
+      isActive,
     };
 
     const updatedProperties = editingPropertyId
@@ -266,6 +331,7 @@ export default function PropertiesPage() {
     setComplement(property.complement);
     setRentValue(String(property.rentValue));
     setPropertyStatus(property.status);
+    setIsActive(property.isActive);
     setIsFormOpen(true);
   }
 
@@ -274,7 +340,7 @@ export default function PropertiesPage() {
 
     if (!property) return;
 
-    if (property.status === "Rented") {
+    if (propertyHasLinkedContract(property.id)) {
       setBlockedPropertyToDelete(property);
       return;
     }
@@ -288,6 +354,10 @@ export default function PropertiesPage() {
 
   function handleCloseBlockedDeleteProperty() {
     setBlockedPropertyToDelete(null);
+  }
+
+  function handleCloseBlockedInactiveProperty() {
+    setBlockedInactiveProperty(null);
   }
 
   function handleConfirmDeleteProperty() {
@@ -357,7 +427,7 @@ export default function PropertiesPage() {
         </div>
 
         <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm">
-          <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+<div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div>
               <h2 className="text-2xl font-black text-slate-950">
                 Imóveis cadastrados
@@ -382,10 +452,12 @@ export default function PropertiesPage() {
                 <select
                   value={statusFilter}
                   onChange={(event) =>
-                    setStatusFilter(event.target.value as "All" | PropertyStatus)
+                    setStatusFilter(event.target.value as PropertyFilterStatus)
                   }
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 md:w-48"
                 >
+                  <option value="Active">Ativos</option>
+                  <option value="Inactive">Inativos</option>
                   <option value="All">Todos</option>
                   <option value="Available">Disponíveis</option>
                   <option value="Rented">Alugados</option>
@@ -421,6 +493,9 @@ export default function PropertiesPage() {
                       Valor
                     </th>
                     <th className="px-5 py-4 text-sm font-black text-slate-700">
+                      Ativo
+                    </th>
+                    <th className="px-5 py-4 text-sm font-black text-slate-700">
                       Status
                     </th>
                     <th className="px-5 py-4 text-sm font-black text-slate-700">
@@ -451,6 +526,10 @@ export default function PropertiesPage() {
 
                       <td className="px-5 py-4 text-sm font-black text-slate-900">
                         {formatCurrency(property.rentValue)}
+                      </td>
+
+                      <td className="px-5 py-4">
+                        <ActiveBadge isActive={property.isActive} />
                       </td>
 
                       <td className="px-5 py-4">
@@ -535,6 +614,20 @@ export default function PropertiesPage() {
                       <option value="Available">Disponível</option>
                       <option value="Rented">Alugado</option>
                     </select>
+                  </FormField>
+
+                  <FormField label="Situação do cadastro">
+                    <label className="flex min-h-[58px] cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 px-4 py-4 text-sm font-black text-slate-700 transition hover:border-orange-200 hover:bg-orange-50/40">
+                      <input
+                        type="checkbox"
+                        checked={isActive}
+                        onChange={(event) =>
+                          handleActiveChange(event.target.checked)
+                        }
+                        className="h-5 w-5 rounded border-slate-300 accent-orange-500"
+                      />
+                      Imóvel ativo
+                    </label>
                   </FormField>
 
                   <FormField label="Nome do imóvel">
@@ -704,11 +797,13 @@ export default function PropertiesPage() {
 
               <div className="mt-5 text-center">
                 <h3 className="text-2xl font-black text-slate-950">
-                  Imóvel alugado
+                  Imóvel com histórico
                 </h3>
 
                 <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
-                  Este imóvel está alugado e não pode ser excluído.
+                  Este imóvel já possui contratos vinculados e não pode ser
+                  excluído. Caso necessário, altere a situação do cadastro para
+                  inativo.
                 </p>
 
                 <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
@@ -724,6 +819,46 @@ export default function PropertiesPage() {
               <div className="mt-8">
                 <button
                   onClick={handleCloseBlockedDeleteProperty}
+                  className="w-full rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                >
+                  Entendi
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {blockedInactiveProperty && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-[2rem] border border-orange-100 bg-white p-8 shadow-2xl">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 text-3xl">
+                ⚠️
+              </div>
+
+              <div className="mt-5 text-center">
+                <h3 className="text-2xl font-black text-slate-950">
+                  Imóvel vinculado a contrato
+                </h3>
+
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
+                  Este imóvel possui contrato vinculado e não pode ser inativado.
+                  Para alterar a situação do cadastro, encerre ou remova o
+                  contrato vinculado primeiro.
+                </p>
+
+                <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
+                  <p className="text-sm font-black text-slate-900">
+                    {blockedInactiveProperty.name}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                    {blockedInactiveProperty.address || "Endereço não informado"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-8">
+                <button
+                  onClick={handleCloseBlockedInactiveProperty}
                   className="w-full rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
                 >
                   Entendi
@@ -771,6 +906,26 @@ function SummaryCard({ icon, title, value, detail }: SummaryCardProps) {
       <h3 className="mt-3 text-3xl font-black text-slate-950">{value}</h3>
       <p className="mt-3 text-sm font-bold text-orange-600">{detail}</p>
     </div>
+  );
+}
+
+function ActiveBadge({ isActive }: { isActive: boolean }) {
+  const activeConfig = isActive
+    ? {
+        label: "Ativo",
+        className: "bg-emerald-100 text-emerald-700",
+      }
+    : {
+        label: "Inativo",
+        className: "bg-slate-100 text-slate-600",
+      };
+
+  return (
+    <span
+      className={`rounded-full px-3 py-1 text-xs font-black ${activeConfig.className}`}
+    >
+      {activeConfig.label}
+    </span>
   );
 }
 

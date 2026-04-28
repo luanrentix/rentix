@@ -7,6 +7,11 @@ import { Tenant, initialTenants } from "@/data/tenants";
 const CONTRACTS_STORAGE_KEY = "rentix_contracts";
 const PROPERTIES_STORAGE_KEY = "rentix_properties";
 const TENANTS_STORAGE_KEY = "rentix_tenants";
+const RECEIVABLE_FROM_CONTRACT_STORAGE_KEY = "rentix_new_charge_from_contract";
+const MANUAL_CHARGES_STORAGE_KEY = "rentix_manual_charges";
+const PAID_CHARGES_STORAGE_KEY = "rentix_paid_charges";
+const CHARGE_PAYMENTS_STORAGE_KEY = "rentix_charge_payments";
+const EXPIRING_CONTRACT_DAYS_LIMIT = 30;
 
 type PropertyStatus = "Available" | "Rented";
 
@@ -15,10 +20,12 @@ type Property = {
   name: string;
   rentValue?: number;
   status: PropertyStatus;
+  isActive?: boolean;
 };
 
 type RentixTenant = Tenant & {
   isTenant?: boolean;
+  isActive?: boolean;
 };
 
 type ContractStatus =
@@ -28,7 +35,9 @@ type ContractStatus =
   | "Finished"
   | "Deleted";
 
-type ContractFilterStatus = "All" | ContractStatus;
+type ContractDisplayStatus = ContractStatus | "Expiring";
+
+type ContractFilterStatus = "All" | ContractStatus | "Expiring";
 
 type Contract = {
   id: number;
@@ -41,6 +50,33 @@ type Contract = {
   rentValue: number;
   status?: ContractStatus;
   deletedAt?: string | null;
+  statusReason?: string | null;
+  statusReasonType?: "Canceled" | "Deleted" | null;
+  statusReasonAt?: string | null;
+};
+
+type ReceivableCharge = {
+  id: string;
+  contractId?: string | number | null;
+  property?: string;
+  tenant?: string;
+  dueDate?: string;
+  amount?: number;
+  manual?: boolean;
+  issueDate?: string;
+  installmentNumber?: number;
+  installmentTotal?: number;
+  installmentGroupId?: string;
+};
+
+type ChargePaymentRecord = {
+  chargeId: string;
+  [key: string]: unknown;
+};
+
+type PendingStatusChange = {
+  contract: Contract;
+  nextStatus: "Canceled" | "Deleted";
 };
 
 export default function ContractsPage() {
@@ -53,10 +89,9 @@ export default function ContractsPage() {
   const [editingContractId, setEditingContractId] = useState<number | null>(
     null
   );
-  const [contractToDelete, setContractToDelete] = useState<Contract | null>(
-    null
-  );
-  const [statusFilter, setStatusFilter] = useState<ContractFilterStatus>("All");
+  const [statusFilter, setStatusFilter] =
+    useState<ContractFilterStatus>("Active");
+  const [searchTerm, setSearchTerm] = useState("");
 
   const [propertyId, setPropertyId] = useState("");
   const [tenantId, setTenantId] = useState("");
@@ -65,6 +100,10 @@ export default function ContractsPage() {
   const [rentValue, setRentValue] = useState("");
   const [contractStatus, setContractStatus] =
     useState<ContractStatus>("Active");
+  const [pendingStatusChange, setPendingStatusChange] =
+    useState<PendingStatusChange | null>(null);
+  const [statusReason, setStatusReason] = useState("");
+  const [statusReasonError, setStatusReasonError] = useState("");
 
   const isEditing = editingContractId !== null;
 
@@ -90,6 +129,9 @@ export default function ContractsPage() {
             contract.status ||
             getAutomaticContractStatus(contract.endDate || ""),
           deletedAt: contract.deletedAt || null,
+          statusReason: contract.statusReason || null,
+          statusReasonType: contract.statusReasonType || null,
+          statusReasonAt: contract.statusReasonAt || null,
         })
       );
 
@@ -135,31 +177,47 @@ export default function ContractsPage() {
       const hasActiveContract = contracts.some(
         (contract) =>
           String(contract.propertyId) === String(property.id) &&
-          getDisplayContractStatus(contract) === "Active" &&
+          ["Active", "Expiring"].includes(getDisplayContractStatus(contract)) &&
           contract.status !== "Deleted"
       );
 
       const isCurrentEditingProperty =
         isEditing && String(property.id) === String(propertyId);
 
+      const isPropertyActive = property.isActive !== false;
+
       return (
-        (property.status === "Available" && !hasActiveContract) ||
+        (isPropertyActive && property.status === "Available" && !hasActiveContract) ||
         isCurrentEditingProperty
       );
     });
   }, [properties, contracts, isEditing, propertyId]);
 
   const availableTenants = useMemo(() => {
-    return tenants.filter((tenant) => tenant.isTenant !== false);
+    return tenants.filter((tenant) => {
+      const isTenant = tenant.isTenant !== false;
+      const isActive = tenant.isActive !== false;
+      return isTenant && isActive;
+    });
   }, [tenants]);
 
   const filteredContracts = useMemo(() => {
-    if (statusFilter === "All") return contracts;
+    const normalizedSearchTerm = normalizeSearchText(searchTerm);
 
-    return contracts.filter(
-      (contract) => getDisplayContractStatus(contract) === statusFilter
-    );
-  }, [contracts, statusFilter]);
+    return contracts.filter((contract) => {
+      const displayStatus = getDisplayContractStatus(contract);
+      const matchesStatus =
+        statusFilter === "All" ||
+        displayStatus === statusFilter ||
+        (statusFilter === "Active" && displayStatus === "Expiring");
+      const matchesSearch =
+        !normalizedSearchTerm ||
+        normalizeSearchText(contract.propertyName).includes(normalizedSearchTerm) ||
+        normalizeSearchText(contract.tenantName).includes(normalizedSearchTerm);
+
+      return matchesStatus && matchesSearch;
+    });
+  }, [contracts, statusFilter, searchTerm]);
 
   function resetForm() {
     setPropertyId("");
@@ -170,6 +228,9 @@ export default function ContractsPage() {
     setContractStatus("Active");
     setFormError("");
     setEditingContractId(null);
+    setPendingStatusChange(null);
+    setStatusReason("");
+    setStatusReasonError("");
     setIsFormOpen(false);
   }
 
@@ -192,6 +253,175 @@ export default function ContractsPage() {
     setIsFormOpen(true);
   }
 
+  function getFirstDueDateFromStartDate(dateValue: string) {
+    if (!dateValue) return "";
+
+    const dueDate = new Date(`${dateValue}T00:00:00`);
+
+    if (Number.isNaN(dueDate.getTime())) {
+      return "";
+    }
+
+    dueDate.setMonth(dueDate.getMonth() + 1);
+
+    const year = dueDate.getFullYear();
+    const month = String(dueDate.getMonth() + 1).padStart(2, "0");
+    const day = String(dueDate.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  }
+
+  function getContractInstallmentQuantity(startDateValue: string, endDateValue: string) {
+    if (!startDateValue || !endDateValue) return 1;
+
+    const start = new Date(`${startDateValue}T00:00:00`);
+    const end = new Date(`${endDateValue}T00:00:00`);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+      return 1;
+    }
+
+    const monthDifference =
+      (end.getFullYear() - start.getFullYear()) * 12 +
+      (end.getMonth() - start.getMonth());
+
+    return Math.max(monthDifference, 1);
+  }
+
+  function applyEditedContract(updatedContract: Contract, reason?: string) {
+    const shouldRemoveReceivables =
+      updatedContract.status === "Canceled" || updatedContract.status === "Deleted";
+    const cleanReason = reason?.trim() || updatedContract.statusReason || null;
+
+    const contractToSave: Contract = {
+      ...updatedContract,
+      deletedAt:
+        updatedContract.status === "Deleted"
+          ? updatedContract.deletedAt || new Date().toISOString()
+          : null,
+      statusReason: shouldRemoveReceivables
+        ? cleanReason
+        : updatedContract.statusReason || null,
+      statusReasonType: shouldRemoveReceivables
+        ? updatedContract.status === "Deleted"
+          ? "Deleted"
+          : "Canceled"
+        : null,
+      statusReasonAt:
+        shouldRemoveReceivables && cleanReason
+          ? new Date().toISOString()
+          : updatedContract.statusReasonAt || null,
+    };
+
+    if (shouldRemoveReceivables) {
+      removeReceivableChargesFromContract(contractToSave);
+    }
+
+    setContracts((currentContracts) =>
+      currentContracts.map((contract) =>
+        contract.id === contractToSave.id ? contractToSave : contract,
+      ),
+    );
+
+    resetForm();
+  }
+
+  function handleConfirmStatusReason() {
+    const cleanReason = statusReason.trim();
+
+    if (!pendingStatusChange) return;
+
+    if (cleanReason.length < 5) {
+      setStatusReasonError(
+        "Informe um motivo com pelo menos 5 caracteres para continuar.",
+      );
+      return;
+    }
+
+    applyEditedContract(pendingStatusChange.contract, cleanReason);
+    setPendingStatusChange(null);
+    setStatusReason("");
+    setStatusReasonError("");
+  }
+
+  function handleCancelStatusReason() {
+    setPendingStatusChange(null);
+    setStatusReason("");
+    setStatusReasonError("");
+  }
+
+  function removeReceivableChargesFromContract(contract: Contract) {
+    const storedManualCharges = localStorage.getItem(MANUAL_CHARGES_STORAGE_KEY);
+    const storedPaidCharges = localStorage.getItem(PAID_CHARGES_STORAGE_KEY);
+    const storedPaymentRecords = localStorage.getItem(CHARGE_PAYMENTS_STORAGE_KEY);
+
+    const manualCharges = safeParseLocalStorageArray<ReceivableCharge>(storedManualCharges);
+    const paidCharges = safeParseLocalStorageArray<string>(storedPaidCharges);
+    const paymentRecords = safeParseLocalStorageArray<ChargePaymentRecord>(storedPaymentRecords);
+    const removedChargeIds = new Set<string>();
+    const automaticChargePrefix = String(contract.id);
+
+    const updatedManualCharges = manualCharges.filter((charge) => {
+      const isLinked = isReceivableChargeLinkedToContract(charge, contract);
+
+      if (isLinked) {
+        removedChargeIds.add(String(charge.id));
+        return false;
+      }
+
+      return true;
+    });
+
+    const updatedPaidCharges = paidCharges.filter((chargeId) => {
+      const normalizedChargeId = String(chargeId);
+      const isLinked =
+        removedChargeIds.has(normalizedChargeId) ||
+        normalizedChargeId.startsWith(automaticChargePrefix + "-");
+
+      return !isLinked;
+    });
+
+    const updatedPaymentRecords = paymentRecords.filter((paymentRecord) => {
+      const normalizedChargeId = String(paymentRecord.chargeId);
+      const isLinked =
+        removedChargeIds.has(normalizedChargeId) ||
+        normalizedChargeId.startsWith(automaticChargePrefix + "-");
+
+      return !isLinked;
+    });
+
+    localStorage.setItem(MANUAL_CHARGES_STORAGE_KEY, JSON.stringify(updatedManualCharges));
+    localStorage.setItem(PAID_CHARGES_STORAGE_KEY, JSON.stringify(updatedPaidCharges));
+    localStorage.setItem(CHARGE_PAYMENTS_STORAGE_KEY, JSON.stringify(updatedPaymentRecords));
+  }
+
+  function openReceivableChargeFromContract(contract: Contract) {
+    const installmentQuantity = getContractInstallmentQuantity(
+      contract.startDate,
+      contract.endDate
+    );
+    const monthlyRentAmount = Number(contract.rentValue || 0);
+    const totalContractAmount = monthlyRentAmount * installmentQuantity;
+
+    localStorage.setItem(
+      RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
+      JSON.stringify({
+        contractId: String(contract.id),
+        tenantId: String(contract.tenantId),
+        propertyId: String(contract.propertyId),
+        amount: totalContractAmount,
+        monthlyAmount: monthlyRentAmount,
+        totalAmount: totalContractAmount,
+        issueDate: contract.startDate,
+        dueDate: getFirstDueDateFromStartDate(contract.startDate),
+        endDate: contract.endDate,
+        installmentQuantity,
+      })
+    );
+
+    window.location.href = "/contas-receber";
+  }
+
   function handleSubmitContract(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError("");
@@ -209,6 +439,13 @@ export default function ContractsPage() {
       return;
     }
 
+    if (selectedProperty.isActive === false) {
+      setFormError(
+        "Este imóvel está inativo e não pode ser utilizado para criar ou alterar um contrato."
+      );
+      return;
+    }
+
     if (!selectedTenant) {
       setFormError("Selecione um inquilino válido.");
       return;
@@ -216,6 +453,13 @@ export default function ContractsPage() {
 
     if (selectedTenant.isTenant === false) {
       setFormError("Esta pessoa não está marcada como inquilino.");
+      return;
+    }
+
+    if (selectedTenant.isActive === false) {
+      setFormError(
+        "Esta pessoa está inativa e não pode ser utilizada para criar ou alterar um contrato."
+      );
       return;
     }
 
@@ -235,29 +479,46 @@ export default function ContractsPage() {
     }
 
     if (isEditing) {
-      setContracts((currentContracts) =>
-        currentContracts.map((contract) =>
-          contract.id === editingContractId
-            ? {
-                ...contract,
-                propertyId: selectedProperty.id,
-                propertyName: selectedProperty.name,
-                tenantId: selectedTenant.id,
-                tenantName: selectedTenant.name,
-                startDate,
-                endDate,
-                rentValue: Number(rentValue),
-                status: contractStatus,
-                deletedAt:
-                  contractStatus === "Deleted"
-                    ? contract.deletedAt || new Date().toISOString()
-                    : null,
-              }
-            : contract
-        )
+      const currentContract = contracts.find(
+        (contract) => contract.id === editingContractId,
       );
 
-      resetForm();
+      if (!currentContract) {
+        setFormError("Contrato não encontrado para edição.");
+        return;
+      }
+
+      const updatedContract: Contract = {
+        ...currentContract,
+        propertyId: selectedProperty.id,
+        propertyName: selectedProperty.name,
+        tenantId: selectedTenant.id,
+        tenantName: selectedTenant.name,
+        startDate,
+        endDate,
+        rentValue: Number(rentValue),
+        status: contractStatus,
+        deletedAt:
+          contractStatus === "Deleted"
+            ? currentContract.deletedAt || new Date().toISOString()
+            : null,
+      };
+
+      const statusRequiresReason =
+        (contractStatus === "Canceled" || contractStatus === "Deleted") &&
+        currentContract.status !== contractStatus;
+
+      if (statusRequiresReason) {
+        setPendingStatusChange({
+          contract: updatedContract,
+          nextStatus: contractStatus,
+        });
+        setStatusReason("");
+        setStatusReasonError("");
+        return;
+      }
+
+      applyEditedContract(updatedContract);
       return;
     }
 
@@ -272,10 +533,17 @@ export default function ContractsPage() {
       rentValue: Number(rentValue),
       status: contractStatus,
       deletedAt: contractStatus === "Deleted" ? new Date().toISOString() : null,
+      statusReason: null,
+      statusReasonType: null,
+      statusReasonAt: null,
     };
 
-    setContracts((currentContracts) => [newContract, ...currentContracts]);
+    const updatedContracts = [newContract, ...contracts];
+
+    setContracts(updatedContracts);
+    localStorage.setItem(CONTRACTS_STORAGE_KEY, JSON.stringify(updatedContracts));
     resetForm();
+    openReceivableChargeFromContract(newContract);
   }
 
   function handlePropertyChange(selectedPropertyId: string) {
@@ -289,24 +557,6 @@ export default function ContractsPage() {
     if (selectedProperty) {
       setRentValue(String(selectedProperty.rentValue || ""));
     }
-  }
-
-  function handleSoftDeleteContract() {
-    if (!contractToDelete) return;
-
-    setContracts((currentContracts) =>
-      currentContracts.map((contract) =>
-        contract.id === contractToDelete.id
-          ? {
-              ...contract,
-              status: "Deleted",
-              deletedAt: new Date().toISOString(),
-            }
-          : contract
-      )
-    );
-
-    setContractToDelete(null);
   }
 
   return (
@@ -343,26 +593,39 @@ export default function ContractsPage() {
               </p>
             </div>
 
-            <FormField label="Filtrar por status">
-              <select
-                value={statusFilter}
-                onChange={(event) =>
-                  setStatusFilter(event.target.value as ContractFilterStatus)
-                }
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 md:w-64"
-              >
-                <option value="All">Todos</option>
-                <option value="Active">Ativos</option>
-                <option value="Inactive">Inativos</option>
-                <option value="Canceled">Cancelados</option>
-                <option value="Finished">Finalizados</option>
-                <option value="Deleted">Excluídos</option>
-              </select>
-            </FormField>
+            <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-[1fr_240px] xl:max-w-3xl">
+              <FormField label="Buscar contrato">
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Buscar por imóvel ou inquilino"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                />
+              </FormField>
+
+              <FormField label="Status">
+                <select
+                  value={statusFilter}
+                  onChange={(event) =>
+                    setStatusFilter(event.target.value as ContractFilterStatus)
+                  }
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                >
+                  <option value="Active">Ativos</option>
+                  <option value="Expiring">Vencendo</option>
+                  <option value="Inactive">Inativos</option>
+                  <option value="Canceled">Cancelados</option>
+                  <option value="Finished">Finalizados</option>
+                  <option value="Deleted">Excluídos</option>
+                  <option value="All">Todos</option>
+                </select>
+              </FormField>
+            </div>
           </div>
 
-          <div className="overflow-hidden">
-            <table className="w-full text-left">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] text-left">
               <thead className="bg-orange-50">
                 <tr>
                   <th className="px-6 py-4 text-sm font-black text-slate-700">
@@ -390,63 +653,74 @@ export default function ContractsPage() {
               </thead>
 
               <tbody className="divide-y divide-slate-100">
-                {filteredContracts.map((contract) => (
-                  <tr
-                    key={contract.id}
-                    className={`transition hover:bg-slate-50 ${
-                      getDisplayContractStatus(contract) === "Deleted"
-                        ? "bg-slate-50 opacity-70"
-                        : ""
-                    }`}
-                  >
-                    <td className="px-6 py-4 font-black text-slate-900">
-                      {contract.propertyName || "Não informado"}
-                    </td>
+                {filteredContracts.map((contract) => {
+                  const displayStatus = getDisplayContractStatus(contract);
 
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-600">
-                      {contract.tenantName || "Não informado"}
-                    </td>
+                  return (
+                    <tr
+                      key={contract.id}
+                      className={`transition hover:bg-slate-50 ${
+                        displayStatus === "Deleted"
+                          ? "bg-slate-50 opacity-70"
+                          : displayStatus === "Expiring"
+                            ? "bg-amber-50/60"
+                            : ""
+                      }`}
+                    >
+                      <td className="px-6 py-4 font-black text-slate-900">
+                        {contract.propertyName || "Não informado"}
+                      </td>
 
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-600">
-                      {formatDate(contract.startDate)}
-                    </td>
+                      <td className="px-6 py-4 text-sm font-semibold text-slate-600">
+                        {contract.tenantName || "Não informado"}
+                      </td>
 
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-600">
-                      {formatDate(contract.endDate)}
-                    </td>
+                      <td className="px-6 py-4 text-sm font-semibold text-slate-600">
+                        {formatDate(contract.startDate)}
+                      </td>
 
-                    <td className="px-6 py-4 text-sm font-black text-slate-900">
-                      {formatCurrency(contract.rentValue)}
-                    </td>
+                      <td className="px-6 py-4 text-sm font-semibold text-slate-600">
+                        <div className="flex flex-col gap-1">
+                          <span>{formatDate(contract.endDate)}</span>
+                          {displayStatus === "Expiring" && (
+                            <span className="text-xs font-black text-amber-700">
+                              Vence em {getDaysUntilDate(contract.endDate)} dia(s)
+                            </span>
+                          )}
+                        </div>
+                      </td>
 
-                    <td className="px-6 py-4">
-                      <StatusBadge status={getDisplayContractStatus(contract)} />
-                    </td>
+                      <td className="px-6 py-4 text-sm font-black text-slate-900">
+                        {formatCurrency(contract.rentValue)}
+                      </td>
 
-                    <td className="px-6 py-4">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleEditContract(contract)}
-                          className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
-                        >
-                          Editar
-                        </button>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-1">
+                          <StatusBadge status={displayStatus} />
+                          {(displayStatus === "Canceled" ||
+                            displayStatus === "Deleted") &&
+                            contract.statusReason && (
+                              <span className="max-w-[220px] text-xs font-semibold text-slate-500">
+                                Motivo: {contract.statusReason}
+                              </span>
+                            )}
+                        </div>
+                      </td>
 
-                        <button
-                          type="button"
-                          onClick={() => setContractToDelete(contract)}
-                          disabled={
-                            getDisplayContractStatus(contract) === "Deleted"
-                          }
-                          className="rounded-xl bg-red-50 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Excluir
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      <td className="px-6 py-4">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEditContract(contract)}
+                            className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+                          >
+                            Editar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
 
                 {filteredContracts.length === 0 && (
                   <tr>
@@ -462,6 +736,81 @@ export default function ContractsPage() {
             </table>
           </div>
         </div>
+
+        {pendingStatusChange && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-[2rem] border border-red-100 bg-white p-8 shadow-2xl">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 text-3xl">
+                {pendingStatusChange.nextStatus === "Deleted" ? "🗑️" : "🚫"}
+              </div>
+
+              <div className="mt-5 text-center">
+                <h3 className="text-2xl font-black text-slate-950">
+                  {pendingStatusChange.nextStatus === "Deleted"
+                    ? "Motivo da exclusão"
+                    : "Motivo do cancelamento"}
+                </h3>
+
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
+                  Ao confirmar, as parcelas em aberto vinculadas a este contrato serão removidas do Contas a Receber para manter o financeiro consistente.
+                </p>
+              </div>
+
+              <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
+                <p className="text-sm font-black text-slate-900">
+                  {pendingStatusChange.contract.propertyName || "Contrato"}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  {pendingStatusChange.contract.tenantName || "Inquilino não informado"}
+                </p>
+              </div>
+
+              <div className="mt-5">
+                <label className="mb-2 block text-sm font-black text-slate-700">
+                  Motivo
+                </label>
+                <textarea
+                  value={statusReason}
+                  onChange={(event) => {
+                    setStatusReason(event.target.value);
+                    setStatusReasonError("");
+                  }}
+                  placeholder={
+                    pendingStatusChange.nextStatus === "Deleted"
+                      ? "Descreva o motivo da exclusão do contrato"
+                      : "Descreva o motivo do cancelamento do contrato"
+                  }
+                  rows={4}
+                  className="w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                />
+
+                {statusReasonError && (
+                  <div className="mt-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                    {statusReasonError}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-8 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={handleCancelStatusReason}
+                  className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleConfirmStatusReason}
+                  className="rounded-2xl bg-red-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600"
+                >
+                  Confirmar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {isFormOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
@@ -611,54 +960,6 @@ export default function ContractsPage() {
             </div>
           </div>
         )}
-
-        {contractToDelete && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-[2rem] border border-red-100 bg-white p-8 shadow-2xl">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 text-3xl">
-                🗑️
-              </div>
-
-              <div className="mt-5 text-center">
-                <h3 className="text-2xl font-black text-slate-950">
-                  Excluir contrato?
-                </h3>
-
-                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
-                  Este contrato não será apagado definitivamente. Ele ficará
-                  registrado como excluído para manter o histórico do sistema.
-                </p>
-
-                <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
-                  <p className="text-sm font-black text-slate-900">
-                    {contractToDelete.propertyName || "Contrato"}
-                  </p>
-                  <p className="mt-1 text-xs font-semibold text-slate-500">
-                    {contractToDelete.tenantName || "Inquilino não informado"}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-8 grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setContractToDelete(null)}
-                  className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200"
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleSoftDeleteContract}
-                  className="rounded-2xl bg-red-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600"
-                >
-                  Sim, excluir
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </AppShell>
   );
@@ -680,11 +981,15 @@ function FormField({ label, children }: FormFieldProps) {
   );
 }
 
-function StatusBadge({ status }: { status: ContractStatus }) {
+function StatusBadge({ status }: { status: ContractDisplayStatus }) {
   const statusConfig = {
     Active: {
       label: "Ativo",
       className: "bg-emerald-100 text-emerald-700",
+    },
+    Expiring: {
+      label: "Vencendo",
+      className: "bg-amber-100 text-amber-700",
     },
     Inactive: {
       label: "Inativo",
@@ -721,7 +1026,7 @@ function syncPropertiesWithContracts(
     const hasActiveContract = contracts.some(
       (contract) =>
         String(contract.propertyId) === String(property.id) &&
-        getDisplayContractStatus(contract) === "Active" &&
+        ["Active", "Expiring"].includes(getDisplayContractStatus(contract)) &&
         contract.status !== "Deleted"
     );
 
@@ -732,16 +1037,19 @@ function syncPropertiesWithContracts(
   });
 }
 
-function getDisplayContractStatus(contract: Contract): ContractStatus {
+function getDisplayContractStatus(contract: Contract): ContractDisplayStatus {
   if (contract.status === "Deleted") return "Deleted";
   if (contract.status === "Canceled") return "Canceled";
   if (contract.status === "Finished") return "Finished";
   if (contract.status === "Inactive") return "Inactive";
-  if (contract.status === "Active") {
-    return getAutomaticContractStatus(contract.endDate);
+
+  const automaticStatus = getAutomaticContractStatus(contract.endDate);
+
+  if (automaticStatus === "Active" && isContractExpiring(contract.endDate)) {
+    return "Expiring";
   }
 
-  return getAutomaticContractStatus(contract.endDate);
+  return automaticStatus;
 }
 
 function getAutomaticContractStatus(endDate: string): ContractStatus {
@@ -751,6 +1059,99 @@ function getAutomaticContractStatus(endDate: string): ContractStatus {
   const contractEndDate = new Date(`${endDate}T23:59:59`);
 
   return contractEndDate >= today ? "Active" : "Inactive";
+}
+
+function isContractExpiring(endDate: string) {
+  const daysUntilEndDate = getDaysUntilDate(endDate);
+
+  return (
+    daysUntilEndDate >= 0 &&
+    daysUntilEndDate <= EXPIRING_CONTRACT_DAYS_LIMIT
+  );
+}
+
+function getDaysUntilDate(value: string) {
+  if (!value) return -1;
+
+  const today = new Date();
+  const endDate = new Date(`${value}T23:59:59`);
+  const millisecondsPerDay = 1000 * 60 * 60 * 24;
+
+  today.setHours(0, 0, 0, 0);
+
+  return Math.ceil((endDate.getTime() - today.getTime()) / millisecondsPerDay);
+}
+
+function safeParseLocalStorageArray<T>(value: string | null): T[] {
+  if (!value) return [];
+
+  try {
+    const parsedValue = JSON.parse(value);
+    return Array.isArray(parsedValue) ? (parsedValue as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function isReceivableChargeLinkedToContract(
+  charge: ReceivableCharge,
+  contract: Contract,
+) {
+  if (String(charge.contractId || "") === String(contract.id)) {
+    return true;
+  }
+
+  const chargeTenant = normalizeSearchText(charge.tenant || "");
+  const chargeProperty = normalizeSearchText(charge.property || "");
+  const contractTenant = normalizeSearchText(contract.tenantName || "");
+  const contractProperty = normalizeSearchText(contract.propertyName || "");
+
+  if (!chargeTenant || !contractTenant || chargeTenant !== contractTenant) {
+    return false;
+  }
+
+  if (!chargeProperty || !contractProperty || chargeProperty !== contractProperty) {
+    return false;
+  }
+
+  const chargeAmount = Number(charge.amount || 0);
+  const contractRentValue = Number(contract.rentValue || 0);
+
+  if (Math.abs(chargeAmount - contractRentValue) > 0.01) {
+    return false;
+  }
+
+  if (!charge.dueDate || !contract.startDate || !contract.endDate) {
+    return false;
+  }
+
+  const chargeDueDate = new Date(charge.dueDate);
+  const contractStartDate = new Date(contract.startDate + "T00:00:00");
+  const contractEndDate = new Date(contract.endDate + "T23:59:59");
+
+  if (
+    Number.isNaN(chargeDueDate.getTime()) ||
+    Number.isNaN(contractStartDate.getTime()) ||
+    Number.isNaN(contractEndDate.getTime())
+  ) {
+    return false;
+  }
+
+  const lowerLimit = new Date(contractStartDate);
+  lowerLimit.setDate(lowerLimit.getDate() - 5);
+
+  const upperLimit = new Date(contractEndDate);
+  upperLimit.setDate(upperLimit.getDate() + 45);
+
+  return chargeDueDate >= lowerLimit && chargeDueDate <= upperLimit;
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 }
 
 function formatCurrency(value?: number) {

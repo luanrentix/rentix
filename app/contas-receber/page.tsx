@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import AppShell from "@/components/layout/app-shell";
 
+const RECEIVABLE_FROM_CONTRACT_STORAGE_KEY = "rentix_new_charge_from_contract";
+
 type Contract = {
   id: string;
   propertyId: string;
@@ -62,6 +64,19 @@ type InstallmentPreview = {
   installmentNumber: number;
   amount: string;
   dueDate: string;
+};
+
+type ReceivableFromContractPayload = {
+  contractId?: string;
+  tenantId: string;
+  propertyId: string;
+  amount: number;
+  monthlyAmount?: number;
+  totalAmount?: number;
+  issueDate: string;
+  dueDate: string;
+  endDate?: string;
+  installmentQuantity?: number;
 };
 
 type PaymentMethod =
@@ -220,6 +235,36 @@ export default function AccountsReceivablePage() {
   const [reportEndDate, setReportEndDate] = useState("");
   const [reportFormError, setReportFormError] = useState("");
 
+  function openChargeFromContractPayload(payload: ReceivableFromContractPayload) {
+    const normalizedInstallmentQuantity = Math.max(
+      Number(payload.installmentQuantity || 1),
+      1,
+    );
+    const monthlyAmount = normalizeAmount(payload.monthlyAmount ?? payload.amount);
+    const totalAmount = normalizeAmount(
+      payload.totalAmount ?? monthlyAmount * normalizedInstallmentQuantity,
+    );
+    const receivableAmount =
+      normalizedInstallmentQuantity > 1 ? totalAmount : monthlyAmount;
+
+    setFormTenant(String(payload.tenantId || ""));
+    setFormProperty(String(payload.propertyId || ""));
+    setFormAmount(formatAmountInput(receivableAmount));
+    setFormIssueDate(payload.issueDate || getLocalDateValue(new Date()));
+    setFormDueDate(payload.dueDate || getLocalDateValue(new Date()));
+    setFormPaymentDate("");
+    setFormLaunchType(normalizedInstallmentQuantity > 1 ? "installment" : "single");
+    setFormInstallmentQuantity(String(Math.max(normalizedInstallmentQuantity, 2)));
+    setEditingChargeId(null);
+    setChargeFormError("");
+    setInstallmentPreview([]);
+    setIsTenantCreateOpen(false);
+    setSelectedTenant(null);
+    setSearch("");
+    setIsSearchOpen(false);
+    setIsCreateOpen(true);
+  }
+
   useEffect(() => {
     const c = localStorage.getItem("rentix_contracts");
     const p = localStorage.getItem("rentix_properties");
@@ -258,6 +303,23 @@ export default function AccountsReceivablePage() {
     } else {
       setAutoOpenSearch(true);
       setIsSearchOpen(true);
+    }
+
+    const contractChargeData = localStorage.getItem(
+      RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
+    );
+
+    if (contractChargeData) {
+      try {
+        const parsedContractChargeData = JSON.parse(
+          contractChargeData,
+        ) as ReceivableFromContractPayload;
+
+        openChargeFromContractPayload(parsedContractChargeData);
+        localStorage.removeItem(RECEIVABLE_FROM_CONTRACT_STORAGE_KEY);
+      } catch {
+        localStorage.removeItem(RECEIVABLE_FROM_CONTRACT_STORAGE_KEY);
+      }
     }
   }, []);
 
@@ -804,6 +866,356 @@ export default function AccountsReceivablePage() {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
+  }
+
+
+  function getCompanySettingsForCarnet() {
+    const defaultCompanySettings = {
+      companyName: "Rentix",
+      tradeName: "Rentix",
+      document: "",
+      phone: "",
+      email: "",
+      city: "",
+      pixKeyType: "",
+      pixKey: "",
+    };
+
+    try {
+      const storedCompanySettings = localStorage.getItem("rentix_company_settings");
+
+      if (!storedCompanySettings) {
+        return defaultCompanySettings;
+      }
+
+      return {
+        ...defaultCompanySettings,
+        ...JSON.parse(storedCompanySettings),
+      };
+    } catch {
+      return defaultCompanySettings;
+    }
+  }
+
+  function removeTextAccents(value: string) {
+    return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  }
+
+  function sanitizePixText(value: string, maxLength: number) {
+    return removeTextAccents(value)
+      .replace(/[^a-zA-Z0-9 $%*+\-.\/]/g, "")
+      .trim()
+      .slice(0, maxLength);
+  }
+
+  function formatEmvField(id: string, value: string) {
+    const length = String(value.length).padStart(2, "0");
+
+    return `${id}${length}${value}`;
+  }
+
+  function calculatePixCrc16(payload: string) {
+    let crc = 0xffff;
+
+    for (let index = 0; index < payload.length; index += 1) {
+      crc ^= payload.charCodeAt(index) << 8;
+
+      for (let bit = 0; bit < 8; bit += 1) {
+        if ((crc & 0x8000) !== 0) {
+          crc = (crc << 1) ^ 0x1021;
+        } else {
+          crc <<= 1;
+        }
+
+        crc &= 0xffff;
+      }
+    }
+
+    return crc.toString(16).toUpperCase().padStart(4, "0");
+  }
+
+  function generatePixPayload(params: {
+    pixKey: string;
+    merchantName: string;
+    merchantCity: string;
+    amount: number;
+    txId: string;
+    description: string;
+  }) {
+    const pixKey = params.pixKey.trim();
+
+    if (!pixKey) {
+      return "";
+    }
+
+    const merchantAccountInfo =
+      formatEmvField("00", "br.gov.bcb.pix") +
+      formatEmvField("01", pixKey) +
+      formatEmvField("02", sanitizePixText(params.description, 72));
+
+    const additionalDataField = formatEmvField(
+      "05",
+      sanitizePixText(params.txId || "RENTIX", 25),
+    );
+
+    const amount = Number(params.amount || 0).toFixed(2);
+    const payloadWithoutCrc =
+      formatEmvField("00", "01") +
+      formatEmvField("26", merchantAccountInfo) +
+      formatEmvField("52", "0000") +
+      formatEmvField("53", "986") +
+      formatEmvField("54", amount) +
+      formatEmvField("58", "BR") +
+      formatEmvField("59", sanitizePixText(params.merchantName || "RENTIX", 25)) +
+      formatEmvField("60", sanitizePixText(params.merchantCity || "BRASIL", 15)) +
+      formatEmvField("62", additionalDataField) +
+      "6304";
+
+    return `${payloadWithoutCrc}${calculatePixCrc16(payloadWithoutCrc)}`;
+  }
+
+  function getPixQrCodeUrl(pixPayload: string) {
+    return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=8&data=${encodeURIComponent(
+      pixPayload,
+    )}`;
+  }
+
+  function generatePaymentCarnet(carnetCharges: Charge[]) {
+    if (carnetCharges.length === 0) return;
+
+    const printWindow = window.open(
+      "",
+      "_blank",
+      `toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=${window.screen.width},height=${window.screen.height}`,
+    );
+
+    if (!printWindow) {
+      setChargeFormError(
+        "As parcelas foram salvas, mas não foi possível abrir o carnê. Verifique se o navegador bloqueou pop-ups.",
+      );
+      return;
+    }
+
+    const companySettings = getCompanySettingsForCarnet();
+    const companyName =
+      companySettings.tradeName || companySettings.companyName || "Rentix";
+    const companyDocument = companySettings.document || "Não informado";
+    const companyPhone = companySettings.phone || "Não informado";
+    const companyEmail = companySettings.email || "Não informado";
+    const pixKeyType = companySettings.pixKeyType || "Pix";
+    const pixKey = companySettings.pixKey || "Não cadastrada";
+    const firstCharge = carnetCharges[0];
+    const totalAmount = carnetCharges.reduce(
+      (total, charge) => total + charge.amount,
+      0,
+    );
+
+    const rows = carnetCharges
+      .map(
+        (charge) => `
+          <tr>
+            <td>${charge.installmentNumber || 1}/${charge.installmentTotal || carnetCharges.length}</td>
+            <td>${escapeHtml(charge.tenant)}</td>
+            <td>${escapeHtml(charge.property)}</td>
+            <td>${formatDate(charge.dueDate)}</td>
+            <td>${formatCurrency(charge.amount)}</td>
+          </tr>
+        `,
+      )
+      .join("");
+
+    const vouchers = carnetCharges
+      .map((charge) => {
+        const installmentLabel = `${charge.installmentNumber || 1}/${
+          charge.installmentTotal || carnetCharges.length
+        }`;
+        const pixPayload = generatePixPayload({
+          pixKey: companySettings.pixKey || "",
+          merchantName: companyName,
+          merchantCity: companySettings.city || "Brasil",
+          amount: charge.amount,
+          txId: `RX${String(charge.installmentGroupId || charge.id)
+            .replace(/[^a-zA-Z0-9]/g, "")
+            .slice(-18)}${String(charge.installmentNumber || 1).padStart(2, "0")}`,
+          description: `Aluguel ${installmentLabel} ${charge.tenant}`,
+        });
+        const pixQrCodeUrl = pixPayload ? getPixQrCodeUrl(pixPayload) : "";
+
+        return `
+          <section class="voucher">
+            <div class="voucher-header">
+              <div>
+                <div class="brand">${escapeHtml(companyName)}</div>
+                <h2>Carnê de pagamento</h2>
+              </div>
+              <div class="installment-badge">
+                Parcela ${installmentLabel}
+              </div>
+            </div>
+
+            <div class="voucher-grid">
+              <div class="field full">
+                <span>Inquilino/Pessoa</span>
+                <strong>${escapeHtml(charge.tenant)}</strong>
+              </div>
+
+              <div class="field full">
+                <span>Imóvel</span>
+                <strong>${escapeHtml(charge.property)}</strong>
+              </div>
+
+              <div class="field">
+                <span>Vencimento</span>
+                <strong>${formatDate(charge.dueDate)}</strong>
+              </div>
+
+              <div class="field">
+                <span>Valor</span>
+                <strong>${formatCurrency(charge.amount)}</strong>
+              </div>
+            </div>
+
+            <div class="pix-area">
+              <div class="pix-info">
+                <span>Pagamento via Pix</span>
+                <strong>${escapeHtml(pixKey)}</strong>
+                <small>Tipo da chave: ${escapeHtml(pixKeyType || "Não informado")}</small>
+                ${
+                  pixPayload
+                    ? `<div class="pix-copy"><span>Pix copia e cola</span><p>${escapeHtml(pixPayload)}</p></div>`
+                    : `<div class="pix-warning">Cadastre a chave Pix da empresa para gerar o QR Code automático.</div>`
+                }
+              </div>
+              ${
+                pixQrCodeUrl
+                  ? `<div class="pix-qr"><img src="${pixQrCodeUrl}" alt="QR Code Pix" /><span>QR Code Pix</span></div>`
+                  : ""
+              }
+            </div>
+
+            <div class="voucher-footer">
+              <span>${escapeHtml(companyName)} · Documento: ${escapeHtml(companyDocument)}</span>
+              <span>Telefone: ${escapeHtml(companyPhone)} · E-mail: ${escapeHtml(companyEmail)}</span>
+            </div>
+          </section>
+        `;
+      })
+      .join("");
+
+    printWindow.document.write(`
+      <!doctype html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8" />
+          <title>Carnê de Pagamento</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { margin: 0; background: #f1f5f9; color: #0f172a; font-family: Arial, sans-serif; }
+            .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 10px; padding: 14px 24px; background: rgba(255, 255, 255, 0.96); border-bottom: 1px solid #e2e8f0; backdrop-filter: blur(10px); }
+            .toolbar button { border: 0; border-radius: 12px; padding: 11px 18px; font-size: 13px; font-weight: 800; cursor: pointer; }
+            .print-button { background: #059669; color: #ffffff; }
+            .close-button { background: #e2e8f0; color: #0f172a; }
+            @page { size: A4; margin: 10mm; }
+            .page { width: min(1240px, calc(100% - 40px)); margin: 24px auto; }
+            .voucher-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+            .summary { margin-bottom: 18px; border: 1px solid #e2e8f0; border-radius: 18px; background: #ffffff; padding: 24px; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.10); }
+            .summary-header { display: flex; justify-content: space-between; gap: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 16px; }
+            .brand { color: #ea580c; font-size: 12px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+            h1, h2 { margin: 6px 0 0; }
+            .summary-meta { color: #64748b; font-size: 12px; line-height: 1.7; text-align: right; }
+            table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+            th { background: #fff7ed; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+            th, td { border: 1px solid #e2e8f0; padding: 9px; font-size: 12px; text-align: left; }
+            .voucher { break-inside: avoid; page-break-inside: avoid; border: 1px dashed #94a3b8; border-radius: 18px; background: #ffffff; padding: 18px; min-height: 318px; }
+            .voucher-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; }
+            .installment-badge { border-radius: 999px; background: #ecfdf5; color: #047857; padding: 8px 12px; font-size: 12px; font-weight: 900; white-space: nowrap; }
+            .voucher-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 14px; }
+            .field { border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; background: #f8fafc; }
+            .field.full { grid-column: 1 / -1; }
+            .field span { display: block; color: #64748b; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.04em; }
+            .field strong { display: block; margin-top: 5px; font-size: 14px; }
+            .field small { display: block; margin-top: 5px; color: #64748b; font-size: 11px; font-weight: 700; }
+            .pix-area { display: grid; grid-template-columns: minmax(0, 1fr) 132px; gap: 12px; margin-top: 12px; border: 1px solid #a7f3d0; border-radius: 14px; background: #ecfdf5; padding: 12px; }
+            .pix-info span, .pix-copy span { display: block; color: #047857; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.04em; }
+            .pix-info strong { display: block; margin-top: 5px; color: #0f172a; font-size: 14px; }
+            .pix-info small { display: block; margin-top: 4px; color: #475569; font-size: 11px; font-weight: 700; }
+            .pix-copy { margin-top: 8px; border-radius: 10px; background: #ffffff; padding: 8px; border: 1px dashed #6ee7b7; }
+            .pix-copy p { margin: 5px 0 0; color: #0f172a; font-size: 8px; line-height: 1.35; word-break: break-all; }
+            .pix-warning { margin-top: 8px; border-radius: 10px; background: #fff7ed; color: #c2410c; padding: 8px; font-size: 11px; font-weight: 800; }
+            .pix-qr { display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 12px; background: #ffffff; padding: 8px; border: 1px solid #d1fae5; }
+            .pix-qr img { width: 112px; height: 112px; object-fit: contain; }
+            .pix-qr span { margin-top: 5px; color: #047857; font-size: 10px; font-weight: 900; }
+            .voucher-footer { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; color: #64748b; font-size: 10px; font-weight: 700; }
+            @media print {
+              body { background: #ffffff; }
+              .toolbar { display: none !important; }
+              .page { width: 100%; margin: 0; padding: 0; }
+              .summary { box-shadow: none; border-radius: 0; }
+              .voucher { margin-bottom: 10px; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="toolbar">
+            <button class="print-button" type="button" onclick="window.print()">Imprimir carnê</button>
+            <button class="close-button" type="button" onclick="window.close()">Fechar</button>
+          </div>
+
+          <main class="page">
+            <section class="summary">
+              <div class="summary-header">
+                <div>
+                  <div class="brand">${escapeHtml(companyName)} · Financeiro</div>
+                  <h1>Carnê de Pagamento</h1>
+                  <p>Inquilino: <strong>${escapeHtml(firstCharge.tenant)}</strong></p>
+                  <p>Imóvel: <strong>${escapeHtml(firstCharge.property)}</strong></p>
+                </div>
+                <div class="summary-meta">
+                  Parcelas: <strong>${carnetCharges.length}</strong><br />
+                  Total: <strong>${formatCurrency(totalAmount)}</strong><br />
+                  Gerado em: <strong>${new Date().toLocaleString("pt-BR")}</strong>
+                </div>
+              </div>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>Parcela</th>
+                    <th>Inquilino</th>
+                    <th>Imóvel</th>
+                    <th>Vencimento</th>
+                    <th>Valor</th>
+                  </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </section>
+
+            <div class="voucher-list">
+              ${vouchers}
+            </div>
+          </main>
+
+          <script>
+            window.onload = function () {
+              window.focus();
+              try {
+                window.moveTo(0, 0);
+                window.resizeTo(screen.availWidth, screen.availHeight);
+              } catch (error) {}
+            };
+          </script>
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    printWindow.focus();
+
+    try {
+      printWindow.moveTo(0, 0);
+      printWindow.resizeTo(window.screen.availWidth, window.screen.availHeight);
+    } catch {}
   }
 
   function openAccountsReceivableReport(shouldPrint: boolean) {
@@ -1478,6 +1890,41 @@ export default function AccountsReceivablePage() {
     );
   }
 
+  function getCarnetChargesFromCharge(charge: Charge) {
+    if (charge.installmentGroupId) {
+      const groupedCharges = charges
+        .filter(
+          (currentCharge) =>
+            String(currentCharge.installmentGroupId || "") ===
+            String(charge.installmentGroupId),
+        )
+        .sort(
+          (firstCharge, secondCharge) =>
+            Number(firstCharge.installmentNumber || 0) -
+            Number(secondCharge.installmentNumber || 0),
+        );
+
+      if (groupedCharges.length > 0) {
+        return groupedCharges;
+      }
+    }
+
+    return [
+      {
+        ...charge,
+        installmentNumber: charge.installmentNumber || 1,
+        installmentTotal: charge.installmentTotal || 1,
+        installmentGroupId: charge.installmentGroupId || charge.id,
+      },
+    ];
+  }
+
+  function reprintPaymentCarnet(charge: Charge) {
+    const carnetCharges = getCarnetChargesFromCharge(charge);
+
+    generatePaymentCarnet(carnetCharges);
+  }
+
   function saveManualCharge() {
     setChargeFormError("");
 
@@ -1598,6 +2045,14 @@ export default function AccountsReceivablePage() {
         JSON.stringify(updatedManualCharges),
       );
 
+      generatePaymentCarnet([
+        {
+          ...savedCharge,
+          installmentNumber: 1,
+          installmentTotal: 1,
+          installmentGroupId: savedCharge.id,
+        },
+      ]);
       closeCreateModal();
       return;
     }
@@ -1645,6 +2100,7 @@ export default function AccountsReceivablePage() {
       JSON.stringify(updatedManualCharges),
     );
 
+    generatePaymentCarnet(newCharges);
     closeCreateModal();
   }
 
@@ -1876,6 +2332,13 @@ export default function AccountsReceivablePage() {
                             </button>
 
                             <button
+                              onClick={() => reprintPaymentCarnet(charge)}
+                              className="rounded-xl bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 shadow-sm ring-1 ring-emerald-100 transition hover:bg-emerald-100"
+                            >
+                              Carnê
+                            </button>
+
+                            <button
                               onClick={() => openReceivePaymentModal(charge)}
                               className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
                             >
@@ -1889,6 +2352,13 @@ export default function AccountsReceivablePage() {
                               className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-200"
                             >
                               Editar
+                            </button>
+
+                            <button
+                              onClick={() => reprintPaymentCarnet(charge)}
+                              className="rounded-xl bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 shadow-sm ring-1 ring-emerald-100 transition hover:bg-emerald-100"
+                            >
+                              Carnê
                             </button>
 
                             <span className="inline-flex items-center text-sm font-semibold text-emerald-600">

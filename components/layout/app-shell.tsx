@@ -20,6 +20,8 @@ type PasswordSettings = {
   confirmPassword: string;
 };
 
+type PixKeyType = "cpf" | "cnpj" | "email" | "phone" | "random";
+
 type CompanySettings = {
   companyName: string;
   tradeName: string;
@@ -28,6 +30,8 @@ type CompanySettings = {
   municipalRegistration: string;
   phone: string;
   email: string;
+  pixKeyType: PixKeyType;
+  pixKey: string;
   zipCode: string;
   address: string;
   number: string;
@@ -39,12 +43,20 @@ type CompanySettings = {
 const menuItems = [
   { label: "Dashboard", href: "/dashboard", icon: "🏠" },
   { label: "Imóveis", href: "/imoveis", icon: "🏢" },
-  { label: "Pessoas", href: "/inquilinos", icon: "👥" },
+  { label: "Pessoas", href: "/pessoas", icon: "👥" },
   { label: "Contratos", href: "/contratos", icon: "📄" },
   { label: "Financeiro", href: "/financeiro", icon: "💰" },
   { label: "Contas a Receber", href: "/contas-receber", icon: "📥" },
   { label: "Contas a Pagar", href: "/contas-pagar", icon: "📤" },
   { label: "Agenda", href: "/agenda", icon: "📅" },
+];
+
+const pixKeyTypeOptions: { label: string; value: PixKeyType }[] = [
+  { label: "CPF", value: "cpf" },
+  { label: "CNPJ", value: "cnpj" },
+  { label: "E-mail", value: "email" },
+  { label: "Telefone", value: "phone" },
+  { label: "Chave aleatória", value: "random" },
 ];
 
 const defaultUserSettings: UserSettings = {
@@ -66,6 +78,8 @@ const defaultCompanySettings: CompanySettings = {
   municipalRegistration: "",
   phone: "",
   email: "",
+  pixKeyType: "cpf",
+  pixKey: "",
   zipCode: "",
   address: "",
   number: "",
@@ -126,6 +140,30 @@ function formatZipCode(value: string) {
     .replace(/\D/g, "")
     .slice(0, 8)
     .replace(/(\d{5})(\d)/, "$1-$2");
+}
+
+function formatPixKey(value: string, pixKeyType: PixKeyType) {
+  if (pixKeyType === "cpf" || pixKeyType === "cnpj") {
+    return formatDocument(value);
+  }
+
+  if (pixKeyType === "phone") {
+    return formatPhone(value);
+  }
+
+  return value;
+}
+
+function getPixKeyPlaceholder(pixKeyType: PixKeyType) {
+  const placeholders: Record<PixKeyType, string> = {
+    cpf: "000.000.000-00",
+    cnpj: "00.000.000/0000-00",
+    email: "pix@empresa.com",
+    phone: "(00) 00000-0000",
+    random: "Chave aleatória Pix",
+  };
+
+  return placeholders[pixKeyType];
 }
 
 export default function AppShell({ children }: AppShellProps) {
@@ -644,6 +682,68 @@ export default function AppShell({ children }: AppShellProps) {
                             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                           />
                         </label>
+                      </div>
+
+                      <div className="rounded-3xl border border-orange-100 bg-orange-50/60 p-5">
+                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <h4 className="text-sm font-black uppercase tracking-wide text-slate-600">
+                              Dados Pix da empresa
+                            </h4>
+                            <p className="mt-1 text-sm font-medium text-slate-500">
+                              Informe a chave Pix que será usada em cobranças, recibos e documentos financeiros.
+                            </p>
+                          </div>
+
+                          <div className="rounded-full bg-white px-3 py-1 text-xs font-black text-orange-700 shadow-sm">
+                            Pix
+                          </div>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+                          <label className="space-y-2">
+                            <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                              Tipo da chave Pix
+                            </span>
+                            <select
+                              value={companySettings.pixKeyType}
+                              onChange={(event) => {
+                                const pixKeyType = event.target.value as PixKeyType;
+
+                                setCompanySettings({
+                                  ...companySettings,
+                                  pixKeyType,
+                                  pixKey: formatPixKey(companySettings.pixKey, pixKeyType),
+                                });
+                              }}
+                              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                            >
+                              {pixKeyTypeOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label className="space-y-2 md:col-span-2">
+                            <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                              Chave Pix
+                            </span>
+                            <input
+                              type={companySettings.pixKeyType === "email" ? "email" : "text"}
+                              value={companySettings.pixKey}
+                              onChange={(event) =>
+                                setCompanySettings({
+                                  ...companySettings,
+                                  pixKey: formatPixKey(event.target.value, companySettings.pixKeyType),
+                                })
+                              }
+                              placeholder={getPixKeyPlaceholder(companySettings.pixKeyType)}
+                              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                            />
+                          </label>
+                        </div>
                       </div>
 
                       <div className="rounded-3xl border border-slate-100 bg-slate-50 p-5">

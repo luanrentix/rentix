@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/app-shell";
 import { Tenant, initialTenants } from "@/data/tenants";
 
 const STORAGE_KEY = "rentix_tenants";
+const CONTRACTS_STORAGE_KEY = "rentix_contracts";
+const ACCOUNTS_RECEIVABLE_STORAGE_KEY = "rentix_accounts_receivable";
+const ACCOUNTS_PAYABLE_STORAGE_KEY = "rentix_accounts_payable";
 
 type PersonType = "Individual" | "Company";
+
+type PersonStatusFilter = "Active" | "Inactive" | "All" | "Tenant" | "NotTenant";
 
 type RentixTenant = Tenant & {
   personType?: PersonType;
@@ -19,6 +24,7 @@ type RentixTenant = Tenant & {
   neighborhood?: string;
   complement?: string;
   isTenant?: boolean;
+  isActive?: boolean;
 };
 
 type ViaCepResponse = {
@@ -53,6 +59,13 @@ export default function TenantsPage() {
   const [tenantToDelete, setTenantToDelete] = useState<RentixTenant | null>(
     null
   );
+  const [blockedInactivePerson, setBlockedInactivePerson] =
+    useState<RentixTenant | null>(null);
+  const [blockedDeletePerson, setBlockedDeletePerson] =
+    useState<RentixTenant | null>(null);
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<PersonStatusFilter>("Active");
 
   const [tenantName, setTenantName] = useState("");
   const [tenantPersonType, setTenantPersonType] =
@@ -67,9 +80,35 @@ export default function TenantsPage() {
   const [tenantNeighborhood, setTenantNeighborhood] = useState("");
   const [tenantComplement, setTenantComplement] = useState("");
   const [tenantIsTenant, setTenantIsTenant] = useState(true);
+  const [tenantIsActive, setTenantIsActive] = useState(true);
   const [cpfError, setCpfError] = useState("");
   const [isCnpjLoading, setIsCnpjLoading] = useState(false);
   const [cnpjSearchError, setCnpjSearchError] = useState("");
+
+  const filteredTenants = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+
+    return tenants.filter((tenant) => {
+      const document = tenant.cpf || tenant.document || "";
+      const city = tenant.city || "";
+      const phone = tenant.phone || "";
+
+      const matchesSearch =
+        tenant.name.toLowerCase().includes(normalizedSearch) ||
+        document.toLowerCase().includes(normalizedSearch) ||
+        city.toLowerCase().includes(normalizedSearch) ||
+        phone.toLowerCase().includes(normalizedSearch);
+
+      const matchesStatus =
+        statusFilter === "All" ||
+        (statusFilter === "Active" && tenant.isActive !== false) ||
+        (statusFilter === "Inactive" && tenant.isActive === false) ||
+        (statusFilter === "Tenant" && tenant.isTenant !== false) ||
+        (statusFilter === "NotTenant" && tenant.isTenant === false);
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [tenants, search, statusFilter]);
 
   const isEditing = editingTenantId !== null;
 
@@ -96,6 +135,7 @@ export default function TenantsPage() {
         neighborhood: tenant.neighborhood || "",
         complement: tenant.complement || "",
         isTenant: tenant.isTenant ?? true,
+        isActive: tenant.isActive ?? true,
       }));
 
       setTenants(
@@ -106,6 +146,7 @@ export default function TenantsPage() {
         initialTenants.map((tenant) => ({
           ...tenant,
           isTenant: true,
+          isActive: tenant.isActive ?? true,
         }))
       );
     }
@@ -132,6 +173,7 @@ export default function TenantsPage() {
     setTenantNeighborhood("");
     setTenantComplement("");
     setTenantIsTenant(true);
+    setTenantIsActive(true);
     setCpfError("");
     setIsCnpjLoading(false);
     setCnpjSearchError("");
@@ -285,6 +327,135 @@ export default function TenantsPage() {
     setTenantPhone(formatPhone(value));
   }
 
+  function getPersonIdFromRecord(record: Record<string, unknown>) {
+    return (
+      record.tenantId ||
+      record.tenant_id ||
+      record.personId ||
+      record.person_id ||
+      record.customerId ||
+      record.customer_id ||
+      record.supplierId ||
+      record.supplier_id ||
+      record.peopleId ||
+      record.people_id ||
+      record.person ||
+      record.tenant ||
+      record.customer ||
+      record.supplier
+    );
+  }
+
+  function personHasAnyContract(personId: number) {
+    const storedContracts = localStorage.getItem(CONTRACTS_STORAGE_KEY);
+
+    if (!storedContracts) return false;
+
+    try {
+      const parsedContracts = JSON.parse(storedContracts) as Array<
+        Record<string, unknown>
+      >;
+
+      return parsedContracts.some((contract) => {
+        const contractPersonId = getPersonIdFromRecord(contract);
+
+        return String(contractPersonId || "") === String(personId);
+      });
+    } catch {
+      return false;
+    }
+  }
+
+  function personHasActiveContract(personId: number) {
+    const storedContracts = localStorage.getItem(CONTRACTS_STORAGE_KEY);
+
+    if (!storedContracts) return false;
+
+    try {
+      const parsedContracts = JSON.parse(storedContracts) as Array<
+        Record<string, unknown>
+      >;
+
+      return parsedContracts.some((contract) => {
+        const contractPersonId = getPersonIdFromRecord(contract);
+        const contractStatus = String(contract.status || "").toLowerCase();
+        const contractEndDate = String(contract.endDate || "");
+
+        const isSamePerson = String(contractPersonId || "") === String(personId);
+        const isDeleted = contractStatus === "deleted";
+        const isCanceled = contractStatus === "canceled";
+        const isFinished = contractStatus === "finished";
+        const isInactive = contractStatus === "inactive";
+
+        if (!isSamePerson || isDeleted || isCanceled || isFinished || isInactive) {
+          return false;
+        }
+
+        if (!contractEndDate) {
+          return contractStatus === "active";
+        }
+
+        const today = new Date();
+        const endDate = new Date(`${contractEndDate}T23:59:59`);
+
+        return contractStatus === "active" && endDate >= today;
+      });
+    } catch {
+      return false;
+    }
+  }
+
+  function personHasFinancialHistory(personId: number) {
+    const storageKeys = [
+      ACCOUNTS_RECEIVABLE_STORAGE_KEY,
+      ACCOUNTS_PAYABLE_STORAGE_KEY,
+    ];
+
+    return storageKeys.some((storageKey) => {
+      const storedRecords = localStorage.getItem(storageKey);
+
+      if (!storedRecords) return false;
+
+      try {
+        const parsedRecords = JSON.parse(storedRecords) as Array<
+          Record<string, unknown>
+        >;
+
+        return parsedRecords.some((record) => {
+          const recordPersonId = getPersonIdFromRecord(record);
+
+          return String(recordPersonId || "") === String(personId);
+        });
+      } catch {
+        return false;
+      }
+    });
+  }
+
+  function personHasAnyHistory(personId: number) {
+    return personHasAnyContract(personId) || personHasFinancialHistory(personId);
+  }
+
+  function getEditingTenant() {
+    if (!editingTenantId) return null;
+
+    return tenants.find((tenant) => tenant.id === editingTenantId) || null;
+  }
+
+  function handleActiveChange(checked: boolean) {
+    if (!checked && editingTenantId && personHasActiveContract(editingTenantId)) {
+      const tenant = getEditingTenant();
+
+      if (tenant) {
+        setBlockedInactivePerson(tenant);
+      }
+
+      return;
+    }
+
+    setTenantIsActive(checked);
+  }
+
   function handleSubmitTenant(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -318,6 +489,16 @@ export default function TenantsPage() {
       return;
     }
 
+    if (!tenantIsActive && editingTenantId && personHasActiveContract(editingTenantId)) {
+      const tenant = getEditingTenant();
+
+      if (tenant) {
+        setBlockedInactivePerson(tenant);
+      }
+
+      return;
+    }
+
     if (isEditing) {
       setTenants((currentTenants) =>
         currentTenants.map((tenant) =>
@@ -337,6 +518,7 @@ export default function TenantsPage() {
                 neighborhood: tenantNeighborhood,
                 complement: tenantComplement,
                 isTenant: tenantIsTenant,
+                isActive: tenantIsActive,
               }
             : tenant
         )
@@ -361,6 +543,7 @@ export default function TenantsPage() {
       neighborhood: tenantNeighborhood,
       complement: tenantComplement,
       isTenant: tenantIsTenant,
+      isActive: tenantIsActive,
     };
 
     setTenants((currentTenants) => [newTenant, ...currentTenants]);
@@ -390,11 +573,17 @@ export default function TenantsPage() {
     setTenantNeighborhood(tenant.neighborhood || "");
     setTenantComplement(tenant.complement || "");
     setTenantIsTenant(tenant.isTenant ?? true);
+    setTenantIsActive(tenant.isActive ?? true);
     setCpfError("");
     setIsFormOpen(true);
   }
 
   function handleDeleteTenant(tenant: RentixTenant) {
+    if (personHasAnyHistory(tenant.id)) {
+      setBlockedDeletePerson(tenant);
+      return;
+    }
+
     setTenantToDelete(tenant);
   }
 
@@ -410,6 +599,14 @@ export default function TenantsPage() {
 
   function handleCancelDeleteTenant() {
     setTenantToDelete(null);
+  }
+
+  function handleCloseBlockedInactivePerson() {
+    setBlockedInactivePerson(null);
+  }
+
+  function handleCloseBlockedDeletePerson() {
+    setBlockedDeletePerson(null);
   }
 
   return (
@@ -435,13 +632,43 @@ export default function TenantsPage() {
         </div>
 
         <div className="rounded-3xl border border-orange-100 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-6 py-5">
-            <h2 className="text-2xl font-black text-slate-950">
-              Lista de pessoas
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              {tenants.length} pessoa(s) cadastrada(s)
-            </p>
+          <div className="flex flex-col gap-4 border-b border-slate-100 px-6 py-5 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <h2 className="text-2xl font-black text-slate-950">
+                Lista de pessoas
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Exibindo {filteredTenants.length} de {tenants.length} pessoa(s).
+              </p>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <FormField label="Buscar">
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Nome, CPF/CNPJ, cidade ou telefone"
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 md:w-80"
+                />
+              </FormField>
+
+              <FormField label="Status">
+                <select
+                  value={statusFilter}
+                  onChange={(event) =>
+                    setStatusFilter(event.target.value as PersonStatusFilter)
+                  }
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 md:w-48"
+                >
+                  <option value="Active">Ativos</option>
+                  <option value="Inactive">Inativos</option>
+                  <option value="All">Todos</option>
+                  <option value="Tenant">Inquilinos</option>
+                  <option value="NotTenant">Não inquilinos</option>
+                </select>
+              </FormField>
+            </div>
           </div>
 
           <div className="overflow-hidden">
@@ -463,6 +690,9 @@ export default function TenantsPage() {
                   <th className="px-6 py-4 text-sm font-black text-slate-700">
                     Tipo
                   </th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                    Situação
+                  </th>
                   <th className="px-6 py-4 text-right text-sm font-black text-slate-700">
                     Ações
                   </th>
@@ -470,7 +700,7 @@ export default function TenantsPage() {
               </thead>
 
               <tbody className="divide-y divide-slate-100">
-                {tenants.map((tenant) => (
+                {filteredTenants.map((tenant) => (
                   <tr key={tenant.id} className="transition hover:bg-slate-50">
                     <td className="px-6 py-4 font-black text-slate-900">
                       {tenant.name}
@@ -506,6 +736,10 @@ export default function TenantsPage() {
                     </td>
 
                     <td className="px-6 py-4">
+                      <ActiveBadge isActive={tenant.isActive ?? true} />
+                    </td>
+
+                    <td className="px-6 py-4">
                       <div className="flex justify-end gap-2">
                         <button
                           type="button"
@@ -527,13 +761,13 @@ export default function TenantsPage() {
                   </tr>
                 ))}
 
-                {tenants.length === 0 && (
+                {filteredTenants.length === 0 && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="px-6 py-10 text-center text-sm font-semibold text-slate-500"
                     >
-                      Nenhuma pessoa cadastrada.
+                      Nenhuma pessoa encontrada para os filtros aplicados.
                     </td>
                   </tr>
                 )}
@@ -680,11 +914,35 @@ export default function TenantsPage() {
 
                         <div>
                           <p className="text-sm font-black text-slate-800">
-                            Esta pessoa é inquilino
+                            É inquilino
                           </p>
                           <p className="mt-1 text-xs font-semibold text-slate-500">
                             Quando desmarcado, esta pessoa não poderá ser
                             vinculada a contratos de aluguel.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+
+                    <div className="mt-5">
+                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 transition hover:border-orange-200 hover:bg-orange-50/40">
+                        <input
+                          type="checkbox"
+                          checked={tenantIsActive}
+                          onChange={(event) =>
+                            handleActiveChange(event.target.checked)
+                          }
+                          className="mt-1 h-5 w-5 rounded border-slate-300 accent-orange-500"
+                        />
+
+                        <div>
+                          <p className="text-sm font-black text-slate-800">
+                            Pessoa ativa
+                          </p>
+                          <p className="mt-1 text-xs font-semibold text-slate-500">
+                            Quando desmarcado, esta pessoa fica inativa no
+                            sistema. Pessoas vinculadas a contratos não podem
+                            ser inativadas.
                           </p>
                         </div>
                       </label>
@@ -813,6 +1071,94 @@ export default function TenantsPage() {
           </div>
         )}
 
+        {blockedInactivePerson && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-[2rem] border border-orange-100 bg-white p-8 shadow-2xl">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 text-3xl">
+                ⚠️
+              </div>
+
+              <div className="mt-5 text-center">
+                <h3 className="text-2xl font-black text-slate-950">
+                  Pessoa vinculada a contrato
+                </h3>
+
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
+                  Esta pessoa possui contrato ativo vinculado e não pode
+                  ser inativada. Para alterar a situação do cadastro, encerre ou
+                  remova o contrato ativo primeiro.
+                </p>
+
+                <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
+                  <p className="text-sm font-black text-slate-900">
+                    {blockedInactivePerson.name}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                    {formatDocument(
+                      blockedInactivePerson.cpf || blockedInactivePerson.document,
+                      blockedInactivePerson.personType
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-8">
+                <button
+                  type="button"
+                  onClick={handleCloseBlockedInactivePerson}
+                  className="w-full rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                >
+                  Entendi
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {blockedDeletePerson && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-[2rem] border border-orange-100 bg-white p-8 shadow-2xl">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 text-3xl">
+                ⚠️
+              </div>
+
+              <div className="mt-5 text-center">
+                <h3 className="text-2xl font-black text-slate-950">
+                  Pessoa com histórico
+                </h3>
+
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
+                  Este cadastro possui vínculos com contratos ou financeiro e
+                  não pode ser excluído. Caso necessário, altere a situação para
+                  inativo.
+                </p>
+
+                <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
+                  <p className="text-sm font-black text-slate-900">
+                    {blockedDeletePerson.name}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                    {formatDocument(
+                      blockedDeletePerson.cpf || blockedDeletePerson.document,
+                      blockedDeletePerson.personType
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-8">
+                <button
+                  type="button"
+                  onClick={handleCloseBlockedDeletePerson}
+                  className="w-full rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                >
+                  Entendi
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {tenantToDelete && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
             <div className="w-full max-w-md rounded-[2rem] bg-white p-8 shadow-2xl">
@@ -880,6 +1226,26 @@ function FormField({ label, children }: FormFieldProps) {
       </label>
       {children}
     </div>
+  );
+}
+
+function ActiveBadge({ isActive }: { isActive: boolean }) {
+  const activeConfig = isActive
+    ? {
+        label: "Ativo",
+        className: "bg-emerald-100 text-emerald-700",
+      }
+    : {
+        label: "Inativo",
+        className: "bg-slate-100 text-slate-600",
+      };
+
+  return (
+    <span
+      className={`rounded-full px-3 py-1 text-xs font-black ${activeConfig.className}`}
+    >
+      {activeConfig.label}
+    </span>
   );
 }
 
