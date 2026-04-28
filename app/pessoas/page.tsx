@@ -146,7 +146,7 @@ export default function TenantsPage() {
         initialTenants.map((tenant) => ({
           ...tenant,
           isTenant: true,
-          isActive: tenant.isActive ?? true,
+          isActive: true,
         }))
       );
     }
