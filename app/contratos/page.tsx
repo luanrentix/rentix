@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "@/components/layout/app-shell";
 import { Tenant, initialTenants } from "@/data/tenants";
 
@@ -11,6 +11,7 @@ const RECEIVABLE_FROM_CONTRACT_STORAGE_KEY = "rentix_new_charge_from_contract";
 const MANUAL_CHARGES_STORAGE_KEY = "rentix_manual_charges";
 const PAID_CHARGES_STORAGE_KEY = "rentix_paid_charges";
 const CHARGE_PAYMENTS_STORAGE_KEY = "rentix_charge_payments";
+const PROPERTY_MOVEMENTS_STORAGE_KEY = "rentix_property_movements";
 const EXPIRING_CONTRACT_DAYS_LIMIT = 30;
 
 type PropertyStatus = "Available" | "Rented";
@@ -21,11 +22,46 @@ type Property = {
   rentValue?: number;
   status: PropertyStatus;
   isActive?: boolean;
+  zipCode?: string;
+  state?: string;
+  city?: string;
+  street?: string;
+  number?: string;
+  neighborhood?: string;
+  complement?: string;
 };
 
 type RentixTenant = Tenant & {
   isTenant?: boolean;
   isActive?: boolean;
+  personType?: "Individual" | "Company";
+  cpf?: string;
+  document?: string;
+  email?: string;
+  phone?: string;
+  zipCode?: string;
+  state?: string;
+  city?: string;
+  street?: string;
+  number?: string;
+  neighborhood?: string;
+  complement?: string;
+};
+
+type CompanySettings = {
+  name?: string;
+  legalName?: string;
+  document?: string;
+  stateRegistration?: string;
+  email?: string;
+  phone?: string;
+  zipCode?: string;
+  state?: string;
+  city?: string;
+  street?: string;
+  number?: string;
+  neighborhood?: string;
+  complement?: string;
 };
 
 type ContractStatus =
@@ -53,6 +89,9 @@ type Contract = {
   statusReason?: string | null;
   statusReasonType?: "Canceled" | "Deleted" | null;
   statusReasonAt?: string | null;
+  isTemporaryRental?: boolean;
+  checkInTime?: string;
+  checkOutTime?: string;
 };
 
 type ReceivableCharge = {
@@ -79,6 +118,15 @@ type PendingStatusChange = {
   nextStatus: "Canceled" | "Deleted";
 };
 
+type PropertyMovement = {
+  id: string;
+  propertyId: string;
+  propertyName: string;
+  type: "ContractCreated" | "ContractUpdated" | "ContractCanceled" | "ContractDeleted";
+  description: string;
+  createdAt: string;
+};
+
 export default function ContractsPage() {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
@@ -86,22 +134,22 @@ export default function ContractsPage() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formError, setFormError] = useState("");
-  const [editingContractId, setEditingContractId] = useState<number | null>(
-    null
-  );
-  const [statusFilter, setStatusFilter] =
-    useState<ContractFilterStatus>("Active");
+  const [editingContractId, setEditingContractId] = useState<number | null>(null);
+  const [statusFilter, setStatusFilter] = useState<ContractFilterStatus>("Active");
   const [searchTerm, setSearchTerm] = useState("");
+  const [printableContract, setPrintableContract] = useState<Contract | null>(null);
+  const printableContractFrameRef = useRef<HTMLIFrameElement | null>(null);
 
   const [propertyId, setPropertyId] = useState("");
   const [tenantId, setTenantId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [rentValue, setRentValue] = useState("");
-  const [contractStatus, setContractStatus] =
-    useState<ContractStatus>("Active");
-  const [pendingStatusChange, setPendingStatusChange] =
-    useState<PendingStatusChange | null>(null);
+  const [contractStatus, setContractStatus] = useState<ContractStatus>("Active");
+  const [isTemporaryRental, setIsTemporaryRental] = useState(false);
+  const [checkInTime, setCheckInTime] = useState("");
+  const [checkOutTime, setCheckOutTime] = useState("");
+  const [pendingStatusChange, setPendingStatusChange] = useState<PendingStatusChange | null>(null);
   const [statusReason, setStatusReason] = useState("");
   const [statusReasonError, setStatusReasonError] = useState("");
 
@@ -115,31 +163,38 @@ export default function ContractsPage() {
     if (storedContracts) {
       const parsedContracts = JSON.parse(storedContracts) as Partial<Contract>[];
 
-      const normalizedContracts: Contract[] = parsedContracts.map(
-        (contract) => ({
-          id: contract.id || Date.now(),
-          propertyId: contract.propertyId || "",
-          propertyName: contract.propertyName || "",
-          tenantId: contract.tenantId || 0,
-          tenantName: contract.tenantName || "",
-          startDate: contract.startDate || "",
-          endDate: contract.endDate || "",
-          rentValue: Number(contract.rentValue || 0),
-          status:
-            contract.status ||
-            getAutomaticContractStatus(contract.endDate || ""),
-          deletedAt: contract.deletedAt || null,
-          statusReason: contract.statusReason || null,
-          statusReasonType: contract.statusReasonType || null,
-          statusReasonAt: contract.statusReasonAt || null,
-        })
-      );
+      const normalizedContracts: Contract[] = parsedContracts.map((contract) => ({
+        id: contract.id || Date.now(),
+        propertyId: contract.propertyId || "",
+        propertyName: toUpperText(contract.propertyName || ""),
+        tenantId: contract.tenantId || 0,
+        tenantName: contract.tenantName || "",
+        startDate: contract.startDate || "",
+        endDate: contract.endDate || "",
+        rentValue: Number(contract.rentValue || 0),
+        status: contract.status || getAutomaticContractStatus(contract.endDate || ""),
+        deletedAt: contract.deletedAt || null,
+        statusReason: contract.statusReason || null,
+        statusReasonType: contract.statusReasonType || null,
+        statusReasonAt: contract.statusReasonAt || null,
+        isTemporaryRental: contract.isTemporaryRental ?? false,
+        checkInTime: contract.checkInTime || "",
+        checkOutTime: contract.checkOutTime || "",
+      }));
 
       setContracts(normalizedContracts);
     }
 
     if (storedProperties) {
-      setProperties(JSON.parse(storedProperties) as Property[]);
+      const parsedProperties = JSON.parse(storedProperties) as Property[];
+      setProperties(
+        parsedProperties.map((property) => ({
+          ...property,
+          name: toUpperText(property.name || ""),
+          status: property.status || "Available",
+          isActive: property.isActive ?? true,
+        }))
+      );
     }
 
     if (storedTenants) {
@@ -158,15 +213,9 @@ export default function ContractsPage() {
     localStorage.setItem(CONTRACTS_STORAGE_KEY, JSON.stringify(contracts));
 
     setProperties((currentProperties) => {
-      const updatedProperties = syncPropertiesWithContracts(
-        contracts,
-        currentProperties
-      );
+      const updatedProperties = syncPropertiesWithContracts(contracts, currentProperties);
 
-      localStorage.setItem(
-        PROPERTIES_STORAGE_KEY,
-        JSON.stringify(updatedProperties)
-      );
+      localStorage.setItem(PROPERTIES_STORAGE_KEY, JSON.stringify(updatedProperties));
 
       return updatedProperties;
     });
@@ -181,15 +230,10 @@ export default function ContractsPage() {
           contract.status !== "Deleted"
       );
 
-      const isCurrentEditingProperty =
-        isEditing && String(property.id) === String(propertyId);
-
+      const isCurrentEditingProperty = isEditing && String(property.id) === String(propertyId);
       const isPropertyActive = property.isActive !== false;
 
-      return (
-        (isPropertyActive && property.status === "Available" && !hasActiveContract) ||
-        isCurrentEditingProperty
-      );
+      return (isPropertyActive && property.status === "Available" && !hasActiveContract) || isCurrentEditingProperty;
     });
   }, [properties, contracts, isEditing, propertyId]);
 
@@ -219,6 +263,18 @@ export default function ContractsPage() {
     });
   }, [contracts, statusFilter, searchTerm]);
 
+  const activeContracts = contracts.filter((contract) =>
+    ["Active", "Expiring"].includes(getDisplayContractStatus(contract))
+  ).length;
+
+  const expiringContracts = contracts.filter(
+    (contract) => getDisplayContractStatus(contract) === "Expiring"
+  ).length;
+
+  const monthlyRevenue = contracts
+    .filter((contract) => ["Active", "Expiring"].includes(getDisplayContractStatus(contract)))
+    .reduce((total, contract) => total + Number(contract.rentValue || 0), 0);
+
   function resetForm() {
     setPropertyId("");
     setTenantId("");
@@ -226,6 +282,9 @@ export default function ContractsPage() {
     setEndDate("");
     setRentValue("");
     setContractStatus("Active");
+    setIsTemporaryRental(false);
+    setCheckInTime("");
+    setCheckOutTime("");
     setFormError("");
     setEditingContractId(null);
     setPendingStatusChange(null);
@@ -246,9 +305,10 @@ export default function ContractsPage() {
     setStartDate(contract.startDate);
     setEndDate(contract.endDate);
     setRentValue(String(contract.rentValue || ""));
-    setContractStatus(
-      contract.status || getAutomaticContractStatus(contract.endDate)
-    );
+    setContractStatus(contract.status || getAutomaticContractStatus(contract.endDate));
+    setIsTemporaryRental(contract.isTemporaryRental ?? false);
+    setCheckInTime(contract.checkInTime || "");
+    setCheckOutTime(contract.checkOutTime || "");
     setFormError("");
     setIsFormOpen(true);
   }
@@ -288,6 +348,26 @@ export default function ContractsPage() {
     return Math.max(monthDifference, 1);
   }
 
+  function registerPropertyMovementFromContract(
+    contract: Contract,
+    type: PropertyMovement["type"],
+    description: string
+  ) {
+    const storedMovements = localStorage.getItem(PROPERTY_MOVEMENTS_STORAGE_KEY);
+    const currentMovements = safeParseLocalStorageArray<PropertyMovement>(storedMovements);
+
+    const movement: PropertyMovement = {
+      id: crypto.randomUUID(),
+      propertyId: String(contract.propertyId),
+      propertyName: contract.propertyName,
+      type,
+      description,
+      createdAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem(PROPERTY_MOVEMENTS_STORAGE_KEY, JSON.stringify([movement, ...currentMovements]));
+  }
+
   function applyEditedContract(updatedContract: Contract, reason?: string) {
     const shouldRemoveReceivables =
       updatedContract.status === "Canceled" || updatedContract.status === "Deleted";
@@ -295,13 +375,12 @@ export default function ContractsPage() {
 
     const contractToSave: Contract = {
       ...updatedContract,
+      propertyName: toUpperText(updatedContract.propertyName),
       deletedAt:
         updatedContract.status === "Deleted"
           ? updatedContract.deletedAt || new Date().toISOString()
           : null,
-      statusReason: shouldRemoveReceivables
-        ? cleanReason
-        : updatedContract.statusReason || null,
+      statusReason: shouldRemoveReceivables ? cleanReason : updatedContract.statusReason || null,
       statusReasonType: shouldRemoveReceivables
         ? updatedContract.status === "Deleted"
           ? "Deleted"
@@ -315,12 +394,25 @@ export default function ContractsPage() {
 
     if (shouldRemoveReceivables) {
       removeReceivableChargesFromContract(contractToSave);
+      registerPropertyMovementFromContract(
+        contractToSave,
+        contractToSave.status === "Deleted" ? "ContractDeleted" : "ContractCanceled",
+        contractToSave.status === "Deleted"
+          ? "Contrato marcado como excluído e parcelas vinculadas removidas."
+          : "Contrato cancelado e parcelas vinculadas removidas."
+      );
+    } else {
+      registerPropertyMovementFromContract(
+        contractToSave,
+        "ContractUpdated",
+        "Contrato atualizado no cadastro de locação."
+      );
     }
 
     setContracts((currentContracts) =>
       currentContracts.map((contract) =>
-        contract.id === contractToSave.id ? contractToSave : contract,
-      ),
+        contract.id === contractToSave.id ? contractToSave : contract
+      )
     );
 
     resetForm();
@@ -332,9 +424,7 @@ export default function ContractsPage() {
     if (!pendingStatusChange) return;
 
     if (cleanReason.length < 5) {
-      setStatusReasonError(
-        "Informe um motivo com pelo menos 5 caracteres para continuar.",
-      );
+      setStatusReasonError("Informe um motivo com pelo menos 5 caracteres para continuar.");
       return;
     }
 
@@ -396,10 +486,7 @@ export default function ContractsPage() {
   }
 
   function openReceivableChargeFromContract(contract: Contract) {
-    const installmentQuantity = getContractInstallmentQuantity(
-      contract.startDate,
-      contract.endDate
-    );
+    const installmentQuantity = getContractInstallmentQuantity(contract.startDate, contract.endDate);
     const monthlyRentAmount = Number(contract.rentValue || 0);
     const totalContractAmount = monthlyRentAmount * installmentQuantity;
 
@@ -430,9 +517,7 @@ export default function ContractsPage() {
       (property) => String(property.id) === String(propertyId)
     );
 
-    const selectedTenant = tenants.find(
-      (tenant) => String(tenant.id) === String(tenantId)
-    );
+    const selectedTenant = tenants.find((tenant) => String(tenant.id) === String(tenantId));
 
     if (!selectedProperty) {
       setFormError("Selecione um imóvel válido.");
@@ -440,9 +525,20 @@ export default function ContractsPage() {
     }
 
     if (selectedProperty.isActive === false) {
-      setFormError(
-        "Este imóvel está inativo e não pode ser utilizado para criar ou alterar um contrato."
-      );
+      setFormError("Este imóvel está inativo e não pode ser utilizado para criar ou alterar um contrato.");
+      return;
+    }
+
+    const propertyHasAnotherActiveContract = contracts.some((contract) => {
+      const isSameProperty = String(contract.propertyId) === String(selectedProperty.id);
+      const isSameContract = isEditing && contract.id === editingContractId;
+      const isActiveContract = ["Active", "Expiring"].includes(getDisplayContractStatus(contract));
+
+      return isSameProperty && !isSameContract && isActiveContract;
+    });
+
+    if (propertyHasAnotherActiveContract) {
+      setFormError("Este imóvel já possui contrato ativo e não pode ser usado em outro contrato.");
       return;
     }
 
@@ -457,9 +553,7 @@ export default function ContractsPage() {
     }
 
     if (selectedTenant.isActive === false) {
-      setFormError(
-        "Esta pessoa está inativa e não pode ser utilizada para criar ou alterar um contrato."
-      );
+      setFormError("Esta pessoa está inativa e não pode ser utilizada para criar ou alterar um contrato.");
       return;
     }
 
@@ -478,10 +572,13 @@ export default function ContractsPage() {
       return;
     }
 
+    if (isTemporaryRental && (!checkInTime || !checkOutTime)) {
+      setFormError("Informe a hora de entrada e a hora de saída para contrato de locação temporária.");
+      return;
+    }
+
     if (isEditing) {
-      const currentContract = contracts.find(
-        (contract) => contract.id === editingContractId,
-      );
+      const currentContract = contracts.find((contract) => contract.id === editingContractId);
 
       if (!currentContract) {
         setFormError("Contrato não encontrado para edição.");
@@ -491,13 +588,16 @@ export default function ContractsPage() {
       const updatedContract: Contract = {
         ...currentContract,
         propertyId: selectedProperty.id,
-        propertyName: selectedProperty.name,
+        propertyName: toUpperText(selectedProperty.name),
         tenantId: selectedTenant.id,
         tenantName: selectedTenant.name,
         startDate,
         endDate,
         rentValue: Number(rentValue),
         status: contractStatus,
+        isTemporaryRental,
+        checkInTime: isTemporaryRental ? checkInTime : "",
+        checkOutTime: isTemporaryRental ? checkOutTime : "",
         deletedAt:
           contractStatus === "Deleted"
             ? currentContract.deletedAt || new Date().toISOString()
@@ -525,13 +625,16 @@ export default function ContractsPage() {
     const newContract: Contract = {
       id: Date.now(),
       propertyId: selectedProperty.id,
-      propertyName: selectedProperty.name,
+      propertyName: toUpperText(selectedProperty.name),
       tenantId: selectedTenant.id,
       tenantName: selectedTenant.name,
       startDate,
       endDate,
       rentValue: Number(rentValue),
       status: contractStatus,
+      isTemporaryRental,
+      checkInTime: isTemporaryRental ? checkInTime : "",
+      checkOutTime: isTemporaryRental ? checkOutTime : "",
       deletedAt: contractStatus === "Deleted" ? new Date().toISOString() : null,
       statusReason: null,
       statusReasonType: null,
@@ -542,6 +645,11 @@ export default function ContractsPage() {
 
     setContracts(updatedContracts);
     localStorage.setItem(CONTRACTS_STORAGE_KEY, JSON.stringify(updatedContracts));
+    registerPropertyMovementFromContract(
+      newContract,
+      "ContractCreated",
+      "Contrato criado e imóvel vinculado à locação."
+    );
     resetForm();
     openReceivableChargeFromContract(newContract);
   }
@@ -559,6 +667,43 @@ export default function ContractsPage() {
     }
   }
 
+  function handleOpenPrintableContract(contract: Contract) {
+    if (!contract.isTemporaryRental) {
+      alert("O modelo de impressão disponível no momento é para contrato de locação temporária.");
+      return;
+    }
+
+    setPrintableContract(contract);
+  }
+
+  function handleClosePrintableContract() {
+    setPrintableContract(null);
+  }
+
+  function handlePrintPrintableContract() {
+    const printableFrameWindow = printableContractFrameRef.current?.contentWindow;
+
+    if (!printableFrameWindow) {
+      alert("Não foi possível carregar a visualização do contrato para impressão.");
+      return;
+    }
+
+    printableFrameWindow.focus();
+    printableFrameWindow.print();
+  }
+
+  function handleGeneratePrintableContractPdf() {
+    const printableFrameWindow = printableContractFrameRef.current?.contentWindow;
+
+    if (!printableFrameWindow) {
+      alert("Não foi possível carregar a visualização do contrato para gerar o PDF.");
+      return;
+    }
+
+    printableFrameWindow.focus();
+    printableFrameWindow.print();
+  }
+
   return (
     <AppShell>
       <div className="space-y-8">
@@ -568,7 +713,7 @@ export default function ContractsPage() {
               Contratos
             </h1>
             <p className="mt-2 text-slate-500">
-              Gerencie os contratos de locação.
+              Gerencie os contratos de locação e mantenha o financeiro integrado.
             </p>
           </div>
 
@@ -581,6 +726,12 @@ export default function ContractsPage() {
           </button>
         </div>
 
+        <div className="grid gap-5 md:grid-cols-3">
+          <SummaryCard icon="📄" title="Contratos ativos" value={activeContracts} detail="Inclui vencendo" />
+          <SummaryCard icon="⏳" title="Vencendo" value={expiringContracts} detail={`Até ${EXPIRING_CONTRACT_DAYS_LIMIT} dias`} />
+          <SummaryCard icon="💰" title="Receita mensal" value={formatCurrency(monthlyRevenue)} detail="Contratos ativos" />
+        </div>
+
         <div className="rounded-3xl border border-orange-100 bg-white shadow-sm">
           <div className="flex flex-col gap-4 border-b border-slate-100 px-6 py-5 xl:flex-row xl:items-end xl:justify-between">
             <div>
@@ -588,8 +739,7 @@ export default function ContractsPage() {
                 Contratos cadastrados
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Exibindo {filteredContracts.length} de {contracts.length}{" "}
-                contrato(s)
+                Exibindo {filteredContracts.length} de {contracts.length} contrato(s)
               </p>
             </div>
 
@@ -607,9 +757,7 @@ export default function ContractsPage() {
               <FormField label="Status">
                 <select
                   value={statusFilter}
-                  onChange={(event) =>
-                    setStatusFilter(event.target.value as ContractFilterStatus)
-                  }
+                  onChange={(event) => setStatusFilter(event.target.value as ContractFilterStatus)}
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                 >
                   <option value="Active">Ativos</option>
@@ -628,27 +776,14 @@ export default function ContractsPage() {
             <table className="w-full min-w-[900px] text-left">
               <thead className="bg-orange-50">
                 <tr>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
-                    Imóvel
-                  </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
-                    Inquilino
-                  </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
-                    Início
-                  </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
-                    Fim
-                  </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
-                    Valor
-                  </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
-                    Status
-                  </th>
-                  <th className="px-6 py-4 text-right text-sm font-black text-slate-700">
-                    Ações
-                  </th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">Imóvel</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">Inquilino</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">Início</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">Fim</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">Valor</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">Tipo</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">Status</th>
+                  <th className="px-6 py-4 text-right text-sm font-black text-slate-700">Ações</th>
                 </tr>
               </thead>
 
@@ -695,10 +830,21 @@ export default function ContractsPage() {
                       </td>
 
                       <td className="px-6 py-4">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-black ${
+                            contract.isTemporaryRental
+                              ? "bg-orange-100 text-orange-700"
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {contract.isTemporaryRental ? "Temporário" : "Padrão"}
+                        </span>
+                      </td>
+
+                      <td className="px-6 py-4">
                         <div className="flex flex-col gap-1">
                           <StatusBadge status={displayStatus} />
-                          {(displayStatus === "Canceled" ||
-                            displayStatus === "Deleted") &&
+                          {(displayStatus === "Canceled" || displayStatus === "Deleted") &&
                             contract.statusReason && (
                               <span className="max-w-[220px] text-xs font-semibold text-slate-500">
                                 Motivo: {contract.statusReason}
@@ -709,6 +855,14 @@ export default function ContractsPage() {
 
                       <td className="px-6 py-4">
                         <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenPrintableContract(contract)}
+                            className="rounded-xl bg-orange-50 px-4 py-2 text-sm font-bold text-orange-600 transition hover:bg-orange-100"
+                          >
+                            Gerar contrato
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => handleEditContract(contract)}
@@ -724,10 +878,7 @@ export default function ContractsPage() {
 
                 {filteredContracts.length === 0 && (
                   <tr>
-                    <td
-                      colSpan={7}
-                      className="px-6 py-10 text-center text-sm font-semibold text-slate-500"
-                    >
+                    <td colSpan={8} className="px-6 py-10 text-center text-sm font-semibold text-slate-500">
                       Nenhum contrato encontrado para este filtro.
                     </td>
                   </tr>
@@ -736,6 +887,66 @@ export default function ContractsPage() {
             </table>
           </div>
         </div>
+
+        {printableContract && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+            <div className="flex max-h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
+              <div className="flex flex-col gap-4 border-b border-slate-100 bg-white px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-500">
+                    Contrato temporário
+                  </p>
+                  <h2 className="mt-1 text-2xl font-black text-slate-950">
+                    Visualização do contrato
+                  </h2>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                    Confira o documento antes de gerar PDF ou imprimir.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleClosePrintableContract}
+                    className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                  >
+                    Fechar
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleGeneratePrintableContractPdf}
+                    className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-md shadow-slate-100 transition hover:bg-slate-800"
+                  >
+                    Gerar PDF
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handlePrintPrintableContract}
+                    className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                  >
+                    Imprimir
+                  </button>
+                </div>
+              </div>
+
+              <div className="min-h-0 flex-1 bg-slate-100 p-4">
+                <iframe
+                  ref={printableContractFrameRef}
+                  title="Visualização do contrato temporário"
+                  srcDoc={buildTemporaryRentalContractHtml(
+                    printableContract,
+                    properties.find((property) => String(property.id) === String(printableContract.propertyId)),
+                    tenants.find((tenant) => String(tenant.id) === String(printableContract.tenantId)),
+                    false
+                  )}
+                  className="h-[72vh] w-full rounded-2xl border border-slate-200 bg-white shadow-sm"
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {pendingStatusChange && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
@@ -846,9 +1057,7 @@ export default function ContractsPage() {
                     <FormField label="Imóvel">
                       <select
                         value={propertyId}
-                        onChange={(event) =>
-                          handlePropertyChange(event.target.value)
-                        }
+                        onChange={(event) => handlePropertyChange(event.target.value)}
                         required
                         className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                       >
@@ -856,7 +1065,7 @@ export default function ContractsPage() {
 
                         {availableProperties.map((property) => (
                           <option key={property.id} value={property.id}>
-                            {property.name}
+                            {getPropertyOptionLabel(property)}
                           </option>
                         ))}
                       </select>
@@ -924,9 +1133,7 @@ export default function ContractsPage() {
                     <FormField label="Status">
                       <select
                         value={contractStatus}
-                        onChange={(event) =>
-                          setContractStatus(event.target.value as ContractStatus)
-                        }
+                        onChange={(event) => setContractStatus(event.target.value as ContractStatus)}
                         required
                         className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                       >
@@ -938,6 +1145,62 @@ export default function ContractsPage() {
                       </select>
                     </FormField>
                   </div>
+
+                  <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-2xl border border-orange-100 bg-orange-50/40 px-5 py-4 transition hover:bg-orange-50">
+                    <input
+                      type="checkbox"
+                      checked={isTemporaryRental}
+                      onChange={(event) => {
+                        const checked = event.target.checked;
+                        setIsTemporaryRental(checked);
+
+                        if (!checked) {
+                          setCheckInTime("");
+                          setCheckOutTime("");
+                        }
+                      }}
+                      className="mt-1 h-5 w-5 rounded border-slate-300 accent-orange-500"
+                    />
+
+                    <div>
+                      <p className="text-sm font-black text-slate-800">
+                        Este contrato é de locação temporária
+                      </p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">
+                        Use esta opção para contratos de curto prazo. Esta marcação será utilizada na impressão e no modelo do contrato.
+                      </p>
+                    </div>
+                  </label>
+
+                  {isTemporaryRental && (
+                    <div className="mt-5 grid gap-5 md:grid-cols-2">
+                      <FormField label="Hora de entrada (check-in)">
+                        <input
+                          type="time"
+                          value={checkInTime}
+                          onChange={(event) => {
+                            setCheckInTime(event.target.value);
+                            setFormError("");
+                          }}
+                          required={isTemporaryRental}
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        />
+                      </FormField>
+
+                      <FormField label="Hora de saída (check-out)">
+                        <input
+                          type="time"
+                          value={checkOutTime}
+                          onChange={(event) => {
+                            setCheckOutTime(event.target.value);
+                            setFormError("");
+                          }}
+                          required={isTemporaryRental}
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        />
+                      </FormField>
+                    </div>
+                  )}
                 </div>
 
                 <div className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-100 bg-white px-8 py-6">
@@ -981,47 +1244,45 @@ function FormField({ label, children }: FormFieldProps) {
   );
 }
 
+type SummaryCardProps = {
+  icon: string;
+  title: string;
+  value: string | number;
+  detail: string;
+};
+
+function SummaryCard({ icon, title, value, detail }: SummaryCardProps) {
+  return (
+    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
+      <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-xl text-orange-600">
+        {icon}
+      </div>
+
+      <p className="text-sm font-bold text-slate-500">{title}</p>
+      <h3 className="mt-3 text-3xl font-black text-slate-950">{value}</h3>
+      <p className="mt-3 text-sm font-bold text-orange-600">{detail}</p>
+    </div>
+  );
+}
+
 function StatusBadge({ status }: { status: ContractDisplayStatus }) {
   const statusConfig = {
-    Active: {
-      label: "Ativo",
-      className: "bg-emerald-100 text-emerald-700",
-    },
-    Expiring: {
-      label: "Vencendo",
-      className: "bg-amber-100 text-amber-700",
-    },
-    Inactive: {
-      label: "Inativo",
-      className: "bg-slate-100 text-slate-600",
-    },
-    Canceled: {
-      label: "Cancelado",
-      className: "bg-red-100 text-red-700",
-    },
-    Finished: {
-      label: "Finalizado",
-      className: "bg-blue-100 text-blue-700",
-    },
-    Deleted: {
-      label: "Excluído",
-      className: "bg-zinc-200 text-zinc-700",
-    },
+    Active: { label: "Ativo", className: "bg-emerald-100 text-emerald-700" },
+    Expiring: { label: "Vencendo", className: "bg-amber-100 text-amber-700" },
+    Inactive: { label: "Inativo", className: "bg-slate-100 text-slate-600" },
+    Canceled: { label: "Cancelado", className: "bg-red-100 text-red-700" },
+    Finished: { label: "Finalizado", className: "bg-blue-100 text-blue-700" },
+    Deleted: { label: "Excluído", className: "bg-zinc-200 text-zinc-700" },
   };
 
   return (
-    <span
-      className={`rounded-full px-3 py-1 text-xs font-black ${statusConfig[status].className}`}
-    >
+    <span className={`rounded-full px-3 py-1 text-xs font-black ${statusConfig[status].className}`}>
       {statusConfig[status].label}
     </span>
   );
 }
 
-function syncPropertiesWithContracts(
-  contracts: Contract[],
-  properties: Property[]
-): Property[] {
+function syncPropertiesWithContracts(contracts: Contract[], properties: Property[]): Property[] {
   return properties.map((property) => {
     const hasActiveContract = contracts.some(
       (contract) =>
@@ -1032,7 +1293,9 @@ function syncPropertiesWithContracts(
 
     return {
       ...property,
+      name: toUpperText(property.name || ""),
       status: hasActiveContract ? "Rented" : "Available",
+      isActive: property.isActive ?? true,
     };
   });
 }
@@ -1064,10 +1327,7 @@ function getAutomaticContractStatus(endDate: string): ContractStatus {
 function isContractExpiring(endDate: string) {
   const daysUntilEndDate = getDaysUntilDate(endDate);
 
-  return (
-    daysUntilEndDate >= 0 &&
-    daysUntilEndDate <= EXPIRING_CONTRACT_DAYS_LIMIT
-  );
+  return daysUntilEndDate >= 0 && daysUntilEndDate <= EXPIRING_CONTRACT_DAYS_LIMIT;
 }
 
 function getDaysUntilDate(value: string) {
@@ -1093,10 +1353,7 @@ function safeParseLocalStorageArray<T>(value: string | null): T[] {
   }
 }
 
-function isReceivableChargeLinkedToContract(
-  charge: ReceivableCharge,
-  contract: Contract,
-) {
+function isReceivableChargeLinkedToContract(charge: ReceivableCharge, contract: Contract) {
   if (String(charge.contractId || "") === String(contract.id)) {
     return true;
   }
@@ -1146,12 +1403,405 @@ function isReceivableChargeLinkedToContract(
   return chargeDueDate >= lowerLimit && chargeDueDate <= upperLimit;
 }
 
+
+function buildTemporaryRentalContractHtml(
+  contract: Contract,
+  property?: Property,
+  tenant?: RentixTenant,
+  showToolbar = true
+) {
+  const companySettings = getCompanySettingsForContractPrint();
+  const landlordName =
+    companySettings.legalName || companySettings.name || "LOCADOR NÃO INFORMADO";
+  const landlordDocument = formatDocumentForPrint(companySettings.document || "");
+  const landlordAddress = formatFullAddressForPrint({
+    street: companySettings.street,
+    number: companySettings.number,
+    neighborhood: companySettings.neighborhood,
+    city: companySettings.city,
+    state: companySettings.state,
+    zipCode: companySettings.zipCode,
+    complement: companySettings.complement,
+  });
+  const tenantDocument = formatDocumentForPrint(tenant?.cpf || tenant?.document || "");
+  const tenantAddress = formatFullAddressForPrint({
+    street: tenant?.street,
+    number: tenant?.number,
+    neighborhood: tenant?.neighborhood,
+    city: tenant?.city,
+    state: tenant?.state,
+    zipCode: tenant?.zipCode,
+    complement: tenant?.complement,
+  });
+  const propertyAddress = formatFullAddressForPrint({
+    street: property?.street,
+    number: property?.number,
+    neighborhood: property?.neighborhood,
+    city: property?.city,
+    state: property?.state,
+    zipCode: property?.zipCode,
+    complement: property?.complement,
+  });
+  const contractDays = getContractDurationInDays(contract.startDate, contract.endDate);
+  const checkInTime = contract.checkInTime || "____:____";
+  const checkOutTime = contract.checkOutTime || "____:____";
+  const currentDate = new Date();
+  const locationText = property?.city && property?.state ? `${property.city}/${property.state}` : "______/__";
+  const tenantName = contract.tenantName || tenant?.name || "LOCATÁRIO NÃO INFORMADO";
+  const propertyName = contract.propertyName || property?.name || "IMÓVEL NÃO INFORMADO";
+  const totalAmount = formatCurrency(contract.rentValue);
+
+  return `<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title></title>
+  <style>
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; }
+    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
+    .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
+    .print-button { background: #f97316; color: #ffffff; }
+    .close-button { background: #f1f5f9; color: #334155; }
+    .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }
+    .page-inner { padding: 18mm; }
+    .content { font-size: 12.5px; line-height: 1.55; }
+    h1 { margin: 0 0 18px; text-align: center; font-size: 16px; line-height: 1.35; text-transform: uppercase; }
+    h2 { margin: 16px 0 8px; font-size: 13px; text-transform: uppercase; }
+    p { margin: 0 0 8px; }
+    .section-title { font-weight: 800; text-transform: uppercase; }
+    .clause { margin-top: 12px; }
+    .signature-area { margin-top: 54px; page-break-inside: avoid; }
+    .signature-label { margin: 30px 0 96px; font-size: 14px; font-weight: 800; text-transform: uppercase; }
+    .signature-line { width: 82%; margin: 0 auto 6px; border-top: 1px solid #111827; }
+    .signature-name { text-align: center; font-weight: 800; }
+    .witness-block { margin-top: 96px; }
+    .witness-line { width: 45%; border-top: 1px solid #111827; }
+    .witness-info { margin-top: 8px; font-weight: 800; line-height: 1.45; }
+    .muted { color: #475569; }
+    @media print {
+      body { background: #ffffff; }
+      .toolbar { display: none; }
+      .page { width: 210mm; min-height: 297mm; margin: 0; box-shadow: none; }
+      .page-inner { padding: 18mm; }
+    }
+  </style>
+</head>
+<body>
+  ${showToolbar ? `<div class="toolbar">
+    <button class="close-button" onclick="window.close()">Fechar</button>
+    <button class="print-button" onclick="window.print()">Imprimir contrato</button>
+  </div>` : ""}
+
+  <main class="page">
+    <div class="page-inner">
+      <div class="content">
+        <h1>Instrumento Particular de Contrato de Locação Imobiliária Temporária</h1>
+
+        <p><span class="section-title">I - LOCADOR:</span></p>
+        <p><strong>${escapeHtml(landlordName)}</strong>, pessoa jurídica de direito privado, inscrita no CPF/CNPJ nº <strong>${escapeHtml(landlordDocument || "não informado")}</strong>${companySettings.stateRegistration ? `, inscrição estadual nº <strong>${escapeHtml(companySettings.stateRegistration)}</strong>` : ""}, com endereço em <strong>${escapeHtml(landlordAddress || "endereço não informado")}</strong>, doravante denominada <strong>LOCADOR</strong>.</p>
+        <p>E-mail: ${escapeHtml(companySettings.email || "não informado")}</p>
+        <p>Telefone: ${escapeHtml(companySettings.phone || "não informado")}</p>
+
+        <p><span class="section-title">II - LOCATÁRIO:</span></p>
+        <p><strong>${escapeHtml(tenantName)}</strong>, brasileiro(a), estado civil não informado, profissão não informada, inscrito(a) no CPF/CNPJ nº <strong>${escapeHtml(tenantDocument || "não informado")}</strong>, Carteira de Identidade nº __________, residente e domiciliado(a) em <strong>${escapeHtml(tenantAddress || "endereço não informado")}</strong>, doravante denominado(a) <strong>LOCATÁRIO</strong>.</p>
+        <p>E-mail: ${escapeHtml(tenant?.email || "não informado")}</p>
+
+        <p><span class="section-title">III - OBJETO DA LOCAÇÃO:</span></p>
+        <p><strong>${escapeHtml(propertyName)}</strong>${propertyAddress ? `, localizado em ${escapeHtml(propertyAddress)}` : ", endereço não informado"}.</p>
+
+        <p><span class="section-title">IV - PRAZO DE VIGÊNCIA:</span> O prazo de locação é de <strong>${contractDays}</strong> dia(s), com entrada (check-in) em <strong>${escapeHtml(formatDate(contract.startDate))}</strong> às <strong>${escapeHtml(checkInTime)}</strong> e saída (check-out) em <strong>${escapeHtml(formatDate(contract.endDate))}</strong> às <strong>${escapeHtml(checkOutTime)}</strong>, sem prorrogação automática.</p>
+
+        <p><span class="section-title">V - ATIVIDADE OBRIGATÓRIA:</span> Durante o período de locação, o locatário compromete-se a utilizar o imóvel exclusivamente para fins recreativos e de lazer, respeitando todas as normas legais e regulamentações aplicáveis. O locatário deverá zelar pela conservação do imóvel e de suas instalações, garantindo sua limpeza e manutenção adequadas. Qualquer dano causado durante o período de locação será de responsabilidade do locatário, que se compromete a ressarcir integralmente o locador pelos prejuízos decorrentes.</p>
+
+        <p><span class="section-title">VI - ALUGUEL PELO PERÍODO:</span> igual a <strong>${escapeHtml(totalAmount)}</strong>.</p>
+
+        <p><span class="section-title">VII - PAGAMENTO DO ALUGUEL:</span> Pela execução do objeto deste contrato, o LOCATÁRIO pagará ao LOCADOR o valor total de <strong>${escapeHtml(totalAmount)}</strong>, conforme forma de pagamento acordada entre as partes.</p>
+        <p>A liberação das chaves está condicionada à quitação integral de todas as parcelas.</p>
+        <p>Parágrafo Segundo: O pagamento será efetuado por meio de [PIX/DINHEIRO/TRANSFERÊNCIA], conforme dados a serem informados pelo LOCADOR.</p>
+
+        <p><span class="section-title">VIII - CONDIÇÕES ESPECIAIS:</span></p>
+        <p>Não há.</p>
+
+        <p>Pelo presente instrumento, as partes acima identificadas e qualificadas têm entre si justas e acertadas o presente <strong>INSTRUMENTO PARTICULAR DE CONTRATO DE LOCAÇÃO</strong>, que se regerá pelas cláusulas e condições abaixo pactuadas.</p>
+
+        <div class="clause">
+          <h2>Cláusula Primeira - Da Vistoria e Conservação</h2>
+          <p>1.1. O imóvel é entregue em perfeitas condições de higiene e conservação.</p>
+          <p>1.2. O LOCATÁRIO tem o prazo de 2 (duas) horas após a entrada para conferir o local e reportar qualquer dano preexistente por escrito, com fotos ou vídeos.</p>
+          <p>1.3. Caso não haja manifestação no prazo acima, entende-se que o imóvel e seus utensílios foram recebidos em perfeito estado.</p>
+          <p>1.4. O LOCATÁRIO deverá restituir o imóvel nas mesmas condições em que o recebeu, sob pena de arcar com os custos de reparo ou reposição de itens danificados.</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Segunda - Do Objeto e Destinação</h2>
+          <p>2.1. O objeto deste contrato é a locação temporária do imóvel identificado neste instrumento.</p>
+          <p>2.2. O imóvel destina-se exclusivamente para fins recreativos e de lazer, conforme detalhado no preâmbulo.</p>
+          <p>2.3. É proibido ao LOCATÁRIO sublocar, ceder, emprestar ou transferir a locação a terceiros, total ou parcialmente, sem autorização prévia e por escrito do LOCADOR.</p>
+          <p>2.4. Após o recebimento das chaves, o LOCATÁRIO assume a posse temporária e a responsabilidade total pela guarda e conservação do imóvel e seus bens.</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Terceira - Da Utilização e Finalidade</h2>
+          <p>3.1. O imóvel deve ser utilizado exclusivamente para fins recreativos e de lazer.</p>
+          <p>3.2. É proibida a realização de eventos com venda de ingressos, atividades comerciais ou festas abertas ao público sem autorização prévia por escrito do LOCADOR.</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Quarta - Do Prazo e da Desocupação</h2>
+          <p>4.1. A locação é firmada por curto prazo, com início em ${escapeHtml(formatDate(contract.startDate))} às ${escapeHtml(checkInTime)} e término em ${escapeHtml(formatDate(contract.endDate))} às ${escapeHtml(checkOutTime)}.</p>
+          <p>4.2. Findo o prazo estipulado, o contrato se encerra automaticamente, devendo o LOCATÁRIO desocupar o imóvel e entregar as chaves, independente de aviso prévio.</p>
+          <p>4.3. Caso o LOCATÁRIO deseje prorrogar a estadia, deverá consultar a disponibilidade e valores com o LOCADOR com antecedência, sendo necessária a formalização de novo ajuste por escrito.</p>
+          <p>4.4. O atraso na desocupação do imóvel após o horário de término sujeitará o LOCATÁRIO à multa por hora excedente, sem prejuízo das demais penalidades.</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Quinta - Do Valor e Pacote Escolhido</h2>
+          <p>5.1. O valor da locação temporária é de ${escapeHtml(totalAmount)}, referente ao período contratado.</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Sexta - Das Obrigações e Regras de Convivência</h2>
+          <p>6.1. O LOCADOR deverá entregar o imóvel em bom estado de conservação e limpeza.</p>
+          <p>6.2. O LOCATÁRIO deverá utilizar o imóvel apenas para os fins contratados, responsabilizando-se por danos ocorridos durante a locação, exceto desgaste natural de uso.</p>
+          <p>6.3. O LOCATÁRIO deverá respeitar os limites de hóspedes e convidados definidos previamente pelas partes.</p>
+          <p>6.4. Animais de estimação somente serão permitidos mediante autorização do LOCADOR, respondendo o LOCATÁRIO por higiene e eventuais danos.</p>
+          <p>6.5. O LOCATÁRIO deve respeitar o sossego dos vizinhos, sendo proibidos ruídos excessivos, especialmente em horário noturno.</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Sétima - Das Comunicações e Notificações</h2>
+          <p>7.1. As partes concordam que comunicações urgentes poderão ser realizadas por WhatsApp ou e-mail, utilizando os contatos fornecidos neste contrato.</p>
+          <p>7.2. Para notificações formais, as partes elegem os endereços declarados neste instrumento.</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Oitava - Da Ausência de Garantia e Condição de Acesso</h2>
+          <p>8.1. Esta locação é celebrada sem as modalidades de garantia previstas na Lei 8.245/91.</p>
+          <p>8.2. O acesso ao imóvel e a entrega das chaves só ocorrerão mediante a quitação integral do valor total da locação e eventuais taxas acordadas.</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Nona - Do Inadimplemento, Cancelamento e Multas</h2>
+          <p>9.1. O descumprimento de qualquer cláusula deste contrato sujeitará o infrator à multa de 20% sobre o valor total do contrato, sem prejuízo da responsabilidade por eventuais danos materiais comprovados.</p>
+          <p>9.2. O atraso no pagamento sujeitará o LOCATÁRIO à multa moratória, juros e eventual cancelamento da reserva.</p>
+          <p>9.3. Em caso de desistência por iniciativa do LOCATÁRIO após a assinatura, não haverá devolução de valor já pago, salvo acordo escrito entre as partes.</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Décima - Da Rescisão</h2>
+          <p>10.1. O descumprimento de cláusula contratual autoriza a rescisão imediata do instrumento, sem prejuízo da cobrança de perdas e danos.</p>
+          <p>10.2. Caso o LOCATÁRIO encerre a locação antes do horário previsto, não haverá reembolso proporcional do valor contratado.</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Décima Primeira - Da Assinatura Eletrônica e Comunicações Digitais</h2>
+          <p>11.1. As partes reconhecem como válida a assinatura deste contrato em formato eletrônico, conforme legislação vigente.</p>
+          <p>11.2. Os e-mails e números de WhatsApp informados são considerados canais oficiais de comunicação.</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Décima Segunda - Foro</h2>
+          <p>12.1. As partes elegem o foro da comarca do local do imóvel para dirimir dúvidas ou litígios oriundos deste contrato, renunciando a qualquer outro, por mais privilegiado que seja.</p>
+        </div>
+
+        <p style="margin-top: 28px;">${escapeHtml(locationText)}, ${escapeHtml(formatLongDateForPrint(currentDate))}.</p>
+
+        <div class="signature-area">
+          <p class="signature-label">LOCADOR:</p>
+          <div class="signature-line"></div>
+          <div class="signature-name">${escapeHtml(landlordName)}</div>
+
+          <p class="signature-label">LOCATÁRIO:</p>
+          <div class="signature-line"></div>
+          <div class="signature-name">${escapeHtml(tenantName)}</div>
+
+          <div class="witness-block">
+            <p class="signature-label">TESTEMUNHA</p>
+            <div class="witness-line"></div>
+            <div class="witness-info">
+              Nome: ______________________________<br />
+              CPF: ______________________________<br />
+              Email: ______________________________
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>`;
+}
+
+
+function getCompanySettingsForContractPrint(): CompanySettings {
+  if (typeof window === "undefined") return {};
+
+  const possibleStorageKeys = [
+    "rentix_company_settings",
+    "rentix_company_config",
+    "rentix_company_registration",
+    "rentix_company",
+    "rentix_settings",
+    "rentix_system_settings",
+    "rentix_configuration",
+  ];
+
+  for (const storageKey of possibleStorageKeys) {
+    const storedValue = window.localStorage.getItem(storageKey);
+
+    if (!storedValue) continue;
+
+    try {
+      const parsedValue = JSON.parse(storedValue) as Record<string, unknown>;
+      const source = getNestedCompanySettingsSource(parsedValue);
+      const normalizedSettings = normalizeCompanySettingsSource(source);
+
+      if (normalizedSettings.name || normalizedSettings.legalName || normalizedSettings.document) {
+        return normalizedSettings;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return {};
+}
+
+function getNestedCompanySettingsSource(source: Record<string, unknown>) {
+  const nestedKeys = ["company", "companySettings", "companyData", "business", "businessData", "registration"];
+
+  for (const nestedKey of nestedKeys) {
+    const nestedValue = source[nestedKey];
+
+    if (nestedValue && typeof nestedValue === "object" && !Array.isArray(nestedValue)) {
+      return nestedValue as Record<string, unknown>;
+    }
+  }
+
+  return source;
+}
+
+function normalizeCompanySettingsSource(source: Record<string, unknown>): CompanySettings {
+  return {
+    name: getFirstStringValue(source, ["name", "companyName", "fantasyName", "tradeName", "nomeFantasia", "nome"]),
+    legalName: getFirstStringValue(source, ["legalName", "corporateName", "businessName", "razaoSocial", "companyLegalName"]),
+    document: getFirstStringValue(source, ["document", "cnpj", "cpfCnpj", "taxId", "companyDocument"]),
+    stateRegistration: getFirstStringValue(source, ["stateRegistration", "ie", "inscricaoEstadual"]),
+    email: getFirstStringValue(source, ["email", "companyEmail", "contactEmail"]),
+    phone: getFirstStringValue(source, ["phone", "companyPhone", "whatsapp", "cellphone", "mobile"]),
+    zipCode: getFirstStringValue(source, ["zipCode", "cep", "postalCode"]),
+    state: getFirstStringValue(source, ["state", "uf"]),
+    city: getFirstStringValue(source, ["city", "cidade", "municipality", "municipio"]),
+    street: getFirstStringValue(source, ["street", "logradouro", "address", "endereco"]),
+    number: getFirstStringValue(source, ["number", "numero", "addressNumber"]),
+    neighborhood: getFirstStringValue(source, ["neighborhood", "bairro", "district"]),
+    complement: getFirstStringValue(source, ["complement", "complemento", "addressComplement"]),
+  };
+}
+
+function getFirstStringValue(source: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = source[key];
+
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return String(value);
+    }
+  }
+
+  return "";
+}
+
+function formatFullAddressForPrint(address: {
+  street?: string;
+  number?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  complement?: string;
+}) {
+  const parts = [
+    address.street,
+    address.number ? `nº ${address.number}` : "",
+    address.complement,
+    address.neighborhood ? `Bairro: ${address.neighborhood}` : "",
+    address.city && address.state ? `${address.city}/${address.state}` : address.city || address.state,
+    address.zipCode ? `CEP ${address.zipCode}` : "",
+  ];
+
+  return parts.filter(Boolean).join(", ");
+}
+
+function formatDocumentForPrint(value: string) {
+  const digits = String(value || "").replace(/\D/g, "");
+
+  if (digits.length > 11) {
+    return digits
+      .slice(0, 14)
+      .replace(/^(\d{2})(\d)/, "$1.$2")
+      .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+      .replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3/$4")
+      .replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/, "$1.$2.$3/$4-$5");
+  }
+
+  return digits
+    .slice(0, 11)
+    .replace(/^(\d{3})(\d)/, "$1.$2")
+    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3-$4");
+}
+
+function getContractDurationInDays(startDateValue: string, endDateValue: string) {
+  if (!startDateValue || !endDateValue) return 1;
+
+  const start = new Date(`${startDateValue}T00:00:00`);
+  const end = new Date(`${endDateValue}T00:00:00`);
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 1;
+
+  const millisecondsPerDay = 1000 * 60 * 60 * 24;
+
+  return Math.max(Math.floor((end.getTime() - start.getTime()) / millisecondsPerDay) + 1, 1);
+}
+
+function formatLongDateForPrint(value: Date) {
+  return value.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function escapeHtml(value: string) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function getPropertyOptionLabel(property: Property) {
+  return toUpperText(property.name || "");
+}
+
 function normalizeSearchText(value: string) {
   return value
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
+}
+
+function toUpperText(value: string) {
+  return value.toLocaleUpperCase("pt-BR").trimStart();
 }
 
 function formatCurrency(value?: number) {
