@@ -539,7 +539,7 @@ export default function AppShell({ children }: AppShellProps) {
                   Bem-vindo
                 </p>
                 <h2 className="text-xl font-black text-slate-950 lg:text-2xl">
-                  Rentix
+                  {companySettings.tradeName || companySettings.companyName || "Rentix"}
                 </h2>
               </div>
             </div>
@@ -567,13 +567,13 @@ export default function AppShell({ children }: AppShellProps) {
                     <p className="text-xs text-slate-500">{userSettings.email}</p>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handleOpenSettings}
+                  <Link
+                    href="/configuracoes"
+                    onClick={() => setIsUserMenuOpen(false)}
                     className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-slate-600 hover:bg-orange-50 hover:text-orange-600"
                   >
                     ⚙️ Configurações
-                  </button>
+                  </Link>
 
                   <button
                     type="button"
