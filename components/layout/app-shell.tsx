@@ -40,6 +40,12 @@ type CompanySettings = {
   state: string;
 };
 
+type ThemeMode = "light" | "black";
+
+type ThemeSettings = {
+  mode: ThemeMode;
+};
+
 type ResetModuleKey =
   | "properties"
   | "people"
@@ -170,6 +176,10 @@ const defaultCompanySettings: CompanySettings = {
   state: "",
 };
 
+const defaultThemeSettings: ThemeSettings = {
+  mode: "light",
+};
+
 function getInitialLetters(name: string) {
   const cleanName = name.trim();
 
@@ -248,6 +258,192 @@ function getPixKeyPlaceholder(pixKeyType: PixKeyType) {
   return placeholders[pixKeyType];
 }
 
+
+const rentixThemeStyle = `
+  [data-rentix-theme="black"] {
+    color-scheme: dark;
+    background-color: #020617 !important;
+    color: #f8fafc !important;
+  }
+
+  [data-rentix-theme="black"] main,
+  [data-rentix-theme="black"] header,
+  [data-rentix-theme="black"] aside,
+  [data-rentix-theme="black"] .min-h-screen,
+  [data-rentix-theme="black"] .flex-1 {
+    background-color: #020617 !important;
+  }
+
+  [data-rentix-theme="black"] [class*="bg-white"],
+  [data-rentix-theme="black"] [class*="bg-slate-50"],
+  [data-rentix-theme="black"] [class*="bg-slate-100"],
+  [data-rentix-theme="black"] [class*="bg-[#f8fafc"],
+  [data-rentix-theme="black"] [class*="bg-\[\#f8fafc"],
+  [data-rentix-theme="black"] .bg-white,
+  [data-rentix-theme="black"] .bg-white\/90,
+  [data-rentix-theme="black"] .bg-slate-50,
+  [data-rentix-theme="black"] .bg-slate-100 {
+    background-color: #0f172a !important;
+  }
+
+  [data-rentix-theme="black"] [class*="from-orange-50"],
+  [data-rentix-theme="black"] [class*="via-white"],
+  [data-rentix-theme="black"] [class*="to-white"] {
+    --tw-gradient-from: #0f172a var(--tw-gradient-from-position) !important;
+    --tw-gradient-to: #0f172a var(--tw-gradient-to-position) !important;
+    --tw-gradient-stops: #0f172a, #0f172a, #0f172a !important;
+  }
+
+  [data-rentix-theme="black"] [class*="bg-orange-50"],
+  [data-rentix-theme="black"] [class*="bg-orange-100"],
+  [data-rentix-theme="black"] [class*="bg-amber-50"] {
+    background-color: rgba(249, 115, 22, 0.14) !important;
+  }
+
+  [data-rentix-theme="black"] [class*="bg-red-50"],
+  [data-rentix-theme="black"] [class*="bg-red-100"] {
+    background-color: rgba(239, 68, 68, 0.14) !important;
+  }
+
+  [data-rentix-theme="black"] [class*="bg-emerald-50"],
+  [data-rentix-theme="black"] [class*="bg-emerald-100"] {
+    background-color: rgba(16, 185, 129, 0.14) !important;
+  }
+
+  [data-rentix-theme="black"] [class*="bg-blue-50"],
+  [data-rentix-theme="black"] [class*="bg-blue-100"],
+  [data-rentix-theme="black"] [class*="bg-sky-50"],
+  [data-rentix-theme="black"] [class*="bg-sky-100"] {
+    background-color: rgba(14, 165, 233, 0.14) !important;
+  }
+
+  [data-rentix-theme="black"] [class*="text-slate-950"],
+  [data-rentix-theme="black"] [class*="text-slate-900"],
+  [data-rentix-theme="black"] [class*="text-slate-800"],
+  [data-rentix-theme="black"] [class*="text-slate-700"],
+  [data-rentix-theme="black"] .text-slate-950,
+  [data-rentix-theme="black"] .text-slate-900,
+  [data-rentix-theme="black"] .text-slate-800,
+  [data-rentix-theme="black"] .text-slate-700 {
+    color: #f8fafc !important;
+  }
+
+  [data-rentix-theme="black"] [class*="text-slate-600"],
+  [data-rentix-theme="black"] [class*="text-slate-500"],
+  [data-rentix-theme="black"] [class*="text-slate-400"],
+  [data-rentix-theme="black"] [class*="text-slate-300"],
+  [data-rentix-theme="black"] .text-slate-600,
+  [data-rentix-theme="black"] .text-slate-500,
+  [data-rentix-theme="black"] .text-slate-400,
+  [data-rentix-theme="black"] .text-slate-300 {
+    color: #cbd5e1 !important;
+  }
+
+  [data-rentix-theme="black"] [class*="text-orange-"],
+  [data-rentix-theme="black"] .text-orange-500,
+  [data-rentix-theme="black"] .text-orange-600,
+  [data-rentix-theme="black"] .text-orange-700,
+  [data-rentix-theme="black"] .text-orange-800 {
+    color: #fb923c !important;
+  }
+
+  [data-rentix-theme="black"] [class*="text-red-"] {
+    color: #fca5a5 !important;
+  }
+
+  [data-rentix-theme="black"] [class*="text-emerald-"] {
+    color: #6ee7b7 !important;
+  }
+
+  [data-rentix-theme="black"] [class*="text-blue-"],
+  [data-rentix-theme="black"] [class*="text-sky-"] {
+    color: #7dd3fc !important;
+  }
+
+  [data-rentix-theme="black"] [class*="border-slate-"],
+  [data-rentix-theme="black"] [class*="border-orange-"],
+  [data-rentix-theme="black"] [class*="border-amber-"],
+  [data-rentix-theme="black"] [class*="border-red-"],
+  [data-rentix-theme="black"] [class*="border-emerald-"],
+  [data-rentix-theme="black"] [class*="border-blue-"],
+  [data-rentix-theme="black"] [class*="border-sky-"] {
+    border-color: #1e293b !important;
+  }
+
+  [data-rentix-theme="black"] input,
+  [data-rentix-theme="black"] select,
+  [data-rentix-theme="black"] textarea {
+    background-color: #020617 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+  }
+
+  [data-rentix-theme="black"] input::placeholder,
+  [data-rentix-theme="black"] textarea::placeholder {
+    color: #64748b !important;
+  }
+
+  [data-rentix-theme="black"] option {
+    background-color: #020617 !important;
+    color: #f8fafc !important;
+  }
+
+  [data-rentix-theme="black"] table {
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+  }
+
+  [data-rentix-theme="black"] thead,
+  [data-rentix-theme="black"] table thead,
+  [data-rentix-theme="black"] [class*="bg-orange-50"] table thead {
+    background-color: rgba(249, 115, 22, 0.16) !important;
+  }
+
+  [data-rentix-theme="black"] tbody tr,
+  [data-rentix-theme="black"] tr {
+    background-color: #0f172a !important;
+    border-color: #1e293b !important;
+  }
+
+  [data-rentix-theme="black"] tbody tr:hover,
+  [data-rentix-theme="black"] [class*="hover:bg-slate-50"]:hover,
+  [data-rentix-theme="black"] [class*="hover:bg-slate-100"]:hover {
+    background-color: #111c31 !important;
+  }
+
+  [data-rentix-theme="black"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+  [data-rentix-theme="black"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+    border-color: #1e293b !important;
+  }
+
+  [data-rentix-theme="black"] [class*="shadow-sm"],
+  [data-rentix-theme="black"] [class*="shadow-md"],
+  [data-rentix-theme="black"] [class*="shadow-lg"],
+  [data-rentix-theme="black"] [class*="shadow-xl"],
+  [data-rentix-theme="black"] [class*="shadow-2xl"] {
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42) !important;
+  }
+
+  [data-rentix-theme="black"] .recharts-cartesian-grid line {
+    stroke: #334155 !important;
+  }
+
+  [data-rentix-theme="black"] .recharts-text {
+    fill: #cbd5e1 !important;
+  }
+
+  [data-rentix-theme="black"] .recharts-tooltip-wrapper .recharts-default-tooltip {
+    background-color: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+  }
+
+  [data-rentix-theme="black"] .recharts-tooltip-label,
+  [data-rentix-theme="black"] .recharts-tooltip-item {
+    color: #f8fafc !important;
+  }
+`;
+
 export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -258,6 +454,7 @@ export default function AppShell({ children }: AppShellProps) {
   const [activeSettingsTab, setActiveSettingsTab] = useState<"user" | "company">("company");
   const [userSettings, setUserSettings] = useState<UserSettings>(defaultUserSettings);
   const [companySettings, setCompanySettings] = useState<CompanySettings>(defaultCompanySettings);
+  const [themeSettings, setThemeSettings] = useState<ThemeSettings>(defaultThemeSettings);
   const [passwordSettings, setPasswordSettings] = useState<PasswordSettings>(defaultPasswordSettings);
   const [successMessage, setSuccessMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
@@ -271,6 +468,7 @@ export default function AppShell({ children }: AppShellProps) {
   useEffect(() => {
     const storedUserSettings = localStorage.getItem("rentix_user_settings");
     const storedCompanySettings = localStorage.getItem("rentix_company_settings");
+    const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
 
     if (storedUserSettings) {
       setUserSettings({
@@ -283,6 +481,13 @@ export default function AppShell({ children }: AppShellProps) {
       setCompanySettings({
         ...defaultCompanySettings,
         ...JSON.parse(storedCompanySettings),
+      });
+    }
+
+    if (storedThemeSettings) {
+      setThemeSettings({
+        ...defaultThemeSettings,
+        ...JSON.parse(storedThemeSettings),
       });
     }
   }, []);
@@ -418,7 +623,11 @@ export default function AppShell({ children }: AppShellProps) {
 
   return (
     <AuthGuard>
-      <div className="min-h-screen bg-[#f8fafc] text-slate-900 lg:flex">
+      <div
+        data-rentix-theme={themeSettings.mode}
+        className="min-h-screen bg-[#f8fafc] text-slate-900 lg:flex"
+      >
+        <style>{rentixThemeStyle}</style>
         {isMobileSidebarOpen && (
           <button
             type="button"
@@ -559,18 +768,44 @@ export default function AppShell({ children }: AppShellProps) {
               </button>
 
               {isUserMenuOpen && (
-                <div className="absolute right-0 top-14 w-64 rounded-3xl border border-orange-100 bg-white p-3 shadow-xl lg:top-16">
-                  <div className="mb-2 rounded-2xl bg-orange-50 px-4 py-3">
-                    <p className="text-sm font-black text-slate-900">
+                <div
+                  className={`absolute right-0 top-14 z-50 w-72 rounded-3xl border p-3 shadow-2xl transition lg:top-16 ${
+                    themeSettings.mode === "black"
+                      ? "border-slate-700 bg-slate-900 shadow-black/40"
+                      : "border-orange-100 bg-white shadow-xl"
+                  }`}
+                >
+                  <div
+                    className={`mb-2 rounded-2xl px-4 py-3 ${
+                      themeSettings.mode === "black"
+                        ? "border border-slate-700 bg-slate-800"
+                        : "bg-orange-50"
+                    }`}
+                  >
+                    <p
+                      className={`text-sm font-black ${
+                        themeSettings.mode === "black" ? "text-white" : "text-slate-900"
+                      }`}
+                    >
                       {userSettings.name}
                     </p>
-                    <p className="text-xs text-slate-500">{userSettings.email}</p>
+                    <p
+                      className={`text-xs ${
+                        themeSettings.mode === "black" ? "text-slate-400" : "text-slate-500"
+                      }`}
+                    >
+                      {userSettings.email}
+                    </p>
                   </div>
 
                   <Link
                     href="/configuracoes"
                     onClick={() => setIsUserMenuOpen(false)}
-                    className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                    className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition ${
+                      themeSettings.mode === "black"
+                        ? "text-slate-200 hover:bg-slate-800 hover:text-orange-400"
+                        : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                    }`}
                   >
                     ⚙️ Configurações
                   </Link>
@@ -578,7 +813,11 @@ export default function AppShell({ children }: AppShellProps) {
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-slate-600 hover:bg-red-50 hover:text-red-600"
+                    className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition ${
+                      themeSettings.mode === "black"
+                        ? "text-red-300 hover:bg-red-950/40 hover:text-red-200"
+                        : "text-slate-600 hover:bg-red-50 hover:text-red-600"
+                    }`}
                   >
                     ↩️ Sair
                   </button>

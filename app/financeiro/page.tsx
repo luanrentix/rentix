@@ -370,10 +370,10 @@ export default function FinancialPage() {
       <div className="space-y-8">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <h1 className="text-4xl font-black tracking-tight text-slate-950">
+            <h1 className="text-4xl font-black tracking-tight text-slate-950 dark:text-white">
               Financeiro
             </h1>
-            <p className="mt-2 text-slate-500">
+            <p className="mt-2 text-slate-500 dark:text-slate-400 dark:text-slate-500">
               Controle empresarial de receitas, despesas, baixas, estornos e
               resultado financeiro.
             </p>
@@ -382,7 +382,7 @@ export default function FinancialPage() {
           <button
             type="button"
             onClick={() => setIsPayableFormOpen(true)}
-            className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+            className="rounded-2xl bg-orange-50 dark:bg-orange-500/100 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/20 transition hover:bg-orange-600"
           >
             + Nova conta a pagar
           </button>
@@ -435,7 +435,7 @@ export default function FinancialPage() {
             amount={receivableCharges.filter((charge) => charge.status === "Overdue").length}
             description="Recebimentos em atraso"
             badge="Atenção"
-            badgeClassName="bg-red-100 text-red-700"
+            badgeClassName="bg-red-100 dark:bg-red-50 dark:bg-red-500/100/20 text-red-700"
           />
 
           <StatusCard
@@ -444,7 +444,7 @@ export default function FinancialPage() {
             amount={normalizedPayables.filter((payable) => payable.status === "Paid").length}
             description="Contas pagas"
             badge="Pago"
-            badgeClassName="bg-emerald-100 text-emerald-700"
+            badgeClassName="bg-emerald-100 dark:bg-emerald-50 dark:bg-emerald-500/100/20 text-emerald-700"
           />
 
           <StatusCard
@@ -453,17 +453,17 @@ export default function FinancialPage() {
             amount={normalizedPayables.filter((payable) => payable.status !== "Canceled").length}
             description="Recebido - contas pagas"
             badge="Realizado"
-            badgeClassName="bg-orange-100 text-orange-700"
+            badgeClassName="bg-orange-100 dark:bg-orange-50 dark:bg-orange-500/100/20 text-orange-700"
           />
         </div>
 
-        <div className="rounded-3xl border border-orange-100 bg-white shadow-sm">
-          <div className="flex flex-col gap-4 border-b border-slate-100 px-6 py-5 xl:flex-row xl:items-end xl:justify-between">
+        <div className="rounded-3xl border border-orange-100 dark:border-orange-500/30 bg-white dark:bg-slate-900 shadow-sm">
+          <div className="flex flex-col gap-4 border-b border-slate-100 dark:border-slate-700 px-6 py-5 xl:flex-row xl:items-end xl:justify-between">
             <div>
-              <h2 className="text-2xl font-black text-slate-950">
+              <h2 className="text-2xl font-black text-slate-950 dark:text-white">
                 Contas a receber
               </h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                 Cobranças geradas automaticamente pelos contratos ativos.
               </p>
             </div>
@@ -474,7 +474,7 @@ export default function FinancialPage() {
                 onChange={(event) =>
                   setReceivableFilter(event.target.value as FinanceStatusFilter)
                 }
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 md:w-64"
+                className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20 md:w-64"
               >
                 <option value="All">Todos</option>
                 <option value="Pending">Pendentes</option>
@@ -487,45 +487,45 @@ export default function FinancialPage() {
 
           <div className="overflow-hidden">
             <table className="w-full text-left">
-              <thead className="bg-orange-50">
+              <thead className="bg-orange-50 dark:bg-orange-500/10">
                 <tr>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300">
                     Imóvel
                   </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300">
                     Inquilino
                   </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300">
                     Vencimento
                   </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300">
                     Valor
                   </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300">
                     Status
                   </th>
-                  <th className="px-6 py-4 text-right text-sm font-black text-slate-700">
+                  <th className="px-6 py-4 text-right text-sm font-black text-slate-700 dark:text-slate-300">
                     Ações
                   </th>
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                 {filteredReceivables.map((charge) => (
-                  <tr key={charge.id} className="transition hover:bg-slate-50">
-                    <td className="px-6 py-4 font-black text-slate-900">
+                  <tr key={charge.id} className="transition hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800">
+                    <td className="px-6 py-4 font-black text-slate-900 dark:text-slate-100">
                       {charge.propertyName}
                     </td>
 
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-600">
+                    <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
                       {charge.tenantName}
                     </td>
 
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-600">
+                    <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
                       {formatDate(charge.dueDate)}
                     </td>
 
-                    <td className="px-6 py-4 text-sm font-black text-slate-900">
+                    <td className="px-6 py-4 text-sm font-black text-slate-900 dark:text-slate-100">
                       {formatCurrency(charge.amount)}
                     </td>
 
@@ -539,7 +539,7 @@ export default function FinancialPage() {
                           <button
                             type="button"
                             onClick={() => handleUndoReceivablePayment(charge.id)}
-                            className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+                            className="rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
                           >
                             Estornar
                           </button>
@@ -548,7 +548,7 @@ export default function FinancialPage() {
                             type="button"
                             onClick={() => handleMarkReceivableAsPaid(charge.id)}
                             disabled={charge.status === "Canceled"}
-                            className="rounded-xl bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="rounded-xl bg-emerald-50 dark:bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 dark:bg-emerald-50 dark:bg-emerald-500/100/20 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             Receber
                           </button>
@@ -558,7 +558,7 @@ export default function FinancialPage() {
                           type="button"
                           onClick={() => handleCancelReceivable(charge.id)}
                           disabled={charge.status === "Canceled"}
-                          className="rounded-xl bg-red-50 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded-xl bg-red-50 dark:bg-red-500/10 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-100 dark:bg-red-50 dark:bg-red-500/100/20 dark:hover:bg-red-50 dark:bg-red-500/10 dark:hover:bg-red-50 dark:bg-red-500/100/100/20 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Cancelar
                         </button>
@@ -571,7 +571,7 @@ export default function FinancialPage() {
                   <tr>
                     <td
                       colSpan={6}
-                      className="px-6 py-10 text-center text-sm font-semibold text-slate-500"
+                      className="px-6 py-10 text-center text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500"
                     >
                       Nenhuma conta a receber encontrada.
                     </td>
@@ -582,53 +582,53 @@ export default function FinancialPage() {
           </div>
         </div>
 
-        <div className="rounded-3xl border border-orange-100 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-6 py-5">
-            <h2 className="text-2xl font-black text-slate-950">
+        <div className="rounded-3xl border border-orange-100 dark:border-orange-500/30 bg-white dark:bg-slate-900 shadow-sm">
+          <div className="border-b border-slate-100 dark:border-slate-700 px-6 py-5">
+            <h2 className="text-2xl font-black text-slate-950 dark:text-white">
               Contas a pagar
             </h2>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
               Despesas cadastradas manualmente com baixa e cancelamento.
             </p>
           </div>
 
           <div className="overflow-hidden">
             <table className="w-full text-left">
-              <thead className="bg-orange-50">
+              <thead className="bg-orange-50 dark:bg-orange-500/10">
                 <tr>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300">
                     Descrição
                   </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300">
                     Imóvel
                   </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300">
                     Vencimento
                   </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300">
                     Valor
                   </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300">
                     Status
                   </th>
-                  <th className="px-6 py-4 text-right text-sm font-black text-slate-700">
+                  <th className="px-6 py-4 text-right text-sm font-black text-slate-700 dark:text-slate-300">
                     Ações
                   </th>
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                 {normalizedPayables.map((payable) => (
-                  <tr key={payable.id} className="transition hover:bg-slate-50">
-                    <td className="px-6 py-4 font-black text-slate-900">
+                  <tr key={payable.id} className="transition hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800">
+                    <td className="px-6 py-4 font-black text-slate-900 dark:text-slate-100">
                       {payable.description}
                     </td>
 
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-600">
+                    <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
                       {payable.propertyName || "Geral"}
                     </td>
 
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-600">
+                    <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
                       {formatDate(payable.dueDate)}
                     </td>
 
@@ -646,7 +646,7 @@ export default function FinancialPage() {
                           <button
                             type="button"
                             onClick={() => handleUndoPayablePayment(payable.id)}
-                            className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+                            className="rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
                           >
                             Estornar
                           </button>
@@ -655,7 +655,7 @@ export default function FinancialPage() {
                             type="button"
                             onClick={() => handleMarkPayableAsPaid(payable.id)}
                             disabled={payable.status === "Canceled"}
-                            className="rounded-xl bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="rounded-xl bg-emerald-50 dark:bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 dark:bg-emerald-50 dark:bg-emerald-500/100/20 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             Pagar
                           </button>
@@ -665,7 +665,7 @@ export default function FinancialPage() {
                           type="button"
                           onClick={() => handleCancelPayable(payable.id)}
                           disabled={payable.status === "Canceled"}
-                          className="rounded-xl bg-red-50 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded-xl bg-red-50 dark:bg-red-500/10 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-100 dark:bg-red-50 dark:bg-red-500/100/20 dark:hover:bg-red-50 dark:bg-red-500/10 dark:hover:bg-red-50 dark:bg-red-500/100/100/20 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Cancelar
                         </button>
@@ -678,7 +678,7 @@ export default function FinancialPage() {
                   <tr>
                     <td
                       colSpan={6}
-                      className="px-6 py-10 text-center text-sm font-semibold text-slate-500"
+                      className="px-6 py-10 text-center text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500"
                     >
                       Nenhuma conta a pagar cadastrada.
                     </td>
@@ -691,13 +691,13 @@ export default function FinancialPage() {
 
         {isPayableFormOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
-            <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
-              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-8 py-6">
+            <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-[2rem] border border-orange-100 dark:border-orange-500/30 bg-white dark:bg-slate-900 shadow-2xl">
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 px-8 py-6">
                 <div>
-                  <h2 className="text-2xl font-black text-slate-950">
+                  <h2 className="text-2xl font-black text-slate-950 dark:text-white">
                     Nova conta a pagar
                   </h2>
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                     Cadastre uma despesa operacional do sistema.
                   </p>
                 </div>
@@ -705,7 +705,7 @@ export default function FinancialPage() {
                 <button
                   type="button"
                   onClick={resetPayableForm}
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-600 transition hover:bg-red-50 hover:text-red-600"
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 text-xl font-black text-slate-600 dark:text-slate-300 transition hover:bg-red-50 dark:bg-red-500/10 dark:hover:bg-red-50 dark:bg-red-500/100/10 hover:text-red-600"
                 >
                   ×
                 </button>
@@ -720,7 +720,7 @@ export default function FinancialPage() {
                       onChange={(event) => setPayableDescription(event.target.value)}
                       placeholder="Ex: Manutenção, IPTU, limpeza..."
                       required
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
                     />
                   </FormField>
 
@@ -731,7 +731,7 @@ export default function FinancialPage() {
                       onChange={(event) => setPayableAmount(event.target.value)}
                       placeholder="Ex: 350"
                       required
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
                     />
                   </FormField>
 
@@ -741,7 +741,7 @@ export default function FinancialPage() {
                       value={payableDueDate}
                       onChange={(event) => setPayableDueDate(event.target.value)}
                       required
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
                     />
                   </FormField>
 
@@ -749,7 +749,7 @@ export default function FinancialPage() {
                     <select
                       value={payablePropertyId}
                       onChange={(event) => setPayablePropertyId(event.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
                     >
                       <option value="">Despesa geral</option>
                       {properties.map((property) => (
@@ -761,18 +761,18 @@ export default function FinancialPage() {
                   </FormField>
                 </div>
 
-                <div className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-100 bg-white px-8 py-6">
+                <div className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 px-8 py-6">
                   <button
                     type="button"
                     onClick={resetPayableForm}
-                    className="rounded-2xl bg-slate-100 px-6 py-4 text-sm font-black text-slate-600 transition hover:bg-slate-200"
+                    className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-4 text-sm font-black text-slate-600 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
                   >
                     Cancelar
                   </button>
 
                   <button
                     type="submit"
-                    className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                    className="rounded-2xl bg-orange-50 dark:bg-orange-500/100 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/20 transition hover:bg-orange-600"
                   >
                     Cadastrar conta
                   </button>
@@ -794,7 +794,7 @@ type FormFieldProps = {
 function FormField({ label, children }: FormFieldProps) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-black text-slate-700">
+      <label className="mb-2 block text-sm font-black text-slate-700 dark:text-slate-300">
         {label}
       </label>
       {children}
@@ -818,16 +818,16 @@ function FinancialCard({
   isPositive = true,
 }: FinancialCardProps) {
   return (
-    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
-      <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-xl text-orange-600">
+    <div className="rounded-3xl border border-orange-100 dark:border-orange-500/30 bg-white dark:bg-slate-900 p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
+      <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 dark:bg-orange-50 dark:bg-orange-500/100/20 text-xl text-orange-600">
         {icon}
       </div>
 
-      <p className="text-sm font-bold text-slate-500">{title}</p>
+      <p className="text-sm font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500">{title}</p>
 
       <h3
         className={`mt-3 text-3xl font-black ${
-          isPositive ? "text-slate-950" : "text-red-600"
+          isPositive ? "text-slate-950 dark:text-white" : "text-red-600"
         }`}
       >
         {value}
@@ -856,18 +856,18 @@ function StatusCard({
   badgeClassName,
 }: StatusCardProps) {
   return (
-    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm">
+    <div className="rounded-3xl border border-orange-100 dark:border-orange-500/30 bg-white dark:bg-slate-900 p-6 shadow-sm">
       <div className="mb-5 flex items-center justify-between">
         <span className={`rounded-full px-3 py-1 text-xs font-black ${badgeClassName}`}>
           {badge}
         </span>
 
-        <span className="text-sm font-black text-slate-400">{amount}</span>
+        <span className="text-sm font-black text-slate-400 dark:text-slate-500">{amount}</span>
       </div>
 
-      <p className="text-sm font-bold text-slate-500">{title}</p>
-      <h3 className="mt-3 text-3xl font-black text-slate-950">{value}</h3>
-      <p className="mt-3 text-sm font-semibold text-slate-500">{description}</p>
+      <p className="text-sm font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500">{title}</p>
+      <h3 className="mt-3 text-3xl font-black text-slate-950 dark:text-white">{value}</h3>
+      <p className="mt-3 text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">{description}</p>
     </div>
   );
 }
@@ -880,15 +880,15 @@ function PaymentStatusBadge({ status }: { status: ReceivableStatus }) {
     },
     Paid: {
       label: "Pago",
-      className: "bg-emerald-100 text-emerald-700",
+      className: "bg-emerald-100 dark:bg-emerald-50 dark:bg-emerald-500/100/20 text-emerald-700",
     },
     Overdue: {
       label: "Vencido",
-      className: "bg-red-100 text-red-700",
+      className: "bg-red-100 dark:bg-red-50 dark:bg-red-500/100/20 text-red-700",
     },
     Canceled: {
       label: "Cancelado",
-      className: "bg-slate-100 text-slate-600",
+      className: "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300",
     },
   };
 
@@ -909,15 +909,15 @@ function PayableStatusBadge({ status }: { status: PayableStatus }) {
     },
     Paid: {
       label: "Pago",
-      className: "bg-emerald-100 text-emerald-700",
+      className: "bg-emerald-100 dark:bg-emerald-50 dark:bg-emerald-500/100/20 text-emerald-700",
     },
     Overdue: {
       label: "Vencido",
-      className: "bg-red-100 text-red-700",
+      className: "bg-red-100 dark:bg-red-50 dark:bg-red-500/100/20 text-red-700",
     },
     Canceled: {
       label: "Cancelado",
-      className: "bg-slate-100 text-slate-600",
+      className: "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300",
     },
   };
 

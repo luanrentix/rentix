@@ -38,7 +38,13 @@ type CompanySettings = {
   contractDefaultNotes: string;
 };
 
-type SettingsTab = "company" | "user" | "print";
+type SettingsTab = "company" | "user" | "print" | "appearance";
+
+type ThemeMode = "light" | "black";
+
+type ThemeSettings = {
+  mode: ThemeMode;
+};
 
 type PrintDocumentKey = "temporaryContract" | "paymentBooklet";
 
@@ -180,6 +186,10 @@ const defaultCompanySettings: CompanySettings = {
   state: "",
   contractCity: "",
   contractDefaultNotes: "",
+};
+
+const defaultThemeSettings: ThemeSettings = {
+  mode: "light",
 };
 
 const legacyTemporaryContractTemplateContent = 'CONTRATO TEMPORÁRIO\n\nLOCADOR: {companyName}\nLOCATÁRIO: {personName}\nIMÓVEL: {propertyName}\nPERÍODO: {startDate} até {endDate}\nHORÁRIO: Entrada {entryTime} / Saída {exitTime}\n\nCLÁUSULAS E CONDIÇÕES:\n1. O presente contrato tem finalidade de locação temporária.\n2. O locatário declara estar ciente das regras de uso do imóvel.\n3. As informações financeiras e condições acordadas deverão constar no documento final.\n\n{contractDefaultNotes}\n\n{contractCity}, {currentDate}.\n\n__________________________________\nLOCADOR\n\n__________________________________\nLOCATÁRIO';
@@ -506,12 +516,15 @@ function getChangedSections(
   initialCompanySettings: CompanySettings,
   printTemplates: PrintTemplates,
   initialPrintTemplates: PrintTemplates,
+  themeSettings: ThemeSettings,
+  initialThemeSettings: ThemeSettings,
   passwordSettings: PasswordSettings
 ) {
   const changedSections: string[] = [];
   const hasUserChanges = JSON.stringify(userSettings) !== JSON.stringify(initialUserSettings);
   const hasCompanyChanges = JSON.stringify(companySettings) !== JSON.stringify(initialCompanySettings);
   const hasPrintChanges = JSON.stringify(printTemplates) !== JSON.stringify(initialPrintTemplates);
+  const hasThemeChanges = JSON.stringify(themeSettings) !== JSON.stringify(initialThemeSettings);
   const hasPasswordChanges = Boolean(passwordSettings.newPassword);
 
   if (hasCompanyChanges) {
@@ -524,6 +537,10 @@ function getChangedSections(
 
   if (hasPrintChanges) {
     changedSections.push("Modelos de impressos");
+  }
+
+  if (hasThemeChanges) {
+    changedSections.push("Tema e aparência do sistema");
   }
 
   if (hasPasswordChanges) {
@@ -592,6 +609,146 @@ function renderPrintTemplatePreview(content: string, documentKey: PrintDocumentK
   return previewContent;
 }
 
+
+const rentixThemeStyle = `
+  [data-rentix-theme="black"] {
+    background: #020617 !important;
+    color: #f8fafc !important;
+  }
+
+  [data-rentix-theme="black"] * {
+    scrollbar-color: #475569 #020617;
+  }
+
+  [data-rentix-theme="black"] .bg-white,
+  [data-rentix-theme="black"] .bg-slate-50,
+  [data-rentix-theme="black"] .bg-slate-100,
+  [data-rentix-theme="black"] .bg-white\\/90 {
+    background-color: #0f172a !important;
+  }
+
+  [data-rentix-theme="black"] .bg-gradient-to-r {
+    background-image: none !important;
+    background-color: #0f172a !important;
+  }
+
+  [data-rentix-theme="black"] .from-orange-50,
+  [data-rentix-theme="black"] .via-white,
+  [data-rentix-theme="black"] .to-white,
+  [data-rentix-theme="black"] .from-slate-50 {
+    background-image: none !important;
+  }
+
+  [data-rentix-theme="black"] .bg-orange-50,
+  [data-rentix-theme="black"] .bg-orange-50\\/40,
+  [data-rentix-theme="black"] .bg-orange-50\\/50,
+  [data-rentix-theme="black"] .bg-orange-50\\/60,
+  [data-rentix-theme="black"] .bg-orange-100 {
+    background-color: rgba(249, 115, 22, 0.16) !important;
+  }
+
+  [data-rentix-theme="black"] .bg-amber-50,
+  [data-rentix-theme="black"] .bg-amber-100 {
+    background-color: rgba(245, 158, 11, 0.16) !important;
+  }
+
+  [data-rentix-theme="black"] .bg-red-50,
+  [data-rentix-theme="black"] .bg-red-100 {
+    background-color: rgba(239, 68, 68, 0.16) !important;
+  }
+
+  [data-rentix-theme="black"] .bg-emerald-50,
+  [data-rentix-theme="black"] .bg-emerald-100 {
+    background-color: rgba(16, 185, 129, 0.16) !important;
+  }
+
+  [data-rentix-theme="black"] .bg-slate-900,
+  [data-rentix-theme="black"] .bg-slate-950 {
+    background-color: #020617 !important;
+  }
+
+  [data-rentix-theme="black"] .text-slate-950,
+  [data-rentix-theme="black"] .text-slate-900,
+  [data-rentix-theme="black"] .text-slate-800,
+  [data-rentix-theme="black"] .text-slate-700,
+  [data-rentix-theme="black"] .text-slate-600 {
+    color: #f8fafc !important;
+  }
+
+  [data-rentix-theme="black"] .text-slate-500,
+  [data-rentix-theme="black"] .text-slate-400 {
+    color: #cbd5e1 !important;
+  }
+
+  [data-rentix-theme="black"] .text-orange-600,
+  [data-rentix-theme="black"] .text-orange-700,
+  [data-rentix-theme="black"] .text-orange-800 {
+    color: #fb923c !important;
+  }
+
+  [data-rentix-theme="black"] .text-red-600,
+  [data-rentix-theme="black"] .text-red-700,
+  [data-rentix-theme="black"] .text-red-800 {
+    color: #fca5a5 !important;
+  }
+
+  [data-rentix-theme="black"] .text-amber-600,
+  [data-rentix-theme="black"] .text-amber-700,
+  [data-rentix-theme="black"] .text-amber-800 {
+    color: #fbbf24 !important;
+  }
+
+  [data-rentix-theme="black"] .text-emerald-600,
+  [data-rentix-theme="black"] .text-emerald-700 {
+    color: #6ee7b7 !important;
+  }
+
+  [data-rentix-theme="black"] .border-slate-100,
+  [data-rentix-theme="black"] .border-slate-200,
+  [data-rentix-theme="black"] .border-orange-100,
+  [data-rentix-theme="black"] .border-orange-200,
+  [data-rentix-theme="black"] .border-amber-100,
+  [data-rentix-theme="black"] .border-red-100,
+  [data-rentix-theme="black"] .border-emerald-100 {
+    border-color: #1e293b !important;
+  }
+
+  [data-rentix-theme="black"] input,
+  [data-rentix-theme="black"] select,
+  [data-rentix-theme="black"] textarea {
+    background-color: #020617 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+  }
+
+  [data-rentix-theme="black"] input:focus,
+  [data-rentix-theme="black"] select:focus,
+  [data-rentix-theme="black"] textarea:focus {
+    border-color: #f97316 !important;
+    box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.16) !important;
+  }
+
+  [data-rentix-theme="black"] input::placeholder,
+  [data-rentix-theme="black"] textarea::placeholder {
+    color: #64748b !important;
+  }
+
+  [data-rentix-theme="black"] button:not(.bg-orange-500):not(.bg-red-500):not(.bg-red-600):not(.bg-emerald-600) {
+    border-color: #1e293b;
+  }
+
+  [data-rentix-theme="black"] .shadow-sm,
+  [data-rentix-theme="black"] .shadow-md,
+  [data-rentix-theme="black"] .shadow-xl,
+  [data-rentix-theme="black"] .shadow-2xl {
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35) !important;
+  }
+
+  [data-rentix-theme="black"] pre {
+    color: #e2e8f0 !important;
+  }
+`;
+
 export default function ConfiguracoesPage() {
   const router = useRouter();
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>("company");
@@ -599,6 +756,8 @@ export default function ConfiguracoesPage() {
   const [companySettings, setCompanySettings] = useState<CompanySettings>(defaultCompanySettings);
   const [initialUserSettings, setInitialUserSettings] = useState<UserSettings>(defaultUserSettings);
   const [initialCompanySettings, setInitialCompanySettings] = useState<CompanySettings>(defaultCompanySettings);
+  const [themeSettings, setThemeSettings] = useState<ThemeSettings>(defaultThemeSettings);
+  const [initialThemeSettings, setInitialThemeSettings] = useState<ThemeSettings>(defaultThemeSettings);
   const [printTemplates, setPrintTemplates] = useState<PrintTemplates>(defaultPrintTemplates);
   const [initialPrintTemplates, setInitialPrintTemplates] = useState<PrintTemplates>(defaultPrintTemplates);
   const [printModalState, setPrintModalState] = useState<PrintModalState>(defaultPrintModalState);
@@ -637,6 +796,8 @@ export default function ConfiguracoesPage() {
         initialCompanySettings,
         printTemplates,
         initialPrintTemplates,
+        themeSettings,
+        initialThemeSettings,
         passwordSettings
       ),
     [
@@ -646,6 +807,8 @@ export default function ConfiguracoesPage() {
       initialCompanySettings,
       printTemplates,
       initialPrintTemplates,
+      themeSettings,
+      initialThemeSettings,
       passwordSettings,
     ]
   );
@@ -654,6 +817,7 @@ export default function ConfiguracoesPage() {
     const storedUserSettings = localStorage.getItem("rentix_user_settings");
     const storedCompanySettings = localStorage.getItem("rentix_company_settings");
     const storedPrintTemplates = localStorage.getItem("rentix_print_templates");
+    const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
 
     if (storedUserSettings) {
       const parsedUserSettings = {
@@ -680,6 +844,16 @@ export default function ConfiguracoesPage() {
 
       setPrintTemplates(parsedPrintTemplates);
       setInitialPrintTemplates(parsedPrintTemplates);
+    }
+
+    if (storedThemeSettings) {
+      const parsedThemeSettings = {
+        ...defaultThemeSettings,
+        ...JSON.parse(storedThemeSettings),
+      };
+
+      setThemeSettings(parsedThemeSettings);
+      setInitialThemeSettings(parsedThemeSettings);
     }
   }, []);
 
@@ -882,6 +1056,7 @@ export default function ConfiguracoesPage() {
     localStorage.setItem("rentix_user_settings", JSON.stringify(userSettings));
     localStorage.setItem("rentix_company_settings", JSON.stringify(companySettings));
     localStorage.setItem("rentix_print_templates", JSON.stringify(printTemplates));
+    localStorage.setItem("rentix_theme_settings", JSON.stringify(themeSettings));
 
     if (passwordSettings.newPassword) {
       localStorage.setItem("rentix_user_password_updated", "true");
@@ -891,6 +1066,7 @@ export default function ConfiguracoesPage() {
     setInitialUserSettings(userSettings);
     setInitialCompanySettings(companySettings);
     setInitialPrintTemplates(printTemplates);
+    setInitialThemeSettings(themeSettings);
     setValidationErrors({});
     setSuccessMessage("Configurações salvas com sucesso.");
     localStorage.setItem("rentix_dashboard_success_message", "Configurações salvas com sucesso.");
@@ -900,7 +1076,11 @@ export default function ConfiguracoesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 px-4 py-6 sm:px-6 lg:px-8">
+    <div
+      data-rentix-theme={themeSettings.mode}
+      className="min-h-screen bg-slate-100 px-4 py-6 sm:px-6 lg:px-8"
+    >
+      <style>{rentixThemeStyle}</style>
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="rounded-[2rem] border border-orange-100 bg-white shadow-sm">
           <div className="border-b border-slate-100 bg-gradient-to-r from-orange-50 via-white to-white px-6 py-5 lg:px-8">
@@ -978,6 +1158,18 @@ export default function ConfiguracoesPage() {
                   }`}
                 >
                   🖨️ Impresso
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveSettingsTab("appearance")}
+                  className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-black transition ${
+                    activeSettingsTab === "appearance"
+                      ? "bg-orange-500 text-white shadow-md shadow-orange-100"
+                      : "bg-white text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                  }`}
+                >
+                  🎨 Aparência
                 </button>
               </div>
 
@@ -1500,6 +1692,94 @@ export default function ConfiguracoesPage() {
                         />
                       </label>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {activeSettingsTab === "appearance" && (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-xl font-black text-slate-950">
+                      Aparência
+                    </h2>
+                    <p className="mt-1 text-sm font-medium text-slate-500">
+                      Escolha o tema visual do Rentix mantendo o laranja como cor principal do sistema.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => setThemeSettings({ mode: "light" })}
+                      className={`rounded-3xl border p-5 text-left transition ${
+                        themeSettings.mode === "light"
+                          ? "border-orange-300 bg-orange-50 shadow-md shadow-orange-100"
+                          : "border-slate-200 bg-white hover:border-orange-200 hover:bg-orange-50/40"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl">
+                            ☀️
+                          </div>
+                          <h3 className="mt-4 text-lg font-black text-slate-950">
+                            Tema claro
+                          </h3>
+                          <p className="mt-1 text-sm font-semibold leading-6 text-slate-500">
+                            Mantém o padrão atual com fundo claro, cards brancos e detalhes em laranja.
+                          </p>
+                        </div>
+
+                        <span className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs font-black ${
+                          themeSettings.mode === "light"
+                            ? "border-orange-500 bg-orange-500 text-white"
+                            : "border-slate-300 text-transparent"
+                        }`}>
+                          ✓
+                        </span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setThemeSettings({ mode: "black" })}
+                      className={`rounded-3xl border p-5 text-left transition ${
+                        themeSettings.mode === "black"
+                          ? "border-orange-400 bg-slate-950 shadow-md shadow-orange-950/30"
+                          : "border-slate-200 bg-white hover:border-orange-200 hover:bg-orange-50/40"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-2xl ring-1 ring-orange-500/40">
+                            🌙
+                          </div>
+                          <h3 className={`mt-4 text-lg font-black ${themeSettings.mode === "black" ? "text-white" : "text-slate-950"}`}>
+                            Tema black
+                          </h3>
+                          <p className={`mt-1 text-sm font-semibold leading-6 ${themeSettings.mode === "black" ? "text-slate-300" : "text-slate-500"}`}>
+                            Usa fundo preto/cinza escuro, textos claros e mantém o laranja como destaque principal.
+                          </p>
+                        </div>
+
+                        <span className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs font-black ${
+                          themeSettings.mode === "black"
+                            ? "border-orange-500 bg-orange-500 text-white"
+                            : "border-slate-300 text-transparent"
+                        }`}>
+                          ✓
+                        </span>
+                      </div>
+                    </button>
+                  </div>
+
+                  <div className="rounded-3xl border border-orange-100 bg-orange-50 px-5 py-4">
+                    <p className="text-sm font-black text-orange-800">
+                      Importante
+                    </p>
+                    <p className="mt-1 text-sm font-semibold leading-6 text-orange-700">
+                      A alteração será aplicada ao sistema depois de clicar em Salvar configurações. A identidade laranja do Rentix permanece nos dois temas.
+                    </p>
                   </div>
                 </div>
               )}

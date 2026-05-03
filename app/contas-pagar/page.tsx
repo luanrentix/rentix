@@ -7,7 +7,12 @@ type PersonType = "Individual" | "Company";
 
 type ExpenseStatus = "Pending" | "Paid" | "Overdue";
 type StatusFilter = "All" | "Pending" | "Paid" | "Overdue";
-type ReportDueFilter = "All" | "Overdue" | "DueToday" | "Upcoming" | "DateRange";
+type ReportDueFilter =
+  | "All"
+  | "Overdue"
+  | "DueToday"
+  | "Upcoming"
+  | "DateRange";
 type ExpenseLaunchType = "single" | "installment";
 
 type PaymentMethod =
@@ -255,7 +260,8 @@ export default function AccountsPayablePage() {
           personName: expense.personName || "Pessoa não informada",
           category: expense.category || "Outros",
           note: expense.note || "",
-          issueDate: expense.issueDate || expense.date || new Date().toISOString(),
+          issueDate:
+            expense.issueDate || expense.date || new Date().toISOString(),
           dueDate: expense.dueDate || expense.date || new Date().toISOString(),
           status: expense.status || "Pending",
           manual: expense.manual ?? true,
@@ -449,10 +455,7 @@ export default function AccountsPayablePage() {
       .replace(/^(\d{2})(\d)/, "$1.$2")
       .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
       .replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3/$4")
-      .replace(
-        /^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/,
-        "$1.$2.$3/$4-$5",
-      );
+      .replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/, "$1.$2.$3/$4-$5");
   }
 
   function formatDocument(value: string, personType: PersonType) {
@@ -548,7 +551,9 @@ export default function AccountsPayablePage() {
     if (tenantFormData.personType !== "Company") return;
 
     if (cleanCnpj.length !== 14) {
-      setCnpjSearchError("Informe um CNPJ com 14 números para buscar os dados.");
+      setCnpjSearchError(
+        "Informe um CNPJ com 14 números para buscar os dados.",
+      );
       return;
     }
 
@@ -572,7 +577,9 @@ export default function AccountsPayablePage() {
         ...currentData,
         name: companyData.name || currentData.name,
         cpf: formatCnpj(companyData.cnpj || cleanCnpj),
-        phone: companyData.phone ? formatPhone(companyData.phone) : currentData.phone,
+        phone: companyData.phone
+          ? formatPhone(companyData.phone)
+          : currentData.phone,
         zipCode: companyData.zipCode
           ? formatZipCode(companyData.zipCode)
           : currentData.zipCode,
@@ -757,14 +764,14 @@ export default function AccountsPayablePage() {
 
   function getStatusClassName(status?: ExpenseStatus) {
     if (status === "Paid") {
-      return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
+      return "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 ring-1 ring-emerald-200";
     }
 
     if (status === "Overdue") {
-      return "bg-red-50 text-red-700 ring-1 ring-red-200";
+      return "bg-red-50 dark:bg-red-950/30 text-red-700 ring-1 ring-red-200 dark:ring-red-900/60";
     }
 
-    return "bg-amber-50 text-amber-700 ring-1 ring-amber-200";
+    return "bg-amber-50 dark:bg-amber-950/30 text-amber-700 ring-1 ring-amber-200 dark:ring-amber-900/60";
   }
 
   function getStatusFilterLabel(status: StatusFilter) {
@@ -1053,7 +1060,9 @@ export default function AccountsPayablePage() {
       if (!editingExpenseId) return;
 
       if (!formPaymentDate) {
-        setExpenseFormError("Informe a data de pagamento para salvar os ajustes.");
+        setExpenseFormError(
+          "Informe a data de pagamento para salvar os ajustes.",
+        );
         return;
       }
 
@@ -1400,7 +1409,10 @@ export default function AccountsPayablePage() {
         return false;
       }
 
-      if (reportStatusFilter !== "All" && expense.status !== reportStatusFilter) {
+      if (
+        reportStatusFilter !== "All" &&
+        expense.status !== reportStatusFilter
+      ) {
         return false;
       }
 
@@ -1408,7 +1420,10 @@ export default function AccountsPayablePage() {
         return false;
       }
 
-      if (reportDueFilter === "DueToday" && dueDate.getTime() !== today.getTime()) {
+      if (
+        reportDueFilter === "DueToday" &&
+        dueDate.getTime() !== today.getTime()
+      ) {
         return false;
       }
 
@@ -1466,7 +1481,9 @@ export default function AccountsPayablePage() {
     const reportExpenses = getReportFilteredExpenses();
 
     if (reportExpenses.length === 0) {
-      setReportFormError("Nenhuma conta encontrada para os filtros informados.");
+      setReportFormError(
+        "Nenhuma conta encontrada para os filtros informados.",
+      );
       return;
     }
 
@@ -1657,30 +1674,38 @@ export default function AccountsPayablePage() {
         <div>
           <p className="text-sm font-semibold text-orange-600">Financeiro</p>
 
-          <h1 className="mt-1 text-3xl font-black text-slate-900">
+          <h1 className="mt-1 text-3xl font-black text-slate-900 dark:text-slate-100">
             Contas a Pagar
           </h1>
 
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
             Cadastre, acompanhe e controle suas despesas financeiras.
           </p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-4">
-          <Card title="Total a Pagar" value={formatCurrency(totalPayable)} red />
+          <Card
+            title="Total a Pagar"
+            value={formatCurrency(totalPayable)}
+            red
+          />
           <Card title="Total Pago" value={formatCurrency(totalPaid)} green />
-          <Card title="Total Vencido" value={formatCurrency(totalOverdue)} red />
+          <Card
+            title="Total Vencido"
+            value={formatCurrency(totalOverdue)}
+            red
+          />
           <Card title="Despesas" value={filteredExpenses.length} />
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-sm">
           <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
             <div>
-              <h2 className="text-lg font-black text-slate-900">
+              <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">
                 Filtros Financeiros
               </h2>
 
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                 Refine a visualização sem alterar os dados originais.
               </p>
             </div>
@@ -1693,8 +1718,8 @@ export default function AccountsPayablePage() {
                     onClick={() => setStatusFilter(status)}
                     className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
                       statusFilter === status
-                        ? "bg-orange-500 text-white shadow-sm"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        ? "bg-orange-50 dark:bg-orange-950/300 text-white shadow-sm"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
                     }`}
                   >
                     {getStatusFilterLabel(status)}
@@ -1704,7 +1729,7 @@ export default function AccountsPayablePage() {
 
               <button
                 onClick={clearAllFilters}
-                className="rounded-xl bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100"
+                className="rounded-xl bg-white dark:bg-slate-900 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-800"
               >
                 Limpar filtros
               </button>
@@ -1713,13 +1738,13 @@ export default function AccountsPayablePage() {
         </div>
 
         {(search || statusFilter !== "All") && (
-          <div className="flex flex-col justify-between gap-3 rounded-2xl border border-orange-200 bg-orange-50 p-4 md:flex-row md:items-center">
+          <div className="flex flex-col justify-between gap-3 rounded-2xl border border-orange-200 dark:border-orange-800/60 bg-orange-50 dark:bg-orange-950/30 p-4 md:flex-row md:items-center">
             <div>
               <p className="text-sm font-bold text-orange-700">
                 Filtro aplicado
               </p>
 
-              <p className="text-sm text-slate-700">
+              <p className="text-sm text-slate-700 dark:text-slate-300">
                 Busca: <strong>{search || "Todas"}</strong> · Status:{" "}
                 <strong>{getStatusFilterLabel(statusFilter)}</strong>.
               </p>
@@ -1727,22 +1752,22 @@ export default function AccountsPayablePage() {
 
             <button
               onClick={clearAllFilters}
-              className="rounded-xl bg-white px-4 py-2 text-sm font-bold text-orange-600 shadow-sm ring-1 ring-orange-200 transition hover:bg-orange-100"
+              className="rounded-xl bg-white dark:bg-slate-900 px-4 py-2 text-sm font-bold text-orange-600 shadow-sm ring-1 ring-orange-200 dark:ring-orange-800/50 transition hover:bg-orange-100 dark:hover:bg-orange-900/40"
             >
               Remover filtros
             </button>
           </div>
         )}
 
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 p-5">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
+          <div className="border-b border-slate-200 dark:border-slate-700 dark:border-slate-800 p-5">
             <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
               <div>
-                <h2 className="text-lg font-black text-slate-900">
+                <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">
                   Lista de Contas a Pagar
                 </h2>
 
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                   Visualize as despesas pendentes, pagas e vencidas.
                 </p>
               </div>
@@ -1769,40 +1794,40 @@ export default function AccountsPayablePage() {
                 placeholder="Buscar por pessoa, descrição ou categoria..."
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
               />
             </div>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1080px]">
-              <thead className="bg-orange-50">
+              <thead className="bg-orange-50 dark:bg-orange-950/30">
                 <tr>
-                  <th className="px-5 py-4 text-left text-sm font-black text-slate-900">
+                  <th className="px-5 py-4 text-left text-sm font-black text-slate-900 dark:text-slate-100">
                     Pessoa
                   </th>
 
-                  <th className="px-5 py-4 text-left text-sm font-black text-slate-900">
+                  <th className="px-5 py-4 text-left text-sm font-black text-slate-900 dark:text-slate-100">
                     Descrição
                   </th>
 
-                  <th className="px-5 py-4 text-left text-sm font-black text-slate-900">
+                  <th className="px-5 py-4 text-left text-sm font-black text-slate-900 dark:text-slate-100">
                     Categoria
                   </th>
 
-                  <th className="px-5 py-4 text-center text-sm font-black text-slate-900">
+                  <th className="px-5 py-4 text-center text-sm font-black text-slate-900 dark:text-slate-100">
                     Vencimento
                   </th>
 
-                  <th className="px-5 py-4 text-center text-sm font-black text-slate-900">
+                  <th className="px-5 py-4 text-center text-sm font-black text-slate-900 dark:text-slate-100">
                     Valor
                   </th>
 
-                  <th className="px-5 py-4 text-center text-sm font-black text-slate-900">
+                  <th className="px-5 py-4 text-center text-sm font-black text-slate-900 dark:text-slate-100">
                     Status
                   </th>
 
-                  <th className="px-5 py-4 text-center text-sm font-black text-slate-900">
+                  <th className="px-5 py-4 text-center text-sm font-black text-slate-900 dark:text-slate-100">
                     Ação
                   </th>
                 </tr>
@@ -1813,7 +1838,7 @@ export default function AccountsPayablePage() {
                   <tr>
                     <td
                       colSpan={7}
-                      className="px-5 py-10 text-center text-sm text-slate-500"
+                      className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500"
                     >
                       Nenhuma conta a pagar encontrada.
                     </td>
@@ -1822,32 +1847,32 @@ export default function AccountsPayablePage() {
                   filteredExpenses.map((expense) => (
                     <tr
                       key={expense.id}
-                      className="border-t border-slate-100 transition hover:bg-slate-50"
+                      className="border-t border-slate-100 dark:border-slate-800 dark:border-slate-800 transition hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800/80"
                     >
-                      <td className="px-5 py-4 text-sm font-medium text-slate-900">
+                      <td className="px-5 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
                         {expense.personName || "Pessoa não informada"}
                       </td>
 
-                      <td className="px-5 py-4 text-sm font-medium text-slate-900">
+                      <td className="px-5 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
                         {expense.description}
                         {expense.installmentNumber &&
                           expense.installmentTotal && (
-                            <span className="ml-2 rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">
+                            <span className="ml-2 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-1 text-xs font-bold text-slate-600 dark:text-slate-400 dark:text-slate-500">
                               {expense.installmentNumber}/
                               {expense.installmentTotal}
                             </span>
                           )}
                       </td>
 
-                      <td className="px-5 py-4 text-sm text-slate-600">
+                      <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500">
                         {expense.category || "Outros"}
                       </td>
 
-                      <td className="px-5 py-4 text-center text-sm text-slate-600">
+                      <td className="px-5 py-4 text-center text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500">
                         {formatDate(expense.dueDate || expense.date || "")}
                       </td>
 
-                      <td className="px-5 py-4 text-center text-sm font-bold text-slate-900">
+                      <td className="px-5 py-4 text-center text-sm font-bold text-slate-900 dark:text-slate-100">
                         {formatCurrency(expense.amount)}
                       </td>
 
@@ -1866,14 +1891,14 @@ export default function AccountsPayablePage() {
                           <div className="flex flex-wrap justify-center gap-2">
                             <button
                               onClick={() => openEditExpense(expense)}
-                              className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-200"
+                              className="rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 shadow-sm transition hover:bg-slate-200 dark:hover:bg-slate-700"
                             >
                               Editar
                             </button>
 
                             <button
                               onClick={() => openPayExpenseModal(expense)}
-                              className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
+                              className="rounded-xl bg-orange-50 dark:bg-orange-950/300 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
                             >
                               Pagar
                             </button>
@@ -1882,7 +1907,7 @@ export default function AccountsPayablePage() {
                           <div className="flex flex-wrap justify-center gap-2">
                             <button
                               onClick={() => openEditExpense(expense)}
-                              className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-200"
+                              className="rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 shadow-sm transition hover:bg-slate-200 dark:hover:bg-slate-700"
                             >
                               Editar
                             </button>
@@ -1904,23 +1929,26 @@ export default function AccountsPayablePage() {
 
       {isCreateOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
-          <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
-            <div className="border-b border-slate-100 bg-gradient-to-r from-orange-50 to-white p-6">
+          <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
+            <div className="border-b border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-gradient-to-r from-orange-50 to-white dark:from-orange-950/30 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-xl font-black text-slate-900">
-                    {editingExpenseId ? "Editar conta a pagar" : "Nova conta a pagar"}
+                  <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">
+                    {editingExpenseId
+                      ? "Editar conta a pagar"
+                      : "Nova conta a pagar"}
                   </h2>
 
-                  <p className="mt-1 text-sm text-slate-500">
-                    Informe descrição, categoria, valor, vencimento e observações.
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                    Informe descrição, categoria, valor, vencimento e
+                    observações.
                   </p>
                 </div>
 
                 <button
                   type="button"
                   onClick={closeCreateModal}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 hover:text-slate-900"
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 dark:text-slate-500 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-800 hover:text-slate-900 dark:text-slate-100"
                   aria-label="Fechar cadastro"
                 >
                   ✕
@@ -1931,7 +1959,7 @@ export default function AccountsPayablePage() {
             <div className="flex-1 space-y-5 overflow-y-auto p-6">
               {!editingExpenseId && (
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Tipo de lançamento
                   </label>
 
@@ -1941,8 +1969,8 @@ export default function AccountsPayablePage() {
                       onClick={() => setFormLaunchType("single")}
                       className={`rounded-2xl border px-4 py-3 text-sm font-bold transition ${
                         formLaunchType === "single"
-                          ? "border-orange-500 bg-orange-500 text-white shadow-sm"
-                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                          ? "border-orange-500 bg-orange-50 dark:bg-orange-950/300 text-white shadow-sm"
+                          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800/80"
                       }`}
                     >
                       Conta única
@@ -1953,8 +1981,8 @@ export default function AccountsPayablePage() {
                       onClick={() => setFormLaunchType("installment")}
                       className={`rounded-2xl border px-4 py-3 text-sm font-bold transition ${
                         formLaunchType === "installment"
-                          ? "border-orange-500 bg-orange-500 text-white shadow-sm"
-                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                          ? "border-orange-500 bg-orange-50 dark:bg-orange-950/300 text-white shadow-sm"
+                          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800/80"
                       }`}
                     >
                       Parcelado
@@ -1965,7 +1993,7 @@ export default function AccountsPayablePage() {
 
               <div>
                 <div className="mb-2 flex items-center justify-between gap-3">
-                  <label className="block text-sm font-bold text-slate-700">
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Pessoa
                   </label>
 
@@ -1973,7 +2001,7 @@ export default function AccountsPayablePage() {
                     type="button"
                     onClick={openTenantCreateModal}
                     disabled={isEditingPaidExpense}
-                    className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:bg-slate-300"
+                    className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:bg-slate-300 dark:disabled:bg-slate-700"
                   >
                     Cadastrar pessoa
                   </button>
@@ -1986,7 +2014,7 @@ export default function AccountsPayablePage() {
                     setExpenseFormError("");
                     setFormTenant(event.target.value);
                   }}
-                  className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 disabled:bg-slate-100 disabled:text-slate-500"
+                  className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40 disabled:bg-slate-100 dark:bg-slate-800 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:text-slate-400 dark:text-slate-500"
                 >
                   <option value="">Selecione uma pessoa</option>
                   {tenants.map((tenant) => (
@@ -1996,14 +2024,15 @@ export default function AccountsPayablePage() {
                   ))}
                 </select>
 
-                <p className="mt-2 text-xs font-semibold text-slate-500">
-                  Use o mesmo cadastro de pessoas/inquilinos do Contas a Receber.
+                <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                  Use o mesmo cadastro de pessoas/inquilinos do Contas a
+                  Receber.
                 </p>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Descrição
                   </label>
 
@@ -2015,12 +2044,12 @@ export default function AccountsPayablePage() {
                       setFormDescription(event.target.value);
                     }}
                     placeholder="Ex: Energia elétrica"
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 disabled:bg-slate-100 disabled:text-slate-500"
+                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40 disabled:bg-slate-100 dark:bg-slate-800 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:text-slate-400 dark:text-slate-500"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Categoria
                   </label>
 
@@ -2031,7 +2060,7 @@ export default function AccountsPayablePage() {
                       setExpenseFormError("");
                       setFormCategory(event.target.value);
                     }}
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 disabled:bg-slate-100 disabled:text-slate-500"
+                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40 disabled:bg-slate-100 dark:bg-slate-800 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:text-slate-400 dark:text-slate-500"
                   >
                     {expenseCategoryOptions.map((category) => (
                       <option key={category} value={category}>
@@ -2044,7 +2073,7 @@ export default function AccountsPayablePage() {
 
               <div className="grid gap-4 md:grid-cols-3">
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Valor
                   </label>
 
@@ -2056,12 +2085,12 @@ export default function AccountsPayablePage() {
                       setFormAmount(event.target.value);
                     }}
                     placeholder="0,00"
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 disabled:bg-slate-100 disabled:text-slate-500"
+                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40 disabled:bg-slate-100 dark:bg-slate-800 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:text-slate-400 dark:text-slate-500"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Lançamento
                   </label>
 
@@ -2073,12 +2102,12 @@ export default function AccountsPayablePage() {
                       setExpenseFormError("");
                       setFormIssueDate(event.target.value);
                     }}
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 disabled:bg-slate-100 disabled:text-slate-500"
+                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40 disabled:bg-slate-100 dark:bg-slate-800 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:text-slate-400 dark:text-slate-500"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Vencimento
                   </label>
 
@@ -2090,14 +2119,14 @@ export default function AccountsPayablePage() {
                       setExpenseFormError("");
                       setFormDueDate(event.target.value);
                     }}
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 disabled:bg-slate-100 disabled:text-slate-500"
+                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40 disabled:bg-slate-100 dark:bg-slate-800 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:text-slate-400 dark:text-slate-500"
                   />
                 </div>
               </div>
 
               {isEditingPaidExpense && (
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Data de pagamento
                   </label>
 
@@ -2108,13 +2137,13 @@ export default function AccountsPayablePage() {
                       setExpenseFormError("");
                       setFormPaymentDate(event.target.value);
                     }}
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                   />
                 </div>
               )}
 
               <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">
+                <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                   Observação
                 </label>
 
@@ -2123,15 +2152,15 @@ export default function AccountsPayablePage() {
                   disabled={isEditingPaidExpense}
                   onChange={(event) => setFormNote(event.target.value)}
                   placeholder="Informações adicionais sobre a conta..."
-                  className="min-h-24 w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 disabled:bg-slate-100 disabled:text-slate-500"
+                  className="min-h-24 w-full resize-none rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40 disabled:bg-slate-100 dark:bg-slate-800 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:text-slate-400 dark:text-slate-500"
                 />
               </div>
 
               {formLaunchType === "installment" && !editingExpenseId && (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4">
                   <div className="grid gap-4 md:grid-cols-[220px_1fr] md:items-end">
                     <div>
-                      <label className="mb-2 block text-sm font-bold text-slate-700">
+                      <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                         Quantidade de parcelas
                       </label>
 
@@ -2142,13 +2171,13 @@ export default function AccountsPayablePage() {
                         onChange={(event) =>
                           setFormInstallmentQuantity(event.target.value)
                         }
-                        className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                        className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                       />
                     </div>
 
-                    <p className="text-sm font-semibold text-slate-500">
-                      As parcelas são geradas a cada 30 dias e podem ser ajustadas
-                      antes de salvar.
+                    <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                      As parcelas são geradas a cada 30 dias e podem ser
+                      ajustadas antes de salvar.
                     </p>
                   </div>
 
@@ -2157,9 +2186,9 @@ export default function AccountsPayablePage() {
                       {installmentPreview.map((installment) => (
                         <div
                           key={installment.id}
-                          className="grid gap-3 rounded-xl bg-white p-3 ring-1 ring-slate-200 md:grid-cols-[120px_1fr_1fr]"
+                          className="grid gap-3 rounded-xl bg-white dark:bg-slate-900 p-3 ring-1 ring-slate-200 dark:ring-slate-700 md:grid-cols-[120px_1fr_1fr]"
                         >
-                          <div className="flex items-center text-sm font-black text-slate-700">
+                          <div className="flex items-center text-sm font-black text-slate-700 dark:text-slate-300">
                             Parcela {installment.installmentNumber}
                           </div>
 
@@ -2171,7 +2200,7 @@ export default function AccountsPayablePage() {
                                 event.target.value,
                               )
                             }
-                            className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                            className="h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                           />
 
                           <input
@@ -2183,7 +2212,7 @@ export default function AccountsPayablePage() {
                                 event.target.value,
                               )
                             }
-                            className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                            className="h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                           />
                         </div>
                       ))}
@@ -2193,19 +2222,19 @@ export default function AccountsPayablePage() {
               )}
 
               {expenseFormError && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                <div className="rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm font-bold text-red-700">
                   {expenseFormError}
                 </div>
               )}
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white p-5 md:flex-row md:justify-between">
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 md:flex-row md:justify-between">
               <div className="flex flex-col gap-3 md:flex-row">
                 {editingExpenseId && (
                   <button
                     type="button"
                     onClick={openDeleteExpenseConfirmation}
-                    className="rounded-xl bg-red-50 px-5 py-3 text-sm font-bold text-red-700 shadow-sm ring-1 ring-red-200 transition hover:bg-red-100"
+                    className="rounded-xl bg-red-50 dark:bg-red-950/30 px-5 py-3 text-sm font-bold text-red-700 shadow-sm ring-1 ring-red-200 dark:ring-red-900/60 transition hover:bg-red-100 dark:hover:bg-red-900/40"
                   >
                     Excluir
                   </button>
@@ -2215,7 +2244,7 @@ export default function AccountsPayablePage() {
                   <button
                     type="button"
                     onClick={openPaymentReversalConfirmation}
-                    className="rounded-xl bg-amber-50 px-5 py-3 text-sm font-bold text-amber-700 shadow-sm ring-1 ring-amber-200 transition hover:bg-amber-100"
+                    className="rounded-xl bg-amber-50 dark:bg-amber-950/30 px-5 py-3 text-sm font-bold text-amber-700 shadow-sm ring-1 ring-amber-200 dark:ring-amber-900/60 transition hover:bg-amber-100 dark:hover:bg-amber-900/40"
                   >
                     Voltar para pendente
                   </button>
@@ -2226,7 +2255,7 @@ export default function AccountsPayablePage() {
                 <button
                   type="button"
                   onClick={closeCreateModal}
-                  className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+                  className="rounded-xl bg-slate-100 dark:bg-slate-800 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
                 >
                   Cancelar
                 </button>
@@ -2234,7 +2263,7 @@ export default function AccountsPayablePage() {
                 <button
                   type="button"
                   onClick={saveExpense}
-                  className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
+                  className="rounded-xl bg-orange-50 dark:bg-orange-950/300 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
                 >
                   Salvar
                 </button>
@@ -2246,15 +2275,15 @@ export default function AccountsPayablePage() {
 
       {isTenantCreateOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-0 backdrop-blur-sm md:p-4">
-          <div className="flex max-h-screen w-full max-w-6xl flex-col overflow-hidden rounded-none bg-white shadow-2xl ring-1 ring-slate-200 md:max-h-[94vh] md:rounded-3xl">
-            <div className="border-b border-slate-100 bg-white px-6 py-5 md:px-8">
+          <div className="flex max-h-screen w-full max-w-6xl flex-col overflow-hidden rounded-none bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700 md:max-h-[94vh] md:rounded-3xl">
+            <div className="border-b border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-5 md:px-8">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-2xl font-black text-slate-950">
+                  <h2 className="text-2xl font-black text-slate-950 dark:text-white">
                     Nova pessoa
                   </h2>
 
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                     Preencha os dados pessoais e endereço da pessoa.
                   </p>
                 </div>
@@ -2262,7 +2291,7 @@ export default function AccountsPayablePage() {
                 <button
                   type="button"
                   onClick={closeTenantCreateModal}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-700 transition hover:bg-slate-200"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 text-xl font-black text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
                   aria-label="Fechar cadastro de pessoa"
                 >
                   ×
@@ -2273,7 +2302,7 @@ export default function AccountsPayablePage() {
             <div className="flex-1 space-y-7 overflow-y-auto px-6 py-6 md:px-8">
               <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     Nome completo / Razão social
                   </label>
 
@@ -2287,12 +2316,12 @@ export default function AccountsPayablePage() {
                         ? "Ex: Empresa LTDA"
                         : "Ex: João Silva"
                     }
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     Tipo de pessoa
                   </label>
 
@@ -2301,7 +2330,7 @@ export default function AccountsPayablePage() {
                     onChange={(event) =>
                       updateTenantPersonType(event.target.value as PersonType)
                     }
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                   >
                     <option value="Individual">Pessoa física</option>
                     <option value="Company">Pessoa jurídica</option>
@@ -2309,7 +2338,7 @@ export default function AccountsPayablePage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     {tenantFormData.personType === "Company" ? "CNPJ" : "CPF"}
                   </label>
 
@@ -2335,8 +2364,10 @@ export default function AccountsPayablePage() {
                         ? "Ex: 12.345.678/0001-90"
                         : "Ex: 123.456.789-00"
                     }
-                    maxLength={tenantFormData.personType === "Company" ? 18 : 14}
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    maxLength={
+                      tenantFormData.personType === "Company" ? 18 : 14
+                    }
+                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                   />
 
                   {tenantFormData.personType === "Company" && (
@@ -2352,30 +2383,34 @@ export default function AccountsPayablePage() {
                     </button>
                   )}
 
-                  {cnpjSearchError && tenantFormData.personType === "Company" && (
-                    <p className="mt-2 text-xs font-bold text-red-500">
-                      {cnpjSearchError}
-                    </p>
-                  )}
+                  {cnpjSearchError &&
+                    tenantFormData.personType === "Company" && (
+                      <p className="mt-2 text-xs font-bold text-red-500">
+                        {cnpjSearchError}
+                      </p>
+                    )}
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     Telefone
                   </label>
 
                   <input
                     value={tenantFormData.phone}
                     onChange={(event) =>
-                      updateTenantFormData("phone", formatPhone(event.target.value))
+                      updateTenantFormData(
+                        "phone",
+                        formatPhone(event.target.value),
+                      )
                     }
                     placeholder="Ex: (69) 99999-0000"
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                   />
                 </div>
               </div>
 
-              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-orange-100 bg-orange-50/50 px-5 py-4 transition hover:bg-orange-50">
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-orange-100 dark:border-orange-900/50 bg-orange-50 dark:bg-orange-950/30/50 dark:bg-orange-950/30 px-5 py-4 transition hover:bg-orange-50 dark:bg-orange-950/30 dark:hover:bg-orange-950/40">
                 <input
                   type="checkbox"
                   checked={tenantFormData.isTenant}
@@ -2386,11 +2421,11 @@ export default function AccountsPayablePage() {
                 />
 
                 <span>
-                  <span className="block text-sm font-black text-slate-800">
+                  <span className="block text-sm font-black text-slate-800 dark:text-slate-200">
                     Esta pessoa é inquilino
                   </span>
 
-                  <span className="mt-1 block text-xs font-semibold text-slate-500">
+                  <span className="mt-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                     Quando desmarcado, esta pessoa não poderá ser vinculada a
                     contratos de aluguel.
                   </span>
@@ -2405,7 +2440,7 @@ export default function AccountsPayablePage() {
 
               <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     CEP
                   </label>
 
@@ -2420,14 +2455,14 @@ export default function AccountsPayablePage() {
                       }
                       onBlur={verifyZipCode}
                       placeholder="Ex: 76940-000"
-                      className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                      className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                     />
 
                     <button
                       type="button"
                       onClick={verifyZipCode}
                       disabled={isZipCodeLoading}
-                      className="h-14 rounded-2xl bg-orange-500 px-4 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 disabled:bg-orange-300"
+                      className="h-14 rounded-2xl bg-orange-50 dark:bg-orange-950/300 px-4 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 disabled:bg-orange-300"
                     >
                       {isZipCodeLoading ? "..." : "Buscar"}
                     </button>
@@ -2441,23 +2476,26 @@ export default function AccountsPayablePage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     Estado
                   </label>
 
                   <input
                     value={tenantFormData.state}
                     onChange={(event) =>
-                      updateTenantFormData("state", event.target.value.toUpperCase())
+                      updateTenantFormData(
+                        "state",
+                        event.target.value.toUpperCase(),
+                      )
                     }
                     placeholder="UF"
                     maxLength={2}
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     Cidade
                   </label>
 
@@ -2467,12 +2505,12 @@ export default function AccountsPayablePage() {
                       updateTenantFormData("city", event.target.value)
                     }
                     placeholder="Cidade"
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     Logradouro
                   </label>
 
@@ -2482,12 +2520,12 @@ export default function AccountsPayablePage() {
                       updateTenantFormData("street", event.target.value)
                     }
                     placeholder="Rua, avenida..."
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     Número
                   </label>
 
@@ -2497,12 +2535,12 @@ export default function AccountsPayablePage() {
                       updateTenantFormData("number", event.target.value)
                     }
                     placeholder="Número da casa"
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     Bairro
                   </label>
 
@@ -2512,12 +2550,12 @@ export default function AccountsPayablePage() {
                       updateTenantFormData("district", event.target.value)
                     }
                     placeholder="Bairro"
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     Complemento
                   </label>
 
@@ -2527,17 +2565,17 @@ export default function AccountsPayablePage() {
                       updateTenantFormData("complement", event.target.value)
                     }
                     placeholder="Apartamento, bloco, referência..."
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white px-6 py-5 md:flex-row md:justify-end md:px-8">
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-5 md:flex-row md:justify-end md:px-8">
               <button
                 type="button"
                 onClick={closeTenantCreateModal}
-                className="rounded-2xl bg-slate-100 px-6 py-4 text-sm font-black text-slate-600 transition hover:bg-slate-200"
+                className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-4 text-sm font-black text-slate-600 dark:text-slate-400 dark:text-slate-500 transition hover:bg-slate-200 dark:hover:bg-slate-700"
               >
                 Cancelar
               </button>
@@ -2545,7 +2583,7 @@ export default function AccountsPayablePage() {
               <button
                 type="button"
                 onClick={createTenantFromModal}
-                className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                className="rounded-2xl bg-orange-50 dark:bg-orange-950/300 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600"
               >
                 Cadastrar pessoa
               </button>
@@ -2556,15 +2594,15 @@ export default function AccountsPayablePage() {
 
       {expensePendingPaymentReceipt && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
-            <div className="border-b border-slate-100 bg-gradient-to-r from-orange-50 to-white p-6">
+          <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
+            <div className="border-b border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-gradient-to-r from-orange-50 to-white dark:from-orange-950/30 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-xl font-black text-slate-900">
+                  <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">
                     Pagar conta
                   </h2>
 
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                     Ajuste juros, desconto, valor final e formas de pagamento.
                   </p>
                 </div>
@@ -2572,7 +2610,7 @@ export default function AccountsPayablePage() {
                 <button
                   type="button"
                   onClick={closePayExpenseModal}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 hover:text-slate-900"
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 dark:text-slate-500 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-800 hover:text-slate-900 dark:text-slate-100"
                   aria-label="Fechar pagamento"
                 >
                   ✕
@@ -2581,12 +2619,12 @@ export default function AccountsPayablePage() {
             </div>
 
             <div className="flex-1 space-y-5 overflow-y-auto p-6">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-black text-slate-900">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4">
+                <p className="text-sm font-black text-slate-900 dark:text-slate-100">
                   {expensePendingPaymentReceipt.description}
                 </p>
 
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                   Valor original:{" "}
                   <strong>
                     {formatCurrency(expensePendingPaymentReceipt.amount)}
@@ -2596,7 +2634,7 @@ export default function AccountsPayablePage() {
 
               <div className="grid gap-4 md:grid-cols-3">
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Juros
                   </label>
 
@@ -2613,12 +2651,12 @@ export default function AccountsPayablePage() {
                       );
                     }}
                     placeholder="0,00"
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Desconto
                   </label>
 
@@ -2635,12 +2673,12 @@ export default function AccountsPayablePage() {
                       );
                     }}
                     placeholder="0,00"
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Valor final pago
                   </label>
 
@@ -2657,14 +2695,14 @@ export default function AccountsPayablePage() {
                       updatePaymentEntriesFromFinalAmount(value);
                     }}
                     placeholder="0,00"
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-bold text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                   />
                 </div>
               </div>
 
               <div>
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <label className="block text-sm font-bold text-slate-700">
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Formas de pagamento
                   </label>
 
@@ -2681,7 +2719,7 @@ export default function AccountsPayablePage() {
                   {paymentEntries.map((entry) => (
                     <div
                       key={entry.id}
-                      className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-[1fr_180px_auto]"
+                      className="grid gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-[1fr_180px_auto]"
                     >
                       <select
                         value={entry.method}
@@ -2691,7 +2729,7 @@ export default function AccountsPayablePage() {
                             event.target.value as PaymentMethod,
                           )
                         }
-                        className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                        className="h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                       >
                         {paymentMethodOptions.map((option) => (
                           <option key={option.value} value={option.value}>
@@ -2706,13 +2744,13 @@ export default function AccountsPayablePage() {
                           updatePaymentEntryAmount(entry.id, event.target.value)
                         }
                         placeholder="0,00"
-                        className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                        className="h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                       />
 
                       <button
                         type="button"
                         onClick={() => removePaymentEntry(entry.id)}
-                        className="rounded-xl bg-white px-4 py-2 text-sm font-bold text-red-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-red-50"
+                        className="rounded-xl bg-white dark:bg-slate-900 px-4 py-2 text-sm font-bold text-red-600 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-red-50 dark:bg-red-950/30 dark:hover:bg-red-950/40"
                       >
                         Remover
                       </button>
@@ -2720,13 +2758,13 @@ export default function AccountsPayablePage() {
                   ))}
                 </div>
 
-                <p className="mt-2 text-sm font-bold text-slate-600">
+                <p className="mt-2 text-sm font-bold text-slate-600 dark:text-slate-400 dark:text-slate-500">
                   Total informado: {formatCurrency(getPaymentEntriesTotal())}
                 </p>
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">
+                <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                   Observação do pagamento
                 </label>
 
@@ -2734,22 +2772,22 @@ export default function AccountsPayablePage() {
                   value={paymentNote}
                   onChange={(event) => setPaymentNote(event.target.value)}
                   placeholder="Ex: pago com desconto negociado..."
-                  className="min-h-20 w-full resize-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                  className="min-h-20 w-full resize-none rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
                 />
               </div>
 
               {paymentFormError && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                <div className="rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm font-bold text-red-700">
                   {paymentFormError}
                 </div>
               )}
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white p-5 md:flex-row md:justify-end">
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 md:flex-row md:justify-end">
               <button
                 type="button"
                 onClick={closePayExpenseModal}
-                className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+                className="rounded-xl bg-slate-100 dark:bg-slate-800 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
               >
                 Cancelar
               </button>
@@ -2757,7 +2795,7 @@ export default function AccountsPayablePage() {
               <button
                 type="button"
                 onClick={confirmPayExpense}
-                className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
+                className="rounded-xl bg-orange-50 dark:bg-orange-950/300 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
               >
                 Confirmar pagamento
               </button>
@@ -2808,15 +2846,15 @@ export default function AccountsPayablePage() {
 
       {isReportOpen && (
         <div className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
-            <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white p-6">
+          <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
+            <div className="border-b border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-gradient-to-r from-slate-50 to-white dark:from-slate-800 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-xl font-black text-slate-900">
+                  <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">
                     Relatório de contas a pagar
                   </h2>
 
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                     Visualize o relatório na tela ou gere um PDF com filtros por
                     categoria, status, vencidas, a vencer ou período.
                   </p>
@@ -2825,7 +2863,7 @@ export default function AccountsPayablePage() {
                 <button
                   type="button"
                   onClick={closeReportModal}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 hover:text-slate-900"
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 dark:text-slate-500 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-800 hover:text-slate-900 dark:text-slate-100"
                   aria-label="Fechar relatório"
                 >
                   ✕
@@ -2836,7 +2874,7 @@ export default function AccountsPayablePage() {
             <div className="flex-1 space-y-5 overflow-y-auto p-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Categoria
                   </label>
 
@@ -2846,7 +2884,7 @@ export default function AccountsPayablePage() {
                       setReportFormError("");
                       setReportCategory(event.target.value);
                     }}
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100"
+                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100 dark:ring-slate-800"
                   >
                     <option value="">Todas as categorias</option>
                     {expenseCategoryOptions.map((category) => (
@@ -2858,7 +2896,7 @@ export default function AccountsPayablePage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Status
                   </label>
 
@@ -2868,7 +2906,7 @@ export default function AccountsPayablePage() {
                       setReportFormError("");
                       setReportStatusFilter(event.target.value as StatusFilter);
                     }}
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100"
+                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100 dark:ring-slate-800"
                   >
                     <option value="All">Todos</option>
                     <option value="Pending">Pendente</option>
@@ -2879,18 +2917,20 @@ export default function AccountsPayablePage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">
+                <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                   Filtro de vencimento
                 </label>
 
                 <div className="grid gap-3 md:grid-cols-5">
-                  {([
-                    "All",
-                    "Overdue",
-                    "DueToday",
-                    "Upcoming",
-                    "DateRange",
-                  ] as ReportDueFilter[]).map((filter) => (
+                  {(
+                    [
+                      "All",
+                      "Overdue",
+                      "DueToday",
+                      "Upcoming",
+                      "DateRange",
+                    ] as ReportDueFilter[]
+                  ).map((filter) => (
                     <button
                       key={filter}
                       type="button"
@@ -2901,7 +2941,7 @@ export default function AccountsPayablePage() {
                       className={`rounded-2xl border px-3 py-3 text-sm font-bold transition ${
                         reportDueFilter === filter
                           ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800/80"
                       }`}
                     >
                       {getReportDueFilterLabel(filter)}
@@ -2911,9 +2951,9 @@ export default function AccountsPayablePage() {
               </div>
 
               {reportDueFilter === "DateRange" && (
-                <div className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
+                <div className="grid gap-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4 md:grid-cols-2">
                   <div>
-                    <label className="mb-2 block text-sm font-bold text-slate-700">
+                    <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                       Data inicial
                     </label>
 
@@ -2924,12 +2964,12 @@ export default function AccountsPayablePage() {
                         setReportFormError("");
                         setReportStartDate(event.target.value);
                       }}
-                      className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100"
+                      className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100 dark:ring-slate-800"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-sm font-bold text-slate-700">
+                    <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                       Data final
                     </label>
 
@@ -2940,43 +2980,43 @@ export default function AccountsPayablePage() {
                         setReportFormError("");
                         setReportEndDate(event.target.value);
                       }}
-                      className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100"
+                      className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100 dark:ring-slate-800"
                     />
                   </div>
                 </div>
               )}
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-black text-slate-900">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4">
+                <p className="text-sm font-black text-slate-900 dark:text-slate-100">
                   Prévia do relatório
                 </p>
 
                 <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
-                    <p className="text-xs font-bold uppercase text-slate-500">
+                  <div className="rounded-xl bg-white dark:bg-slate-900 p-4 ring-1 ring-slate-200 dark:ring-slate-700">
+                    <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500">
                       Registros
                     </p>
-                    <p className="mt-1 text-xl font-black text-slate-900">
+                    <p className="mt-1 text-xl font-black text-slate-900 dark:text-slate-100">
                       {getReportFilteredExpenses().length}
                     </p>
                   </div>
 
-                  <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
-                    <p className="text-xs font-bold uppercase text-slate-500">
+                  <div className="rounded-xl bg-white dark:bg-slate-900 p-4 ring-1 ring-slate-200 dark:ring-slate-700">
+                    <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500">
                       Total filtrado
                     </p>
-                    <p className="mt-1 text-xl font-black text-slate-900">
+                    <p className="mt-1 text-xl font-black text-slate-900 dark:text-slate-100">
                       {formatCurrency(
                         getReportTotalAmount(getReportFilteredExpenses()),
                       )}
                     </p>
                   </div>
 
-                  <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
-                    <p className="text-xs font-bold uppercase text-slate-500">
+                  <div className="rounded-xl bg-white dark:bg-slate-900 p-4 ring-1 ring-slate-200 dark:ring-slate-700">
+                    <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500">
                       Tipo
                     </p>
-                    <p className="mt-1 text-sm font-black text-slate-900">
+                    <p className="mt-1 text-sm font-black text-slate-900 dark:text-slate-100">
                       {getReportDueFilterLabel(reportDueFilter)}
                     </p>
                   </div>
@@ -2984,17 +3024,17 @@ export default function AccountsPayablePage() {
               </div>
 
               {reportFormError && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                <div className="rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm font-bold text-red-700">
                   {reportFormError}
                 </div>
               )}
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white p-5 md:flex-row md:justify-end">
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 md:flex-row md:justify-end">
               <button
                 type="button"
                 onClick={closeReportModal}
-                className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+                className="rounded-xl bg-slate-100 dark:bg-slate-800 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
               >
                 Cancelar
               </button>
@@ -3002,7 +3042,7 @@ export default function AccountsPayablePage() {
               <button
                 type="button"
                 onClick={viewAccountsPayableReport}
-                className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100"
+                className="rounded-xl bg-white dark:bg-slate-900 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-800"
               >
                 Visualizar relatório
               </button>
@@ -3063,8 +3103,10 @@ function Card({
   red?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <p className="text-sm font-medium text-slate-500">{title}</p>
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-sm">
+      <p className="text-sm font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">
+        {title}
+      </p>
 
       <h2
         className={`mt-2 text-2xl font-black ${
@@ -3072,7 +3114,7 @@ function Card({
             ? "text-emerald-600"
             : red
               ? "text-red-600"
-              : "text-slate-900"
+              : "text-slate-900 dark:text-slate-100"
         }`}
       >
         {value}
@@ -3104,38 +3146,42 @@ function ConfirmationModal({
 }) {
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
+      <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
         <div className="p-6 text-center">
           <div
             className={`mx-auto flex h-14 w-14 items-center justify-center rounded-2xl text-2xl shadow-lg ${
               danger
-                ? "bg-red-50 text-red-600 shadow-red-500/10"
-                : "bg-orange-50 text-orange-600 shadow-orange-500/10"
+                ? "bg-red-50 dark:bg-red-950/30 text-red-600 shadow-red-500/10"
+                : "bg-orange-50 dark:bg-orange-950/30 text-orange-600 shadow-orange-500/10"
             }`}
           >
             {icon}
           </div>
 
-          <h2 className="mt-4 text-xl font-black text-slate-900">{title}</h2>
+          <h2 className="mt-4 text-xl font-black text-slate-900 dark:text-slate-100">
+            {title}
+          </h2>
 
-          <p className="mt-2 text-sm text-slate-500">{description}</p>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
+            {description}
+          </p>
 
-          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">
-            <p className="text-xs font-bold uppercase text-slate-500">
+          <div className="mt-5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4 text-left">
+            <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500">
               {itemLabel}
             </p>
 
-            <p className="mt-1 text-sm font-black text-slate-900">
+            <p className="mt-1 text-sm font-black text-slate-900 dark:text-slate-100">
               {itemValue}
             </p>
           </div>
         </div>
 
-        <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white p-5 md:flex-row md:justify-end">
+        <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 md:flex-row md:justify-end">
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+            className="rounded-xl bg-slate-100 dark:bg-slate-800 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
           >
             Cancelar
           </button>
@@ -3146,7 +3192,7 @@ function ConfirmationModal({
             className={`rounded-xl px-5 py-3 text-sm font-bold text-white shadow-sm transition ${
               danger
                 ? "bg-red-600 hover:bg-red-700"
-                : "bg-orange-500 hover:bg-orange-600"
+                : "bg-orange-50 dark:bg-orange-950/300 hover:bg-orange-600"
             }`}
           >
             {confirmLabel}

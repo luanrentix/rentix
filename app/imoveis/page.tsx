@@ -155,6 +155,40 @@ export default function PropertiesPage() {
   const [statusFilter, setStatusFilter] = useState<PropertyFilterStatus>("Active");
 
   useEffect(() => {
+    function applyStoredTheme() {
+      const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
+      const legacyTheme = localStorage.getItem("rentix_theme");
+
+      try {
+        const parsedThemeSettings = storedThemeSettings
+          ? (JSON.parse(storedThemeSettings) as { mode?: string })
+          : null;
+
+        const isBlackTheme =
+          parsedThemeSettings?.mode === "black" ||
+          parsedThemeSettings?.mode === "dark" ||
+          legacyTheme === "black" ||
+          legacyTheme === "dark";
+
+        document.documentElement.classList.toggle("dark", isBlackTheme);
+      } catch {
+        document.documentElement.classList.toggle(
+          "dark",
+          legacyTheme === "black" || legacyTheme === "dark"
+        );
+      }
+    }
+
+    applyStoredTheme();
+
+    window.addEventListener("storage", applyStoredTheme);
+
+    return () => {
+      window.removeEventListener("storage", applyStoredTheme);
+    };
+  }, []);
+
+  useEffect(() => {
     const storedProperties = localStorage.getItem(PROPERTIES_STORAGE_KEY);
     const storedMovements = localStorage.getItem(PROPERTY_MOVEMENTS_STORAGE_KEY);
 
@@ -616,6 +650,158 @@ export default function PropertiesPage() {
   return (
     <AppShell>
       <style jsx global>{`
+        .dark .rentix-properties-page {
+          color: #f8fafc;
+        }
+
+        .dark .rentix-properties-page .bg-white {
+          background-color: #0f172a !important;
+        }
+
+        .dark .rentix-properties-page .bg-slate-50,
+        .dark .rentix-properties-page .bg-slate-100 {
+          background-color: #111827 !important;
+        }
+
+        .dark .rentix-properties-page .bg-orange-50,
+        .dark .rentix-properties-page .bg-orange-100,
+        .dark .rentix-properties-page .bg-orange-50\/50,
+        .dark .rentix-properties-page .bg-orange-50\/60,
+        .dark .rentix-properties-page .bg-orange-50\/40 {
+          background-color: rgba(249, 115, 22, 0.13) !important;
+        }
+
+        .dark .rentix-properties-page .bg-red-50,
+        .dark .rentix-properties-page .bg-red-100 {
+          background-color: rgba(239, 68, 68, 0.12) !important;
+        }
+
+        .dark .rentix-properties-page .bg-emerald-50,
+        .dark .rentix-properties-page .bg-emerald-50\/50,
+        .dark .rentix-properties-page .bg-emerald-100 {
+          background-color: rgba(16, 185, 129, 0.12) !important;
+        }
+
+        .dark .rentix-properties-page .bg-amber-100 {
+          background-color: rgba(245, 158, 11, 0.14) !important;
+        }
+
+        .dark .rentix-properties-page .bg-blue-100 {
+          background-color: rgba(59, 130, 246, 0.14) !important;
+        }
+
+        .dark .rentix-properties-page .bg-zinc-200 {
+          background-color: #334155 !important;
+        }
+
+        .dark .rentix-properties-page .text-slate-950,
+        .dark .rentix-properties-page .text-slate-900,
+        .dark .rentix-properties-page .text-slate-800,
+        .dark .rentix-properties-page .text-slate-700 {
+          color: #f8fafc !important;
+        }
+
+        .dark .rentix-properties-page .text-slate-600,
+        .dark .rentix-properties-page .text-slate-500,
+        .dark .rentix-properties-page .text-slate-400 {
+          color: #cbd5e1 !important;
+        }
+
+        .dark .rentix-properties-page .text-orange-600,
+        .dark .rentix-properties-page .text-orange-700,
+        .dark .rentix-properties-page .text-orange-800 {
+          color: #fb923c !important;
+        }
+
+        .dark .rentix-properties-page .text-red-600,
+        .dark .rentix-properties-page .text-red-700 {
+          color: #fca5a5 !important;
+        }
+
+        .dark .rentix-properties-page .text-emerald-700,
+        .dark .rentix-properties-page .text-emerald-800 {
+          color: #6ee7b7 !important;
+        }
+
+        .dark .rentix-properties-page .text-amber-700 {
+          color: #fcd34d !important;
+        }
+
+        .dark .rentix-properties-page .border-orange-100,
+        .dark .rentix-properties-page .border-orange-200,
+        .dark .rentix-properties-page .border-red-100,
+        .dark .rentix-properties-page .border-red-200,
+        .dark .rentix-properties-page .border-emerald-200,
+        .dark .rentix-properties-page .border-slate-100,
+        .dark .rentix-properties-page .border-slate-200,
+        .dark .rentix-properties-page .border-slate-300 {
+          border-color: #334155 !important;
+        }
+
+        .dark .rentix-properties-page input,
+        .dark .rentix-properties-page select,
+        .dark .rentix-properties-page textarea {
+          background-color: #020617 !important;
+          border-color: #334155 !important;
+          color: #f8fafc !important;
+        }
+
+        .dark .rentix-properties-page input::placeholder,
+        .dark .rentix-properties-page textarea::placeholder {
+          color: #64748b !important;
+        }
+
+        .dark .rentix-properties-page table,
+        .dark .rentix-properties-page tbody,
+        .dark .rentix-properties-page tr {
+          background-color: #0f172a !important;
+        }
+
+        .dark .rentix-properties-page thead,
+        .dark .rentix-properties-page .bg-orange-50 thead {
+          background-color: rgba(249, 115, 22, 0.15) !important;
+        }
+
+        .dark .rentix-properties-page tbody tr:hover {
+          background-color: #1e293b !important;
+        }
+
+        .dark .rentix-properties-page .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+          border-color: #1e293b !important;
+        }
+
+        .dark .rentix-properties-page .shadow-sm,
+        .dark .rentix-properties-page .shadow-md,
+        .dark .rentix-properties-page .shadow-2xl {
+          box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35) !important;
+        }
+
+        .dark .rentix-properties-page .disabled\:cursor-not-allowed:disabled {
+          opacity: 0.9;
+        }
+
+        .dark .rentix-properties-page #property-history-report,
+        .dark .rentix-properties-page #property-history-report .report-page {
+          background: #ffffff !important;
+          color: #111827 !important;
+        }
+
+        .dark .rentix-properties-page #property-history-report .report-section,
+        .dark .rentix-properties-page #property-history-report .report-field,
+        .dark .rentix-properties-page #property-history-report .report-kpi {
+          background: #ffffff !important;
+        }
+
+        .dark .rentix-properties-page #property-history-report .report-title,
+        .dark .rentix-properties-page #property-history-report .report-value {
+          color: #0f172a !important;
+        }
+
+        .dark .rentix-properties-page #property-history-report .report-small,
+        .dark .rentix-properties-page #property-history-report .report-label {
+          color: #475569 !important;
+        }
+
         #property-history-report .report-page {
           background: #ffffff;
         }
@@ -972,7 +1158,7 @@ export default function PropertiesPage() {
         }
       `}</style>
 
-      <div className="space-y-8 print:space-y-0">
+      <div className="rentix-properties-page space-y-8 print:space-y-0">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h1 className="text-4xl font-black tracking-tight text-slate-950">

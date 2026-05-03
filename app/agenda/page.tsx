@@ -111,9 +111,12 @@ const statusLabels: Record<ScheduleStatus, string> = {
 };
 
 const statusStyles: Record<ScheduleStatus, string> = {
-  scheduled: "bg-orange-50 text-orange-700 ring-orange-100",
-  completed: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-  canceled: "bg-red-50 text-red-700 ring-red-100",
+  scheduled:
+    "bg-orange-50 text-orange-700 ring-orange-100 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-500/30",
+  completed:
+    "bg-emerald-50 text-emerald-700 ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30",
+  canceled:
+    "bg-red-50 text-red-700 ring-red-100 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30",
 };
 
 function formatDateToInputValue(date: Date) {
@@ -160,14 +163,14 @@ function getMonthDays(currentDate: Date) {
 export default function AgendaPage() {
   const [selectedDate, setSelectedDate] = useState("2026-04-27");
   const [currentCalendarDate, setCurrentCalendarDate] = useState(
-    createDateFromInputValue("2026-04-27")
+    createDateFromInputValue("2026-04-27"),
   );
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
 
   const calendarDays = useMemo(
     () => getMonthDays(currentCalendarDate),
-    [currentCalendarDate]
+    [currentCalendarDate],
   );
 
   const selectedDateItems = useMemo(() => {
@@ -185,28 +188,38 @@ export default function AgendaPage() {
           item.type.toLowerCase().includes(normalizedSearchTerm)
         );
       })
-      .sort((firstItem, secondItem) => firstItem.time.localeCompare(secondItem.time));
+      .sort((firstItem, secondItem) =>
+        firstItem.time.localeCompare(secondItem.time),
+      );
   }, [selectedDate, searchTerm]);
 
   const scheduledCount = selectedDateItems.filter(
-    (item) => item.status === "scheduled"
+    (item) => item.status === "scheduled",
   ).length;
   const completedCount = selectedDateItems.filter(
-    (item) => item.status === "completed"
+    (item) => item.status === "completed",
   ).length;
   const canceledCount = selectedDateItems.filter(
-    (item) => item.status === "canceled"
+    (item) => item.status === "canceled",
   ).length;
 
   function handlePreviousMonth() {
     setCurrentCalendarDate(
-      new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() - 1, 1)
+      new Date(
+        currentCalendarDate.getFullYear(),
+        currentCalendarDate.getMonth() - 1,
+        1,
+      ),
     );
   }
 
   function handleNextMonth() {
     setCurrentCalendarDate(
-      new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() + 1, 1)
+      new Date(
+        currentCalendarDate.getFullYear(),
+        currentCalendarDate.getMonth() + 1,
+        1,
+      ),
     );
   }
 
@@ -224,13 +237,15 @@ export default function AgendaPage() {
     const newDate = createDateFromInputValue(value);
 
     setSelectedDate(value);
-    setCurrentCalendarDate(new Date(newDate.getFullYear(), newDate.getMonth(), 1));
+    setCurrentCalendarDate(
+      new Date(newDate.getFullYear(), newDate.getMonth(), 1),
+    );
   }
 
   return (
     <AppShell>
       <div className="relative z-0 space-y-6">
-        <section className="relative z-0 overflow-hidden rounded-[2rem] bg-gradient-to-br from-orange-500 via-orange-500 to-amber-500 shadow-xl shadow-orange-100">
+        <section className="relative z-0 overflow-hidden rounded-[2rem] bg-gradient-to-br from-orange-500 via-orange-500 to-amber-500 shadow-xl shadow-orange-100 dark:shadow-orange-950/30">
           <div className="relative z-0 p-6 text-white lg:p-8">
             <div className="pointer-events-none absolute -right-12 -top-12 h-44 w-44 rounded-full bg-white/10" />
             <div className="pointer-events-none absolute bottom-4 right-20 h-24 w-24 rounded-full bg-white/10" />
@@ -243,7 +258,8 @@ export default function AgendaPage() {
                 <h1 className="mt-3 text-3xl font-black lg:text-4xl">Agenda</h1>
                 <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-white/90 lg:text-base">
                   Gerencie vistorias, contratos, cobranças, entregas de chaves e
-                  compromissos operacionais em uma agenda visual integrada ao Rentix.
+                  compromissos operacionais em uma agenda visual integrada ao
+                  Rentix.
                 </p>
               </div>
 
@@ -268,29 +284,37 @@ export default function AgendaPage() {
         </section>
 
         <section className="relative z-0 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-3xl border border-orange-100 bg-white p-5 shadow-sm">
-            <p className="text-sm font-bold text-slate-500">Total do dia</p>
-            <h2 className="mt-2 text-3xl font-black text-slate-950">
+          <div className="rounded-3xl border border-orange-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:shadow-slate-950/40">
+            <p className="text-sm font-bold text-slate-500 dark:text-slate-400">
+              Total do dia
+            </p>
+            <h2 className="mt-2 text-3xl font-black text-slate-950 dark:text-white">
               {selectedDateItems.length}
             </h2>
           </div>
 
-          <div className="rounded-3xl border border-orange-100 bg-white p-5 shadow-sm">
-            <p className="text-sm font-bold text-slate-500">Agendados</p>
+          <div className="rounded-3xl border border-orange-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:shadow-slate-950/40">
+            <p className="text-sm font-bold text-slate-500 dark:text-slate-400">
+              Agendados
+            </p>
             <h2 className="mt-2 text-3xl font-black text-orange-600">
               {scheduledCount}
             </h2>
           </div>
 
-          <div className="rounded-3xl border border-orange-100 bg-white p-5 shadow-sm">
-            <p className="text-sm font-bold text-slate-500">Concluídos</p>
+          <div className="rounded-3xl border border-orange-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:shadow-slate-950/40">
+            <p className="text-sm font-bold text-slate-500 dark:text-slate-400">
+              Concluídos
+            </p>
             <h2 className="mt-2 text-3xl font-black text-emerald-600">
               {completedCount}
             </h2>
           </div>
 
-          <div className="rounded-3xl border border-orange-100 bg-white p-5 shadow-sm">
-            <p className="text-sm font-bold text-slate-500">Cancelados</p>
+          <div className="rounded-3xl border border-orange-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:shadow-slate-950/40">
+            <p className="text-sm font-bold text-slate-500 dark:text-slate-400">
+              Cancelados
+            </p>
             <h2 className="mt-2 text-3xl font-black text-red-600">
               {canceledCount}
             </h2>
@@ -298,14 +322,14 @@ export default function AgendaPage() {
         </section>
 
         <section className="relative z-0 grid gap-6 xl:grid-cols-[1.45fr_0.85fr]">
-          <div className="rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm lg:p-6">
-            <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm lg:p-6 dark:border-slate-700 dark:bg-slate-900 dark:shadow-slate-950/40">
+            <div className="flex flex-col gap-4 border-b border-slate-100 dark:border-slate-700 pb-5 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h2 className="text-xl font-black text-slate-950">
+                <h2 className="text-xl font-black text-slate-950 dark:text-white">
                   {monthNames[currentCalendarDate.getMonth()]}{" "}
                   {currentCalendarDate.getFullYear()}
                 </h2>
-                <p className="mt-1 text-sm font-semibold text-slate-500">
+                <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
                   Clique em uma data para visualizar os compromissos.
                 </p>
               </div>
@@ -314,7 +338,7 @@ export default function AgendaPage() {
                 <button
                   type="button"
                   onClick={handlePreviousMonth}
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-lg font-black text-slate-700 transition hover:bg-orange-50 hover:text-orange-600"
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-lg font-black text-slate-700 dark:text-slate-200 transition hover:bg-orange-50 hover:text-orange-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-orange-500/10 dark:hover:text-orange-400"
                 >
                   ‹
                 </button>
@@ -322,26 +346,32 @@ export default function AgendaPage() {
                 <button
                   type="button"
                   onClick={handleNextMonth}
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-lg font-black text-slate-700 transition hover:bg-orange-50 hover:text-orange-600"
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-lg font-black text-slate-700 dark:text-slate-200 transition hover:bg-orange-50 hover:text-orange-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-orange-500/10 dark:hover:text-orange-400"
                 >
                   ›
                 </button>
 
-                <div className="flex rounded-2xl bg-slate-100 p-1">
-                  {(["month", "week", "day"] as CalendarViewMode[]).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setViewMode(mode)}
-                      className={`rounded-xl px-4 py-2 text-xs font-black transition ${
-                        viewMode === mode
-                          ? "bg-white text-orange-600 shadow-sm"
-                          : "text-slate-500 hover:text-slate-900"
-                      }`}
-                    >
-                      {mode === "month" ? "Mês" : mode === "week" ? "Semana" : "Dia"}
-                    </button>
-                  ))}
+                <div className="flex rounded-2xl bg-slate-100 p-1 dark:bg-slate-800">
+                  {(["month", "week", "day"] as CalendarViewMode[]).map(
+                    (mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setViewMode(mode)}
+                        className={`rounded-xl px-4 py-2 text-xs font-black transition ${
+                          viewMode === mode
+                            ? "bg-white text-orange-600 dark:bg-slate-900 dark:text-orange-400 shadow-sm dark:bg-slate-950 dark:text-orange-400"
+                            : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:text-white dark:text-slate-400 dark:hover:text-white"
+                        }`}
+                      >
+                        {mode === "month"
+                          ? "Mês"
+                          : mode === "week"
+                            ? "Semana"
+                            : "Dia"}
+                      </button>
+                    ),
+                  )}
                 </div>
               </div>
             </div>
@@ -350,7 +380,7 @@ export default function AgendaPage() {
               {weekDayLabels.map((dayLabel) => (
                 <div
                   key={dayLabel}
-                  className="rounded-2xl bg-orange-50 px-2 py-3 text-center text-xs font-black uppercase tracking-wide text-orange-700"
+                  className="rounded-2xl bg-orange-50 px-2 py-3 text-center text-xs font-black uppercase tracking-wide text-orange-700 dark:bg-orange-500/10 dark:text-orange-300"
                 >
                   {dayLabel}
                 </div>
@@ -358,11 +388,14 @@ export default function AgendaPage() {
 
               {calendarDays.map((date) => {
                 const inputDateValue = formatDateToInputValue(date);
-                const dateItems = scheduleItems.filter((item) => item.date === inputDateValue);
+                const dateItems = scheduleItems.filter(
+                  (item) => item.date === inputDateValue,
+                );
                 const isCurrentMonth =
                   date.getMonth() === currentCalendarDate.getMonth();
                 const isSelectedDate = inputDateValue === selectedDate;
-                const isToday = inputDateValue === formatDateToInputValue(new Date());
+                const isToday =
+                  inputDateValue === formatDateToInputValue(new Date());
 
                 return (
                   <button
@@ -371,8 +404,8 @@ export default function AgendaPage() {
                     onClick={() => handleSelectDate(date)}
                     className={`min-h-28 rounded-3xl border p-3 text-left transition ${
                       isSelectedDate
-                        ? "border-orange-400 bg-orange-50 shadow-md shadow-orange-100"
-                        : "border-slate-100 bg-white hover:border-orange-200 hover:bg-orange-50/40"
+                        ? "border-orange-400 bg-orange-50 shadow-md shadow-orange-100 dark:bg-orange-500/10 dark:shadow-orange-950/20"
+                        : "border-slate-100 bg-white hover:border-orange-200 hover:bg-orange-50/40 dark:border-slate-700 dark:bg-slate-950 dark:hover:border-orange-500/40 dark:hover:bg-orange-500/10"
                     } ${!isCurrentMonth ? "opacity-40" : ""}`}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -381,8 +414,8 @@ export default function AgendaPage() {
                           isToday
                             ? "bg-orange-500 text-white"
                             : isSelectedDate
-                              ? "bg-white text-orange-600"
-                              : "bg-slate-100 text-slate-700"
+                              ? "bg-white text-orange-600 dark:bg-slate-900 dark:text-orange-400"
+                              : "bg-slate-100 text-slate-700 dark:text-slate-200 dark:bg-slate-800 dark:text-slate-200"
                         }`}
                       >
                         {date.getDate()}
@@ -399,7 +432,7 @@ export default function AgendaPage() {
                       {dateItems.slice(0, 2).map((item) => (
                         <div
                           key={item.id}
-                          className="truncate rounded-xl bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-700"
+                          className="truncate rounded-xl bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-700 dark:text-slate-200 dark:bg-slate-800 dark:text-slate-300"
                         >
                           {item.time} • {item.title}
                         </div>
@@ -417,23 +450,30 @@ export default function AgendaPage() {
             </div>
           </div>
 
-          <aside className="rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm lg:p-6">
-            <div className="border-b border-slate-100 pb-5">
-              <p className="text-sm font-bold text-orange-600">Data selecionada</p>
-              <h2 className="mt-1 text-2xl font-black text-slate-950">
-                {createDateFromInputValue(selectedDate).toLocaleDateString("pt-BR", {
-                  day: "2-digit",
-                  month: "long",
-                  year: "numeric",
-                })}
+          <aside className="rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm lg:p-6 dark:border-slate-700 dark:bg-slate-900 dark:shadow-slate-950/40">
+            <div className="border-b border-slate-100 dark:border-slate-700 pb-5">
+              <p className="text-sm font-bold text-orange-600">
+                Data selecionada
+              </p>
+              <h2 className="mt-1 text-2xl font-black text-slate-950 dark:text-white">
+                {createDateFromInputValue(selectedDate).toLocaleDateString(
+                  "pt-BR",
+                  {
+                    day: "2-digit",
+                    month: "long",
+                    year: "numeric",
+                  },
+                )}
               </h2>
 
               <div className="mt-4 space-y-3">
                 <input
                   type="date"
                   value={selectedDate}
-                  onChange={(event) => handleDateInputChange(event.target.value)}
-                  className="w-full rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                  onChange={(event) =>
+                    handleDateInputChange(event.target.value)
+                  }
+                  className="w-full rounded-2xl border border-orange-100 bg-white px-4 py-3 dark:bg-slate-950 text-sm font-bold text-slate-700 dark:text-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 dark:focus:ring-orange-500/20"
                 />
 
                 <input
@@ -441,7 +481,7 @@ export default function AgendaPage() {
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                   placeholder="Buscar cliente, imóvel ou tipo..."
-                  className="w-full rounded-2xl border border-orange-100 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                  className="w-full rounded-2xl border border-orange-100 bg-white px-4 py-3 dark:bg-slate-950 text-sm font-bold text-slate-700 dark:text-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-orange-400 focus:ring-4 focus:ring-orange-100 dark:focus:ring-orange-500/20"
                 />
               </div>
             </div>
@@ -451,14 +491,14 @@ export default function AgendaPage() {
                 selectedDateItems.map((item) => (
                   <article
                     key={item.id}
-                    className="rounded-3xl border border-slate-100 bg-slate-50 p-4 transition hover:border-orange-100 hover:bg-orange-50/40"
+                    className="rounded-3xl border border-slate-100 bg-slate-50 p-4 transition hover:border-orange-100 hover:bg-orange-50/40 dark:border-slate-700 dark:bg-slate-950 dark:hover:border-orange-500/40 dark:hover:bg-orange-500/10"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-black text-orange-600">
                           {item.time}
                         </p>
-                        <h3 className="mt-1 text-base font-black text-slate-950">
+                        <h3 className="mt-1 text-base font-black text-slate-950 dark:text-white">
                           {item.title}
                         </h3>
                       </div>
@@ -470,17 +510,17 @@ export default function AgendaPage() {
                       </span>
                     </div>
 
-                    <div className="mt-3 space-y-1 text-sm font-semibold text-slate-600">
+                    <div className="mt-3 space-y-1 text-sm font-semibold text-slate-600 dark:text-slate-300">
                       <p>{item.customerName}</p>
                       <p>{item.propertyName}</p>
                     </div>
 
-                    <p className="mt-3 text-sm font-medium leading-6 text-slate-500">
+                    <p className="mt-3 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">
                       {item.notes}
                     </p>
 
                     <div className="mt-4 flex items-center justify-between gap-2">
-                      <span className="rounded-2xl bg-white px-3 py-2 text-xs font-black text-slate-600 shadow-sm">
+                      <span className="rounded-2xl bg-white px-3 py-2 text-xs font-black text-slate-600 dark:text-slate-300 shadow-sm dark:bg-slate-800 dark:text-slate-300">
                         {item.type}
                       </span>
 
@@ -494,15 +534,15 @@ export default function AgendaPage() {
                   </article>
                 ))
               ) : (
-                <div className="rounded-3xl border border-dashed border-orange-200 bg-orange-50/60 p-8 text-center">
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">
+                <div className="rounded-3xl border border-dashed border-orange-200 bg-orange-50/60 p-8 text-center dark:border-orange-500/40 dark:bg-orange-500/10">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm dark:bg-slate-900">
                     📅
                   </div>
 
-                  <p className="mt-4 text-lg font-black text-slate-800">
+                  <p className="mt-4 text-lg font-black text-slate-800 dark:text-slate-100">
                     Nenhum compromisso
                   </p>
-                  <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
+                  <p className="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400">
                     Não existe agendamento para esta data ou filtro informado.
                   </p>
                 </div>

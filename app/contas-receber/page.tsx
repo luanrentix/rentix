@@ -593,14 +593,14 @@ export default function AccountsReceivablePage() {
 
   function getStatusClassName(status: Charge["status"]) {
     if (status === "Paid") {
-      return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200";
+      return "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 ring-1 ring-emerald-200 dark:ring-emerald-900/60";
     }
 
     if (status === "Overdue") {
-      return "bg-red-50 text-red-700 ring-1 ring-red-200";
+      return "bg-red-50 dark:bg-red-950/30 text-red-700 ring-1 ring-red-200";
     }
 
-    return "bg-amber-50 text-amber-700 ring-1 ring-amber-200";
+    return "bg-amber-50 dark:bg-amber-950/30 text-amber-700 ring-1 ring-amber-200";
   }
 
   function getStatusFilterLabel(status: StatusFilter) {
@@ -2175,11 +2175,11 @@ export default function AccountsReceivablePage() {
         <div>
           <p className="text-sm font-semibold text-orange-600">Financeiro</p>
 
-          <h1 className="mt-1 text-3xl font-black text-slate-900">
+          <h1 className="mt-1 text-3xl font-black text-slate-900 dark:text-slate-100">
             Contas a Receber
           </h1>
 
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
             Acompanhe cobranças geradas automaticamente pelos contratos ativos.
           </p>
         </div>
@@ -2202,14 +2202,14 @@ export default function AccountsReceivablePage() {
           <Card title="Cobranças" value={filteredCharges.length} />
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-sm">
           <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
             <div>
-              <h2 className="text-lg font-black text-slate-900">
+              <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">
                 Filtros Financeiros
               </h2>
 
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                 Refine a visualização sem alterar os dados originais.
               </p>
             </div>
@@ -2222,8 +2222,8 @@ export default function AccountsReceivablePage() {
                     onClick={() => setStatusFilter(status)}
                     className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
                       statusFilter === status
-                        ? "bg-orange-500 text-white shadow-sm"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        ? "bg-orange-50 dark:bg-orange-950/300 text-white shadow-sm"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
                     }`}
                   >
                     {getStatusFilterLabel(status)}
@@ -2233,7 +2233,7 @@ export default function AccountsReceivablePage() {
 
               <button
                 onClick={clearAllFilters}
-                className="rounded-xl bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100"
+                className="rounded-xl bg-white dark:bg-slate-900 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:hover:bg-slate-700 dark:bg-slate-800"
               >
                 Limpar filtros
               </button>
@@ -2242,13 +2242,13 @@ export default function AccountsReceivablePage() {
         </div>
 
         {(selectedTenant || statusFilter !== "All") && (
-          <div className="flex flex-col justify-between gap-3 rounded-2xl border border-orange-200 bg-orange-50 p-4 md:flex-row md:items-center">
+          <div className="flex flex-col justify-between gap-3 rounded-2xl border border-orange-200 dark:border-orange-900/60 bg-orange-50 dark:bg-orange-950/30 p-4 md:flex-row md:items-center">
             <div>
               <p className="text-sm font-bold text-orange-700">
                 Filtro aplicado
               </p>
 
-              <p className="text-sm text-slate-700">
+              <p className="text-sm text-slate-700 dark:text-slate-300">
                 {selectedTenant ? (
                   <>
                     Inquilino: <strong>{selectedTenant.name}</strong>
@@ -2262,22 +2262,22 @@ export default function AccountsReceivablePage() {
 
             <button
               onClick={clearAllFilters}
-              className="rounded-xl bg-white px-4 py-2 text-sm font-bold text-orange-600 shadow-sm ring-1 ring-orange-200 transition hover:bg-orange-100"
+              className="rounded-xl bg-white dark:bg-slate-900 px-4 py-2 text-sm font-bold text-orange-600 shadow-sm ring-1 ring-orange-200 dark:ring-orange-900/60 transition hover:bg-orange-100 dark:hover:bg-orange-900/50 dark:bg-orange-900/40"
             >
               Remover filtros
             </button>
           </div>
         )}
 
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 p-5">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
+          <div className="border-b border-slate-200 dark:border-slate-700 p-5">
             <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
               <div>
-                <h2 className="text-lg font-black text-slate-900">
+                <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">
                   Lista de Contas a Receber
                 </h2>
 
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                   Visualize os recebimentos pendentes, pagos e vencidos.
                 </p>
               </div>
@@ -2299,7 +2299,7 @@ export default function AccountsReceivablePage() {
 
                 <button
                   onClick={() => setIsSearchOpen(true)}
-                  className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
+                  className="rounded-xl bg-orange-50 dark:bg-orange-950/300 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
                 >
                   Buscar inquilino
                 </button>
@@ -2309,29 +2309,29 @@ export default function AccountsReceivablePage() {
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px]">
-              <thead className="bg-orange-50">
+              <thead className="bg-orange-50 dark:bg-orange-950/30">
                 <tr>
-                  <th className="px-5 py-4 text-left text-sm font-black text-slate-900">
+                  <th className="px-5 py-4 text-left text-sm font-black text-slate-900 dark:text-slate-100">
                     Imóvel
                   </th>
 
-                  <th className="px-5 py-4 text-left text-sm font-black text-slate-900">
+                  <th className="px-5 py-4 text-left text-sm font-black text-slate-900 dark:text-slate-100">
                     Inquilino
                   </th>
 
-                  <th className="px-5 py-4 text-center text-sm font-black text-slate-900">
+                  <th className="px-5 py-4 text-center text-sm font-black text-slate-900 dark:text-slate-100">
                     Vencimento
                   </th>
 
-                  <th className="px-5 py-4 text-center text-sm font-black text-slate-900">
+                  <th className="px-5 py-4 text-center text-sm font-black text-slate-900 dark:text-slate-100">
                     Valor
                   </th>
 
-                  <th className="px-5 py-4 text-center text-sm font-black text-slate-900">
+                  <th className="px-5 py-4 text-center text-sm font-black text-slate-900 dark:text-slate-100">
                     Status
                   </th>
 
-                  <th className="px-5 py-4 text-center text-sm font-black text-slate-900">
+                  <th className="px-5 py-4 text-center text-sm font-black text-slate-900 dark:text-slate-100">
                     Ação
                   </th>
                 </tr>
@@ -2342,7 +2342,7 @@ export default function AccountsReceivablePage() {
                   <tr>
                     <td
                       colSpan={6}
-                      className="px-5 py-10 text-center text-sm text-slate-500"
+                      className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500"
                     >
                       Nenhuma conta a receber encontrada.
                     </td>
@@ -2351,28 +2351,28 @@ export default function AccountsReceivablePage() {
                   filteredCharges.map((charge) => (
                     <tr
                       key={charge.id}
-                      className="border-t border-slate-100 transition hover:bg-slate-50"
+                      className="border-t border-slate-100 dark:border-slate-700 transition hover:bg-slate-50 dark:hover:bg-slate-800 dark:bg-slate-800"
                     >
-                      <td className="px-5 py-4 text-sm font-medium text-slate-900">
+                      <td className="px-5 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
                         {charge.property}
                       </td>
 
-                      <td className="px-5 py-4 text-sm text-slate-600">
+                      <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500">
                         {charge.tenant}
                         {charge.installmentNumber &&
                           charge.installmentTotal && (
-                            <span className="ml-2 rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">
+                            <span className="ml-2 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-1 text-xs font-bold text-slate-600 dark:text-slate-400 dark:text-slate-500">
                               {charge.installmentNumber}/
                               {charge.installmentTotal}
                             </span>
                           )}
                       </td>
 
-                      <td className="px-5 py-4 text-center text-sm text-slate-600">
+                      <td className="px-5 py-4 text-center text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500">
                         {formatDate(charge.dueDate)}
                       </td>
 
-                      <td className="px-5 py-4 text-center text-sm font-bold text-slate-900">
+                      <td className="px-5 py-4 text-center text-sm font-bold text-slate-900 dark:text-slate-100">
                         {formatCurrency(charge.amount)}
                       </td>
 
@@ -2391,21 +2391,21 @@ export default function AccountsReceivablePage() {
                           <div className="flex flex-wrap justify-center gap-2">
                             <button
                               onClick={() => openEditCharge(charge)}
-                              className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-200"
+                              className="rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 shadow-sm transition hover:bg-slate-200 dark:hover:bg-slate-700"
                             >
                               Editar
                             </button>
 
                             <button
                               onClick={() => reprintPaymentCarnet(charge)}
-                              className="rounded-xl bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 shadow-sm ring-1 ring-emerald-100 transition hover:bg-emerald-100"
+                              className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 px-4 py-2 text-sm font-bold text-emerald-700 shadow-sm ring-1 ring-emerald-100 dark:ring-emerald-900/50 transition hover:bg-emerald-100 dark:hover:bg-emerald-900/50 dark:bg-emerald-900/40"
                             >
                               Carnê
                             </button>
 
                             <button
                               onClick={() => openReceivePaymentModal(charge)}
-                              className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
+                              className="rounded-xl bg-orange-50 dark:bg-orange-950/300 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
                             >
                               Receber
                             </button>
@@ -2414,14 +2414,14 @@ export default function AccountsReceivablePage() {
                           <div className="flex flex-wrap justify-center gap-2">
                             <button
                               onClick={() => openEditCharge(charge)}
-                              className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-200"
+                              className="rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 shadow-sm transition hover:bg-slate-200 dark:hover:bg-slate-700"
                             >
                               Editar
                             </button>
 
                             <button
                               onClick={() => reprintPaymentCarnet(charge)}
-                              className="rounded-xl bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 shadow-sm ring-1 ring-emerald-100 transition hover:bg-emerald-100"
+                              className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 px-4 py-2 text-sm font-bold text-emerald-700 shadow-sm ring-1 ring-emerald-100 dark:ring-emerald-900/50 transition hover:bg-emerald-100 dark:hover:bg-emerald-900/50 dark:bg-emerald-900/40"
                             >
                               Carnê
                             </button>
@@ -2443,8 +2443,8 @@ export default function AccountsReceivablePage() {
 
       {isReportOpen && (
         <div className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
-            <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white p-6">
+          <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
+            <div className="border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-slate-50 to-white dark:from-slate-800 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-xl shadow-lg shadow-slate-900/20">
@@ -2452,11 +2452,11 @@ export default function AccountsReceivablePage() {
                   </div>
 
                   <div>
-                    <h2 className="text-xl font-black text-slate-900">
+                    <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">
                       Relatório de contas a receber
                     </h2>
 
-                    <p className="mt-1 text-sm text-slate-500">
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                       Visualize o relatório na tela ou gere um PDF com filtros por pessoa,
                       status, vencidas, a vencer ou período.
                     </p>
@@ -2466,7 +2466,7 @@ export default function AccountsReceivablePage() {
                 <button
                   type="button"
                   onClick={closeReportModal}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 hover:text-slate-900"
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 dark:text-slate-500 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:hover:bg-slate-700 dark:bg-slate-800 hover:text-slate-900 dark:text-slate-100"
                   aria-label="Fechar relatório"
                 >
                   ✕
@@ -2477,7 +2477,7 @@ export default function AccountsReceivablePage() {
             <div className="flex-1 space-y-5 overflow-y-auto p-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Pessoa/Inquilino
                   </label>
 
@@ -2487,7 +2487,7 @@ export default function AccountsReceivablePage() {
                       setReportFormError("");
                       setReportTenantId(event.target.value);
                     }}
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100"
+                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100 dark:ring-slate-700"
                   >
                     <option value="">Todas as pessoas</option>
                     {tenants.map((tenant) => (
@@ -2499,7 +2499,7 @@ export default function AccountsReceivablePage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Status
                   </label>
 
@@ -2509,7 +2509,7 @@ export default function AccountsReceivablePage() {
                       setReportFormError("");
                       setReportStatusFilter(event.target.value as StatusFilter);
                     }}
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100"
+                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100 dark:ring-slate-700"
                   >
                     <option value="All">Todos</option>
                     <option value="Pending">Pendente</option>
@@ -2520,7 +2520,7 @@ export default function AccountsReceivablePage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">
+                <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                   Filtro de vencimento
                 </label>
 
@@ -2542,7 +2542,7 @@ export default function AccountsReceivablePage() {
                       className={`rounded-2xl border px-3 py-3 text-sm font-bold transition ${
                         reportDueFilter === filter
                           ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 dark:bg-slate-800"
                       }`}
                     >
                       {getReportDueFilterLabel(filter)}
@@ -2552,9 +2552,9 @@ export default function AccountsReceivablePage() {
               </div>
 
               {reportDueFilter === "DateRange" && (
-                <div className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
+                <div className="grid gap-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4 md:grid-cols-2">
                   <div>
-                    <label className="mb-2 block text-sm font-bold text-slate-700">
+                    <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                       Data inicial
                     </label>
 
@@ -2565,12 +2565,12 @@ export default function AccountsReceivablePage() {
                         setReportFormError("");
                         setReportStartDate(event.target.value);
                       }}
-                      className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100"
+                      className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100 dark:ring-slate-700"
                     />
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-sm font-bold text-slate-700">
+                    <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                       Data final
                     </label>
 
@@ -2581,41 +2581,41 @@ export default function AccountsReceivablePage() {
                         setReportFormError("");
                         setReportEndDate(event.target.value);
                       }}
-                      className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100"
+                      className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100 dark:ring-slate-700"
                     />
                   </div>
                 </div>
               )}
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-black text-slate-900">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4">
+                <p className="text-sm font-black text-slate-900 dark:text-slate-100">
                   Prévia do relatório
                 </p>
 
                 <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
-                    <p className="text-xs font-bold uppercase text-slate-500">
+                  <div className="rounded-xl bg-white dark:bg-slate-900 p-4 ring-1 ring-slate-200 dark:ring-slate-700">
+                    <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500">
                       Registros
                     </p>
-                    <p className="mt-1 text-xl font-black text-slate-900">
+                    <p className="mt-1 text-xl font-black text-slate-900 dark:text-slate-100">
                       {getReportFilteredCharges().length}
                     </p>
                   </div>
 
-                  <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
-                    <p className="text-xs font-bold uppercase text-slate-500">
+                  <div className="rounded-xl bg-white dark:bg-slate-900 p-4 ring-1 ring-slate-200 dark:ring-slate-700">
+                    <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500">
                       Total filtrado
                     </p>
-                    <p className="mt-1 text-xl font-black text-slate-900">
+                    <p className="mt-1 text-xl font-black text-slate-900 dark:text-slate-100">
                       {formatCurrency(getReportTotalAmount(getReportFilteredCharges()))}
                     </p>
                   </div>
 
-                  <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
-                    <p className="text-xs font-bold uppercase text-slate-500">
+                  <div className="rounded-xl bg-white dark:bg-slate-900 p-4 ring-1 ring-slate-200 dark:ring-slate-700">
+                    <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500">
                       Tipo
                     </p>
-                    <p className="mt-1 text-sm font-black text-slate-900">
+                    <p className="mt-1 text-sm font-black text-slate-900 dark:text-slate-100">
                       {getReportDueFilterLabel(reportDueFilter)}
                     </p>
                   </div>
@@ -2623,17 +2623,17 @@ export default function AccountsReceivablePage() {
               </div>
 
               {reportFormError && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                <div className="rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm font-bold text-red-700">
                   {reportFormError}
                 </div>
               )}
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white p-5 md:flex-row md:justify-end">
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 md:flex-row md:justify-end">
               <button
                 type="button"
                 onClick={closeReportModal}
-                className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+                className="rounded-xl bg-slate-100 dark:bg-slate-800 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
               >
                 Cancelar
               </button>
@@ -2641,7 +2641,7 @@ export default function AccountsReceivablePage() {
               <button
                 type="button"
                 onClick={viewAccountsReceivableReport}
-                className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100"
+                className="rounded-xl bg-white dark:bg-slate-900 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:hover:bg-slate-700 dark:bg-slate-800"
               >
                 Visualizar relatório
               </button>
@@ -2660,20 +2660,20 @@ export default function AccountsReceivablePage() {
 
       {isSearchOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
-            <div className="border-b border-slate-100 bg-gradient-to-r from-orange-50 to-white p-6">
+          <div className="w-full max-w-xl overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
+            <div className="border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-orange-50 to-white dark:from-orange-950/40 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-xl shadow-lg shadow-orange-500/20">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50 dark:bg-orange-950/300 text-xl shadow-lg shadow-orange-500/20">
                     🔎
                   </div>
 
                   <div>
-                    <h2 className="text-xl font-black text-slate-900">
+                    <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">
                       Buscar por Inquilino
                     </h2>
 
-                    <p className="mt-1 text-sm text-slate-500">
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                       Selecione um inquilino para visualizar somente as contas
                       dele.
                     </p>
@@ -2682,7 +2682,7 @@ export default function AccountsReceivablePage() {
 
                 <button
                   onClick={clearTenantFilter}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 hover:text-slate-900"
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 dark:text-slate-500 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:hover:bg-slate-700 dark:bg-slate-800 hover:text-slate-900 dark:text-slate-100"
                   aria-label="Fechar busca"
                 >
                   ✕
@@ -2692,7 +2692,7 @@ export default function AccountsReceivablePage() {
 
             <div className="flex-1 space-y-5 overflow-y-auto p-6">
               <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">
+                <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                   Nome do inquilino
                 </label>
 
@@ -2700,14 +2700,14 @@ export default function AccountsReceivablePage() {
                   placeholder="Digite para buscar..."
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                  className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
                 />
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2">
                 <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
                   {filteredTenants.length === 0 ? (
-                    <div className="rounded-xl bg-white p-5 text-center text-sm text-slate-500">
+                    <div className="rounded-xl bg-white dark:bg-slate-900 p-5 text-center text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                       Nenhum inquilino encontrado.
                     </div>
                   ) : (
@@ -2718,19 +2718,19 @@ export default function AccountsReceivablePage() {
                           setSelectedTenant(tenant);
                           setIsSearchOpen(false);
                         }}
-                        className="flex w-full items-center justify-between rounded-xl bg-white px-4 py-3 text-left shadow-sm ring-1 ring-slate-100 transition hover:bg-orange-50 hover:ring-orange-200"
+                        className="flex w-full items-center justify-between rounded-xl bg-white dark:bg-slate-900 px-4 py-3 text-left shadow-sm ring-1 ring-slate-100 dark:ring-slate-700 transition hover:bg-orange-50 dark:hover:bg-orange-950/40 dark:bg-orange-950/30 hover:ring-orange-200 dark:ring-orange-900/60"
                       >
                         <div>
-                          <p className="text-sm font-bold text-slate-900">
+                          <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
                             {tenant.name}
                           </p>
 
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
                             Clique para filtrar as contas
                           </p>
                         </div>
 
-                        <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
+                        <span className="rounded-full bg-orange-100 dark:bg-orange-900/40 px-3 py-1 text-xs font-bold text-orange-700">
                           Selecionar
                         </span>
                       </button>
@@ -2739,7 +2739,7 @@ export default function AccountsReceivablePage() {
                 </div>
               </div>
 
-              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:bg-slate-100">
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 transition hover:bg-slate-100 dark:hover:bg-slate-700 dark:bg-slate-800">
                 <input
                   type="checkbox"
                   checked={autoOpenSearch}
@@ -2756,28 +2756,28 @@ export default function AccountsReceivablePage() {
                 />
 
                 <span>
-                  <span className="block text-sm font-black text-slate-800">
+                  <span className="block text-sm font-black text-slate-800 dark:text-slate-200">
                     Abrir busca automaticamente ao entrar na tela
                   </span>
 
-                  <span className="mt-1 block text-xs font-semibold text-slate-500">
+                  <span className="mt-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                     Desmarque esta opção para não abrir a busca toda vez que
                     acessar Contas a Receber.
                   </span>
                 </span>
               </label>
 
-              <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 md:flex-row md:justify-end">
+              <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-700 pt-5 md:flex-row md:justify-end">
                 <button
                   onClick={clearTenantFilter}
-                  className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+                  className="rounded-xl bg-slate-100 dark:bg-slate-800 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
                 >
                   Ver todas as contas
                 </button>
 
                 <button
                   onClick={() => setIsSearchOpen(false)}
-                  className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
+                  className="rounded-xl bg-orange-50 dark:bg-orange-950/300 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
                 >
                   Fechar
                 </button>
@@ -2789,20 +2789,20 @@ export default function AccountsReceivablePage() {
 
       {isCreateOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
-          <div className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
-            <div className="border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-white p-6">
+          <div className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
+            <div className="border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-950/40 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-xl shadow-lg shadow-emerald-600/20">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-xl shadow-lg shadow-emerald-600/20 dark:shadow-emerald-950/30">
                     💰
                   </div>
 
                   <div>
-                    <h2 className="text-xl font-black text-slate-900">
+                    <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">
                       {editingChargeId ? "Editar cobrança" : "Nova cobrança"}
                     </h2>
 
-                    <p className="mt-1 text-sm text-slate-500">
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                       {editingChargeId
                         ? "Ajuste os dados da conta a receber selecionada."
                         : "Cadastre uma conta a receber avulsa, única ou parcelada."}
@@ -2812,7 +2812,7 @@ export default function AccountsReceivablePage() {
 
                 <button
                   onClick={closeCreateModal}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 hover:text-slate-900"
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 dark:text-slate-500 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:hover:bg-slate-700 dark:bg-slate-800 hover:text-slate-900 dark:text-slate-100"
                   aria-label="Fechar cadastro"
                 >
                   ✕
@@ -2823,7 +2823,7 @@ export default function AccountsReceivablePage() {
             <div className="max-h-[calc(92vh-120px)] space-y-5 overflow-y-auto p-6">
               {!editingChargeId && (
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Tipo de lançamento
                   </label>
 
@@ -2836,14 +2836,14 @@ export default function AccountsReceivablePage() {
                       }}
                       className={`rounded-2xl border px-4 py-3 text-left transition ${
                         formLaunchType === "single"
-                          ? "border-emerald-500 bg-emerald-50 ring-4 ring-emerald-100"
-                          : "border-slate-200 bg-white hover:bg-slate-50"
+                          ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 ring-4 ring-emerald-100 dark:ring-emerald-900/50"
+                          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 dark:bg-slate-800"
                       }`}
                     >
-                      <p className="text-sm font-black text-slate-900">
+                      <p className="text-sm font-black text-slate-900 dark:text-slate-100">
                         Conta única
                       </p>
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
                         Lançamento avulso com apenas um vencimento.
                       </p>
                     </button>
@@ -2856,14 +2856,14 @@ export default function AccountsReceivablePage() {
                       }}
                       className={`rounded-2xl border px-4 py-3 text-left transition ${
                         formLaunchType === "installment"
-                          ? "border-emerald-500 bg-emerald-50 ring-4 ring-emerald-100"
-                          : "border-slate-200 bg-white hover:bg-slate-50"
+                          ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 ring-4 ring-emerald-100 dark:ring-emerald-900/50"
+                          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 dark:bg-slate-800"
                       }`}
                     >
-                      <p className="text-sm font-black text-slate-900">
+                      <p className="text-sm font-black text-slate-900 dark:text-slate-100">
                         Sequência de parcelas
                       </p>
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
                         Divide o valor total em parcelas editáveis.
                       </p>
                     </button>
@@ -2871,10 +2871,10 @@ export default function AccountsReceivablePage() {
                 </div>
               )}
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4">
                 <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
                   <div>
-                    <label className="mb-2 block text-sm font-bold text-slate-700">
+                    <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                       Inquilino/Pessoa
                     </label>
 
@@ -2885,10 +2885,10 @@ export default function AccountsReceivablePage() {
                         setChargeFormError("");
                         setFormTenant(event.target.value);
                       }}
-                      className={`h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 ${
+                      className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50 ${
                         isEditingPaidCharge
-                          ? "cursor-not-allowed bg-slate-100 text-slate-500"
-                          : "bg-white text-slate-900"
+                          ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 dark:text-slate-500"
+                          : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                       }`}
                     >
                       <option value="">Selecione o inquilino/pessoa</option>
@@ -2911,7 +2911,7 @@ export default function AccountsReceivablePage() {
                   )}
                 </div>
 
-                <p className="mt-2 text-xs text-slate-500">
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
                   {isEditingPaidCharge
                     ? "Cobrança paga não permite alteração de inquilino/pessoa."
                     : "Use o botão NOVO para abrir o cadastro completo de inquilino e selecionar automaticamente no lançamento."}
@@ -2919,9 +2919,9 @@ export default function AccountsReceivablePage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">
+                <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                   Imóvel
-                  <span className="ml-1 text-xs font-semibold text-slate-400">
+                  <span className="ml-1 text-xs font-semibold text-slate-400 dark:text-slate-500">
                     opcional
                   </span>
                 </label>
@@ -2933,10 +2933,10 @@ export default function AccountsReceivablePage() {
                     setChargeFormError("");
                     setFormProperty(event.target.value);
                   }}
-                  className={`h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 ${
+                  className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50 ${
                     isEditingPaidCharge
-                      ? "cursor-not-allowed bg-slate-100 text-slate-500"
-                      : "bg-white text-slate-900"
+                      ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 dark:text-slate-500"
+                      : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                   }`}
                 >
                   <option value="">Sem imóvel vinculado</option>
@@ -2950,7 +2950,7 @@ export default function AccountsReceivablePage() {
 
               <div className="grid gap-4 md:grid-cols-3">
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Valor total
                   </label>
 
@@ -2962,16 +2962,16 @@ export default function AccountsReceivablePage() {
                       setChargeFormError("");
                       setFormAmount(event.target.value);
                     }}
-                    className={`h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 ${
+                    className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50 ${
                       isEditingPaidCharge
-                        ? "cursor-not-allowed bg-slate-100 text-slate-500"
-                        : "bg-white text-slate-900"
+                        ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 dark:text-slate-500"
+                        : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                     }`}
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Data de lançamento
                   </label>
 
@@ -2983,16 +2983,16 @@ export default function AccountsReceivablePage() {
                       setChargeFormError("");
                       setFormIssueDate(event.target.value);
                     }}
-                    className={`h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 ${
+                    className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50 ${
                       isEditingPaidCharge
-                        ? "cursor-not-allowed bg-slate-100 text-slate-500"
-                        : "bg-white text-slate-900"
+                        ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 dark:text-slate-500"
+                        : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                     }`}
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Primeiro vencimento
                   </label>
 
@@ -3004,18 +3004,18 @@ export default function AccountsReceivablePage() {
                       setChargeFormError("");
                       setFormDueDate(event.target.value);
                     }}
-                    className={`h-12 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 ${
+                    className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50 ${
                       isEditingPaidCharge
-                        ? "cursor-not-allowed bg-slate-100 text-slate-500"
-                        : "bg-white text-slate-900"
+                        ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 dark:text-slate-500"
+                        : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                     }`}
                   />
                 </div>
               </div>
 
               {isEditingPaidCharge && (
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                <div className="rounded-2xl border border-emerald-100 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30/40 p-4">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Data de pagamento
                   </label>
 
@@ -3026,10 +3026,10 @@ export default function AccountsReceivablePage() {
                       setChargeFormError("");
                       setFormPaymentDate(event.target.value);
                     }}
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 md:max-w-xs"
+                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50 md:max-w-xs"
                   />
 
-                  <p className="mt-2 text-xs font-semibold text-slate-500">
+                  <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                     Para cobrança paga, somente a data de pagamento pode ser
                     ajustada antes de salvar.
                   </p>
@@ -3037,10 +3037,10 @@ export default function AccountsReceivablePage() {
               )}
 
               {!editingChargeId && formLaunchType === "installment" && (
-                <div className="space-y-4 rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
+                <div className="space-y-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30/40 p-4">
                   <div className="grid gap-4 md:grid-cols-[220px_1fr] md:items-end">
                     <div>
-                      <label className="mb-2 block text-sm font-bold text-slate-700">
+                      <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                         Quantidade de parcelas
                       </label>
 
@@ -3051,11 +3051,11 @@ export default function AccountsReceivablePage() {
                         onChange={(event) =>
                           setFormInstallmentQuantity(event.target.value)
                         }
-                        className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                        className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50"
                       />
                     </div>
 
-                    <div className="rounded-xl bg-white p-4 text-sm text-slate-600 ring-1 ring-emerald-100">
+                    <div className="rounded-xl bg-white dark:bg-slate-900 p-4 text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500 ring-1 ring-emerald-100 dark:ring-emerald-900/50">
                       O sistema divide o valor total em parcelas iguais e gera
                       os vencimentos automaticamente de 30 em 30 dias. Você pode
                       ajustar valor e vencimento antes de salvar.
@@ -3063,20 +3063,20 @@ export default function AccountsReceivablePage() {
                   </div>
 
                   {installmentPreview.length > 0 && (
-                    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                      <div className="grid grid-cols-[90px_1fr_1fr] bg-slate-50 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500">
+                    <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                      <div className="grid grid-cols-[90px_1fr_1fr] bg-slate-50 dark:bg-slate-800 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">
                         <span>Parcela</span>
                         <span>Valor</span>
                         <span>Vencimento</span>
                       </div>
 
-                      <div className="divide-y divide-slate-100">
+                      <div className="divide-y divide-slate-100 dark:divide-slate-700">
                         {installmentPreview.map((installment) => (
                           <div
                             key={installment.id}
                             className="grid grid-cols-[90px_1fr_1fr] gap-3 px-4 py-3"
                           >
-                            <div className="flex items-center text-sm font-black text-slate-900">
+                            <div className="flex items-center text-sm font-black text-slate-900 dark:text-slate-100">
                               {installment.installmentNumber}/
                               {installmentPreview.length}
                             </div>
@@ -3089,7 +3089,7 @@ export default function AccountsReceivablePage() {
                                   event.target.value,
                                 )
                               }
-                              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                              className="h-11 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50"
                             />
 
                             <input
@@ -3101,7 +3101,7 @@ export default function AccountsReceivablePage() {
                                   event.target.value,
                                 )
                               }
-                              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                              className="h-11 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50"
                             />
                           </div>
                         ))}
@@ -3112,12 +3112,12 @@ export default function AccountsReceivablePage() {
               )}
 
               {chargeFormError && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                <div className="rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm font-bold text-red-700">
                   {chargeFormError}
                 </div>
               )}
 
-              <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-700 pt-5 md:flex-row md:items-center md:justify-between">
                 {editingChargeId && (
                   <div className="flex flex-col-reverse gap-3 md:flex-row">
                     {!isEditingPaidCharge && (
@@ -3134,7 +3134,7 @@ export default function AccountsReceivablePage() {
                       <button
                         type="button"
                         onClick={openPaymentReversalConfirmation}
-                        className="rounded-xl bg-amber-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-amber-600"
+                        className="rounded-xl bg-amber-50 dark:bg-amber-950/300 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-amber-600"
                       >
                         Voltar para pagamento
                       </button>
@@ -3146,7 +3146,7 @@ export default function AccountsReceivablePage() {
                   {!isEditingPaidCharge && (
                     <button
                       onClick={closeCreateModal}
-                      className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+                      className="rounded-xl bg-slate-100 dark:bg-slate-800 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
                     >
                       Cancelar
                     </button>
@@ -3167,20 +3167,20 @@ export default function AccountsReceivablePage() {
 
       {chargePendingPaymentReceipt && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
-            <div className="border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-white p-6">
+          <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
+            <div className="border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-950/40 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-xl shadow-lg shadow-emerald-600/20">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-xl shadow-lg shadow-emerald-600/20 dark:shadow-emerald-950/30">
                     💵
                   </div>
 
                   <div>
-                    <h2 className="text-xl font-black text-slate-900">
+                    <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">
                       Receber cobrança
                     </h2>
 
-                    <p className="mt-1 text-sm text-slate-500">
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                       Informe os dados do pagamento para confirmar o
                       recebimento.
                     </p>
@@ -3190,7 +3190,7 @@ export default function AccountsReceivablePage() {
                 <button
                   type="button"
                   onClick={closeReceivePaymentModal}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 hover:text-slate-900"
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 dark:text-slate-500 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:hover:bg-slate-700 dark:bg-slate-800 hover:text-slate-900 dark:text-slate-100"
                   aria-label="Fechar recebimento"
                 >
                   ✕
@@ -3199,33 +3199,33 @@ export default function AccountsReceivablePage() {
             </div>
 
             <div className="flex-1 space-y-5 overflow-y-auto p-6">
-              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+              <div className="rounded-2xl border border-emerald-100 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 p-4">
                 <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
                   Cobrança selecionada
                 </p>
 
-                <div className="mt-3 grid gap-3 text-sm text-slate-700 md:grid-cols-2">
+                <div className="mt-3 grid gap-3 text-sm text-slate-700 dark:text-slate-300 md:grid-cols-2">
                   <p>
-                    <span className="font-black text-slate-950">
+                    <span className="font-black text-slate-950 dark:text-white">
                       Inquilino:
                     </span>{" "}
                     {chargePendingPaymentReceipt.tenant}
                   </p>
 
                   <p>
-                    <span className="font-black text-slate-950">Imóvel:</span>{" "}
+                    <span className="font-black text-slate-950 dark:text-white">Imóvel:</span>{" "}
                     {chargePendingPaymentReceipt.property}
                   </p>
 
                   <p>
-                    <span className="font-black text-slate-950">
+                    <span className="font-black text-slate-950 dark:text-white">
                       Vencimento:
                     </span>{" "}
                     {formatDate(chargePendingPaymentReceipt.dueDate)}
                   </p>
 
                   <p>
-                    <span className="font-black text-slate-950">
+                    <span className="font-black text-slate-950 dark:text-white">
                       Valor original:
                     </span>{" "}
                     {formatCurrency(chargePendingPaymentReceipt.amount)}
@@ -3235,9 +3235,9 @@ export default function AccountsReceivablePage() {
 
               <div className="grid gap-4 md:grid-cols-3">
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Juros
-                    <span className="ml-1 text-xs font-semibold text-slate-400">
+                    <span className="ml-1 text-xs font-semibold text-slate-400 dark:text-slate-500">
                       se houver
                     </span>
                   </label>
@@ -3259,14 +3259,14 @@ export default function AccountsReceivablePage() {
                         );
                       }
                     }}
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Desconto
-                    <span className="ml-1 text-xs font-semibold text-slate-400">
+                    <span className="ml-1 text-xs font-semibold text-slate-400 dark:text-slate-500">
                       se houver
                     </span>
                   </label>
@@ -3288,12 +3288,12 @@ export default function AccountsReceivablePage() {
                         );
                       }
                     }}
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700">
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Valor final
                   </label>
 
@@ -3314,19 +3314,19 @@ export default function AccountsReceivablePage() {
                         );
                       }
                     }}
-                    className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-black text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50"
                   />
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4">
                 <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
                   <div>
-                    <h3 className="text-sm font-black text-slate-900">
+                    <h3 className="text-sm font-black text-slate-900 dark:text-slate-100">
                       Formas de pagamento
                     </h3>
 
-                    <p className="mt-1 text-xs font-semibold text-slate-500">
+                    <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                       Permite receber com um ou mais tipos, como Pix e cartão de
                       débito no mesmo recebimento.
                     </p>
@@ -3345,10 +3345,10 @@ export default function AccountsReceivablePage() {
                   {paymentEntries.map((entry, index) => (
                     <div
                       key={entry.id}
-                      className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-3 md:grid-cols-[1fr_180px_auto] md:items-end"
+                      className="grid gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 md:grid-cols-[1fr_180px_auto] md:items-end"
                     >
                       <div>
-                        <label className="mb-2 block text-sm font-bold text-slate-700">
+                        <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                           Tipo do pagamento {index + 1}
                         </label>
 
@@ -3360,7 +3360,7 @@ export default function AccountsReceivablePage() {
                               event.target.value as PaymentMethod,
                             )
                           }
-                          className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                          className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50"
                         >
                           {paymentMethodOptions.map((option) => (
                             <option key={option.value} value={option.value}>
@@ -3371,7 +3371,7 @@ export default function AccountsReceivablePage() {
                       </div>
 
                       <div>
-                        <label className="mb-2 block text-sm font-bold text-slate-700">
+                        <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                           Valor
                         </label>
 
@@ -3381,7 +3381,7 @@ export default function AccountsReceivablePage() {
                           onChange={(event) =>
                             updatePaymentEntryAmount(entry.id, event.target.value)
                           }
-                          className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                          className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-black text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50"
                         />
                       </div>
 
@@ -3389,7 +3389,7 @@ export default function AccountsReceivablePage() {
                         type="button"
                         onClick={() => removePaymentEntry(entry.id)}
                         disabled={paymentEntries.length === 1}
-                        className="h-12 rounded-xl bg-red-50 px-4 text-sm font-bold text-red-600 ring-1 ring-red-100 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="h-12 rounded-xl bg-red-50 dark:bg-red-950/30 px-4 text-sm font-bold text-red-600 ring-1 ring-red-100 dark:ring-red-900/50 transition hover:bg-red-100 dark:hover:bg-red-900/50 dark:bg-red-900/40 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Remover
                       </button>
@@ -3397,15 +3397,15 @@ export default function AccountsReceivablePage() {
                   ))}
                 </div>
 
-                <div className="mt-4 rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-700 ring-1 ring-slate-200">
+                <div className="mt-4 rounded-xl bg-white dark:bg-slate-900 px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-slate-700">
                   Total informado nas formas de pagamento: {formatCurrency(getPaymentEntriesTotal())}
                 </div>
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700">
+                <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                   Observação
-                  <span className="ml-1 text-xs font-semibold text-slate-400">
+                  <span className="ml-1 text-xs font-semibold text-slate-400 dark:text-slate-500">
                     opcional
                   </span>
                 </label>
@@ -3414,22 +3414,22 @@ export default function AccountsReceivablePage() {
                   placeholder="Ex: Pix + cartão de débito / comprovante enviado pelo WhatsApp"
                   value={paymentNote}
                   onChange={(event) => setPaymentNote(event.target.value)}
-                  className="h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100"
+                  className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50"
                 />
               </div>
 
               {paymentFormError && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                <div className="rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm font-bold text-red-700">
                   {paymentFormError}
                 </div>
               )}
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white p-5 md:flex-row md:justify-end">
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 md:flex-row md:justify-end">
               <button
                 type="button"
                 onClick={closeReceivePaymentModal}
-                className="rounded-2xl bg-slate-100 px-6 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-3 text-sm font-black text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
               >
                 Cancelar
               </button>
@@ -3437,7 +3437,7 @@ export default function AccountsReceivablePage() {
               <button
                 type="button"
                 onClick={confirmReceivePayment}
-                className="rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700"
+                className="rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-emerald-600/20 dark:shadow-emerald-950/30 transition hover:bg-emerald-700"
               >
                 Confirmar recebimento
               </button>
@@ -3448,72 +3448,72 @@ export default function AccountsReceivablePage() {
 
       {isPaymentConfirmationOpen && chargePendingPaymentReceipt && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="flex max-h-[94vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
+          <div className="flex max-h-[94vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="flex-1 overflow-y-auto p-6 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 text-3xl ring-1 ring-emerald-100">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 text-3xl ring-1 ring-emerald-100 dark:ring-emerald-900/50">
                 ✅
               </div>
 
-              <h2 className="mt-5 text-xl font-black text-slate-950">
+              <h2 className="mt-5 text-xl font-black text-slate-950 dark:text-white">
                 Confirmar recebimento?
               </h2>
 
-              <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
+              <p className="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400 dark:text-slate-500">
                 Confira os dados antes de concluir. Depois de confirmar, a
                 cobrança será marcada como paga.
               </p>
 
-              <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-left">
+              <div className="mt-5 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 p-4 text-left">
                 <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
                   Cobrança selecionada
                 </p>
 
-                <div className="mt-3 space-y-2 text-sm text-slate-700">
+                <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
                   <p>
-                    <span className="font-black text-slate-950">Inquilino:</span>{" "}
+                    <span className="font-black text-slate-950 dark:text-white">Inquilino:</span>{" "}
                     {chargePendingPaymentReceipt.tenant}
                   </p>
 
                   <p>
-                    <span className="font-black text-slate-950">Imóvel:</span>{" "}
+                    <span className="font-black text-slate-950 dark:text-white">Imóvel:</span>{" "}
                     {chargePendingPaymentReceipt.property}
                   </p>
 
                   <p>
-                    <span className="font-black text-slate-950">Vencimento:</span>{" "}
+                    <span className="font-black text-slate-950 dark:text-white">Vencimento:</span>{" "}
                     {formatDate(chargePendingPaymentReceipt.dueDate)}
                   </p>
 
                   <p>
-                    <span className="font-black text-slate-950">Valor original:</span>{" "}
+                    <span className="font-black text-slate-950 dark:text-white">Valor original:</span>{" "}
                     {formatCurrency(chargePendingPaymentReceipt.amount)}
                   </p>
                 </div>
               </div>
 
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">
-                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+              <div className="mt-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4 text-left">
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">
                   Dados do recebimento
                 </p>
 
-                <div className="mt-3 space-y-2 text-sm text-slate-700">
+                <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
                   <p>
-                    <span className="font-black text-slate-950">Juros:</span>{" "}
+                    <span className="font-black text-slate-950 dark:text-white">Juros:</span>{" "}
                     {formatCurrency(normalizeAmount(paymentInterest))}
                   </p>
 
                   <p>
-                    <span className="font-black text-slate-950">Desconto:</span>{" "}
+                    <span className="font-black text-slate-950 dark:text-white">Desconto:</span>{" "}
                     {formatCurrency(normalizeAmount(paymentDiscount))}
                   </p>
 
                   <p>
-                    <span className="font-black text-slate-950">Valor final:</span>{" "}
+                    <span className="font-black text-slate-950 dark:text-white">Valor final:</span>{" "}
                     {formatCurrency(normalizeAmount(paymentFinalAmount))}
                   </p>
 
                   <div>
-                    <p className="font-black text-slate-950">Formas de pagamento:</p>
+                    <p className="font-black text-slate-950 dark:text-white">Formas de pagamento:</p>
                     <div className="mt-2 space-y-1">
                       {paymentEntries.map((entry) => (
                         <p key={entry.id}>
@@ -3525,7 +3525,7 @@ export default function AccountsReceivablePage() {
 
                   {paymentNote.trim() && (
                     <p>
-                      <span className="font-black text-slate-950">Observação:</span>{" "}
+                      <span className="font-black text-slate-950 dark:text-white">Observação:</span>{" "}
                       {paymentNote.trim()}
                     </p>
                   )}
@@ -3533,11 +3533,11 @@ export default function AccountsReceivablePage() {
               </div>
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white p-5 md:flex-row md:justify-end">
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 md:flex-row md:justify-end">
               <button
                 type="button"
                 onClick={closePaymentConfirmation}
-                className="rounded-2xl bg-slate-100 px-6 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-3 text-sm font-black text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
               >
                 Conferir novamente
               </button>
@@ -3545,7 +3545,7 @@ export default function AccountsReceivablePage() {
               <button
                 type="button"
                 onClick={finishReceivePayment}
-                className="rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700"
+                className="rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-emerald-600/20 dark:shadow-emerald-950/30 transition hover:bg-emerald-700"
               >
                 Sim, confirmar
               </button>
@@ -3557,59 +3557,59 @@ export default function AccountsReceivablePage() {
 
       {chargePendingDeletion && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
+          <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="p-6 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-3xl ring-1 ring-red-100">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 dark:bg-red-950/30 text-3xl ring-1 ring-red-100 dark:ring-red-900/50">
                 ⚠️
               </div>
 
-              <h2 className="mt-5 text-xl font-black text-slate-950">
+              <h2 className="mt-5 text-xl font-black text-slate-950 dark:text-white">
                 Excluir cobrança?
               </h2>
 
-              <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
+              <p className="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400 dark:text-slate-500">
                 Esta ação removerá a cobrança selecionada do contas a receber.
                 Depois de confirmar, ela não aparecerá mais na listagem.
               </p>
 
-              <div className="mt-5 rounded-2xl border border-red-100 bg-red-50 p-4 text-left">
+              <div className="mt-5 rounded-2xl border border-red-100 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 p-4 text-left">
                 <p className="text-xs font-black uppercase tracking-wide text-red-600">
                   Cobrança selecionada
                 </p>
 
-                <div className="mt-3 space-y-2 text-sm text-slate-700">
+                <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
                   <p>
-                    <span className="font-black text-slate-950">
+                    <span className="font-black text-slate-950 dark:text-white">
                       Inquilino:
                     </span>{" "}
                     {chargePendingDeletion.tenant}
                   </p>
 
                   <p>
-                    <span className="font-black text-slate-950">Imóvel:</span>{" "}
+                    <span className="font-black text-slate-950 dark:text-white">Imóvel:</span>{" "}
                     {chargePendingDeletion.property}
                   </p>
 
                   <p>
-                    <span className="font-black text-slate-950">
+                    <span className="font-black text-slate-950 dark:text-white">
                       Vencimento:
                     </span>{" "}
                     {formatDate(chargePendingDeletion.dueDate)}
                   </p>
 
                   <p>
-                    <span className="font-black text-slate-950">Valor:</span>{" "}
+                    <span className="font-black text-slate-950 dark:text-white">Valor:</span>{" "}
                     {formatCurrency(chargePendingDeletion.amount)}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white p-5 md:flex-row md:justify-end">
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 md:flex-row md:justify-end">
               <button
                 type="button"
                 onClick={closeDeleteChargeConfirmation}
-                className="rounded-2xl bg-slate-100 px-6 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-3 text-sm font-black text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
               >
                 Cancelar
               </button>
@@ -3617,7 +3617,7 @@ export default function AccountsReceivablePage() {
               <button
                 type="button"
                 onClick={confirmDeleteCharge}
-                className="rounded-2xl bg-red-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-red-600/20 transition hover:bg-red-700"
+                className="rounded-2xl bg-red-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-red-600/20 dark:shadow-red-950/30 transition hover:bg-red-700"
               >
                 Sim, excluir
               </button>
@@ -3628,60 +3628,60 @@ export default function AccountsReceivablePage() {
 
       {chargePendingPaymentReversal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200">
+          <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="p-6 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 text-3xl ring-1 ring-amber-100">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 dark:bg-amber-950/30 text-3xl ring-1 ring-amber-100 dark:ring-amber-900/50">
                 ↩️
               </div>
 
-              <h2 className="mt-5 text-xl font-black text-slate-950">
+              <h2 className="mt-5 text-xl font-black text-slate-950 dark:text-white">
                 Voltar cobrança para pagamento?
               </h2>
 
-              <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
+              <p className="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400 dark:text-slate-500">
                 Esta ação removerá o status de pago da cobrança selecionada.
                 Depois de confirmar, ela voltará para pendente ou vencida,
                 conforme a data de vencimento.
               </p>
 
-              <div className="mt-5 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-left">
+              <div className="mt-5 rounded-2xl border border-amber-100 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 p-4 text-left">
                 <p className="text-xs font-black uppercase tracking-wide text-amber-600">
                   Cobrança selecionada
                 </p>
 
-                <div className="mt-3 space-y-2 text-sm text-slate-700">
+                <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
                   <p>
-                    <span className="font-black text-slate-950">
+                    <span className="font-black text-slate-950 dark:text-white">
                       Inquilino:
                     </span>{" "}
                     {chargePendingPaymentReversal.tenant}
                   </p>
 
                   <p>
-                    <span className="font-black text-slate-950">Imóvel:</span>{" "}
+                    <span className="font-black text-slate-950 dark:text-white">Imóvel:</span>{" "}
                     {chargePendingPaymentReversal.property}
                   </p>
 
                   <p>
-                    <span className="font-black text-slate-950">
+                    <span className="font-black text-slate-950 dark:text-white">
                       Vencimento:
                     </span>{" "}
                     {formatDate(chargePendingPaymentReversal.dueDate)}
                   </p>
 
                   <p>
-                    <span className="font-black text-slate-950">Valor:</span>{" "}
+                    <span className="font-black text-slate-950 dark:text-white">Valor:</span>{" "}
                     {formatCurrency(chargePendingPaymentReversal.amount)}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white p-5 md:flex-row md:justify-end">
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 md:flex-row md:justify-end">
               <button
                 type="button"
                 onClick={closePaymentReversalConfirmation}
-                className="rounded-2xl bg-slate-100 px-6 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-3 text-sm font-black text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
               >
                 Cancelar
               </button>
@@ -3689,7 +3689,7 @@ export default function AccountsReceivablePage() {
               <button
                 type="button"
                 onClick={confirmPaymentReversal}
-                className="rounded-2xl bg-amber-500 px-6 py-3 text-sm font-black text-white shadow-lg shadow-amber-500/20 transition hover:bg-amber-600"
+                className="rounded-2xl bg-amber-50 dark:bg-amber-950/300 px-6 py-3 text-sm font-black text-white shadow-lg shadow-amber-500/20 dark:shadow-amber-950/30 transition hover:bg-amber-600"
               >
                 Sim, voltar
               </button>
@@ -3700,22 +3700,22 @@ export default function AccountsReceivablePage() {
 
       {isTenantCreateOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-0 backdrop-blur-sm md:p-4">
-          <div className="flex max-h-screen w-full max-w-6xl flex-col overflow-hidden rounded-none bg-white shadow-2xl ring-1 ring-slate-200 md:max-h-[94vh] md:rounded-3xl">
-            <div className="border-b border-slate-100 bg-white px-6 py-5 md:px-8">
+          <div className="flex max-h-screen w-full max-w-6xl flex-col overflow-hidden rounded-none bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700 md:max-h-[94vh] md:rounded-3xl">
+            <div className="border-b border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 px-6 py-5 md:px-8">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-2xl font-black text-slate-950">
+                  <h2 className="text-2xl font-black text-slate-950 dark:text-white">
                     Nova pessoa
                   </h2>
 
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                     Preencha os dados pessoais e endereço da pessoa.
                   </p>
                 </div>
 
                 <button
                   onClick={closeTenantCreateModal}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-700 transition hover:bg-slate-200"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 text-xl font-black text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
                   aria-label="Fechar cadastro de pessoa"
                 >
                   ×
@@ -3726,7 +3726,7 @@ export default function AccountsReceivablePage() {
             <div className="flex-1 space-y-7 overflow-y-auto px-6 py-6 md:px-8">
               <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     Nome completo / Razão social
                   </label>
 
@@ -3740,12 +3740,12 @@ export default function AccountsReceivablePage() {
                         ? "Ex: Empresa LTDA"
                         : "Ex: João Silva"
                     }
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     Tipo de pessoa
                   </label>
 
@@ -3754,7 +3754,7 @@ export default function AccountsReceivablePage() {
                     onChange={(event) =>
                       updateTenantPersonType(event.target.value as PersonType)
                     }
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
                   >
                     <option value="Individual">Pessoa física</option>
                     <option value="Company">Pessoa jurídica</option>
@@ -3762,7 +3762,7 @@ export default function AccountsReceivablePage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     {tenantFormData.personType === "Company" ? "CNPJ" : "CPF"}
                   </label>
 
@@ -3788,7 +3788,7 @@ export default function AccountsReceivablePage() {
                         : "Ex: 123.456.789-00"
                     }
                     maxLength={tenantFormData.personType === "Company" ? 18 : 14}
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
                   />
 
                   {tenantFormData.personType === "Company" && (
@@ -3812,7 +3812,7 @@ export default function AccountsReceivablePage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     Telefone
                   </label>
 
@@ -3822,12 +3822,12 @@ export default function AccountsReceivablePage() {
                       updateTenantFormData("phone", formatPhone(event.target.value))
                     }
                     placeholder="Ex: (69) 99999-0000"
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
                   />
                 </div>
               </div>
 
-              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-orange-100 bg-orange-50/50 px-5 py-4 transition hover:bg-orange-50">
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-orange-100 dark:border-orange-900/50 bg-orange-50 dark:bg-orange-950/30/50 px-5 py-4 transition hover:bg-orange-50 dark:hover:bg-orange-950/40 dark:bg-orange-950/30">
                 <input
                   type="checkbox"
                   checked={tenantFormData.isTenant}
@@ -3838,11 +3838,11 @@ export default function AccountsReceivablePage() {
                 />
 
                 <span>
-                  <span className="block text-sm font-black text-slate-800">
+                  <span className="block text-sm font-black text-slate-800 dark:text-slate-200">
                     Esta pessoa é inquilino
                   </span>
 
-                  <span className="mt-1 block text-xs font-semibold text-slate-500">
+                  <span className="mt-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                     Quando desmarcado, esta pessoa não poderá ser vinculada a
                     contratos de aluguel.
                   </span>
@@ -3857,7 +3857,7 @@ export default function AccountsReceivablePage() {
 
               <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     CEP
                   </label>
 
@@ -3872,14 +3872,14 @@ export default function AccountsReceivablePage() {
                       }
                       onBlur={verifyZipCode}
                       placeholder="Ex: 76940-000"
-                      className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                      className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
                     />
 
                     <button
                       type="button"
                       onClick={verifyZipCode}
                       disabled={isZipCodeLoading}
-                      className="h-14 rounded-2xl bg-orange-500 px-4 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 disabled:bg-orange-300"
+                      className="h-14 rounded-2xl bg-orange-50 dark:bg-orange-950/300 px-4 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 disabled:bg-orange-300"
                     >
                       {isZipCodeLoading ? "..." : "Buscar"}
                     </button>
@@ -3893,7 +3893,7 @@ export default function AccountsReceivablePage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     Estado
                   </label>
 
@@ -3904,12 +3904,12 @@ export default function AccountsReceivablePage() {
                     }
                     placeholder="UF"
                     maxLength={2}
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     Cidade
                   </label>
 
@@ -3919,12 +3919,12 @@ export default function AccountsReceivablePage() {
                       updateTenantFormData("city", event.target.value)
                     }
                     placeholder="Cidade"
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     Logradouro
                   </label>
 
@@ -3934,12 +3934,12 @@ export default function AccountsReceivablePage() {
                       updateTenantFormData("street", event.target.value)
                     }
                     placeholder="Rua, avenida..."
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     Número
                   </label>
 
@@ -3949,12 +3949,12 @@ export default function AccountsReceivablePage() {
                       updateTenantFormData("number", event.target.value)
                     }
                     placeholder="Número da casa"
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     Bairro
                   </label>
 
@@ -3964,12 +3964,12 @@ export default function AccountsReceivablePage() {
                       updateTenantFormData("district", event.target.value)
                     }
                     placeholder="Bairro"
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800">
+                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
                     Complemento
                   </label>
 
@@ -3979,17 +3979,17 @@ export default function AccountsReceivablePage() {
                       updateTenantFormData("complement", event.target.value)
                     }
                     placeholder="Apartamento, bloco, referência..."
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
+                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white px-6 py-5 md:flex-row md:justify-end md:px-8">
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 px-6 py-5 md:flex-row md:justify-end md:px-8">
               <button
                 type="button"
                 onClick={closeTenantCreateModal}
-                className="rounded-2xl bg-slate-100 px-6 py-4 text-sm font-black text-slate-600 transition hover:bg-slate-200"
+                className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-4 text-sm font-black text-slate-600 dark:text-slate-400 dark:text-slate-500 transition hover:bg-slate-200 dark:hover:bg-slate-700"
               >
                 Cancelar
               </button>
@@ -3997,7 +3997,7 @@ export default function AccountsReceivablePage() {
               <button
                 type="button"
                 onClick={createTenantFromModal}
-                className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                className="rounded-2xl bg-orange-50 dark:bg-orange-950/300 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600"
               >
                 Cadastrar pessoa
               </button>
@@ -4051,12 +4051,12 @@ function Card({
   red?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <p className="text-sm font-medium text-slate-500">{title}</p>
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-sm">
+      <p className="text-sm font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">{title}</p>
 
       <h2
         className={`mt-2 text-2xl font-black ${
-          green ? "text-emerald-600" : red ? "text-red-600" : "text-slate-900"
+          green ? "text-emerald-600" : red ? "text-red-600" : "text-slate-900 dark:text-slate-100"
         }`}
       >
         {value}

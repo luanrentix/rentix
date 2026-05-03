@@ -720,10 +720,10 @@ export default function TenantsPage() {
       <div className="space-y-8">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <h1 className="text-4xl font-black tracking-tight text-slate-950">
+            <h1 className="text-4xl font-black tracking-tight text-slate-950 dark:text-white">
               Pessoas
             </h1>
-            <p className="mt-2 text-slate-500">
+            <p className="mt-2 text-slate-500 dark:text-slate-400 dark:text-slate-500">
               Gerencie as pessoas cadastradas
             </p>
           </div>
@@ -731,19 +731,19 @@ export default function TenantsPage() {
           <button
             type="button"
             onClick={handleOpenCreateForm}
-            className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+            className="rounded-2xl bg-orange-50 dark:bg-orange-950/300 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600"
           >
             + Nova pessoa
           </button>
         </div>
 
-        <div className="rounded-3xl border border-orange-100 bg-white shadow-sm">
-          <div className="flex flex-col gap-4 border-b border-slate-100 px-6 py-5 xl:flex-row xl:items-end xl:justify-between">
+        <div className="rounded-3xl border border-orange-100 dark:border-orange-900/40 bg-white dark:bg-slate-900 shadow-sm">
+          <div className="flex flex-col gap-4 border-b border-slate-100 dark:border-slate-800 px-6 py-5 xl:flex-row xl:items-end xl:justify-between">
             <div>
-              <h2 className="text-2xl font-black text-slate-950">
+              <h2 className="text-2xl font-black text-slate-950 dark:text-white">
                 Pessoas
               </h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                 Exibindo {filteredTenants.length} de {tenants.length} pessoa(s).
               </p>
             </div>
@@ -755,7 +755,7 @@ export default function TenantsPage() {
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Nome, CPF/CNPJ, telefone ou e-mail"
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 md:w-80"
+                  className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 md:w-80"
                 />
               </FormField>
 
@@ -765,7 +765,7 @@ export default function TenantsPage() {
                   onChange={(event) =>
                     setStatusFilter(event.target.value as PersonStatusFilter)
                   }
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 md:w-48"
+                  className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 md:w-48"
                 >
                   <option value="Active">Ativos</option>
                   <option value="Inactive">Inativos</option>
@@ -779,48 +779,48 @@ export default function TenantsPage() {
 
           <div className="overflow-hidden">
             <table className="w-full text-left">
-              <thead className="bg-orange-50">
+              <thead className="bg-orange-50 dark:bg-orange-950/30">
                 <tr>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">
                     Nome
                   </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">
                     Telefone
                   </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">
                     CPF/CNPJ
                   </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">
                     Tipo
                   </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">
                     Situação
                   </th>
-                  <th className="px-6 py-4 text-right text-sm font-black text-slate-700">
+                  <th className="px-6 py-4 text-right text-sm font-black text-slate-700 dark:text-slate-200">
                     Ações
                   </th>
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {filteredTenants.map((tenant) => (
-                  <tr key={tenant.id} className="transition hover:bg-slate-50">
-                    <td className="px-6 py-4 font-black text-slate-900">
+                  <tr key={tenant.id} className="transition hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800/80">
+                    <td className="px-6 py-4 font-black text-slate-900 dark:text-slate-100">
                       <button
                         type="button"
                         onClick={() => handleOpenPersonHistory(tenant)}
-                        className="text-left font-black text-slate-900 underline-offset-4 transition hover:text-orange-600 hover:underline"
+                        className="text-left font-black text-slate-900 dark:text-slate-100 underline-offset-4 transition hover:text-orange-600 hover:underline"
                         title="Abrir histórico da pessoa"
                       >
                         {tenant.name}
                       </button>
                     </td>
 
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-600">
+                    <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
                       {formatPhone(tenant.phone)}
                     </td>
 
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-600">
+                    <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
                       {formatDocument(
                         tenant.cpf || tenant.document,
                         tenant.personType
@@ -831,8 +831,8 @@ export default function TenantsPage() {
                       <span
                         className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${
                           tenant.isTenant ?? true
-                            ? "bg-green-50 text-green-700"
-                            : "bg-slate-100 text-slate-500"
+                            ? "bg-green-50 dark:bg-emerald-950/30 text-green-700"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 dark:text-slate-500"
                         }`}
                       >
                         {tenant.isTenant ?? true
@@ -850,7 +850,7 @@ export default function TenantsPage() {
                         <button
                           type="button"
                           onClick={() => handleEditTenant(tenant)}
-                          className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+                          className="rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-700"
                         >
                           Editar
                         </button>
@@ -858,7 +858,7 @@ export default function TenantsPage() {
                         <button
                           type="button"
                           onClick={() => handleDeleteTenant(tenant)}
-                          className="rounded-xl bg-red-50 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-100"
+                          className="rounded-xl bg-red-50 dark:bg-red-950/30 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-100 dark:bg-red-950/40"
                         >
                           Excluir
                         </button>
@@ -871,7 +871,7 @@ export default function TenantsPage() {
                   <tr>
                     <td
                       colSpan={6}
-                      className="px-6 py-10 text-center text-sm font-semibold text-slate-500"
+                      className="px-6 py-10 text-center text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500"
                     >
                       Nenhuma pessoa encontrada para os filtros aplicados.
                     </td>
@@ -884,16 +884,16 @@ export default function TenantsPage() {
 
         {selectedPersonHistory && (
           <div className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
-            <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
-              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-8 py-6">
+            <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-[2rem] border border-orange-100 dark:border-orange-900/40 bg-white dark:bg-slate-900 shadow-2xl">
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-8 py-6">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.2em] text-orange-500">
                     Histórico da pessoa
                   </p>
-                  <h2 className="mt-1 text-2xl font-black text-slate-950">
+                  <h2 className="mt-1 text-2xl font-black text-slate-950 dark:text-white">
                     {selectedPersonHistory.person.name}
                   </h2>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                  <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                     Consulte os dados completos do cadastro e o resumo de
                     movimentações vinculadas.
                   </p>
@@ -902,7 +902,7 @@ export default function TenantsPage() {
                 <button
                   type="button"
                   onClick={handleClosePersonHistory}
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-600 transition hover:bg-red-50 hover:text-red-600"
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 text-xl font-black text-slate-600 dark:text-slate-300 transition hover:bg-red-50 dark:bg-red-950/30 dark:hover:bg-red-950/30 hover:text-red-600"
                 >
                   ×
                 </button>
@@ -910,8 +910,8 @@ export default function TenantsPage() {
 
               <div className="p-8">
                 <div className="grid gap-4 md:grid-cols-3">
-                  <div className="rounded-3xl border border-slate-100 bg-slate-50 p-5">
-                    <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+                  <div className="rounded-3xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 p-5">
+                    <p className="text-xs font-black uppercase tracking-wide text-slate-400 dark:text-slate-500">
                       Situação
                     </p>
                     <div className="mt-3">
@@ -921,28 +921,28 @@ export default function TenantsPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-3xl border border-slate-100 bg-slate-50 p-5">
-                    <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+                  <div className="rounded-3xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 p-5">
+                    <p className="text-xs font-black uppercase tracking-wide text-slate-400 dark:text-slate-500">
                       Tipo
                     </p>
-                    <p className="mt-3 text-sm font-black text-slate-900">
+                    <p className="mt-3 text-sm font-black text-slate-900 dark:text-slate-100">
                       {selectedPersonHistory.person.isTenant ?? true
                         ? "Inquilino"
                         : "Não inquilino"}
                     </p>
                   </div>
 
-                  <div className="rounded-3xl border border-slate-100 bg-slate-50 p-5">
-                    <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+                  <div className="rounded-3xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 p-5">
+                    <p className="text-xs font-black uppercase tracking-wide text-slate-400 dark:text-slate-500">
                       Contratos ativos
                     </p>
-                    <p className="mt-3 text-2xl font-black text-slate-950">
+                    <p className="mt-3 text-2xl font-black text-slate-950 dark:text-white">
                       {selectedPersonHistory.activeContractsCount}
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-6 rounded-[1.7rem] border border-slate-100 bg-slate-50/80 p-2">
+                <div className="mt-6 rounded-[1.7rem] border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/80 p-2">
                   <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
                     <PersonHistoryTabButton
                       label="Informações do cadastro"
@@ -967,13 +967,13 @@ export default function TenantsPage() {
                   </div>
                 </div>
 
-                <div className="mt-6 rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+                <div className="mt-6 rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
                   {activePersonHistoryTab === "RegistrationInfo" && (
                     <div>
-                      <h3 className="text-lg font-black text-slate-950">
+                      <h3 className="text-lg font-black text-slate-950 dark:text-white">
                         Informações do cadastro
                       </h3>
-                      <p className="mt-1 text-sm font-semibold text-slate-500">
+                      <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                         Dados completos cadastrados para esta pessoa.
                       </p>
 
@@ -1058,18 +1058,18 @@ export default function TenantsPage() {
 
                   {activePersonHistoryTab === "RentalHistory" && (
                     <div>
-                      <h3 className="text-lg font-black text-slate-950">
+                      <h3 className="text-lg font-black text-slate-950 dark:text-white">
                         Histórico de aluguéis
                       </h3>
-                      <p className="mt-1 text-sm font-semibold text-slate-500">
+                      <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                         Resumo dos vínculos de aluguel relacionados a esta pessoa.
                       </p>
 
-                      <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 p-5">
-                        <p className="text-sm font-black text-slate-900">
+                      <div className="mt-5 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 p-5">
+                        <p className="text-sm font-black text-slate-900 dark:text-slate-100">
                           Contratos de aluguel encontrados
                         </p>
-                        <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+                        <p className="mt-2 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400 dark:text-slate-500">
                           Total de {selectedPersonHistory.contractsCount} contrato(s)
                           vinculado(s), sendo {selectedPersonHistory.activeContractsCount}
                           ativo(s).
@@ -1087,10 +1087,10 @@ export default function TenantsPage() {
 
                   {activePersonHistoryTab === "LinkedContracts" && (
                     <div>
-                      <h3 className="text-lg font-black text-slate-950">
+                      <h3 className="text-lg font-black text-slate-950 dark:text-white">
                         Contratos vinculados
                       </h3>
-                      <p className="mt-1 text-sm font-semibold text-slate-500">
+                      <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                         Consulta resumida dos contratos ligados ao cadastro.
                       </p>
 
@@ -1116,10 +1116,10 @@ export default function TenantsPage() {
 
                   {activePersonHistoryTab === "FinancialMovements" && (
                     <div>
-                      <h3 className="text-lg font-black text-slate-950">
+                      <h3 className="text-lg font-black text-slate-950 dark:text-white">
                         Movimentações financeiras
                       </h3>
-                      <p className="mt-1 text-sm font-semibold text-slate-500">
+                      <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                         Informações buscadas diretamente nas contas a receber vinculadas a esta pessoa.
                       </p>
 
@@ -1135,33 +1135,33 @@ export default function TenantsPage() {
                       </div>
 
                       {selectedPersonHistory.accountsReceivableRecords.length > 0 && (
-                        <div className="mt-5 overflow-hidden rounded-2xl border border-slate-100">
+                        <div className="mt-5 overflow-hidden rounded-2xl border border-slate-100 dark:border-slate-800">
                           <table className="w-full text-left">
-                            <thead className="bg-slate-50">
+                            <thead className="bg-slate-50 dark:bg-slate-800">
                               <tr>
-                                <th className="px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500">
+                                <th className="px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">
                                   Descrição
                                 </th>
-                                <th className="px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500">
+                                <th className="px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">
                                   Vencimento
                                 </th>
-                                <th className="px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500">
+                                <th className="px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">
                                   Status
                                 </th>
-                                <th className="px-4 py-3 text-right text-xs font-black uppercase tracking-wide text-slate-500">
+                                <th className="px-4 py-3 text-right text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">
                                   Valor
                                 </th>
                               </tr>
                             </thead>
 
-                            <tbody className="divide-y divide-slate-100 bg-white">
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
                               {selectedPersonHistory.accountsReceivableRecords.map(
                                 (record, index) => (
                                   <tr key={getFinancialRecordKey(record, index)}>
-                                    <td className="px-4 py-4 text-sm font-black text-slate-800">
+                                    <td className="px-4 py-4 text-sm font-black text-slate-800 dark:text-slate-100">
                                       {getFinancialRecordDescription(record)}
                                     </td>
-                                    <td className="px-4 py-4 text-sm font-semibold text-slate-600">
+                                    <td className="px-4 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
                                       {formatDateValue(getFinancialRecordDueDate(record))}
                                     </td>
                                     <td className="px-4 py-4">
@@ -1169,7 +1169,7 @@ export default function TenantsPage() {
                                         status={getFinancialRecordStatus(record)}
                                       />
                                     </td>
-                                    <td className="px-4 py-4 text-right text-sm font-black text-slate-900">
+                                    <td className="px-4 py-4 text-right text-sm font-black text-slate-900 dark:text-slate-100">
                                       {formatCurrency(getFinancialRecordAmount(record))}
                                     </td>
                                   </tr>
@@ -1196,13 +1196,13 @@ export default function TenantsPage() {
 
         {isFormOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
-            <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
-              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-8 py-6">
+            <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 dark:border-orange-900/40 bg-white dark:bg-slate-900 shadow-2xl">
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-8 py-6">
                 <div>
-                  <h2 className="text-2xl font-black text-slate-950">
+                  <h2 className="text-2xl font-black text-slate-950 dark:text-white">
                     {isEditing ? "Editar pessoa" : "Nova pessoa"}
                   </h2>
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                     Preencha os dados pessoais e endereço da pessoa.
                   </p>
                 </div>
@@ -1210,7 +1210,7 @@ export default function TenantsPage() {
                 <button
                   type="button"
                   onClick={handleCloseForm}
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-600 transition hover:bg-red-50 hover:text-red-600"
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 text-xl font-black text-slate-600 dark:text-slate-300 transition hover:bg-red-50 dark:bg-red-950/30 dark:hover:bg-red-950/30 hover:text-red-600"
                 >
                   ×
                 </button>
@@ -1235,7 +1235,7 @@ export default function TenantsPage() {
                               : "Ex: João Silva"
                           }
                           required
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         />
                       </FormField>
 
@@ -1245,7 +1245,7 @@ export default function TenantsPage() {
                           onChange={(event) =>
                             handlePersonTypeChange(event.target.value as PersonType)
                           }
-                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         >
                           <option value="Individual">Pessoa física</option>
                           <option value="Company">Pessoa jurídica</option>
@@ -1273,10 +1273,10 @@ export default function TenantsPage() {
                           }
                           maxLength={tenantPersonType === "Company" ? 18 : 14}
                           required
-                          className={`w-full rounded-2xl border px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:ring-2 ${
+                          className={`w-full rounded-2xl border px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:ring-2 ${
                             cpfError
                               ? "border-red-300 focus:border-red-500 focus:ring-red-100"
-                              : "border-slate-200 focus:border-orange-500 focus:ring-orange-100"
+                              : "border-slate-200 dark:border-slate-700 focus:border-orange-500 focus:ring-orange-100"
                           }`}
                         />
 
@@ -1314,7 +1314,7 @@ export default function TenantsPage() {
                           placeholder="Ex: (69) 99999-0000"
                           maxLength={15}
                           required
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         />
                       </FormField>
 
@@ -1326,13 +1326,13 @@ export default function TenantsPage() {
                             setTenantEmail(formatEmailValue(event.target.value))
                           }
                           placeholder="Ex: pessoa@email.com"
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         />
                       </FormField>
                     </div>
 
                     <div className="mt-5">
-                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-orange-100 bg-orange-50/50 px-5 py-4 transition hover:bg-orange-50">
+                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-orange-100 dark:border-orange-900/40 bg-orange-50 dark:bg-orange-950/30/50 dark:bg-orange-950/20 px-5 py-4 transition hover:bg-orange-50 dark:bg-orange-950/30 dark:hover:bg-orange-950/30">
                         <input
                           type="checkbox"
                           checked={tenantIsTenant}
@@ -1343,10 +1343,10 @@ export default function TenantsPage() {
                         />
 
                         <div>
-                          <p className="text-sm font-black text-slate-800">
+                          <p className="text-sm font-black text-slate-800 dark:text-slate-100">
                             É inquilino
                           </p>
-                          <p className="mt-1 text-xs font-semibold text-slate-500">
+                          <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                             Quando desmarcado, esta pessoa não poderá ser
                             vinculada a contratos de aluguel.
                           </p>
@@ -1355,7 +1355,7 @@ export default function TenantsPage() {
                     </div>
 
                     <div className="mt-5">
-                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 transition hover:border-orange-200 hover:bg-orange-50/40">
+                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-5 py-4 transition hover:border-orange-200 hover:bg-orange-50 dark:bg-orange-950/30 dark:hover:bg-orange-950/30/40">
                         <input
                           type="checkbox"
                           checked={tenantIsActive}
@@ -1366,10 +1366,10 @@ export default function TenantsPage() {
                         />
 
                         <div>
-                          <p className="text-sm font-black text-slate-800">
+                          <p className="text-sm font-black text-slate-800 dark:text-slate-100">
                             Pessoa ativa
                           </p>
-                          <p className="mt-1 text-xs font-semibold text-slate-500">
+                          <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                             Quando desmarcado, esta pessoa fica inativa no
                             sistema. Pessoas vinculadas a contratos não podem
                             ser inativadas.
@@ -1396,7 +1396,7 @@ export default function TenantsPage() {
                           placeholder="Ex: 76940-000"
                           maxLength={9}
                           required
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         />
                       </FormField>
 
@@ -1410,7 +1410,7 @@ export default function TenantsPage() {
                           placeholder="UF"
                           maxLength={2}
                           required
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         />
                       </FormField>
 
@@ -1421,7 +1421,7 @@ export default function TenantsPage() {
                           onChange={(event) => setTenantCity(toUpperCaseValue(event.target.value))}
                           placeholder="Cidade"
                           required
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         />
                       </FormField>
 
@@ -1434,7 +1434,7 @@ export default function TenantsPage() {
                           }
                           placeholder="Rua, avenida..."
                           required
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         />
                       </FormField>
 
@@ -1447,7 +1447,7 @@ export default function TenantsPage() {
                           }
                           placeholder="Número da casa"
                           required
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         />
                       </FormField>
 
@@ -1460,7 +1460,7 @@ export default function TenantsPage() {
                           }
                           placeholder="Bairro"
                           required
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         />
                       </FormField>
 
@@ -1472,18 +1472,18 @@ export default function TenantsPage() {
                             setTenantComplement(toUpperCaseValue(event.target.value))
                           }
                           placeholder="Apartamento, bloco, referência..."
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         />
                       </FormField>
                     </div>
                   </div>
                 </div>
 
-                <div className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-100 bg-white px-8 py-6">
+                <div className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-8 py-6">
                   <button
                     type="button"
                     onClick={handleCloseForm}
-                    className="rounded-2xl bg-slate-100 px-6 py-4 text-sm font-black text-slate-600 transition hover:bg-slate-200"
+                    className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-4 text-sm font-black text-slate-600 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
                   >
                     Cancelar
                   </button>
@@ -1491,7 +1491,7 @@ export default function TenantsPage() {
                   <button
                     type="submit"
                     disabled={Boolean(cpfError)}
-                    className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-2xl bg-orange-50 dark:bg-orange-950/300 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isEditing ? "Salvar alterações" : "Cadastrar pessoa"}
                   </button>
@@ -1503,27 +1503,27 @@ export default function TenantsPage() {
 
         {blockedInactivePerson && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-[2rem] border border-orange-100 bg-white p-8 shadow-2xl">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 text-3xl">
+            <div className="w-full max-w-md rounded-[2rem] border border-orange-100 dark:border-orange-900/40 bg-white dark:bg-slate-900 p-8 shadow-2xl">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 dark:bg-orange-950/30 text-3xl">
                 ⚠️
               </div>
 
               <div className="mt-5 text-center">
-                <h3 className="text-2xl font-black text-slate-950">
+                <h3 className="text-2xl font-black text-slate-950 dark:text-white">
                   Pessoa vinculada a contrato
                 </h3>
 
-                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400 dark:text-slate-500">
                   Esta pessoa possui contrato ativo vinculado e não pode
                   ser inativada. Para alterar a situação do cadastro, encerre ou
                   remova o contrato ativo primeiro.
                 </p>
 
-                <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
-                  <p className="text-sm font-black text-slate-900">
+                <div className="mt-5 rounded-2xl bg-slate-50 dark:bg-slate-800 px-4 py-3">
+                  <p className="text-sm font-black text-slate-900 dark:text-slate-100">
                     {blockedInactivePerson.name}
                   </p>
-                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                  <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                     {formatDocument(
                       blockedInactivePerson.cpf || blockedInactivePerson.document,
                       blockedInactivePerson.personType
@@ -1536,7 +1536,7 @@ export default function TenantsPage() {
                 <button
                   type="button"
                   onClick={handleCloseBlockedInactivePerson}
-                  className="w-full rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                  className="w-full rounded-2xl bg-orange-50 dark:bg-orange-950/300 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600"
                 >
                   Entendi
                 </button>
@@ -1547,27 +1547,27 @@ export default function TenantsPage() {
 
         {blockedDeletePerson && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-[2rem] border border-orange-100 bg-white p-8 shadow-2xl">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 text-3xl">
+            <div className="w-full max-w-md rounded-[2rem] border border-orange-100 dark:border-orange-900/40 bg-white dark:bg-slate-900 p-8 shadow-2xl">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 dark:bg-orange-950/30 text-3xl">
                 ⚠️
               </div>
 
               <div className="mt-5 text-center">
-                <h3 className="text-2xl font-black text-slate-950">
+                <h3 className="text-2xl font-black text-slate-950 dark:text-white">
                   Pessoa com histórico
                 </h3>
 
-                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400 dark:text-slate-500">
                   Este cadastro possui vínculos com contratos ou financeiro e
                   não pode ser excluído. Caso necessário, altere a situação para
                   inativo.
                 </p>
 
-                <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
-                  <p className="text-sm font-black text-slate-900">
+                <div className="mt-5 rounded-2xl bg-slate-50 dark:bg-slate-800 px-4 py-3">
+                  <p className="text-sm font-black text-slate-900 dark:text-slate-100">
                     {blockedDeletePerson.name}
                   </p>
-                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                  <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                     {formatDocument(
                       blockedDeletePerson.cpf || blockedDeletePerson.document,
                       blockedDeletePerson.personType
@@ -1580,7 +1580,7 @@ export default function TenantsPage() {
                 <button
                   type="button"
                   onClick={handleCloseBlockedDeletePerson}
-                  className="w-full rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                  className="w-full rounded-2xl bg-orange-50 dark:bg-orange-950/300 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600"
                 >
                   Entendi
                 </button>
@@ -1591,25 +1591,25 @@ export default function TenantsPage() {
 
         {tenantToDelete && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-[2rem] bg-white p-8 shadow-2xl">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 text-3xl">
+            <div className="w-full max-w-md rounded-[2rem] bg-white dark:bg-slate-900 p-8 shadow-2xl">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 dark:bg-red-950/30 text-3xl">
                 🗑️
               </div>
 
               <div className="mt-5 text-center">
-                <h3 className="text-2xl font-black text-slate-950">
+                <h3 className="text-2xl font-black text-slate-950 dark:text-white">
                   Excluir pessoa?
                 </h3>
 
-                <p className="mt-3 text-sm font-semibold text-slate-500">
+                <p className="mt-3 text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                   Esta ação removerá a pessoa do sistema.
                 </p>
 
-                <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
-                  <p className="text-sm font-black text-slate-900">
+                <div className="mt-5 rounded-2xl bg-slate-50 dark:bg-slate-800 px-4 py-3">
+                  <p className="text-sm font-black text-slate-900 dark:text-slate-100">
                     {tenantToDelete.name}
                   </p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
                     {formatDocument(
                       tenantToDelete.cpf || tenantToDelete.document,
                       tenantToDelete.personType
@@ -1622,7 +1622,7 @@ export default function TenantsPage() {
                 <button
                   type="button"
                   onClick={handleCancelDeleteTenant}
-                  className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                  className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-5 py-4 text-sm font-black text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-700"
                 >
                   Cancelar
                 </button>
@@ -1630,7 +1630,7 @@ export default function TenantsPage() {
                 <button
                   type="button"
                   onClick={handleConfirmDeleteTenant}
-                  className="rounded-2xl bg-red-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600"
+                  className="rounded-2xl bg-red-50 dark:bg-red-950/300 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 dark:shadow-red-950/30 transition hover:bg-red-600"
                 >
                   Sim, excluir
                 </button>
@@ -1665,8 +1665,8 @@ function PersonHistoryTabButton({
       onClick={onClick}
       className={`rounded-2xl px-4 py-3 text-left text-xs font-black uppercase tracking-wide transition ${
         isActive
-          ? "bg-orange-500 text-white shadow-md shadow-orange-100"
-          : "bg-white text-slate-500 hover:bg-orange-50 hover:text-orange-600"
+          ? "bg-orange-50 dark:bg-orange-950/300 text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30"
+          : "bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 dark:text-slate-500 hover:bg-orange-50 dark:bg-orange-950/30 dark:hover:bg-orange-950/30 hover:text-orange-600"
       }`}
     >
       {label}
@@ -1679,7 +1679,7 @@ function EmptyPersonHistoryState({
   description,
 }: EmptyPersonHistoryStateProps) {
   return (
-    <div className="mt-5 rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
+    <div className="mt-5 rounded-2xl border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/30 p-5">
       <p className="text-sm font-black text-emerald-700">{title}</p>
       <p className="mt-1 text-xs font-semibold leading-5 text-emerald-700/80">
         {description}
@@ -1700,11 +1700,11 @@ type PersonDetailItemProps = {
 
 function PersonDetailItem({ label, value }: PersonDetailItemProps) {
   return (
-    <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-      <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+    <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 px-4 py-3">
+      <p className="text-xs font-black uppercase tracking-wide text-slate-400 dark:text-slate-500">
         {label}
       </p>
-      <p className="mt-1 break-words text-sm font-black text-slate-800">
+      <p className="mt-1 break-words text-sm font-black text-slate-800 dark:text-slate-100">
         {value}
       </p>
     </div>
@@ -1714,7 +1714,7 @@ function PersonDetailItem({ label, value }: PersonDetailItemProps) {
 function FormField({ label, children }: FormFieldProps) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-black text-slate-700">
+      <label className="mb-2 block text-sm font-black text-slate-700 dark:text-slate-200">
         {label}
       </label>
       {children}
@@ -1726,11 +1726,11 @@ function ActiveBadge({ isActive }: { isActive: boolean }) {
   const activeConfig = isActive
     ? {
         label: "Ativo",
-        className: "bg-emerald-100 text-emerald-700",
+        className: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700",
       }
     : {
         label: "Inativo",
-        className: "bg-slate-100 text-slate-600",
+        className: "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300",
       };
 
   return (
@@ -1836,12 +1836,12 @@ function FinancialStatusBadge({ status }: { status: string }) {
   const normalizedStatus = status.toLowerCase();
 
   const config = normalizedStatus.includes("paid") || normalizedStatus.includes("pago")
-    ? { label: "Pago", className: "bg-emerald-100 text-emerald-700" }
+    ? { label: "Pago", className: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700" }
     : normalizedStatus.includes("overdue") || normalizedStatus.includes("vencido")
-      ? { label: "Vencido", className: "bg-red-100 text-red-700" }
+      ? { label: "Vencido", className: "bg-red-100 dark:bg-red-950/40 text-red-700" }
       : normalizedStatus.includes("pending") || normalizedStatus.includes("pendente")
-        ? { label: "Pendente", className: "bg-amber-100 text-amber-700" }
-        : { label: status || "Não informado", className: "bg-slate-100 text-slate-600" };
+        ? { label: "Pendente", className: "bg-amber-100 dark:bg-amber-950/40 text-amber-700" }
+        : { label: status || "Não informado", className: "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300" };
 
   return (
     <span className={`rounded-full px-3 py-1 text-xs font-black ${config.className}`}>

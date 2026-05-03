@@ -837,10 +837,10 @@ export default function ContractsPage() {
       <div className="space-y-8">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <h1 className="text-4xl font-black tracking-tight text-slate-950">
+            <h1 className="text-4xl font-black tracking-tight text-slate-950 dark:text-white">
               Contratos
             </h1>
-            <p className="mt-2 text-slate-500">
+            <p className="mt-2 text-slate-500 dark:text-slate-400 dark:text-slate-500">
               Gerencie os contratos de locação e mantenha o financeiro integrado.
             </p>
           </div>
@@ -848,7 +848,7 @@ export default function ContractsPage() {
           <button
             type="button"
             onClick={handleOpenCreateForm}
-            className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+            className="rounded-2xl bg-orange-50 dark:bg-orange-500/100 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600"
           >
             + Novo contrato
           </button>
@@ -860,13 +860,13 @@ export default function ContractsPage() {
           <SummaryCard icon="💰" title="Receita mensal" value={formatCurrency(monthlyRevenue)} detail="Contratos ativos" />
         </div>
 
-        <div className="rounded-3xl border border-orange-100 bg-white shadow-sm">
-          <div className="flex flex-col gap-4 border-b border-slate-100 px-6 py-5 xl:flex-row xl:items-end xl:justify-between">
+        <div className="rounded-3xl border border-orange-100 dark:border-orange-500/20 bg-white dark:bg-slate-900 dark:bg-slate-950 shadow-sm">
+          <div className="flex flex-col gap-4 border-b border-slate-100 dark:border-slate-700 px-6 py-5 xl:flex-row xl:items-end xl:justify-between">
             <div>
-              <h2 className="text-2xl font-black text-slate-950">
+              <h2 className="text-2xl font-black text-slate-950 dark:text-white">
                 Contratos cadastrados
               </h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                 Exibindo {filteredContracts.length} de {contracts.length} contrato(s)
               </p>
             </div>
@@ -878,7 +878,7 @@ export default function ContractsPage() {
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                   placeholder="Buscar por imóvel ou inquilino"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                  className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-950 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
                 />
               </FormField>
 
@@ -886,7 +886,7 @@ export default function ContractsPage() {
                 <select
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value as ContractFilterStatus)}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                  className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-950 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
                 >
                   <option value="Active">Ativos</option>
                   <option value="Expiring">Vencendo</option>
@@ -902,58 +902,58 @@ export default function ContractsPage() {
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-left">
-              <thead className="bg-orange-50">
+              <thead className="bg-orange-50 dark:bg-orange-500/10">
                 <tr>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">Imóvel</th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">Inquilino</th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">Início</th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">Fim</th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">Valor</th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">Tipo</th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">Status</th>
-                  <th className="px-6 py-4 text-right text-sm font-black text-slate-700">Ações</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">Imóvel</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">Inquilino</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">Início</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">Fim</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">Valor</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">Tipo</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">Status</th>
+                  <th className="px-6 py-4 text-right text-sm font-black text-slate-700 dark:text-slate-200">Ações</th>
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                 {filteredContracts.map((contract) => {
                   const displayStatus = getDisplayContractStatus(contract);
 
                   return (
                     <tr
                       key={contract.id}
-                      className={`transition hover:bg-slate-50 ${
+                      className={`transition hover:bg-slate-50 dark:hover:bg-slate-800/80 dark:bg-slate-800 dark:bg-slate-700 ${
                         displayStatus === "Deleted"
-                          ? "bg-slate-50 opacity-70"
+                          ? "bg-slate-50 dark:bg-slate-800 dark:bg-slate-700 opacity-70"
                           : displayStatus === "Expiring"
-                            ? "bg-amber-50/60"
+                            ? "bg-amber-50 dark:bg-amber-500/10/60"
                             : ""
                       }`}
                     >
-                      <td className="px-6 py-4 font-black text-slate-900">
+                      <td className="px-6 py-4 font-black text-slate-900 dark:text-white">
                         {contract.propertyName || "Não informado"}
                       </td>
 
-                      <td className="px-6 py-4 text-sm font-semibold text-slate-600">
+                      <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
                         {contract.tenantName || "Não informado"}
                       </td>
 
-                      <td className="px-6 py-4 text-sm font-semibold text-slate-600">
+                      <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
                         {formatDate(contract.startDate)}
                       </td>
 
-                      <td className="px-6 py-4 text-sm font-semibold text-slate-600">
+                      <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
                         <div className="flex flex-col gap-1">
                           <span>{formatDate(contract.endDate)}</span>
                           {displayStatus === "Expiring" && (
-                            <span className="text-xs font-black text-amber-700">
+                            <span className="text-xs font-black text-amber-700 dark:text-amber-300">
                               Vence em {getDaysUntilDate(contract.endDate)} dia(s)
                             </span>
                           )}
                         </div>
                       </td>
 
-                      <td className="px-6 py-4 text-sm font-black text-slate-900">
+                      <td className="px-6 py-4 text-sm font-black text-slate-900 dark:text-white">
                         {formatCurrency(contract.rentValue)}
                       </td>
 
@@ -961,8 +961,8 @@ export default function ContractsPage() {
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-black ${
                             contract.isTemporaryRental
-                              ? "bg-orange-100 text-orange-700"
-                              : "bg-slate-100 text-slate-600"
+                              ? "bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-300"
+                              : "bg-slate-100 dark:bg-slate-800 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
                           }`}
                         >
                           {contract.isTemporaryRental ? "Temporário" : "Padrão"}
@@ -974,7 +974,7 @@ export default function ContractsPage() {
                           <StatusBadge status={displayStatus} />
                           {(displayStatus === "Canceled" || displayStatus === "Deleted") &&
                             contract.statusReason && (
-                              <span className="max-w-[220px] text-xs font-semibold text-slate-500">
+                              <span className="max-w-[220px] text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                                 Motivo: {contract.statusReason}
                               </span>
                             )}
@@ -986,7 +986,7 @@ export default function ContractsPage() {
                           <button
                             type="button"
                             onClick={() => handleOpenPrintableContract(contract)}
-                            className="rounded-xl bg-orange-50 px-4 py-2 text-sm font-bold text-orange-600 transition hover:bg-orange-100"
+                            className="rounded-xl bg-orange-50 dark:bg-orange-500/10 px-4 py-2 text-sm font-bold text-orange-600 dark:text-orange-400 transition hover:bg-orange-100 dark:hover:bg-orange-500/20 dark:bg-orange-500/20"
                           >
                             Gerar contrato
                           </button>
@@ -994,7 +994,7 @@ export default function ContractsPage() {
                           <button
                             type="button"
                             onClick={() => handleEditContract(contract)}
-                            className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+                            className="rounded-xl bg-slate-100 dark:bg-slate-800 dark:bg-slate-700 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-700"
                           >
                             Editar
                           </button>
@@ -1006,7 +1006,7 @@ export default function ContractsPage() {
 
                 {filteredContracts.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-6 py-10 text-center text-sm font-semibold text-slate-500">
+                    <td colSpan={8} className="px-6 py-10 text-center text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                       Nenhum contrato encontrado para este filtro.
                     </td>
                   </tr>
@@ -1018,16 +1018,16 @@ export default function ContractsPage() {
 
         {printableContract && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
-            <div className="flex max-h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
-              <div className="flex flex-col gap-4 border-b border-slate-100 bg-white px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex max-h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 dark:border-orange-500/20 bg-white dark:bg-slate-900 dark:bg-slate-950 shadow-2xl">
+              <div className="flex flex-col gap-4 border-b border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-950 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-500">
+                  <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-500 dark:text-orange-400">
                     Contrato temporário
                   </p>
-                  <h2 className="mt-1 text-2xl font-black text-slate-950">
+                  <h2 className="mt-1 text-2xl font-black text-slate-950 dark:text-white">
                     Visualização do contrato
                   </h2>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                  <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                     Confira o documento antes de gerar PDF ou imprimir.
                   </p>
                 </div>
@@ -1036,7 +1036,7 @@ export default function ContractsPage() {
                   <button
                     type="button"
                     onClick={handleClosePrintableContract}
-                    className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                    className="rounded-2xl bg-slate-100 dark:bg-slate-800 dark:bg-slate-700 px-5 py-3 text-sm font-black text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-700"
                   >
                     Fechar
                   </button>
@@ -1044,7 +1044,7 @@ export default function ContractsPage() {
                   <button
                     type="button"
                     onClick={handleGeneratePrintableContractPdf}
-                    className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-md shadow-slate-100 transition hover:bg-slate-800"
+                    className="rounded-2xl bg-slate-900 dark:bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-md shadow-slate-100 dark:shadow-black/40 transition hover:bg-slate-800 dark:bg-slate-700"
                   >
                     Gerar PDF
                   </button>
@@ -1052,14 +1052,14 @@ export default function ContractsPage() {
                   <button
                     type="button"
                     onClick={handlePrintPrintableContract}
-                    className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                    className="rounded-2xl bg-orange-50 dark:bg-orange-500/100 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600"
                   >
                     Imprimir
                   </button>
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 bg-slate-100 p-4">
+              <div className="min-h-0 flex-1 bg-slate-100 dark:bg-slate-800 dark:bg-slate-700 p-4">
                 <iframe
                   ref={printableContractFrameRef}
                   title="Visualização do contrato temporário"
@@ -1069,7 +1069,7 @@ export default function ContractsPage() {
                     tenants.find((tenant) => String(tenant.id) === String(printableContract.tenantId)),
                     false
                   )}
-                  className="h-[72vh] w-full rounded-2xl border border-slate-200 bg-white shadow-sm"
+                  className="h-[72vh] w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-950 shadow-sm"
                 />
               </div>
             </div>
@@ -1078,34 +1078,34 @@ export default function ContractsPage() {
 
         {pendingStatusChange && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-lg rounded-[2rem] border border-red-100 bg-white p-8 shadow-2xl">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 text-3xl">
+            <div className="w-full max-w-lg rounded-[2rem] border border-red-100 dark:border-red-500/20 bg-white dark:bg-slate-900 dark:bg-slate-950 p-8 shadow-2xl">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 dark:bg-red-500/10 text-3xl">
                 {pendingStatusChange.nextStatus === "Deleted" ? "🗑️" : "🚫"}
               </div>
 
               <div className="mt-5 text-center">
-                <h3 className="text-2xl font-black text-slate-950">
+                <h3 className="text-2xl font-black text-slate-950 dark:text-white">
                   {pendingStatusChange.nextStatus === "Deleted"
                     ? "Motivo da exclusão"
                     : "Motivo do cancelamento"}
                 </h3>
 
-                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400 dark:text-slate-500">
                   Ao confirmar, as parcelas em aberto vinculadas a este contrato serão removidas do Contas a Receber para manter o financeiro consistente.
                 </p>
               </div>
 
-              <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
-                <p className="text-sm font-black text-slate-900">
+              <div className="mt-5 rounded-2xl bg-slate-50 dark:bg-slate-800 dark:bg-slate-700 px-4 py-3">
+                <p className="text-sm font-black text-slate-900 dark:text-white">
                   {pendingStatusChange.contract.propertyName || "Contrato"}
                 </p>
-                <p className="mt-1 text-xs font-semibold text-slate-500">
+                <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                   {pendingStatusChange.contract.tenantName || "Inquilino não informado"}
                 </p>
               </div>
 
               <div className="mt-5">
-                <label className="mb-2 block text-sm font-black text-slate-700">
+                <label className="mb-2 block text-sm font-black text-slate-700 dark:text-slate-200">
                   Motivo
                 </label>
                 <textarea
@@ -1120,11 +1120,11 @@ export default function ContractsPage() {
                       : "Descreva o motivo do cancelamento do contrato"
                   }
                   rows={4}
-                  className="w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                  className="w-full resize-none rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
                 />
 
                 {statusReasonError && (
-                  <div className="mt-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                  <div className="mt-3 rounded-2xl border border-red-100 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm font-bold text-red-700 dark:text-red-300">
                     {statusReasonError}
                   </div>
                 )}
@@ -1134,7 +1134,7 @@ export default function ContractsPage() {
                 <button
                   type="button"
                   onClick={handleCancelStatusReason}
-                  className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                  className="rounded-2xl bg-slate-100 dark:bg-slate-800 dark:bg-slate-700 px-5 py-4 text-sm font-black text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-700"
                 >
                   Cancelar
                 </button>
@@ -1142,7 +1142,7 @@ export default function ContractsPage() {
                 <button
                   type="button"
                   onClick={handleConfirmStatusReason}
-                  className="rounded-2xl bg-red-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600"
+                  className="rounded-2xl bg-red-50 dark:bg-red-500/100 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 dark:shadow-red-950/30 transition hover:bg-red-600"
                 >
                   Confirmar
                 </button>
@@ -1153,13 +1153,13 @@ export default function ContractsPage() {
 
         {isFormOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
-            <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
-              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-8 py-6">
+            <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 dark:border-orange-500/20 bg-white dark:bg-slate-900 dark:bg-slate-950 shadow-2xl">
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-950 px-8 py-6">
                 <div>
-                  <h2 className="text-2xl font-black text-slate-950">
+                  <h2 className="text-2xl font-black text-slate-950 dark:text-white">
                     {isEditing ? "Editar contrato" : "Novo contrato"}
                   </h2>
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                     Preencha os dados do contrato.
                   </p>
                 </div>
@@ -1167,7 +1167,7 @@ export default function ContractsPage() {
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-600 transition hover:bg-red-50 hover:text-red-600"
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 dark:bg-slate-700 text-xl font-black text-slate-600 dark:text-slate-300 transition hover:bg-red-50 dark:hover:bg-red-500/10 dark:bg-red-500/10 hover:text-red-600 dark:text-red-300"
                 >
                   ×
                 </button>
@@ -1176,7 +1176,7 @@ export default function ContractsPage() {
               <form onSubmit={handleSubmitContract}>
                 <div className="p-8">
                   {formError && (
-                    <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-black text-red-600">
+                    <div className="mb-6 rounded-2xl border border-red-100 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm font-black text-red-600 dark:text-red-300">
                       {formError}
                     </div>
                   )}
@@ -1187,7 +1187,7 @@ export default function ContractsPage() {
                         value={propertyId}
                         onChange={(event) => handlePropertyChange(event.target.value)}
                         required
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-950 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
                       >
                         <option value="">Selecione um imóvel</option>
 
@@ -1207,7 +1207,7 @@ export default function ContractsPage() {
                           setFormError("");
                         }}
                         required
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-950 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
                       >
                         <option value="">Selecione um inquilino</option>
                         {availableTenants.map((tenant) => (
@@ -1228,7 +1228,7 @@ export default function ContractsPage() {
                         }}
                         placeholder="Ex: 1800"
                         required
-                        className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
                       />
                     </FormField>
 
@@ -1241,7 +1241,7 @@ export default function ContractsPage() {
                           setFormError("");
                         }}
                         required
-                        className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
                       />
                     </FormField>
 
@@ -1254,7 +1254,7 @@ export default function ContractsPage() {
                           setFormError("");
                         }}
                         required
-                        className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
                       />
                     </FormField>
 
@@ -1263,7 +1263,7 @@ export default function ContractsPage() {
                         value={contractStatus}
                         onChange={(event) => setContractStatus(event.target.value as ContractStatus)}
                         required
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-950 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
                       >
                         <option value="Active">Ativo</option>
                         <option value="Inactive">Inativo</option>
@@ -1274,7 +1274,7 @@ export default function ContractsPage() {
                     </FormField>
                   </div>
 
-                  <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-2xl border border-orange-100 bg-orange-50/40 px-5 py-4 transition hover:bg-orange-50">
+                  <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-2xl border border-orange-100 dark:border-orange-500/20 bg-orange-50 dark:bg-orange-500/10/40 px-5 py-4 transition hover:bg-orange-50 dark:hover:bg-orange-500/10 dark:bg-orange-500/10">
                     <input
                       type="checkbox"
                       checked={isTemporaryRental}
@@ -1291,10 +1291,10 @@ export default function ContractsPage() {
                     />
 
                     <div>
-                      <p className="text-sm font-black text-slate-800">
+                      <p className="text-sm font-black text-slate-800 dark:text-slate-100">
                         Este contrato é de locação temporária
                       </p>
-                      <p className="mt-1 text-xs font-semibold text-slate-500">
+                      <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                         Use esta opção para contratos de curto prazo. Esta marcação será utilizada na impressão e no modelo do contrato.
                       </p>
                     </div>
@@ -1311,7 +1311,7 @@ export default function ContractsPage() {
                             setFormError("");
                           }}
                           required={isTemporaryRental}
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
                         />
                       </FormField>
 
@@ -1324,25 +1324,25 @@ export default function ContractsPage() {
                             setFormError("");
                           }}
                           required={isTemporaryRental}
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
                         />
                       </FormField>
                     </div>
                   )}
                 </div>
 
-                <div className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-100 bg-white px-8 py-6">
+                <div className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-950 px-8 py-6">
                   <button
                     type="button"
                     onClick={resetForm}
-                    className="rounded-2xl bg-slate-100 px-6 py-4 text-sm font-black text-slate-600 transition hover:bg-slate-200"
+                    className="rounded-2xl bg-slate-100 dark:bg-slate-800 dark:bg-slate-700 px-6 py-4 text-sm font-black text-slate-600 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
                   >
                     Cancelar
                   </button>
 
                   <button
                     type="submit"
-                    className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                    className="rounded-2xl bg-orange-50 dark:bg-orange-500/100 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600"
                   >
                     {isEditing ? "Salvar alterações" : "Criar contrato"}
                   </button>
@@ -1364,7 +1364,7 @@ type FormFieldProps = {
 function FormField({ label, children }: FormFieldProps) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-black text-slate-700">
+      <label className="mb-2 block text-sm font-black text-slate-700 dark:text-slate-200">
         {label}
       </label>
       {children}
@@ -1381,26 +1381,26 @@ type SummaryCardProps = {
 
 function SummaryCard({ icon, title, value, detail }: SummaryCardProps) {
   return (
-    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
-      <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-xl text-orange-600">
+    <div className="rounded-3xl border border-orange-100 dark:border-orange-500/20 bg-white dark:bg-slate-900 dark:bg-slate-950 p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
+      <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 dark:bg-orange-500/20 text-xl text-orange-600 dark:text-orange-400">
         {icon}
       </div>
 
-      <p className="text-sm font-bold text-slate-500">{title}</p>
-      <h3 className="mt-3 text-3xl font-black text-slate-950">{value}</h3>
-      <p className="mt-3 text-sm font-bold text-orange-600">{detail}</p>
+      <p className="text-sm font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500">{title}</p>
+      <h3 className="mt-3 text-3xl font-black text-slate-950 dark:text-white">{value}</h3>
+      <p className="mt-3 text-sm font-bold text-orange-600 dark:text-orange-400">{detail}</p>
     </div>
   );
 }
 
 function StatusBadge({ status }: { status: ContractDisplayStatus }) {
   const statusConfig = {
-    Active: { label: "Ativo", className: "bg-emerald-100 text-emerald-700" },
-    Expiring: { label: "Vencendo", className: "bg-amber-100 text-amber-700" },
-    Inactive: { label: "Inativo", className: "bg-slate-100 text-slate-600" },
-    Canceled: { label: "Cancelado", className: "bg-red-100 text-red-700" },
-    Finished: { label: "Finalizado", className: "bg-blue-100 text-blue-700" },
-    Deleted: { label: "Excluído", className: "bg-zinc-200 text-zinc-700" },
+    Active: { label: "Ativo", className: "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300" },
+    Expiring: { label: "Vencendo", className: "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300" },
+    Inactive: { label: "Inativo", className: "bg-slate-100 dark:bg-slate-800 dark:bg-slate-700 text-slate-600 dark:text-slate-300" },
+    Canceled: { label: "Cancelado", className: "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300" },
+    Finished: { label: "Finalizado", className: "bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300" },
+    Deleted: { label: "Excluído", className: "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200" },
   };
 
   return (

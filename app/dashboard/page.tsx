@@ -5,11 +5,8 @@ import AppShell from "@/components/layout/app-shell";
 import {
   Bar,
   CartesianGrid,
-  Cell,
   ComposedChart,
   Line,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -104,6 +101,8 @@ type FinancialMovement = {
   status: "overdue" | "today" | "upcoming";
 };
 
+type ThemeMode = "light" | "black";
+
 const chartColors = {
   orange: "#f97316",
   orangeSoft: "#fed7aa",
@@ -113,10 +112,106 @@ const chartColors = {
   red: "#dc2626",
 };
 
+const rentixDashboardThemeStyle = `
+  .rentix-dashboard-page[data-rentix-theme="black"] {
+    color: #f8fafc;
+  }
+
+  .rentix-dashboard-page[data-rentix-theme="black"] .bg-white,
+  .rentix-dashboard-page[data-rentix-theme="black"] .bg-slate-50,
+  .rentix-dashboard-page[data-rentix-theme="black"] .bg-slate-100 {
+    background-color: #0f172a !important;
+  }
+
+  .rentix-dashboard-page[data-rentix-theme="black"] section.bg-white,
+  .rentix-dashboard-page[data-rentix-theme="black"] div.bg-white {
+    background: linear-gradient(145deg, #0f172a 0%, #111827 100%) !important;
+  }
+
+  .rentix-dashboard-page[data-rentix-theme="black"] .bg-orange-50,
+  .rentix-dashboard-page[data-rentix-theme="black"] .bg-orange-100 {
+    background-color: rgba(249, 115, 22, 0.12) !important;
+  }
+
+  .rentix-dashboard-page[data-rentix-theme="black"] .bg-red-50 {
+    background-color: rgba(220, 38, 38, 0.12) !important;
+  }
+
+  .rentix-dashboard-page[data-rentix-theme="black"] .bg-emerald-50 {
+    background-color: rgba(16, 185, 129, 0.12) !important;
+  }
+
+  .rentix-dashboard-page[data-rentix-theme="black"] .bg-sky-50 {
+    background-color: rgba(14, 165, 233, 0.12) !important;
+  }
+
+  .rentix-dashboard-page[data-rentix-theme="black"] .text-slate-950,
+  .rentix-dashboard-page[data-rentix-theme="black"] .text-slate-900,
+  .rentix-dashboard-page[data-rentix-theme="black"] .text-slate-800,
+  .rentix-dashboard-page[data-rentix-theme="black"] .text-slate-700,
+  .rentix-dashboard-page[data-rentix-theme="black"] .text-slate-600 {
+    color: #f8fafc !important;
+  }
+
+  .rentix-dashboard-page[data-rentix-theme="black"] .text-slate-500,
+  .rentix-dashboard-page[data-rentix-theme="black"] .text-slate-400 {
+    color: #cbd5e1 !important;
+  }
+
+  .rentix-dashboard-page[data-rentix-theme="black"] .border-orange-100,
+  .rentix-dashboard-page[data-rentix-theme="black"] .border-slate-100,
+  .rentix-dashboard-page[data-rentix-theme="black"] .border-slate-200,
+  .rentix-dashboard-page[data-rentix-theme="black"] .border-slate-300,
+  .rentix-dashboard-page[data-rentix-theme="black"] .border-red-100,
+  .rentix-dashboard-page[data-rentix-theme="black"] .border-emerald-100,
+  .rentix-dashboard-page[data-rentix-theme="black"] .border-sky-100 {
+    border-color: #1e293b !important;
+  }
+
+  .rentix-dashboard-page[data-rentix-theme="black"] .shadow-sm,
+  .rentix-dashboard-page[data-rentix-theme="black"] .shadow-md,
+  .rentix-dashboard-page[data-rentix-theme="black"] .shadow-lg,
+  .rentix-dashboard-page[data-rentix-theme="black"] .shadow-xl,
+  .rentix-dashboard-page[data-rentix-theme="black"] .shadow-2xl {
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38) !important;
+  }
+
+  .rentix-dashboard-page[data-rentix-theme="black"] .recharts-cartesian-grid line {
+    stroke: #334155 !important;
+  }
+
+  .rentix-dashboard-page[data-rentix-theme="black"] .recharts-text,
+  .rentix-dashboard-page[data-rentix-theme="black"] .recharts-cartesian-axis-tick-value {
+    fill: #cbd5e1 !important;
+  }
+
+  .rentix-dashboard-page[data-rentix-theme="black"] .recharts-tooltip-wrapper .recharts-default-tooltip {
+    background-color: #020617 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    border-radius: 14px !important;
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45) !important;
+  }
+
+  .rentix-dashboard-page[data-rentix-theme="black"] .recharts-tooltip-wrapper .recharts-tooltip-label,
+  .rentix-dashboard-page[data-rentix-theme="black"] .recharts-tooltip-wrapper .recharts-tooltip-item {
+    color: #f8fafc !important;
+  }
+
+  .rentix-dashboard-page[data-rentix-theme="black"] .hover\\:bg-orange-50:hover {
+    background-color: rgba(249, 115, 22, 0.16) !important;
+  }
+
+  .rentix-dashboard-page[data-rentix-theme="black"] .hover\\:bg-slate-200:hover {
+    background-color: #1e293b !important;
+  }
+`;
+
 export default function DashboardPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
+  const [dashboardTheme, setDashboardTheme] = useState<ThemeMode>("light");
   const [manualReceivables, setManualReceivables] = useState<ReceivableCharge[]>([]);
   const [paidReceivableIds, setPaidReceivableIds] = useState<string[]>([]);
   const [payables, setPayables] = useState<PayableCharge[]>([]);
@@ -138,6 +233,7 @@ export default function DashboardPage() {
       localStorage.getItem("rentix_accounts_payable") ||
       localStorage.getItem("rentix_payables");
     const storedPaidPayables = localStorage.getItem("rentix_paid_payables");
+    const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
 
     if (storedProperties) setProperties(JSON.parse(storedProperties));
     if (storedTenants) setTenants(JSON.parse(storedTenants));
@@ -153,6 +249,14 @@ export default function DashboardPage() {
     }
     if (storedPaidPayables) {
       setPaidPayableIds(safeParseArray<string>(storedPaidPayables));
+    }
+    if (storedThemeSettings) {
+      try {
+        const parsedThemeSettings = JSON.parse(storedThemeSettings) as { mode?: ThemeMode };
+        setDashboardTheme(parsedThemeSettings.mode === "black" ? "black" : "light");
+      } catch {
+        setDashboardTheme("light");
+      }
     }
   }, []);
 
@@ -207,21 +311,6 @@ export default function DashboardPage() {
     activeContracts > 0 ? Math.round(monthlyRevenue / activeContracts) : 0;
 
   const annualRevenueProjection = monthlyRevenue * 12;
-
-  const contractStatusChartData = [
-    { name: "Ativos", value: activeContracts, color: chartColors.orange },
-    { name: "Finalizados", value: finishedContracts, color: chartColors.slate },
-    { name: "Cancelados", value: canceledContracts, color: chartColors.red },
-  ].filter((item) => item.value > 0);
-
-  const propertyStatusChartData = [
-    { name: "Alugados", value: rentedProperties, color: chartColors.orange },
-    {
-      name: "Disponíveis",
-      value: availableProperties,
-      color: chartColors.slateSoft,
-    },
-  ];
 
   const revenueChartData = useMemo<RevenueMonth[]>(() => {
     return getLastSixMonths().map((monthDate) => {
@@ -607,7 +696,8 @@ export default function DashboardPage() {
 
   return (
     <AppShell>
-      <div className="space-y-8 pt-6">
+      <style>{rentixDashboardThemeStyle}</style>
+      <div data-rentix-theme={dashboardTheme} className="rentix-dashboard-page space-y-8 pt-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-4xl font-black tracking-tight text-slate-950">
@@ -904,103 +994,123 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid gap-6 xl:grid-cols-12">
-          <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-4">
-            <h2 className="text-lg font-black text-slate-950">
-              Status da carteira
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Distribuição atual entre imóveis alugados e disponíveis.
-            </p>
+          <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-6">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h2 className="text-lg font-black text-slate-950">
+                  Contas a receber
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Recebimentos atrasados, vencendo hoje e próximos 7 dias.
+                </p>
+              </div>
 
-            <div className="mt-6 h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={propertyStatusChartData}
-                    dataKey="value"
-                    nameKey="name"
-                    innerRadius={66}
-                    outerRadius={100}
-                    paddingAngle={4}
-                  >
-                    {propertyStatusChartData.map((item) => (
-                      <Cell key={item.name} fill={item.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+              <span className="rounded-full bg-orange-50 px-3 py-2 text-xs font-black text-orange-700">
+                📥 Receber
+              </span>
             </div>
 
-            <div className="grid gap-3">
-              <StatusLegend
-                label="Alugados"
-                value={rentedProperties}
-                color="bg-orange-500"
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <FinancialSummaryCard
+                title="Hoje / atrasado"
+                value={formatCurrency(todayReceivableTotal)}
+                detail={`${todayReceivableMovements.length} item(ns)`}
+                tone="orange"
               />
-              <StatusLegend
-                label="Disponíveis"
-                value={availableProperties}
-                color="bg-slate-300"
+              <FinancialSummaryCard
+                title="Próximos"
+                value={formatCurrency(upcomingReceivableTotal)}
+                detail={`${upcomingReceivableMovements.length} item(ns)`}
+                tone="green"
+              />
+              <FinancialSummaryCard
+                title="Total atenção"
+                value={formatCurrency(todayReceivableTotal + upcomingReceivableTotal)}
+                detail="Hoje + próximos"
+                tone="slate"
+              />
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              <FinancialMovementPreview
+                title="Receber hoje / atrasado"
+                emptyMessage="Nenhuma conta a receber para hoje ou atrasada."
+                movements={todayReceivableMovements.slice(0, 5)}
+              />
+
+              <FinancialMovementPreview
+                title="Próximos recebimentos"
+                emptyMessage="Nenhuma conta a receber próxima."
+                movements={upcomingReceivableMovements.slice(0, 5)}
               />
             </div>
           </section>
 
-          <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-4">
-            <h2 className="text-lg font-black text-slate-950">
-              Contratos por status
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Leitura rápida da saúde contratual.
-            </p>
+          <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-6">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h2 className="text-lg font-black text-slate-950">
+                  Contas a pagar
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Pagamentos atrasados, vencendo hoje e próximos 7 dias.
+                </p>
+              </div>
 
-            {contractStatusChartData.length === 0 ? (
-              <EmptyState message="Nenhum contrato cadastrado." />
-            ) : (
-              <>
-                <div className="mt-6 h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={contractStatusChartData}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius={66}
-                        outerRadius={100}
-                        paddingAngle={4}
-                      >
-                        {contractStatusChartData.map((item) => (
-                          <Cell key={item.name} fill={item.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
+              <span className="rounded-full bg-red-50 px-3 py-2 text-xs font-black text-red-700">
+                📤 Pagar
+              </span>
+            </div>
 
-                <div className="grid gap-3">
-                  {contractStatusChartData.map((item) => (
-                    <StatusLegend
-                      key={item.name}
-                      label={item.name}
-                      value={item.value}
-                      color={getLegendColor(item.name)}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <FinancialSummaryCard
+                title="Hoje / atrasado"
+                value={formatCurrency(todayPayableTotal)}
+                detail={`${todayPayableMovements.length} item(ns)`}
+                tone="red"
+              />
+              <FinancialSummaryCard
+                title="Próximos"
+                value={formatCurrency(upcomingPayableTotal)}
+                detail={`${upcomingPayableMovements.length} item(ns)`}
+                tone="slate"
+              />
+              <FinancialSummaryCard
+                title="Total atenção"
+                value={formatCurrency(todayPayableTotal + upcomingPayableTotal)}
+                detail="Hoje + próximos"
+                tone="orange"
+              />
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              <FinancialMovementPreview
+                title="Pagar hoje / atrasado"
+                emptyMessage="Nenhuma conta a pagar para hoje ou atrasada."
+                movements={todayPayableMovements.slice(0, 5)}
+              />
+
+              <FinancialMovementPreview
+                title="Próximos pagamentos"
+                emptyMessage="Nenhuma conta a pagar próxima."
+                movements={upcomingPayableMovements.slice(0, 5)}
+              />
+            </div>
           </section>
+        </div>
 
-          <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-4">
+        <div className="grid gap-6 xl:grid-cols-12">
+          <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-12">
             <h2 className="text-lg font-black text-slate-950">Top receitas</h2>
             <p className="mt-1 text-sm text-slate-500">
               Imóveis ativos com maior contribuição mensal.
             </p>
 
-            <div className="mt-5 space-y-3">
+            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
               {topRevenueProperties.length === 0 ? (
-                <EmptyState message="Nenhum contrato ativo encontrado." />
+                <div className="md:col-span-2 xl:col-span-5">
+                  <EmptyState message="Nenhum contrato ativo encontrado." />
+                </div>
               ) : (
                 topRevenueProperties.map((item, index) => (
                   <RankingItem
@@ -1012,98 +1122,6 @@ export default function DashboardPage() {
                   />
                 ))
               )}
-            </div>
-          </section>
-        </div>
-
-        <div className="grid gap-6 xl:grid-cols-12">
-          <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-7">
-            <div className="mb-5 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-black text-slate-950">
-                  Próximos vencimentos
-                </h2>
-                <p className="text-sm text-slate-500">
-                  Lista operacional baseada nos contratos ativos cadastrados.
-                </p>
-              </div>
-            </div>
-
-            {nextPayments.length === 0 ? (
-              <EmptyState message="Nenhum vencimento encontrado." />
-            ) : (
-              <div className="space-y-3">
-                {nextPayments.map((payment) => (
-                  <div
-                    key={payment.id}
-                    className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-4"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-100 text-orange-600">
-                        📅
-                      </div>
-
-                      <div>
-                        <p className="font-bold text-slate-800">
-                          Aluguel - {payment.propertyName}
-                        </p>
-                        <p className="text-sm text-slate-500">
-                          {payment.tenantName}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <p className="font-bold text-orange-600">
-                        {payment.dueDate}
-                      </p>
-                      <p className="text-sm font-semibold text-slate-700">
-                        {formatCurrency(payment.amount)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="rounded-3xl bg-slate-950 p-6 text-white shadow-sm xl:col-span-5">
-            <h2 className="text-lg font-black">Resumo executivo</h2>
-            <p className="mt-1 text-sm text-slate-300">
-              Leitura consolidada da operação atual.
-            </p>
-
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              <ExecutiveSummaryItem
-                title="Carteira"
-                value={`${totalProperties} imóveis`}
-              />
-              <ExecutiveSummaryItem
-                title="Capacidade mensal"
-                value={formatCurrency(totalPotentialRevenue)}
-              />
-              <ExecutiveSummaryItem
-                title="Receita ativa"
-                value={formatCurrency(monthlyRevenue)}
-              />
-              <ExecutiveSummaryItem
-                title="Oportunidade"
-                value={formatCurrency(availablePotentialRevenue)}
-              />
-            </div>
-
-            <div className="mt-6 rounded-2xl bg-white/10 p-4">
-              <p className="text-sm font-semibold text-slate-200">
-                Diagnóstico
-              </p>
-              <p className="mt-2 text-sm leading-6 text-slate-300">
-                {getExecutiveDiagnosis({
-                  totalProperties,
-                  occupancyRate,
-                  availablePotentialRevenue,
-                  activeContracts,
-                })}
-              </p>
             </div>
           </section>
         </div>
@@ -1139,24 +1157,6 @@ function MetricCard({ icon, title, value, detail, trend }: MetricCardProps) {
   );
 }
 
-type StatusLegendProps = {
-  label: string;
-  value: number;
-  color: string;
-};
-
-function StatusLegend({ label, value, color }: StatusLegendProps) {
-  return (
-    <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-      <div className="flex items-center gap-3">
-        <span className={`h-3 w-3 rounded-full ${color}`} />
-        <span className="font-bold text-slate-600">{label}</span>
-      </div>
-
-      <span className="font-black text-slate-950">{value}</span>
-    </div>
-  );
-}
 
 type AlertCardProps = {
   alert: DashboardAlert;
@@ -1309,21 +1309,6 @@ function RankingItem({ position, title, subtitle, value }: RankingItemProps) {
   );
 }
 
-type ExecutiveSummaryItemProps = {
-  title: string;
-  value: string;
-};
-
-function ExecutiveSummaryItem({ title, value }: ExecutiveSummaryItemProps) {
-  return (
-    <div className="rounded-2xl bg-white/10 p-4">
-      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
-        {title}
-      </p>
-      <p className="mt-2 text-lg font-black text-white">{value}</p>
-    </div>
-  );
-}
 
 type EmptyStateProps = {
   message: string;
@@ -1394,45 +1379,7 @@ function getLastThirtyDays() {
   });
 }
 
-function getLegendColor(label: string) {
-  const colors: Record<string, string> = {
-    Ativos: "bg-orange-500",
-    Finalizados: "bg-slate-400",
-    Cancelados: "bg-red-500",
-  };
 
-  return colors[label] || "bg-slate-300";
-}
-
-function getExecutiveDiagnosis({
-  totalProperties,
-  occupancyRate,
-  availablePotentialRevenue,
-  activeContracts,
-}: {
-  totalProperties: number;
-  occupancyRate: number;
-  availablePotentialRevenue: number;
-  activeContracts: number;
-}) {
-  if (totalProperties === 0) {
-    return "Ainda não existem imóveis cadastrados. O primeiro passo é estruturar a carteira para ativar os indicadores da operação.";
-  }
-
-  if (activeContracts === 0) {
-    return "A carteira possui imóveis cadastrados, mas ainda não existem contratos ativos gerando receita recorrente.";
-  }
-
-  if (occupancyRate >= 90) {
-    return "A operação apresenta alta ocupação e boa geração recorrente. O próximo ganho está em ampliar a carteira e proteger a renovação dos contratos ativos.";
-  }
-
-  if (availablePotentialRevenue > 0) {
-    return "Existe potencial de receita parado em imóveis disponíveis. Priorize a conversão desses imóveis para aumentar a receita recorrente mensal.";
-  }
-
-  return "A operação está equilibrada, com contratos ativos e indicadores suficientes para acompanhamento financeiro e operacional.";
-}
 
 function safeParseArray<T>(value: string | null): T[] {
   if (!value) return [];
