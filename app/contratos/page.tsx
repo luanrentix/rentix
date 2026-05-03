@@ -13,6 +13,134 @@ const PAID_CHARGES_STORAGE_KEY = "rentix_paid_charges";
 const CHARGE_PAYMENTS_STORAGE_KEY = "rentix_charge_payments";
 const PROPERTY_MOVEMENTS_STORAGE_KEY = "rentix_property_movements";
 const EXPIRING_CONTRACT_DAYS_LIMIT = 30;
+const PRINT_TEMPLATES_STORAGE_KEY = "rentix_print_templates";
+const LEGACY_SETTINGS_TEMPORARY_CONTRACT_CONTENT = `CONTRATO TEMPORÁRIO
+
+LOCADOR: {companyName}
+LOCATÁRIO: {personName}
+IMÓVEL: {propertyName}
+PERÍODO: {startDate} até {endDate}
+HORÁRIO: Entrada {entryTime} / Saída {exitTime}
+
+CLÁUSULAS E CONDIÇÕES:
+1. O presente contrato tem finalidade de locação temporária.
+2. O locatário declara estar ciente das regras de uso do imóvel.
+3. As informações financeiras e condições acordadas deverão constar no documento final.
+
+{contractDefaultNotes}
+
+{contractCity}, {currentDate}.
+
+__________________________________
+LOCADOR
+
+__________________________________
+LOCATÁRIO`;
+
+const DEFAULT_SETTINGS_TEMPORARY_CONTRACT_CONTENT = `INSTRUMENTO PARTICULAR DE CONTRATO DE LOCAÇÃO IMOBILIÁRIA TEMPORÁRIA
+
+I - LOCADOR:
+{landlordName}, pessoa jurídica de direito privado, inscrita no CPF/CNPJ nº {landlordDocument}, com endereço em {landlordAddress}, doravante denominada LOCADOR.
+E-mail: {companyEmail}
+Telefone: {companyPhone}
+
+II - LOCATÁRIO:
+{tenantName}, brasileiro(a), estado civil não informado, profissão não informada, inscrito(a) no CPF/CNPJ nº {tenantDocument}, Carteira de Identidade nº __________, residente e domiciliado(a) em {tenantAddress}, doravante denominado(a) LOCATÁRIO.
+E-mail: {tenantEmail}
+
+III - OBJETO DA LOCAÇÃO:
+{propertyName}, localizado em {propertyAddress}.
+
+IV - PRAZO DE VIGÊNCIA:
+O prazo de locação é de {contractDays} dia(s), com entrada (check-in) em {startDate} às {entryTime} e saída (check-out) em {endDate} às {exitTime}, sem prorrogação automática.
+
+V - ATIVIDADE OBRIGATÓRIA:
+Durante o período de locação, o locatário compromete-se a utilizar o imóvel exclusivamente para fins recreativos e de lazer, respeitando todas as normas legais e regulamentações aplicáveis. O locatário deverá zelar pela conservação do imóvel e de suas instalações, garantindo sua limpeza e manutenção adequadas. Qualquer dano causado durante o período de locação será de responsabilidade do locatário, que se compromete a ressarcir integralmente o locador pelos prejuízos decorrentes.
+
+VI - ALUGUEL PELO PERÍODO:
+Igual a {amount}.
+
+VII - PAGAMENTO DO ALUGUEL:
+Pela execução do objeto deste contrato, o LOCATÁRIO pagará ao LOCADOR o valor total de {amount}, conforme forma de pagamento acordada entre as partes.
+A liberação das chaves está condicionada à quitação integral de todas as parcelas.
+Parágrafo Segundo: O pagamento será efetuado por meio de [PIX/DINHEIRO/TRANSFERÊNCIA], conforme dados a serem informados pelo LOCADOR.
+
+VIII - CONDIÇÕES ESPECIAIS:
+Não há.
+
+Pelo presente instrumento, as partes acima identificadas e qualificadas têm entre si justas e acertadas o presente INSTRUMENTO PARTICULAR DE CONTRATO DE LOCAÇÃO, que se regerá pelas cláusulas e condições abaixo pactuadas.
+
+Cláusula Primeira - Da Vistoria e Conservação
+1.1. O imóvel é entregue em perfeitas condições de higiene e conservação.
+1.2. O LOCATÁRIO tem o prazo de 2 (duas) horas após a entrada para conferir o local e reportar qualquer dano preexistente por escrito, com fotos ou vídeos.
+1.3. Caso não haja manifestação no prazo acima, entende-se que o imóvel e seus utensílios foram recebidos em perfeito estado.
+1.4. O LOCATÁRIO deverá restituir o imóvel nas mesmas condições em que o recebeu, sob pena de arcar com os custos de reparo ou reposição de itens danificados.
+
+Cláusula Segunda - Do Objeto e Destinação
+2.1. O objeto deste contrato é a locação temporária do imóvel identificado neste instrumento.
+2.2. O imóvel destina-se exclusivamente para fins recreativos e de lazer, conforme detalhado no preâmbulo.
+2.3. É proibido ao LOCATÁRIO sublocar, ceder, emprestar ou transferir a locação a terceiros, total ou parcialmente, sem autorização prévia e por escrito do LOCADOR.
+2.4. Após o recebimento das chaves, o LOCATÁRIO assume a posse temporária e a responsabilidade total pela guarda e conservação do imóvel e seus bens.
+
+Cláusula Terceira - Da Utilização e Finalidade
+3.1. O imóvel deve ser utilizado exclusivamente para fins recreativos e de lazer.
+3.2. É proibida a realização de eventos com venda de ingressos, atividades comerciais ou festas abertas ao público sem autorização prévia por escrito do LOCADOR.
+
+Cláusula Quarta - Do Prazo e da Desocupação
+4.1. A locação é firmada por curto prazo, com início em {startDate} às {entryTime} e término em {endDate} às {exitTime}.
+4.2. Findo o prazo estipulado, o contrato se encerra automaticamente, devendo o LOCATÁRIO desocupar o imóvel e entregar as chaves, independente de aviso prévio.
+4.3. Caso o LOCATÁRIO deseje prorrogar a estadia, deverá consultar a disponibilidade e valores com o LOCADOR com antecedência, sendo necessária a formalização de novo ajuste por escrito.
+4.4. O atraso na desocupação do imóvel após o horário de término sujeitará o LOCATÁRIO à multa por hora excedente, sem prejuízo das demais penalidades.
+
+Cláusula Quinta - Do Valor e Pacote Escolhido
+5.1. O valor da locação temporária é de {amount}, referente ao período contratado.
+
+Cláusula Sexta - Das Obrigações e Regras de Convivência
+6.1. O LOCADOR deverá entregar o imóvel em bom estado de conservação e limpeza.
+6.2. O LOCATÁRIO deverá utilizar o imóvel apenas para os fins contratados, responsabilizando-se por danos ocorridos durante a locação, exceto desgaste natural de uso.
+6.3. O LOCATÁRIO deverá respeitar os limites de hóspedes e convidados definidos previamente pelas partes.
+6.4. Animais de estimação somente serão permitidos mediante autorização do LOCADOR, respondendo o LOCATÁRIO por higiene e eventuais danos.
+6.5. O LOCATÁRIO deve respeitar o sossego dos vizinhos, sendo proibidos ruídos excessivos, especialmente em horário noturno.
+
+Cláusula Sétima - Das Comunicações e Notificações
+7.1. As partes concordam que comunicações urgentes poderão ser realizadas por WhatsApp ou e-mail, utilizando os contatos fornecidos neste contrato.
+7.2. Para notificações formais, as partes elegem os endereços declarados neste instrumento.
+
+Cláusula Oitava - Da Ausência de Garantia e Condição de Acesso
+8.1. Esta locação é celebrada sem as modalidades de garantia previstas na Lei 8.245/91.
+8.2. O acesso ao imóvel e a entrega das chaves só ocorrerão mediante a quitação integral do valor total da locação e eventuais taxas acordadas.
+
+Cláusula Nona - Do Inadimplemento, Cancelamento e Multas
+9.1. O descumprimento de qualquer cláusula deste contrato sujeitará o infrator à multa de 20% sobre o valor total do contrato, sem prejuízo da responsabilidade por eventuais danos materiais comprovados.
+9.2. O atraso no pagamento sujeitará o LOCATÁRIO à multa moratória, juros e eventual cancelamento da reserva.
+9.3. Em caso de desistência por iniciativa do LOCATÁRIO após a assinatura, não haverá devolução de valor já pago, salvo acordo escrito entre as partes.
+
+Cláusula Décima - Da Rescisão
+10.1. O descumprimento de cláusula contratual autoriza a rescisão imediata do instrumento, sem prejuízo da cobrança de perdas e danos.
+10.2. Caso o LOCATÁRIO encerre a locação antes do horário previsto, não haverá reembolso proporcional do valor contratado.
+
+Cláusula Décima Primeira - Da Assinatura Eletrônica e Comunicações Digitais
+11.1. As partes reconhecem como válida a assinatura deste contrato em formato eletrônico, conforme legislação vigente.
+11.2. Os e-mails e números de WhatsApp informados são considerados canais oficiais de comunicação.
+
+Cláusula Décima Segunda - Foro
+12.1. As partes elegem o foro da comarca do local do imóvel para dirimir dúvidas ou litígios oriundos deste contrato, renunciando a qualquer outro, por mais privilegiado que seja.
+
+{contractCity}, {currentDate}.
+
+LOCADOR:
+__________________________________
+{landlordName}
+
+LOCATÁRIO:
+__________________________________
+{tenantName}
+
+TESTEMUNHA:
+__________________________________
+Nome: ______________________________
+CPF: ______________________________
+Email: ______________________________`;
 
 type PropertyStatus = "Available" | "Rented";
 
@@ -1450,6 +1578,39 @@ function buildTemporaryRentalContractHtml(
   const tenantName = contract.tenantName || tenant?.name || "LOCATÁRIO NÃO INFORMADO";
   const propertyName = contract.propertyName || property?.name || "IMÓVEL NÃO INFORMADO";
   const totalAmount = formatCurrency(contract.rentValue);
+  const templateData = {
+    companyName: landlordName,
+    landlordName,
+    landlordDocument: landlordDocument || "não informado",
+    landlordAddress: landlordAddress || "endereço não informado",
+    companyEmail: companySettings.email || "não informado",
+    companyPhone: companySettings.phone || "não informado",
+    personName: tenantName,
+    tenantName,
+    tenantDocument: tenantDocument || "não informado",
+    tenantAddress: tenantAddress || "endereço não informado",
+    tenantEmail: tenant?.email || "não informado",
+    propertyName,
+    propertyAddress: propertyAddress || "endereço não informado",
+    startDate: formatDate(contract.startDate),
+    endDate: formatDate(contract.endDate),
+    entryTime: checkInTime,
+    exitTime: checkOutTime,
+    checkInTime,
+    checkOutTime,
+    contractDays: String(contractDays),
+    amount: totalAmount,
+    rentValue: totalAmount,
+    contractCity: locationText,
+    currentDate: formatLongDateForPrint(currentDate),
+    pixKey: "",
+    contractDefaultNotes: "",
+  };
+  const configuredTemplateContent = getConfiguredTemporaryContractTemplateContent();
+
+  if (configuredTemplateContent) {
+    return buildConfiguredTemporaryContractHtml(configuredTemplateContent, templateData, showToolbar);
+  }
 
   return `<!doctype html>
 <html lang="pt-BR">
@@ -1633,6 +1794,105 @@ function buildTemporaryRentalContractHtml(
   </main>
 </body>
 </html>`;
+}
+
+
+type TemplateData = Record<string, string>;
+
+function getConfiguredTemporaryContractTemplateContent() {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const storedTemplates = window.localStorage.getItem(PRINT_TEMPLATES_STORAGE_KEY);
+
+    if (!storedTemplates) return null;
+
+    const parsedTemplates = JSON.parse(storedTemplates) as Record<string, unknown>;
+    const temporaryContractTemplate = parsedTemplates.temporaryContract;
+    const legacyContractTemplate = parsedTemplates.contract;
+    let templateContent = "";
+
+    if (
+      temporaryContractTemplate &&
+      typeof temporaryContractTemplate === "object" &&
+      !Array.isArray(temporaryContractTemplate) &&
+      typeof (temporaryContractTemplate as { content?: unknown }).content === "string"
+    ) {
+      templateContent = (temporaryContractTemplate as { content: string }).content;
+    }
+
+    if (!templateContent && typeof legacyContractTemplate === "string") {
+      templateContent = legacyContractTemplate;
+    }
+
+    const cleanTemplateContent = templateContent.trim();
+
+    if (!cleanTemplateContent) return null;
+
+    if (
+      cleanTemplateContent === DEFAULT_SETTINGS_TEMPORARY_CONTRACT_CONTENT.trim() ||
+      cleanTemplateContent === LEGACY_SETTINGS_TEMPORARY_CONTRACT_CONTENT.trim()
+    ) {
+      return null;
+    }
+
+    return templateContent;
+  } catch {
+    return null;
+  }
+}
+
+function buildConfiguredTemporaryContractHtml(
+  templateContent: string,
+  templateData: TemplateData,
+  showToolbar: boolean
+) {
+  const renderedTemplateContent = renderTemporaryContractTemplate(templateContent, templateData);
+
+  return `<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title></title>
+  <style>
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; }
+    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
+    .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
+    .print-button { background: #f97316; color: #ffffff; }
+    .close-button { background: #f1f5f9; color: #334155; }
+    .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }
+    .page-inner { padding: 18mm; }
+    .content { white-space: pre-wrap; font-size: 12.5px; line-height: 1.65; font-weight: 600; }
+    @media print {
+      body { background: #ffffff; }
+      .toolbar { display: none; }
+      .page { width: 210mm; min-height: 297mm; margin: 0; box-shadow: none; }
+      .page-inner { padding: 18mm; }
+    }
+  </style>
+</head>
+<body>
+  ${showToolbar ? `<div class="toolbar">
+    <button class="close-button" onclick="window.close()">Fechar</button>
+    <button class="print-button" onclick="window.print()">Imprimir contrato</button>
+  </div>` : ""}
+
+  <main class="page">
+    <div class="page-inner">
+      <div class="content">${escapeHtml(renderedTemplateContent)}</div>
+    </div>
+  </main>
+</body>
+</html>`;
+}
+
+function renderTemporaryContractTemplate(templateContent: string, templateData: TemplateData) {
+  return Object.entries(templateData).reduce((renderedContent, [key, value]) => {
+    return renderedContent.replace(new RegExp(`{${key}}`, "g"), value);
+  }, templateContent);
 }
 
 

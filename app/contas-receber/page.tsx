@@ -897,6 +897,65 @@ export default function AccountsReceivablePage() {
     }
   }
 
+  function getPaymentBookletInstructions() {
+    const defaultInstructions = [
+      "1. Efetue o pagamento até a data de vencimento.",
+      "2. Após o vencimento, poderão ser aplicados multa e juros conforme contrato.",
+      "3. Guarde este comprovante para controle financeiro.",
+    ].join("\n");
+
+    try {
+      const storedPrintTemplates = localStorage.getItem("rentix_print_templates");
+
+      if (!storedPrintTemplates) {
+        return defaultInstructions;
+      }
+
+      const parsedPrintTemplates = JSON.parse(storedPrintTemplates) as {
+        paymentBooklet?: { content?: string };
+      };
+
+      const templateContent = parsedPrintTemplates.paymentBooklet?.content || "";
+
+      return normalizePaymentBookletInstructions(templateContent) || defaultInstructions;
+    } catch {
+      return defaultInstructions;
+    }
+  }
+
+  function normalizePaymentBookletInstructions(content: string) {
+    const cleanContent = String(content || "").trim();
+
+    if (!cleanContent) {
+      return "";
+    }
+
+    if (!cleanContent.includes("INSTRUÇÕES:")) {
+      return cleanContent;
+    }
+
+    const instructionsSection = cleanContent.split("INSTRUÇÕES:")[1] || "";
+
+    return instructionsSection
+      .split("GERADO EM:")[0]
+      .trim();
+  }
+
+  function renderPaymentBookletInstructions(instructions: string) {
+    const instructionRows = instructions
+      .split("\n")
+      .map((instruction) => instruction.trim())
+      .filter(Boolean)
+      .map((instruction) => `<p>${escapeHtml(instruction)}</p>`)
+      .join("");
+
+    if (!instructionRows) {
+      return "";
+    }
+
+    return `<div class="instructions"><span>Instruções</span>${instructionRows}</div>`;
+  }
+
   function removeTextAccents(value: string) {
     return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   }
@@ -1005,6 +1064,7 @@ export default function AccountsReceivablePage() {
     const pixKeyType = companySettings.pixKeyType || "Pix";
     const pixKey = companySettings.pixKey || "Não cadastrada";
     const firstCharge = carnetCharges[0];
+    const paymentBookletInstructions = getPaymentBookletInstructions();
     const totalAmount = carnetCharges.reduce(
       (total, charge) => total + charge.amount,
       0,
@@ -1093,6 +1153,8 @@ export default function AccountsReceivablePage() {
               }
             </div>
 
+            ${renderPaymentBookletInstructions(paymentBookletInstructions)}
+
             <div class="voucher-footer">
               <span>${escapeHtml(companyName)} · Documento: ${escapeHtml(companyDocument)}</span>
               <span>Telefone: ${escapeHtml(companyPhone)} · E-mail: ${escapeHtml(companyEmail)}</span>
@@ -1145,6 +1207,9 @@ export default function AccountsReceivablePage() {
             .pix-qr { display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 12px; background: #ffffff; padding: 8px; border: 1px solid #d1fae5; }
             .pix-qr img { width: 112px; height: 112px; object-fit: contain; }
             .pix-qr span { margin-top: 5px; color: #047857; font-size: 10px; font-weight: 900; }
+            .instructions { margin-top: 12px; border: 1px solid #fed7aa; border-radius: 12px; background: #fff7ed; padding: 10px 12px; }
+            .instructions span { display: block; margin-bottom: 6px; color: #c2410c; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.04em; }
+            .instructions p { margin: 3px 0; color: #334155; font-size: 10px; line-height: 1.35; font-weight: 700; }
             .voucher-footer { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; color: #64748b; font-size: 10px; font-weight: 700; }
             @media print {
               body { background: #ffffff; }
