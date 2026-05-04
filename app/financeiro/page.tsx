@@ -94,6 +94,45 @@ export default function FinancialPage() {
   const [payableAmount, setPayableAmount] = useState("");
   const [payableDueDate, setPayableDueDate] = useState("");
   const [payablePropertyId, setPayablePropertyId] = useState("");
+  const [isBlackTheme, setIsBlackTheme] = useState(false);
+
+  useEffect(() => {
+    function applyStoredTheme() {
+      const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
+      const legacyTheme = localStorage.getItem("rentix_theme");
+
+      try {
+        const parsedThemeSettings = storedThemeSettings
+          ? (JSON.parse(storedThemeSettings) as { mode?: string })
+          : null;
+
+        const isBlackThemeSelected =
+          parsedThemeSettings?.mode === "black" ||
+          parsedThemeSettings?.mode === "dark" ||
+          legacyTheme === "black" ||
+          legacyTheme === "dark";
+
+        document.documentElement.classList.toggle("dark", isBlackThemeSelected);
+        document.body.classList.toggle("dark", isBlackThemeSelected);
+        setIsBlackTheme(isBlackThemeSelected);
+      } catch {
+        const isLegacyBlackTheme =
+          legacyTheme === "black" || legacyTheme === "dark";
+
+        document.documentElement.classList.toggle("dark", isLegacyBlackTheme);
+        document.body.classList.toggle("dark", isLegacyBlackTheme);
+        setIsBlackTheme(isLegacyBlackTheme);
+      }
+    }
+
+    applyStoredTheme();
+
+    window.addEventListener("storage", applyStoredTheme);
+
+    return () => {
+      window.removeEventListener("storage", applyStoredTheme);
+    };
+  }, []);
 
   useEffect(() => {
     const storedProperties = localStorage.getItem(PROPERTIES_STORAGE_KEY);
@@ -102,7 +141,9 @@ export default function FinancialPage() {
     const storedPayables = localStorage.getItem(PAYABLES_STORAGE_KEY);
     const legacyExpenses = localStorage.getItem(LEGACY_EXPENSES_STORAGE_KEY);
     const storedPaidCharges = localStorage.getItem(PAID_CHARGES_STORAGE_KEY);
-    const storedCanceledCharges = localStorage.getItem(CANCELED_CHARGES_STORAGE_KEY);
+    const storedCanceledCharges = localStorage.getItem(
+      CANCELED_CHARGES_STORAGE_KEY,
+    );
 
     if (storedProperties) {
       setProperties(JSON.parse(storedProperties));
@@ -141,7 +182,10 @@ export default function FinancialPage() {
       }));
 
       setPayables(migratedPayables);
-      localStorage.setItem(PAYABLES_STORAGE_KEY, JSON.stringify(migratedPayables));
+      localStorage.setItem(
+        PAYABLES_STORAGE_KEY,
+        JSON.stringify(migratedPayables),
+      );
     }
 
     if (storedPaidCharges) {
@@ -158,13 +202,16 @@ export default function FinancialPage() {
   }, [payables]);
 
   useEffect(() => {
-    localStorage.setItem(PAID_CHARGES_STORAGE_KEY, JSON.stringify(paidChargeIds));
+    localStorage.setItem(
+      PAID_CHARGES_STORAGE_KEY,
+      JSON.stringify(paidChargeIds),
+    );
   }, [paidChargeIds]);
 
   useEffect(() => {
     localStorage.setItem(
       CANCELED_CHARGES_STORAGE_KEY,
-      JSON.stringify(canceledChargeIds)
+      JSON.stringify(canceledChargeIds),
     );
   }, [canceledChargeIds]);
 
@@ -175,11 +222,12 @@ export default function FinancialPage() {
       .filter((contract) => getContractDisplayStatus(contract) === "Active")
       .map((contract) => {
         const property = properties.find(
-          (propertyItem) => String(propertyItem.id) === String(contract.propertyId)
+          (propertyItem) =>
+            String(propertyItem.id) === String(contract.propertyId),
         );
 
         const tenant = tenants.find(
-          (tenantItem) => String(tenantItem.id) === String(contract.tenantId)
+          (tenantItem) => String(tenantItem.id) === String(contract.tenantId),
         );
 
         const dueDate = buildCurrentMonthDueDate(contract.startDate);
@@ -214,7 +262,9 @@ export default function FinancialPage() {
   const filteredReceivables = useMemo(() => {
     if (receivableFilter === "All") return receivableCharges;
 
-    return receivableCharges.filter((charge) => charge.status === receivableFilter);
+    return receivableCharges.filter(
+      (charge) => charge.status === receivableFilter,
+    );
   }, [receivableCharges, receivableFilter]);
 
   const totalReceivable = receivableCharges
@@ -242,14 +292,16 @@ export default function FinancialPage() {
     .reduce((total, payable) => total + Number(payable.amount || 0), 0);
 
   const totalOpenPayables = payables
-    .filter((payable) => payable.status === "Pending" || payable.status === "Overdue")
+    .filter(
+      (payable) => payable.status === "Pending" || payable.status === "Overdue",
+    )
     .reduce((total, payable) => total + Number(payable.amount || 0), 0);
 
   const estimatedProfit = totalReceivable - totalPayable;
   const realizedProfit = totalReceived - totalPaidPayables;
 
   const paidCharges = receivableCharges.filter(
-    (charge) => charge.status === "Paid"
+    (charge) => charge.status === "Paid",
   ).length;
 
   const paymentRate =
@@ -259,27 +311,27 @@ export default function FinancialPage() {
 
   function handleMarkReceivableAsPaid(chargeId: string) {
     setPaidChargeIds((currentIds) =>
-      currentIds.includes(chargeId) ? currentIds : [...currentIds, chargeId]
+      currentIds.includes(chargeId) ? currentIds : [...currentIds, chargeId],
     );
 
     setCanceledChargeIds((currentIds) =>
-      currentIds.filter((currentId) => currentId !== chargeId)
+      currentIds.filter((currentId) => currentId !== chargeId),
     );
   }
 
   function handleUndoReceivablePayment(chargeId: string) {
     setPaidChargeIds((currentIds) =>
-      currentIds.filter((currentId) => currentId !== chargeId)
+      currentIds.filter((currentId) => currentId !== chargeId),
     );
   }
 
   function handleCancelReceivable(chargeId: string) {
     setCanceledChargeIds((currentIds) =>
-      currentIds.includes(chargeId) ? currentIds : [...currentIds, chargeId]
+      currentIds.includes(chargeId) ? currentIds : [...currentIds, chargeId],
     );
 
     setPaidChargeIds((currentIds) =>
-      currentIds.filter((currentId) => currentId !== chargeId)
+      currentIds.filter((currentId) => currentId !== chargeId),
     );
   }
 
@@ -287,7 +339,7 @@ export default function FinancialPage() {
     event.preventDefault();
 
     const property = properties.find(
-      (propertyItem) => String(propertyItem.id) === String(payablePropertyId)
+      (propertyItem) => String(propertyItem.id) === String(payablePropertyId),
     );
 
     const newPayable: PayableAccount = {
@@ -324,8 +376,8 @@ export default function FinancialPage() {
               status: "Paid",
               paymentDate: getTodayDate(),
             }
-          : payable
-      )
+          : payable,
+      ),
     );
   }
 
@@ -338,8 +390,8 @@ export default function FinancialPage() {
               status: getPayableStatus(payable.dueDate, false, false),
               paymentDate: null,
             }
-          : payable
-      )
+          : payable,
+      ),
     );
   }
 
@@ -352,8 +404,8 @@ export default function FinancialPage() {
               status: "Canceled",
               canceledAt: new Date().toISOString(),
             }
-          : payable
-      )
+          : payable,
+      ),
     );
   }
 
@@ -367,7 +419,175 @@ export default function FinancialPage() {
 
   return (
     <AppShell>
-      <div className="space-y-8">
+      <style jsx global>{`
+        .rentix-financial-page-light .bg-white {
+          background-color: #ffffff !important;
+        }
+
+        .rentix-financial-page-light .bg-slate-50 {
+          background-color: #f8fafc !important;
+        }
+
+        .rentix-financial-page-light .bg-slate-100 {
+          background-color: #f1f5f9 !important;
+        }
+
+        .rentix-financial-page-light .bg-orange-50 {
+          background-color: #fff7ed !important;
+        }
+
+        .rentix-financial-page-light .bg-orange-100 {
+          background-color: #ffedd5 !important;
+        }
+
+        .rentix-financial-page-light .bg-red-50 {
+          background-color: #fef2f2 !important;
+        }
+
+        .rentix-financial-page-light .bg-red-100 {
+          background-color: #fee2e2 !important;
+        }
+
+        .rentix-financial-page-light .bg-emerald-50 {
+          background-color: #ecfdf5 !important;
+        }
+
+        .rentix-financial-page-light .bg-emerald-100 {
+          background-color: #d1fae5 !important;
+        }
+
+        .rentix-financial-page-light .text-slate-950,
+        .rentix-financial-page-light .text-slate-900,
+        .rentix-financial-page-light .text-slate-800,
+        .rentix-financial-page-light .text-slate-700 {
+          color: #0f172a !important;
+        }
+
+        .rentix-financial-page-light .text-slate-600 {
+          color: #475569 !important;
+        }
+
+        .rentix-financial-page-light .text-slate-500 {
+          color: #64748b !important;
+        }
+
+        .rentix-financial-page-light .text-slate-400 {
+          color: #94a3b8 !important;
+        }
+
+        .rentix-financial-page-light .border-orange-100 {
+          border-color: #ffedd5 !important;
+        }
+
+        .rentix-financial-page-light .border-slate-100 {
+          border-color: #f1f5f9 !important;
+        }
+
+        .rentix-financial-page-light .border-slate-200 {
+          border-color: #e2e8f0 !important;
+        }
+
+        .rentix-financial-page-light input,
+        .rentix-financial-page-light select,
+        .rentix-financial-page-light textarea {
+          background-color: #ffffff !important;
+          border-color: #e2e8f0 !important;
+          color: #334155 !important;
+          color-scheme: light !important;
+        }
+
+        .rentix-financial-page-light input::placeholder,
+        .rentix-financial-page-light textarea::placeholder {
+          color: #94a3b8 !important;
+        }
+
+        .rentix-financial-page-light tbody tr {
+          background-color: #ffffff !important;
+        }
+
+        .rentix-financial-page-light tbody tr:hover {
+          background-color: #f8fafc !important;
+        }
+
+        .dark .rentix-financial-page-black {
+          color: #f8fafc;
+        }
+
+        .dark .rentix-financial-page-black .bg-white {
+          background-color: #0f172a !important;
+        }
+
+        .dark .rentix-financial-page-black .bg-slate-50,
+        .dark .rentix-financial-page-black .bg-slate-100 {
+          background-color: #111827 !important;
+        }
+
+        .dark .rentix-financial-page-black .bg-orange-50,
+        .dark .rentix-financial-page-black .bg-orange-100 {
+          background-color: rgba(249, 115, 22, 0.13) !important;
+        }
+
+        .dark .rentix-financial-page-black .bg-red-50,
+        .dark .rentix-financial-page-black .bg-red-100 {
+          background-color: rgba(239, 68, 68, 0.12) !important;
+        }
+
+        .dark .rentix-financial-page-black .bg-emerald-50,
+        .dark .rentix-financial-page-black .bg-emerald-100 {
+          background-color: rgba(16, 185, 129, 0.12) !important;
+        }
+
+        .dark .rentix-financial-page-black .text-slate-950,
+        .dark .rentix-financial-page-black .text-slate-900,
+        .dark .rentix-financial-page-black .text-slate-800,
+        .dark .rentix-financial-page-black .text-slate-700 {
+          color: #f8fafc !important;
+        }
+
+        .dark .rentix-financial-page-black .text-slate-600,
+        .dark .rentix-financial-page-black .text-slate-500,
+        .dark .rentix-financial-page-black .text-slate-400 {
+          color: #cbd5e1 !important;
+        }
+
+        .dark .rentix-financial-page-black .border-orange-100,
+        .dark .rentix-financial-page-black .border-orange-200,
+        .dark .rentix-financial-page-black .border-slate-100,
+        .dark .rentix-financial-page-black .border-slate-200,
+        .dark .rentix-financial-page-black .border-slate-300 {
+          border-color: #334155 !important;
+        }
+
+        .dark .rentix-financial-page-black input,
+        .dark .rentix-financial-page-black select,
+        .dark .rentix-financial-page-black textarea {
+          background-color: #020617 !important;
+          border-color: #334155 !important;
+          color: #f8fafc !important;
+          color-scheme: dark !important;
+        }
+
+        .dark .rentix-financial-page-black input::placeholder,
+        .dark .rentix-financial-page-black textarea::placeholder {
+          color: #64748b !important;
+        }
+
+        .dark .rentix-financial-page-black tbody tr {
+          background-color: #1e293b !important;
+        }
+
+        .dark .rentix-financial-page-black tbody tr:hover {
+          background-color: #334155 !important;
+        }
+      `}</style>
+
+      <div
+        className={`rentix-financial-page ${
+          isBlackTheme
+            ? "rentix-financial-page-black"
+            : "rentix-financial-page-light"
+        } space-y-8`}
+      >
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h1 className="text-4xl font-black tracking-tight text-slate-950 dark:text-white">
@@ -382,7 +602,7 @@ export default function FinancialPage() {
           <button
             type="button"
             onClick={() => setIsPayableFormOpen(true)}
-            className="rounded-2xl bg-orange-50 dark:bg-orange-500/100 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/20 transition hover:bg-orange-600"
+            className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/20 transition hover:bg-orange-600"
           >
             + Nova conta a pagar
           </button>
@@ -423,7 +643,10 @@ export default function FinancialPage() {
           <StatusCard
             title="Pendente"
             value={formatCurrency(totalPending)}
-            amount={receivableCharges.filter((charge) => charge.status === "Pending").length}
+            amount={
+              receivableCharges.filter((charge) => charge.status === "Pending")
+                .length
+            }
             description="Recebimentos aguardando baixa"
             badge="A receber"
             badgeClassName="bg-yellow-100 text-yellow-700"
@@ -432,7 +655,10 @@ export default function FinancialPage() {
           <StatusCard
             title="Vencido"
             value={formatCurrency(totalOverdue)}
-            amount={receivableCharges.filter((charge) => charge.status === "Overdue").length}
+            amount={
+              receivableCharges.filter((charge) => charge.status === "Overdue")
+                .length
+            }
             description="Recebimentos em atraso"
             badge="Atenção"
             badgeClassName="bg-red-100 dark:bg-red-50 dark:bg-red-500/100/20 text-red-700"
@@ -441,7 +667,10 @@ export default function FinancialPage() {
           <StatusCard
             title="Pago em despesas"
             value={formatCurrency(totalPaidPayables)}
-            amount={normalizedPayables.filter((payable) => payable.status === "Paid").length}
+            amount={
+              normalizedPayables.filter((payable) => payable.status === "Paid")
+                .length
+            }
             description="Contas pagas"
             badge="Pago"
             badgeClassName="bg-emerald-100 dark:bg-emerald-50 dark:bg-emerald-500/100/20 text-emerald-700"
@@ -450,7 +679,11 @@ export default function FinancialPage() {
           <StatusCard
             title="Saldo realizado"
             value={formatCurrency(realizedProfit)}
-            amount={normalizedPayables.filter((payable) => payable.status !== "Canceled").length}
+            amount={
+              normalizedPayables.filter(
+                (payable) => payable.status !== "Canceled",
+              ).length
+            }
             description="Recebido - contas pagas"
             badge="Realizado"
             badgeClassName="bg-orange-100 dark:bg-orange-50 dark:bg-orange-500/100/20 text-orange-700"
@@ -512,7 +745,10 @@ export default function FinancialPage() {
 
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                 {filteredReceivables.map((charge) => (
-                  <tr key={charge.id} className="transition hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800">
+                  <tr
+                    key={charge.id}
+                    className="transition hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800"
+                  >
                     <td className="px-6 py-4 font-black text-slate-900 dark:text-slate-100">
                       {charge.propertyName}
                     </td>
@@ -538,7 +774,9 @@ export default function FinancialPage() {
                         {charge.status === "Paid" ? (
                           <button
                             type="button"
-                            onClick={() => handleUndoReceivablePayment(charge.id)}
+                            onClick={() =>
+                              handleUndoReceivablePayment(charge.id)
+                            }
                             className="rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
                           >
                             Estornar
@@ -546,7 +784,9 @@ export default function FinancialPage() {
                         ) : (
                           <button
                             type="button"
-                            onClick={() => handleMarkReceivableAsPaid(charge.id)}
+                            onClick={() =>
+                              handleMarkReceivableAsPaid(charge.id)
+                            }
                             disabled={charge.status === "Canceled"}
                             className="rounded-xl bg-emerald-50 dark:bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 dark:bg-emerald-50 dark:bg-emerald-500/100/20 disabled:cursor-not-allowed disabled:opacity-50"
                           >
@@ -619,7 +859,10 @@ export default function FinancialPage() {
 
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                 {normalizedPayables.map((payable) => (
-                  <tr key={payable.id} className="transition hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800">
+                  <tr
+                    key={payable.id}
+                    className="transition hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800"
+                  >
                     <td className="px-6 py-4 font-black text-slate-900 dark:text-slate-100">
                       {payable.description}
                     </td>
@@ -717,7 +960,9 @@ export default function FinancialPage() {
                     <input
                       type="text"
                       value={payableDescription}
-                      onChange={(event) => setPayableDescription(event.target.value)}
+                      onChange={(event) =>
+                        setPayableDescription(event.target.value)
+                      }
                       placeholder="Ex: Manutenção, IPTU, limpeza..."
                       required
                       className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
@@ -739,7 +984,9 @@ export default function FinancialPage() {
                     <input
                       type="date"
                       value={payableDueDate}
-                      onChange={(event) => setPayableDueDate(event.target.value)}
+                      onChange={(event) =>
+                        setPayableDueDate(event.target.value)
+                      }
                       required
                       className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
                     />
@@ -748,7 +995,9 @@ export default function FinancialPage() {
                   <FormField label="Imóvel vinculado">
                     <select
                       value={payablePropertyId}
-                      onChange={(event) => setPayablePropertyId(event.target.value)}
+                      onChange={(event) =>
+                        setPayablePropertyId(event.target.value)
+                      }
                       className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
                     >
                       <option value="">Despesa geral</option>
@@ -772,7 +1021,7 @@ export default function FinancialPage() {
 
                   <button
                     type="submit"
-                    className="rounded-2xl bg-orange-50 dark:bg-orange-500/100 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/20 transition hover:bg-orange-600"
+                    className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/20 transition hover:bg-orange-600"
                   >
                     Cadastrar conta
                   </button>
@@ -823,7 +1072,9 @@ function FinancialCard({
         {icon}
       </div>
 
-      <p className="text-sm font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500">{title}</p>
+      <p className="text-sm font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500">
+        {title}
+      </p>
 
       <h3
         className={`mt-3 text-3xl font-black ${
@@ -858,16 +1109,26 @@ function StatusCard({
   return (
     <div className="rounded-3xl border border-orange-100 dark:border-orange-500/30 bg-white dark:bg-slate-900 p-6 shadow-sm">
       <div className="mb-5 flex items-center justify-between">
-        <span className={`rounded-full px-3 py-1 text-xs font-black ${badgeClassName}`}>
+        <span
+          className={`rounded-full px-3 py-1 text-xs font-black ${badgeClassName}`}
+        >
           {badge}
         </span>
 
-        <span className="text-sm font-black text-slate-400 dark:text-slate-500">{amount}</span>
+        <span className="text-sm font-black text-slate-400 dark:text-slate-500">
+          {amount}
+        </span>
       </div>
 
-      <p className="text-sm font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500">{title}</p>
-      <h3 className="mt-3 text-3xl font-black text-slate-950 dark:text-white">{value}</h3>
-      <p className="mt-3 text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">{description}</p>
+      <p className="text-sm font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500">
+        {title}
+      </p>
+      <h3 className="mt-3 text-3xl font-black text-slate-950 dark:text-white">
+        {value}
+      </h3>
+      <p className="mt-3 text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
+        {description}
+      </p>
     </div>
   );
 }
@@ -880,15 +1141,18 @@ function PaymentStatusBadge({ status }: { status: ReceivableStatus }) {
     },
     Paid: {
       label: "Pago",
-      className: "bg-emerald-100 dark:bg-emerald-50 dark:bg-emerald-500/100/20 text-emerald-700",
+      className:
+        "bg-emerald-100 dark:bg-emerald-50 dark:bg-emerald-500/100/20 text-emerald-700",
     },
     Overdue: {
       label: "Vencido",
-      className: "bg-red-100 dark:bg-red-50 dark:bg-red-500/100/20 text-red-700",
+      className:
+        "bg-red-100 dark:bg-red-50 dark:bg-red-500/100/20 text-red-700",
     },
     Canceled: {
       label: "Cancelado",
-      className: "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300",
+      className:
+        "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300",
     },
   };
 
@@ -909,15 +1173,18 @@ function PayableStatusBadge({ status }: { status: PayableStatus }) {
     },
     Paid: {
       label: "Pago",
-      className: "bg-emerald-100 dark:bg-emerald-50 dark:bg-emerald-500/100/20 text-emerald-700",
+      className:
+        "bg-emerald-100 dark:bg-emerald-50 dark:bg-emerald-500/100/20 text-emerald-700",
     },
     Overdue: {
       label: "Vencido",
-      className: "bg-red-100 dark:bg-red-50 dark:bg-red-500/100/20 text-red-700",
+      className:
+        "bg-red-100 dark:bg-red-50 dark:bg-red-500/100/20 text-red-700",
     },
     Canceled: {
       label: "Cancelado",
-      className: "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300",
+      className:
+        "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300",
     },
   };
 
@@ -935,7 +1202,8 @@ function getContractDisplayStatus(contract: Contract): ContractStatus {
   if (contract.status === "Canceled") return "Canceled";
   if (contract.status === "Finished") return "Finished";
   if (contract.status === "Inactive") return "Inactive";
-  if (contract.status === "Active") return getAutomaticContractStatus(contract.endDate);
+  if (contract.status === "Active")
+    return getAutomaticContractStatus(contract.endDate);
 
   return getAutomaticContractStatus(contract.endDate);
 }
@@ -952,7 +1220,7 @@ function getAutomaticContractStatus(endDate?: string): ContractStatus {
 function getPayableStatus(
   dueDate: string,
   isPaid: boolean,
-  isCanceled: boolean
+  isCanceled: boolean,
 ): PayableStatus {
   if (isCanceled) return "Canceled";
   if (isPaid) return "Paid";
@@ -974,7 +1242,7 @@ function buildCurrentMonthDueDate(startDate: string) {
 
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(
     2,
-    "0"
+    "0",
   )}-${String(dueDay).padStart(2, "0")}`;
 }
 

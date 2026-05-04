@@ -260,6 +260,12 @@ function getPixKeyPlaceholder(pixKeyType: PixKeyType) {
 
 
 const rentixThemeStyle = `
+  [data-rentix-theme="light"] {
+    color-scheme: light;
+    background-color: #f8fafc !important;
+    color: #0f172a !important;
+  }
+
   [data-rentix-theme="black"] {
     color-scheme: dark;
     background-color: #020617 !important;
@@ -277,8 +283,8 @@ const rentixThemeStyle = `
   [data-rentix-theme="black"] [class*="bg-white"],
   [data-rentix-theme="black"] [class*="bg-slate-50"],
   [data-rentix-theme="black"] [class*="bg-slate-100"],
-  [data-rentix-theme="black"] [class*="bg-[#f8fafc"],
-  [data-rentix-theme="black"] [class*="bg-\[\#f8fafc"],
+  [data-rentix-theme="black"] [class*="bg-[#f8fafc]"],
+  [data-rentix-theme="black"] [class*="bg-\[\#f8fafc\]"],
   [data-rentix-theme="black"] .bg-white,
   [data-rentix-theme="black"] .bg-white\/90,
   [data-rentix-theme="black"] .bg-slate-50,
@@ -444,6 +450,44 @@ const rentixThemeStyle = `
   }
 `;
 
+function normalizeThemeMode(value: unknown): ThemeMode {
+  return String(value || "").toLowerCase() === "black" ? "black" : "light";
+}
+
+function readThemeSettingsFromStorage(): ThemeSettings {
+  if (typeof window === "undefined") return defaultThemeSettings;
+
+  const storageKeys = [
+    "rentix_theme_settings",
+    "rentix_theme",
+    "rentix_current_theme",
+    "theme",
+  ];
+
+  for (const storageKey of storageKeys) {
+    const storedValue = window.localStorage.getItem(storageKey);
+
+    if (!storedValue) continue;
+
+    try {
+      const parsedValue = JSON.parse(storedValue) as Partial<ThemeSettings> | string;
+
+      if (typeof parsedValue === "string") {
+        return { mode: normalizeThemeMode(parsedValue) };
+      }
+
+      return {
+        ...defaultThemeSettings,
+        mode: normalizeThemeMode(parsedValue.mode),
+      };
+    } catch {
+      return { mode: normalizeThemeMode(storedValue) };
+    }
+  }
+
+  return defaultThemeSettings;
+}
+
 export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -484,12 +528,37 @@ export default function AppShell({ children }: AppShellProps) {
       });
     }
 
-    if (storedThemeSettings) {
-      setThemeSettings({
-        ...defaultThemeSettings,
-        ...JSON.parse(storedThemeSettings),
-      });
+    setThemeSettings(readThemeSettingsFromStorage());
+  }, []);
+
+  useEffect(() => {
+    const isBlackMode = themeSettings.mode === "black";
+
+    document.documentElement.classList.toggle("dark", isBlackMode);
+    document.body.classList.toggle("dark", isBlackMode);
+    document.documentElement.dataset.rentixTheme = themeSettings.mode;
+    document.body.dataset.rentixTheme = themeSettings.mode;
+  }, [themeSettings.mode]);
+
+  useEffect(() => {
+    function syncThemeFromStorage() {
+      const storedTheme = readThemeSettingsFromStorage();
+
+      setThemeSettings((currentTheme) =>
+        currentTheme.mode === storedTheme.mode ? currentTheme : storedTheme
+      );
     }
+
+    window.addEventListener("storage", syncThemeFromStorage);
+    window.addEventListener("rentix-theme-change", syncThemeFromStorage);
+
+    const syncInterval = window.setInterval(syncThemeFromStorage, 500);
+
+    return () => {
+      window.removeEventListener("storage", syncThemeFromStorage);
+      window.removeEventListener("rentix-theme-change", syncThemeFromStorage);
+      window.clearInterval(syncInterval);
+    };
   }, []);
 
   function isActiveRoute(href: string) {
@@ -606,6 +675,8 @@ export default function AppShell({ children }: AppShellProps) {
 
     localStorage.setItem("rentix_user_settings", JSON.stringify(userSettings));
     localStorage.setItem("rentix_company_settings", JSON.stringify(companySettings));
+    localStorage.setItem("rentix_theme_settings", JSON.stringify(themeSettings));
+    window.dispatchEvent(new Event("rentix-theme-change"));
 
     if (passwordSettings.newPassword) {
       localStorage.setItem("rentix_user_password_updated", "true");
@@ -625,7 +696,11 @@ export default function AppShell({ children }: AppShellProps) {
     <AuthGuard>
       <div
         data-rentix-theme={themeSettings.mode}
-        className="min-h-screen bg-[#f8fafc] text-slate-900 lg:flex"
+        className={`min-h-screen lg:flex ${
+          themeSettings.mode === "black"
+            ? "dark bg-slate-950 text-slate-100"
+            : "bg-[#f8fafc] text-slate-900"
+        }`}
       >
         <style>{rentixThemeStyle}</style>
         {isMobileSidebarOpen && (

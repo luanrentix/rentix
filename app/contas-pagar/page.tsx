@@ -243,6 +243,47 @@ export default function AccountsPayablePage() {
   const [reportEndDate, setReportEndDate] = useState("");
   const [reportFormError, setReportFormError] = useState("");
 
+  const [isBlackTheme, setIsBlackTheme] = useState(false);
+
+  useEffect(() => {
+    function applyStoredTheme() {
+      const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
+      const legacyTheme = localStorage.getItem("rentix_theme");
+
+      try {
+        const parsedThemeSettings = storedThemeSettings
+          ? (JSON.parse(storedThemeSettings) as { mode?: string })
+          : null;
+
+        const isBlackThemeSelected =
+          parsedThemeSettings?.mode === "black" ||
+          parsedThemeSettings?.mode === "dark" ||
+          legacyTheme === "black" ||
+          legacyTheme === "dark";
+
+        document.documentElement.classList.toggle("dark", isBlackThemeSelected);
+        document.body.classList.toggle("dark", isBlackThemeSelected);
+        setIsBlackTheme(isBlackThemeSelected);
+      } catch {
+        const isLegacyBlackTheme =
+          legacyTheme === "black" || legacyTheme === "dark";
+
+        document.documentElement.classList.toggle("dark", isLegacyBlackTheme);
+        document.body.classList.toggle("dark", isLegacyBlackTheme);
+        setIsBlackTheme(isLegacyBlackTheme);
+      }
+    }
+
+    applyStoredTheme();
+
+    window.addEventListener("storage", applyStoredTheme);
+
+    return () => {
+      window.removeEventListener("storage", applyStoredTheme);
+    };
+  }, []);
+
+
   useEffect(() => {
     const expenseData = localStorage.getItem("rentix_expenses");
     const tenantData = localStorage.getItem("rentix_tenants");
@@ -1670,7 +1711,208 @@ export default function AccountsPayablePage() {
 
   return (
     <AppShell>
-      <div className="space-y-8">
+      <style jsx global>{`
+        .rentix-accounts-payable-page-light,
+        .rentix-accounts-payable-page-light * {
+          color-scheme: light !important;
+        }
+
+        .rentix-accounts-payable-page-light .bg-white,
+        .rentix-accounts-payable-page-light [class*="dark:bg-slate"],
+        .rentix-accounts-payable-page-light [class*="dark:from-slate"],
+        .rentix-accounts-payable-page-light [class*="dark:to-slate"] {
+          background-color: #ffffff !important;
+          background-image: none !important;
+        }
+
+        .rentix-accounts-payable-page-light .bg-slate-50,
+        .rentix-accounts-payable-page-light .bg-slate-100 {
+          background-color: #f8fafc !important;
+        }
+
+        .rentix-accounts-payable-page-light .bg-orange-50,
+        .rentix-accounts-payable-page-light .bg-orange-100,
+        .rentix-accounts-payable-page-light [class*="dark:bg-orange"] {
+          background-color: #fff7ed !important;
+        }
+
+        .rentix-accounts-payable-page-light [class*="bg-orange-50"][class*="text-white"],
+        .rentix-accounts-payable-page-light button[class*="bg-orange-50"],
+        .rentix-accounts-payable-page-light button[class*="bg-orange-500"] {
+          background-color: #f97316 !important;
+          color: #ffffff !important;
+        }
+
+        .rentix-accounts-payable-page-light button[class*="bg-slate-900"],
+        .rentix-accounts-payable-page-light button[class*="bg-emerald-600"],
+        .rentix-accounts-payable-page-light button[class*="bg-red-600"] {
+          color: #ffffff !important;
+        }
+
+        .rentix-accounts-payable-page-light .bg-red-50,
+        .rentix-accounts-payable-page-light .bg-red-100 {
+          background-color: #fef2f2 !important;
+        }
+
+        .rentix-accounts-payable-page-light .bg-emerald-50,
+        .rentix-accounts-payable-page-light .bg-emerald-100 {
+          background-color: #ecfdf5 !important;
+        }
+
+        .rentix-accounts-payable-page-light .bg-amber-50,
+        .rentix-accounts-payable-page-light .bg-amber-100 {
+          background-color: #fffbeb !important;
+        }
+
+        .rentix-accounts-payable-page-light .text-slate-950,
+        .rentix-accounts-payable-page-light .text-slate-900,
+        .rentix-accounts-payable-page-light .text-slate-800,
+        .rentix-accounts-payable-page-light .text-slate-700,
+        .rentix-accounts-payable-page-light [class*="dark:text-slate-100"],
+        .rentix-accounts-payable-page-light [class*="dark:text-white"] {
+          color: #0f172a !important;
+        }
+
+        .rentix-accounts-payable-page-light .text-slate-600,
+        .rentix-accounts-payable-page-light .text-slate-500,
+        .rentix-accounts-payable-page-light .text-slate-400,
+        .rentix-accounts-payable-page-light [class*="dark:text-slate-300"],
+        .rentix-accounts-payable-page-light [class*="dark:text-slate-400"],
+        .rentix-accounts-payable-page-light [class*="dark:text-slate-500"] {
+          color: #475569 !important;
+        }
+
+        .rentix-accounts-payable-page-light .text-orange-600,
+        .rentix-accounts-payable-page-light .text-orange-700 {
+          color: #ea580c !important;
+        }
+
+        .rentix-accounts-payable-page-light .text-red-600,
+        .rentix-accounts-payable-page-light .text-red-700 {
+          color: #dc2626 !important;
+        }
+
+        .rentix-accounts-payable-page-light .text-emerald-600,
+        .rentix-accounts-payable-page-light .text-emerald-700 {
+          color: #047857 !important;
+        }
+
+        .rentix-accounts-payable-page-light .text-amber-700 {
+          color: #b45309 !important;
+        }
+
+        .rentix-accounts-payable-page-light .border-slate-100,
+        .rentix-accounts-payable-page-light .border-slate-200,
+        .rentix-accounts-payable-page-light .border-slate-300,
+        .rentix-accounts-payable-page-light [class*="dark:border-slate"] {
+          border-color: #e2e8f0 !important;
+        }
+
+        .rentix-accounts-payable-page-light .ring-slate-100,
+        .rentix-accounts-payable-page-light .ring-slate-200,
+        .rentix-accounts-payable-page-light [class*="dark:ring-slate"] {
+          --tw-ring-color: #e2e8f0 !important;
+        }
+
+        .rentix-accounts-payable-page-light input,
+        .rentix-accounts-payable-page-light select,
+        .rentix-accounts-payable-page-light textarea {
+          background-color: #ffffff !important;
+          border-color: #cbd5e1 !important;
+          color: #0f172a !important;
+          color-scheme: light !important;
+        }
+
+        .rentix-accounts-payable-page-light input::placeholder,
+        .rentix-accounts-payable-page-light textarea::placeholder {
+          color: #94a3b8 !important;
+        }
+
+        .rentix-accounts-payable-page-light table,
+        .rentix-accounts-payable-page-light tbody,
+        .rentix-accounts-payable-page-light tbody tr {
+          background-color: #ffffff !important;
+        }
+
+        .rentix-accounts-payable-page-light thead {
+          background-color: #fff7ed !important;
+        }
+
+        .rentix-accounts-payable-page-light tbody tr:hover {
+          background-color: #f8fafc !important;
+        }
+
+        .rentix-accounts-payable-page-light .shadow-sm,
+        .rentix-accounts-payable-page-light .shadow-md,
+        .rentix-accounts-payable-page-light .shadow-2xl {
+          box-shadow: 0 18px 45px rgba(15, 23, 42, 0.10) !important;
+        }
+
+        .rentix-accounts-payable-page-black,
+        .rentix-accounts-payable-page-black * {
+          color-scheme: dark !important;
+        }
+
+        .rentix-accounts-payable-page-black .bg-white,
+        .rentix-accounts-payable-page-black .bg-slate-50,
+        .rentix-accounts-payable-page-black .bg-slate-100 {
+          background-color: #0f172a !important;
+        }
+
+        .rentix-accounts-payable-page-black .bg-gradient-to-r {
+          background-image: linear-gradient(to right, #0f172a, #111827) !important;
+        }
+
+        .rentix-accounts-payable-page-black .text-slate-950,
+        .rentix-accounts-payable-page-black .text-slate-900,
+        .rentix-accounts-payable-page-black .text-slate-800,
+        .rentix-accounts-payable-page-black .text-slate-700 {
+          color: #f8fafc !important;
+        }
+
+        .rentix-accounts-payable-page-black .text-slate-600,
+        .rentix-accounts-payable-page-black .text-slate-500,
+        .rentix-accounts-payable-page-black .text-slate-400 {
+          color: #cbd5e1 !important;
+        }
+
+        .rentix-accounts-payable-page-black input,
+        .rentix-accounts-payable-page-black select,
+        .rentix-accounts-payable-page-black textarea {
+          background-color: #020617 !important;
+          border-color: #334155 !important;
+          color: #f8fafc !important;
+          color-scheme: dark !important;
+        }
+
+        .rentix-accounts-payable-page-black input::placeholder,
+        .rentix-accounts-payable-page-black textarea::placeholder {
+          color: #64748b !important;
+        }
+
+        .rentix-accounts-payable-page-black table,
+        .rentix-accounts-payable-page-black tbody,
+        .rentix-accounts-payable-page-black tbody tr {
+          background-color: #0f172a !important;
+        }
+
+        .rentix-accounts-payable-page-black thead {
+          background-color: rgba(249, 115, 22, 0.15) !important;
+        }
+
+        .rentix-accounts-payable-page-black tbody tr:hover {
+          background-color: #1e293b !important;
+        }
+      `}</style>
+
+      <div
+        data-rentix-theme={isBlackTheme ? "black" : "light"}
+        className={
+          isBlackTheme
+            ? "rentix-accounts-payable-page-black space-y-8"
+            : "rentix-accounts-payable-page-light space-y-8"
+        }
+      >
         <div>
           <p className="text-sm font-semibold text-orange-600">Financeiro</p>
 
@@ -1928,7 +2170,7 @@ export default function AccountsPayablePage() {
       </div>
 
       {isCreateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-payable-page-black" : "rentix-accounts-payable-page-light"}`}>
           <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="border-b border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-gradient-to-r from-orange-50 to-white dark:from-orange-950/30 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
@@ -2274,7 +2516,7 @@ export default function AccountsPayablePage() {
       )}
 
       {isTenantCreateOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-0 backdrop-blur-sm md:p-4">
+        <div className={`fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-0 backdrop-blur-sm md:p-4 ${isBlackTheme ? "rentix-accounts-payable-page-black" : "rentix-accounts-payable-page-light"}`}>
           <div className="flex max-h-screen w-full max-w-6xl flex-col overflow-hidden rounded-none bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700 md:max-h-[94vh] md:rounded-3xl">
             <div className="border-b border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-5 md:px-8">
               <div className="flex items-start justify-between gap-4">
@@ -2593,7 +2835,7 @@ export default function AccountsPayablePage() {
       )}
 
       {expensePendingPaymentReceipt && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+        <div className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-payable-page-black" : "rentix-accounts-payable-page-light"}`}>
           <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="border-b border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-gradient-to-r from-orange-50 to-white dark:from-orange-950/30 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
@@ -2814,6 +3056,7 @@ export default function AccountsPayablePage() {
           confirmLabel="Confirmar pagamento"
           onCancel={() => setIsPaymentConfirmationOpen(false)}
           onConfirm={finishPayExpense}
+          isBlackTheme={isBlackTheme}
         />
       )}
 
@@ -2828,6 +3071,7 @@ export default function AccountsPayablePage() {
           danger
           onCancel={closeDeleteExpenseConfirmation}
           onConfirm={confirmDeleteExpense}
+          isBlackTheme={isBlackTheme}
         />
       )}
 
@@ -2841,11 +3085,12 @@ export default function AccountsPayablePage() {
           confirmLabel="Voltar para pendente"
           onCancel={closePaymentReversalConfirmation}
           onConfirm={confirmPaymentReversal}
+          isBlackTheme={isBlackTheme}
         />
       )}
 
       {isReportOpen && (
-        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+        <div className={`fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-payable-page-black" : "rentix-accounts-payable-page-light"}`}>
           <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="border-b border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-gradient-to-r from-slate-50 to-white dark:from-slate-800 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
@@ -3133,6 +3378,7 @@ function ConfirmationModal({
   danger,
   onCancel,
   onConfirm,
+  isBlackTheme,
 }: {
   icon: string;
   title: string;
@@ -3143,9 +3389,10 @@ function ConfirmationModal({
   danger?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  isBlackTheme?: boolean;
 }) {
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+    <div className={`fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-payable-page-black" : "rentix-accounts-payable-page-light"}`}>
       <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
         <div className="p-6 text-center">
           <div

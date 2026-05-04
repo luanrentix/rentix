@@ -14,6 +14,9 @@ const CHARGE_PAYMENTS_STORAGE_KEY = "rentix_charge_payments";
 const PROPERTY_MOVEMENTS_STORAGE_KEY = "rentix_property_movements";
 const EXPIRING_CONTRACT_DAYS_LIMIT = 30;
 const PRINT_TEMPLATES_STORAGE_KEY = "rentix_print_templates";
+const DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME = "14:00";
+const DEFAULT_TEMPORARY_RENTAL_CHECK_OUT_TIME = "12:00";
+const TEMPORARY_RENTAL_TIME_DEFAULTS_STORAGE_KEY = "rentix_temporary_rental_time_defaults";
 const LEGACY_SETTINGS_TEMPORARY_CONTRACT_CONTENT = `CONTRATO TEMPORÁRIO
 
 LOCADOR: {companyName}
@@ -260,6 +263,7 @@ export default function ContractsPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [tenants, setTenants] = useState<RentixTenant[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isBlackTheme, setIsBlackTheme] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formError, setFormError] = useState("");
   const [editingContractId, setEditingContractId] = useState<number | null>(null);
@@ -277,11 +281,49 @@ export default function ContractsPage() {
   const [isTemporaryRental, setIsTemporaryRental] = useState(false);
   const [checkInTime, setCheckInTime] = useState("");
   const [checkOutTime, setCheckOutTime] = useState("");
+  const [defaultCheckInTime, setDefaultCheckInTime] = useState(DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME);
+  const [defaultCheckOutTime, setDefaultCheckOutTime] = useState(DEFAULT_TEMPORARY_RENTAL_CHECK_OUT_TIME);
+  const [isDefaultTimeModalOpen, setIsDefaultTimeModalOpen] = useState(false);
+  const [draftDefaultCheckInTime, setDraftDefaultCheckInTime] = useState(DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME);
+  const [draftDefaultCheckOutTime, setDraftDefaultCheckOutTime] = useState(DEFAULT_TEMPORARY_RENTAL_CHECK_OUT_TIME);
   const [pendingStatusChange, setPendingStatusChange] = useState<PendingStatusChange | null>(null);
   const [statusReason, setStatusReason] = useState("");
   const [statusReasonError, setStatusReasonError] = useState("");
 
   const isEditing = editingContractId !== null;
+
+  useEffect(() => {
+    function applyStoredTheme() {
+      const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
+      const legacyTheme = localStorage.getItem("rentix_theme");
+
+      try {
+        const parsedThemeSettings = storedThemeSettings
+          ? (JSON.parse(storedThemeSettings) as { mode?: string })
+          : null;
+
+        const isBlackThemeSelected =
+          parsedThemeSettings?.mode === "black" ||
+          parsedThemeSettings?.mode === "dark" ||
+          legacyTheme === "black" ||
+          legacyTheme === "dark";
+
+        setIsBlackTheme(isBlackThemeSelected);
+      } catch {
+        const isLegacyBlackTheme = legacyTheme === "black" || legacyTheme === "dark";
+
+        setIsBlackTheme(isLegacyBlackTheme);
+      }
+    }
+
+    applyStoredTheme();
+
+    window.addEventListener("storage", applyStoredTheme);
+
+    return () => {
+      window.removeEventListener("storage", applyStoredTheme);
+    };
+  }, []);
 
   useEffect(() => {
     const storedContracts = localStorage.getItem(CONTRACTS_STORAGE_KEY);
@@ -333,6 +375,35 @@ export default function ContractsPage() {
     }
 
     setIsLoaded(true);
+  }, []);
+
+
+  useEffect(() => {
+    const storedDefaultTimes = localStorage.getItem(TEMPORARY_RENTAL_TIME_DEFAULTS_STORAGE_KEY);
+
+    if (!storedDefaultTimes) return;
+
+    try {
+      const parsedDefaultTimes = JSON.parse(storedDefaultTimes) as {
+        checkInTime?: string;
+        checkOutTime?: string;
+      };
+
+      const nextDefaultCheckInTime =
+        parsedDefaultTimes.checkInTime || DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME;
+      const nextDefaultCheckOutTime =
+        parsedDefaultTimes.checkOutTime || DEFAULT_TEMPORARY_RENTAL_CHECK_OUT_TIME;
+
+      setDefaultCheckInTime(nextDefaultCheckInTime);
+      setDefaultCheckOutTime(nextDefaultCheckOutTime);
+      setDraftDefaultCheckInTime(nextDefaultCheckInTime);
+      setDraftDefaultCheckOutTime(nextDefaultCheckOutTime);
+    } catch {
+      setDefaultCheckInTime(DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME);
+      setDefaultCheckOutTime(DEFAULT_TEMPORARY_RENTAL_CHECK_OUT_TIME);
+      setDraftDefaultCheckInTime(DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME);
+      setDraftDefaultCheckOutTime(DEFAULT_TEMPORARY_RENTAL_CHECK_OUT_TIME);
+    }
   }, []);
 
   useEffect(() => {
@@ -413,6 +484,7 @@ export default function ContractsPage() {
     setIsTemporaryRental(false);
     setCheckInTime("");
     setCheckOutTime("");
+    setIsDefaultTimeModalOpen(false);
     setFormError("");
     setEditingContractId(null);
     setPendingStatusChange(null);
@@ -700,11 +772,6 @@ export default function ContractsPage() {
       return;
     }
 
-    if (isTemporaryRental && (!checkInTime || !checkOutTime)) {
-      setFormError("Informe a hora de entrada e a hora de saída para contrato de locação temporária.");
-      return;
-    }
-
     if (isEditing) {
       const currentContract = contracts.find((contract) => contract.id === editingContractId);
 
@@ -795,12 +862,47 @@ export default function ContractsPage() {
     }
   }
 
-  function handleOpenPrintableContract(contract: Contract) {
-    if (!contract.isTemporaryRental) {
-      alert("O modelo de impressão disponível no momento é para contrato de locação temporária.");
-      return;
-    }
+  function handleApplyDefaultTemporaryRentalTimes() {
+    setCheckInTime(defaultCheckInTime);
+    setCheckOutTime(defaultCheckOutTime);
+    setFormError("");
+  }
 
+  function handleOpenDefaultTimeModal() {
+    setDraftDefaultCheckInTime(defaultCheckInTime);
+    setDraftDefaultCheckOutTime(defaultCheckOutTime);
+    setIsDefaultTimeModalOpen(true);
+  }
+
+  function handleCloseDefaultTimeModal() {
+    setDraftDefaultCheckInTime(defaultCheckInTime);
+    setDraftDefaultCheckOutTime(defaultCheckOutTime);
+    setIsDefaultTimeModalOpen(false);
+  }
+
+  function handleSaveDefaultTemporaryRentalTimes() {
+    const nextDefaultCheckInTime =
+      draftDefaultCheckInTime || DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME;
+    const nextDefaultCheckOutTime =
+      draftDefaultCheckOutTime || DEFAULT_TEMPORARY_RENTAL_CHECK_OUT_TIME;
+
+    setDefaultCheckInTime(nextDefaultCheckInTime);
+    setDefaultCheckOutTime(nextDefaultCheckOutTime);
+    setDraftDefaultCheckInTime(nextDefaultCheckInTime);
+    setDraftDefaultCheckOutTime(nextDefaultCheckOutTime);
+    setIsDefaultTimeModalOpen(false);
+
+    localStorage.setItem(
+      TEMPORARY_RENTAL_TIME_DEFAULTS_STORAGE_KEY,
+      JSON.stringify({
+        checkInTime: nextDefaultCheckInTime,
+        checkOutTime: nextDefaultCheckOutTime,
+      })
+    );
+  }
+
+
+  function handleOpenPrintableContract(contract: Contract) {
     setPrintableContract(contract);
   }
 
@@ -834,13 +936,327 @@ export default function ContractsPage() {
 
   return (
     <AppShell>
-      <div className="space-y-8">
+      <style jsx global>{`
+        .rentix-contracts-page.rentix-black-theme {
+          color: #f8fafc;
+        }
+
+        .rentix-contracts-page.rentix-black-theme .bg-white {
+          background-color: #0f172a !important;
+        }
+
+        .rentix-contracts-page.rentix-black-theme .bg-slate-50,
+        .rentix-contracts-page.rentix-black-theme .bg-slate-100 {
+          background-color: #111827 !important;
+        }
+
+        .rentix-contracts-page.rentix-black-theme .bg-orange-50,
+        .rentix-contracts-page.rentix-black-theme .bg-orange-100,
+        .rentix-contracts-page.rentix-black-theme .bg-orange-50\/50,
+        .rentix-contracts-page.rentix-black-theme .bg-orange-50\/60,
+        .rentix-contracts-page.rentix-black-theme .bg-orange-50\/40 {
+          background-color: rgba(249, 115, 22, 0.13) !important;
+        }
+
+        .rentix-contracts-page.rentix-black-theme .bg-red-50,
+        .rentix-contracts-page.rentix-black-theme .bg-red-100 {
+          background-color: rgba(239, 68, 68, 0.12) !important;
+        }
+
+        .rentix-contracts-page.rentix-black-theme .bg-emerald-50,
+        .rentix-contracts-page.rentix-black-theme .bg-emerald-100 {
+          background-color: rgba(16, 185, 129, 0.12) !important;
+        }
+
+        .rentix-contracts-page.rentix-black-theme .bg-amber-50,
+        .rentix-contracts-page.rentix-black-theme .bg-amber-100 {
+          background-color: rgba(245, 158, 11, 0.14) !important;
+        }
+
+        .rentix-contracts-page.rentix-black-theme .bg-blue-100 {
+          background-color: rgba(59, 130, 246, 0.14) !important;
+        }
+
+        .rentix-contracts-page.rentix-black-theme .bg-zinc-200 {
+          background-color: #334155 !important;
+        }
+
+        .rentix-contracts-page.rentix-black-theme .text-slate-950,
+        .rentix-contracts-page.rentix-black-theme .text-slate-900,
+        .rentix-contracts-page.rentix-black-theme .text-slate-800,
+        .rentix-contracts-page.rentix-black-theme .text-slate-700 {
+          color: #f8fafc !important;
+        }
+
+        .rentix-contracts-page.rentix-black-theme .text-slate-600,
+        .rentix-contracts-page.rentix-black-theme .text-slate-500,
+        .rentix-contracts-page.rentix-black-theme .text-slate-400 {
+          color: #cbd5e1 !important;
+        }
+
+        .rentix-contracts-page.rentix-black-theme .text-orange-600,
+        .rentix-contracts-page.rentix-black-theme .text-orange-700,
+        .rentix-contracts-page.rentix-black-theme .text-orange-800 {
+          color: #fb923c !important;
+        }
+
+        .rentix-contracts-page.rentix-black-theme .text-red-600,
+        .rentix-contracts-page.rentix-black-theme .text-red-700 {
+          color: #fca5a5 !important;
+        }
+
+        .rentix-contracts-page.rentix-black-theme .text-emerald-700,
+        .rentix-contracts-page.rentix-black-theme .text-emerald-800 {
+          color: #6ee7b7 !important;
+        }
+
+        .rentix-contracts-page.rentix-black-theme .text-amber-700 {
+          color: #fcd34d !important;
+        }
+
+        .rentix-contracts-page.rentix-black-theme .text-blue-700 {
+          color: #93c5fd !important;
+        }
+
+        .rentix-contracts-page.rentix-black-theme .border-orange-100,
+        .rentix-contracts-page.rentix-black-theme .border-orange-200,
+        .rentix-contracts-page.rentix-black-theme .border-red-100,
+        .rentix-contracts-page.rentix-black-theme .border-red-200,
+        .rentix-contracts-page.rentix-black-theme .border-emerald-200,
+        .rentix-contracts-page.rentix-black-theme .border-slate-100,
+        .rentix-contracts-page.rentix-black-theme .border-slate-200,
+        .rentix-contracts-page.rentix-black-theme .border-slate-300 {
+          border-color: #334155 !important;
+        }
+
+        .rentix-contracts-page.rentix-black-theme input,
+        .rentix-contracts-page.rentix-black-theme select,
+        .rentix-contracts-page.rentix-black-theme textarea {
+          background-color: #020617 !important;
+          border-color: #334155 !important;
+          color: #f8fafc !important;
+        }
+
+        .rentix-contracts-page.rentix-black-theme input::placeholder,
+        .rentix-contracts-page.rentix-black-theme textarea::placeholder {
+          color: #64748b !important;
+        }
+
+        .rentix-contracts-page.rentix-black-theme table,
+        .rentix-contracts-page.rentix-black-theme tbody,
+        .rentix-contracts-page.rentix-black-theme tr {
+          background-color: #0f172a !important;
+        }
+
+        .rentix-contracts-page.rentix-black-theme thead {
+          background-color: rgba(249, 115, 22, 0.15) !important;
+        }
+
+        .rentix-contracts-page.rentix-black-theme tbody tr:hover {
+          background-color: #1e293b !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light,
+        .rentix-contracts-page .rentix-force-light,
+        .rentix-contracts-page.rentix-force-light .bg-white,
+        .rentix-contracts-page .rentix-force-light .bg-white,
+        .rentix-contracts-page.rentix-force-light .bg-slate-50,
+        .rentix-contracts-page .rentix-force-light .bg-slate-50,
+        .rentix-contracts-page.rentix-force-light .bg-slate-100,
+        .rentix-contracts-page .rentix-force-light .bg-slate-100 {
+          background-color: #ffffff !important;
+          color: #0f172a !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light .bg-slate-50,
+        .rentix-contracts-page .rentix-force-light .bg-slate-50,
+        .rentix-contracts-page.rentix-force-light .bg-slate-100,
+        .rentix-contracts-page .rentix-force-light .bg-slate-100 {
+          background-color: #f8fafc !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light .bg-orange-50,
+        .rentix-contracts-page .rentix-force-light .bg-orange-50,
+        .rentix-contracts-page.rentix-force-light .bg-orange-100,
+        .rentix-contracts-page .rentix-force-light .bg-orange-100,
+        .rentix-contracts-page.rentix-force-light .bg-orange-50\/50,
+        .rentix-contracts-page .rentix-force-light .bg-orange-50\/50,
+        .rentix-contracts-page.rentix-force-light .bg-orange-50\/60,
+        .rentix-contracts-page .rentix-force-light .bg-orange-50\/60,
+        .rentix-contracts-page.rentix-force-light .bg-orange-50\/40,
+        .rentix-contracts-page .rentix-force-light .bg-orange-50\/40 {
+          background-color: #fff7ed !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light .bg-red-50,
+        .rentix-contracts-page .rentix-force-light .bg-red-50,
+        .rentix-contracts-page.rentix-force-light .bg-red-100,
+        .rentix-contracts-page .rentix-force-light .bg-red-100 {
+          background-color: #fef2f2 !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light .bg-emerald-50,
+        .rentix-contracts-page .rentix-force-light .bg-emerald-50,
+        .rentix-contracts-page.rentix-force-light .bg-emerald-100,
+        .rentix-contracts-page .rentix-force-light .bg-emerald-100 {
+          background-color: #ecfdf5 !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light .bg-amber-50,
+        .rentix-contracts-page .rentix-force-light .bg-amber-50,
+        .rentix-contracts-page.rentix-force-light .bg-amber-100,
+        .rentix-contracts-page .rentix-force-light .bg-amber-100 {
+          background-color: #fffbeb !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light .bg-blue-100,
+        .rentix-contracts-page .rentix-force-light .bg-blue-100 {
+          background-color: #dbeafe !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light .text-white,
+        .rentix-contracts-page .rentix-force-light .text-white,
+        .rentix-contracts-page.rentix-force-light .text-slate-950,
+        .rentix-contracts-page .rentix-force-light .text-slate-950,
+        .rentix-contracts-page.rentix-force-light .text-slate-900,
+        .rentix-contracts-page .rentix-force-light .text-slate-900,
+        .rentix-contracts-page.rentix-force-light .text-slate-800,
+        .rentix-contracts-page .rentix-force-light .text-slate-800,
+        .rentix-contracts-page.rentix-force-light .text-slate-700,
+        .rentix-contracts-page .rentix-force-light .text-slate-700 {
+          color: #0f172a !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light .text-slate-600,
+        .rentix-contracts-page .rentix-force-light .text-slate-600,
+        .rentix-contracts-page.rentix-force-light .text-slate-500,
+        .rentix-contracts-page .rentix-force-light .text-slate-500,
+        .rentix-contracts-page.rentix-force-light .text-slate-400,
+        .rentix-contracts-page .rentix-force-light .text-slate-400 {
+          color: #64748b !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light .text-orange-400,
+        .rentix-contracts-page .rentix-force-light .text-orange-400,
+        .rentix-contracts-page.rentix-force-light .text-orange-500,
+        .rentix-contracts-page .rentix-force-light .text-orange-500,
+        .rentix-contracts-page.rentix-force-light .text-orange-600,
+        .rentix-contracts-page .rentix-force-light .text-orange-600,
+        .rentix-contracts-page.rentix-force-light .text-orange-700,
+        .rentix-contracts-page .rentix-force-light .text-orange-700,
+        .rentix-contracts-page.rentix-force-light .text-orange-800,
+        .rentix-contracts-page .rentix-force-light .text-orange-800 {
+          color: #ea580c !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light .text-red-300,
+        .rentix-contracts-page .rentix-force-light .text-red-300,
+        .rentix-contracts-page.rentix-force-light .text-red-600,
+        .rentix-contracts-page .rentix-force-light .text-red-600,
+        .rentix-contracts-page.rentix-force-light .text-red-700,
+        .rentix-contracts-page .rentix-force-light .text-red-700 {
+          color: #dc2626 !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light .text-emerald-700,
+        .rentix-contracts-page .rentix-force-light .text-emerald-700 {
+          color: #047857 !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light .text-amber-700,
+        .rentix-contracts-page .rentix-force-light .text-amber-700 {
+          color: #b45309 !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light .border-orange-100,
+        .rentix-contracts-page .rentix-force-light .border-orange-100,
+        .rentix-contracts-page.rentix-force-light .border-orange-200,
+        .rentix-contracts-page .rentix-force-light .border-orange-200 {
+          border-color: #fed7aa !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light .border-slate-100,
+        .rentix-contracts-page .rentix-force-light .border-slate-100,
+        .rentix-contracts-page.rentix-force-light .border-slate-200,
+        .rentix-contracts-page .rentix-force-light .border-slate-200,
+        .rentix-contracts-page.rentix-force-light .border-slate-300,
+        .rentix-contracts-page .rentix-force-light .border-slate-300,
+        .rentix-contracts-page.rentix-force-light .border-slate-700,
+        .rentix-contracts-page .rentix-force-light .border-slate-700,
+        .rentix-contracts-page.rentix-force-light .border-slate-800,
+        .rentix-contracts-page .rentix-force-light .border-slate-800 {
+          border-color: #e2e8f0 !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light input,
+        .rentix-contracts-page .rentix-force-light input,
+        .rentix-contracts-page.rentix-force-light select,
+        .rentix-contracts-page .rentix-force-light select,
+        .rentix-contracts-page.rentix-force-light textarea,
+        .rentix-contracts-page .rentix-force-light textarea {
+          background-color: #ffffff !important;
+          border-color: #e2e8f0 !important;
+          color: #334155 !important;
+          color-scheme: light !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light input::placeholder,
+        .rentix-contracts-page .rentix-force-light input::placeholder,
+        .rentix-contracts-page.rentix-force-light textarea::placeholder,
+        .rentix-contracts-page .rentix-force-light textarea::placeholder {
+          color: #94a3b8 !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light .bg-slate-900,
+        .rentix-contracts-page .rentix-force-light .bg-slate-900,
+        .rentix-contracts-page.rentix-force-light .bg-slate-950,
+        .rentix-contracts-page .rentix-force-light .bg-slate-950,
+        .rentix-contracts-page.rentix-force-light .bg-slate-800,
+        .rentix-contracts-page .rentix-force-light .bg-slate-800,
+        .rentix-contracts-page.rentix-force-light .bg-slate-700,
+        .rentix-contracts-page .rentix-force-light .bg-slate-700 {
+          background-color: #f8fafc !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light button.bg-slate-900,
+        .rentix-contracts-page .rentix-force-light button.bg-slate-900,
+        .rentix-contracts-page.rentix-force-light button.bg-slate-800,
+        .rentix-contracts-page .rentix-force-light button.bg-slate-800,
+        .rentix-contracts-page.rentix-force-light button.bg-slate-700,
+        .rentix-contracts-page .rentix-force-light button.bg-slate-700 {
+          background-color: #f1f5f9 !important;
+          color: #475569 !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light button.bg-orange-500,
+        .rentix-contracts-page .rentix-force-light button.bg-orange-500 {
+          background-color: #f97316 !important;
+          color: #ffffff !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light button.bg-orange-500:hover,
+        .rentix-contracts-page .rentix-force-light button.bg-orange-500:hover {
+          background-color: #ea580c !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light button.bg-red-500,
+        .rentix-contracts-page .rentix-force-light button.bg-red-500 {
+          background-color: #ef4444 !important;
+          color: #ffffff !important;
+        }
+
+        .rentix-contracts-page.rentix-force-light button.bg-red-500:hover,
+        .rentix-contracts-page .rentix-force-light button.bg-red-500:hover {
+          background-color: #dc2626 !important;
+        }
+      `}</style>
+      <div className={`rentix-contracts-page space-y-8 ${isBlackTheme ? "rentix-black-theme" : "rentix-force-light"}`}>
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <h1 className="text-4xl font-black tracking-tight text-slate-950 dark:text-white">
+            <h1 className="text-4xl font-black tracking-tight text-slate-950">
               Contratos
             </h1>
-            <p className="mt-2 text-slate-500 dark:text-slate-400 dark:text-slate-500">
+            <p className="mt-2 text-slate-500">
               Gerencie os contratos de locação e mantenha o financeiro integrado.
             </p>
           </div>
@@ -848,7 +1264,7 @@ export default function ContractsPage() {
           <button
             type="button"
             onClick={handleOpenCreateForm}
-            className="rounded-2xl bg-orange-50 dark:bg-orange-500/100 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600"
+            className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
           >
             + Novo contrato
           </button>
@@ -860,13 +1276,13 @@ export default function ContractsPage() {
           <SummaryCard icon="💰" title="Receita mensal" value={formatCurrency(monthlyRevenue)} detail="Contratos ativos" />
         </div>
 
-        <div className="rounded-3xl border border-orange-100 dark:border-orange-500/20 bg-white dark:bg-slate-900 dark:bg-slate-950 shadow-sm">
-          <div className="flex flex-col gap-4 border-b border-slate-100 dark:border-slate-700 px-6 py-5 xl:flex-row xl:items-end xl:justify-between">
+        <div className="rounded-3xl border border-orange-100 bg-white shadow-sm">
+          <div className="flex flex-col gap-4 border-b border-slate-100 px-6 py-5 xl:flex-row xl:items-end xl:justify-between">
             <div>
-              <h2 className="text-2xl font-black text-slate-950 dark:text-white">
+              <h2 className="text-2xl font-black text-slate-950">
                 Contratos cadastrados
               </h2>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
+              <p className="mt-1 text-sm text-slate-500">
                 Exibindo {filteredContracts.length} de {contracts.length} contrato(s)
               </p>
             </div>
@@ -878,7 +1294,7 @@ export default function ContractsPage() {
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                   placeholder="Buscar por imóvel ou inquilino"
-                  className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-950 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                 />
               </FormField>
 
@@ -886,7 +1302,7 @@ export default function ContractsPage() {
                 <select
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value as ContractFilterStatus)}
-                  className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-950 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                 >
                   <option value="Active">Ativos</option>
                   <option value="Expiring">Vencendo</option>
@@ -902,58 +1318,58 @@ export default function ContractsPage() {
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-left">
-              <thead className="bg-orange-50 dark:bg-orange-500/10">
+              <thead className="bg-orange-50">
                 <tr>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">Imóvel</th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">Inquilino</th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">Início</th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">Fim</th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">Valor</th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">Tipo</th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">Status</th>
-                  <th className="px-6 py-4 text-right text-sm font-black text-slate-700 dark:text-slate-200">Ações</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">Imóvel</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">Inquilino</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">Início</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">Fim</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">Valor</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">Tipo</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">Status</th>
+                  <th className="px-6 py-4 text-right text-sm font-black text-slate-700">Ações</th>
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+              <tbody className="divide-y divide-slate-100">
                 {filteredContracts.map((contract) => {
                   const displayStatus = getDisplayContractStatus(contract);
 
                   return (
                     <tr
                       key={contract.id}
-                      className={`transition hover:bg-slate-50 dark:hover:bg-slate-800/80 dark:bg-slate-800 dark:bg-slate-700 ${
+                      className={`transition hover:bg-slate-50 ${
                         displayStatus === "Deleted"
-                          ? "bg-slate-50 dark:bg-slate-800 dark:bg-slate-700 opacity-70"
+                          ? "bg-slate-50 opacity-70"
                           : displayStatus === "Expiring"
-                            ? "bg-amber-50 dark:bg-amber-500/10/60"
+                            ? "bg-amber-50"
                             : ""
                       }`}
                     >
-                      <td className="px-6 py-4 font-black text-slate-900 dark:text-white">
+                      <td className="px-6 py-4 font-black text-slate-900">
                         {contract.propertyName || "Não informado"}
                       </td>
 
-                      <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                      <td className="px-6 py-4 text-sm font-semibold text-slate-600">
                         {contract.tenantName || "Não informado"}
                       </td>
 
-                      <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                      <td className="px-6 py-4 text-sm font-semibold text-slate-600">
                         {formatDate(contract.startDate)}
                       </td>
 
-                      <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                      <td className="px-6 py-4 text-sm font-semibold text-slate-600">
                         <div className="flex flex-col gap-1">
                           <span>{formatDate(contract.endDate)}</span>
                           {displayStatus === "Expiring" && (
-                            <span className="text-xs font-black text-amber-700 dark:text-amber-300">
+                            <span className="text-xs font-black text-amber-700">
                               Vence em {getDaysUntilDate(contract.endDate)} dia(s)
                             </span>
                           )}
                         </div>
                       </td>
 
-                      <td className="px-6 py-4 text-sm font-black text-slate-900 dark:text-white">
+                      <td className="px-6 py-4 text-sm font-black text-slate-900">
                         {formatCurrency(contract.rentValue)}
                       </td>
 
@@ -961,8 +1377,8 @@ export default function ContractsPage() {
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-black ${
                             contract.isTemporaryRental
-                              ? "bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-300"
-                              : "bg-slate-100 dark:bg-slate-800 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                              ? "bg-orange-100 text-orange-700"
+                              : "bg-slate-100 text-slate-600"
                           }`}
                         >
                           {contract.isTemporaryRental ? "Temporário" : "Padrão"}
@@ -974,7 +1390,7 @@ export default function ContractsPage() {
                           <StatusBadge status={displayStatus} />
                           {(displayStatus === "Canceled" || displayStatus === "Deleted") &&
                             contract.statusReason && (
-                              <span className="max-w-[220px] text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                              <span className="max-w-[220px] text-xs font-semibold text-slate-500">
                                 Motivo: {contract.statusReason}
                               </span>
                             )}
@@ -986,7 +1402,7 @@ export default function ContractsPage() {
                           <button
                             type="button"
                             onClick={() => handleOpenPrintableContract(contract)}
-                            className="rounded-xl bg-orange-50 dark:bg-orange-500/10 px-4 py-2 text-sm font-bold text-orange-600 dark:text-orange-400 transition hover:bg-orange-100 dark:hover:bg-orange-500/20 dark:bg-orange-500/20"
+                            className="rounded-xl bg-orange-50 px-4 py-2 text-sm font-bold text-orange-600 transition hover:bg-orange-100"
                           >
                             Gerar contrato
                           </button>
@@ -994,7 +1410,7 @@ export default function ContractsPage() {
                           <button
                             type="button"
                             onClick={() => handleEditContract(contract)}
-                            className="rounded-xl bg-slate-100 dark:bg-slate-800 dark:bg-slate-700 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-700"
+                            className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
                           >
                             Editar
                           </button>
@@ -1006,7 +1422,7 @@ export default function ContractsPage() {
 
                 {filteredContracts.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-6 py-10 text-center text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                    <td colSpan={8} className="px-6 py-10 text-center text-sm font-semibold text-slate-500">
                       Nenhum contrato encontrado para este filtro.
                     </td>
                   </tr>
@@ -1018,16 +1434,16 @@ export default function ContractsPage() {
 
         {printableContract && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
-            <div className="flex max-h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 dark:border-orange-500/20 bg-white dark:bg-slate-900 dark:bg-slate-950 shadow-2xl">
-              <div className="flex flex-col gap-4 border-b border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-950 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className={`flex max-h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl ${isBlackTheme ? "rentix-black-theme" : "rentix-force-light"}`}>
+              <div className="flex flex-col gap-4 border-b border-slate-100 bg-white px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-500 dark:text-orange-400">
-                    Contrato temporário
+                  <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-500">
+                    {printableContract.isTemporaryRental ? "Contrato temporário" : "Contrato padrão residencial"}
                   </p>
-                  <h2 className="mt-1 text-2xl font-black text-slate-950 dark:text-white">
+                  <h2 className="mt-1 text-2xl font-black text-slate-950">
                     Visualização do contrato
                   </h2>
-                  <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
                     Confira o documento antes de gerar PDF ou imprimir.
                   </p>
                 </div>
@@ -1036,7 +1452,7 @@ export default function ContractsPage() {
                   <button
                     type="button"
                     onClick={handleClosePrintableContract}
-                    className="rounded-2xl bg-slate-100 dark:bg-slate-800 dark:bg-slate-700 px-5 py-3 text-sm font-black text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-700"
+                    className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
                   >
                     Fechar
                   </button>
@@ -1044,7 +1460,7 @@ export default function ContractsPage() {
                   <button
                     type="button"
                     onClick={handleGeneratePrintableContractPdf}
-                    className="rounded-2xl bg-slate-900 dark:bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-md shadow-slate-100 dark:shadow-black/40 transition hover:bg-slate-800 dark:bg-slate-700"
+                    className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-md shadow-slate-100 transition hover:bg-slate-800"
                   >
                     Gerar PDF
                   </button>
@@ -1052,24 +1468,37 @@ export default function ContractsPage() {
                   <button
                     type="button"
                     onClick={handlePrintPrintableContract}
-                    className="rounded-2xl bg-orange-50 dark:bg-orange-500/100 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600"
+                    className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
                   >
                     Imprimir
                   </button>
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 bg-slate-100 dark:bg-slate-800 dark:bg-slate-700 p-4">
+              <div className="min-h-0 flex-1 bg-slate-100 p-4">
                 <iframe
                   ref={printableContractFrameRef}
-                  title="Visualização do contrato temporário"
-                  srcDoc={buildTemporaryRentalContractHtml(
-                    printableContract,
-                    properties.find((property) => String(property.id) === String(printableContract.propertyId)),
-                    tenants.find((tenant) => String(tenant.id) === String(printableContract.tenantId)),
-                    false
-                  )}
-                  className="h-[72vh] w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-950 shadow-sm"
+                  title={
+                    printableContract.isTemporaryRental
+                      ? "Visualização do contrato temporário"
+                      : "Visualização do contrato padrão residencial"
+                  }
+                  srcDoc={
+                    printableContract.isTemporaryRental
+                      ? buildTemporaryRentalContractHtml(
+                          printableContract,
+                          properties.find((property) => String(property.id) === String(printableContract.propertyId)),
+                          tenants.find((tenant) => String(tenant.id) === String(printableContract.tenantId)),
+                          false
+                        )
+                      : buildStandardResidentialContractHtml(
+                          printableContract,
+                          properties.find((property) => String(property.id) === String(printableContract.propertyId)),
+                          tenants.find((tenant) => String(tenant.id) === String(printableContract.tenantId)),
+                          false
+                        )
+                  }
+                  className="h-[72vh] w-full rounded-2xl border border-slate-200 bg-white shadow-sm"
                 />
               </div>
             </div>
@@ -1078,34 +1507,34 @@ export default function ContractsPage() {
 
         {pendingStatusChange && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-lg rounded-[2rem] border border-red-100 dark:border-red-500/20 bg-white dark:bg-slate-900 dark:bg-slate-950 p-8 shadow-2xl">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 dark:bg-red-500/10 text-3xl">
+            <div className={`w-full max-w-lg rounded-[2rem] border border-red-100 bg-white p-8 shadow-2xl ${isBlackTheme ? "rentix-black-theme" : "rentix-force-light"}`}>
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 text-3xl">
                 {pendingStatusChange.nextStatus === "Deleted" ? "🗑️" : "🚫"}
               </div>
 
               <div className="mt-5 text-center">
-                <h3 className="text-2xl font-black text-slate-950 dark:text-white">
+                <h3 className="text-2xl font-black text-slate-950">
                   {pendingStatusChange.nextStatus === "Deleted"
                     ? "Motivo da exclusão"
                     : "Motivo do cancelamento"}
                 </h3>
 
-                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
                   Ao confirmar, as parcelas em aberto vinculadas a este contrato serão removidas do Contas a Receber para manter o financeiro consistente.
                 </p>
               </div>
 
-              <div className="mt-5 rounded-2xl bg-slate-50 dark:bg-slate-800 dark:bg-slate-700 px-4 py-3">
-                <p className="text-sm font-black text-slate-900 dark:text-white">
+              <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
+                <p className="text-sm font-black text-slate-900">
                   {pendingStatusChange.contract.propertyName || "Contrato"}
                 </p>
-                <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                <p className="mt-1 text-xs font-semibold text-slate-500">
                   {pendingStatusChange.contract.tenantName || "Inquilino não informado"}
                 </p>
               </div>
 
               <div className="mt-5">
-                <label className="mb-2 block text-sm font-black text-slate-700 dark:text-slate-200">
+                <label className="mb-2 block text-sm font-black text-slate-700">
                   Motivo
                 </label>
                 <textarea
@@ -1120,11 +1549,11 @@ export default function ContractsPage() {
                       : "Descreva o motivo do cancelamento do contrato"
                   }
                   rows={4}
-                  className="w-full resize-none rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
+                  className="w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                 />
 
                 {statusReasonError && (
-                  <div className="mt-3 rounded-2xl border border-red-100 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm font-bold text-red-700 dark:text-red-300">
+                  <div className="mt-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
                     {statusReasonError}
                   </div>
                 )}
@@ -1134,7 +1563,7 @@ export default function ContractsPage() {
                 <button
                   type="button"
                   onClick={handleCancelStatusReason}
-                  className="rounded-2xl bg-slate-100 dark:bg-slate-800 dark:bg-slate-700 px-5 py-4 text-sm font-black text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-700"
+                  className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200"
                 >
                   Cancelar
                 </button>
@@ -1142,7 +1571,7 @@ export default function ContractsPage() {
                 <button
                   type="button"
                   onClick={handleConfirmStatusReason}
-                  className="rounded-2xl bg-red-50 dark:bg-red-500/100 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 dark:shadow-red-950/30 transition hover:bg-red-600"
+                  className="rounded-2xl bg-red-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600"
                 >
                   Confirmar
                 </button>
@@ -1151,15 +1580,73 @@ export default function ContractsPage() {
           </div>
         )}
 
+
+        {isDefaultTimeModalOpen && (
+          <div className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
+            <div className={`w-full max-w-lg rounded-[2rem] border border-orange-100 bg-white p-8 shadow-2xl ${isBlackTheme ? "rentix-black-theme" : "rentix-force-light"}`}>
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 text-3xl">
+                ✏️
+              </div>
+
+              <div className="mt-5 text-center">
+                <h3 className="text-2xl font-black text-slate-950">
+                  Editar horário padrão
+                </h3>
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
+                  Defina os horários que serão preenchidos ao clicar em Usar padrão.
+                </p>
+              </div>
+
+              <div className="mt-6 grid gap-5 md:grid-cols-2">
+                <FormField label="Entrada padrão">
+                  <input
+                    type="time"
+                    value={draftDefaultCheckInTime}
+                    onChange={(event) => setDraftDefaultCheckInTime(event.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                  />
+                </FormField>
+
+                <FormField label="Saída padrão">
+                  <input
+                    type="time"
+                    value={draftDefaultCheckOutTime}
+                    onChange={(event) => setDraftDefaultCheckOutTime(event.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                  />
+                </FormField>
+              </div>
+
+              <div className="mt-8 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={handleCloseDefaultTimeModal}
+                  className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveDefaultTemporaryRentalTimes}
+                  className="rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                >
+                  Salvar padrão
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {isFormOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
-            <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 dark:border-orange-500/20 bg-white dark:bg-slate-900 dark:bg-slate-950 shadow-2xl">
-              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-950 px-8 py-6">
+            <div className={`max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 bg-white shadow-2xl ${isBlackTheme ? "rentix-black-theme" : "rentix-force-light"}`}>
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-8 py-6">
                 <div>
-                  <h2 className="text-2xl font-black text-slate-950 dark:text-white">
+                  <h2 className="text-2xl font-black text-slate-950">
                     {isEditing ? "Editar contrato" : "Novo contrato"}
                   </h2>
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                  <p className="mt-1 text-sm text-slate-500">
                     Preencha os dados do contrato.
                   </p>
                 </div>
@@ -1167,7 +1654,7 @@ export default function ContractsPage() {
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 dark:bg-slate-700 text-xl font-black text-slate-600 dark:text-slate-300 transition hover:bg-red-50 dark:hover:bg-red-500/10 dark:bg-red-500/10 hover:text-red-600 dark:text-red-300"
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-600 transition hover:bg-red-50 hover:text-red-600"
                 >
                   ×
                 </button>
@@ -1176,7 +1663,7 @@ export default function ContractsPage() {
               <form onSubmit={handleSubmitContract}>
                 <div className="p-8">
                   {formError && (
-                    <div className="mb-6 rounded-2xl border border-red-100 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm font-black text-red-600 dark:text-red-300">
+                    <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-black text-red-600">
                       {formError}
                     </div>
                   )}
@@ -1187,7 +1674,7 @@ export default function ContractsPage() {
                         value={propertyId}
                         onChange={(event) => handlePropertyChange(event.target.value)}
                         required
-                        className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-950 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                       >
                         <option value="">Selecione um imóvel</option>
 
@@ -1207,7 +1694,7 @@ export default function ContractsPage() {
                           setFormError("");
                         }}
                         required
-                        className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-950 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                       >
                         <option value="">Selecione um inquilino</option>
                         {availableTenants.map((tenant) => (
@@ -1228,7 +1715,7 @@ export default function ContractsPage() {
                         }}
                         placeholder="Ex: 1800"
                         required
-                        className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                       />
                     </FormField>
 
@@ -1241,7 +1728,7 @@ export default function ContractsPage() {
                           setFormError("");
                         }}
                         required
-                        className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                       />
                     </FormField>
 
@@ -1254,7 +1741,7 @@ export default function ContractsPage() {
                           setFormError("");
                         }}
                         required
-                        className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                       />
                     </FormField>
 
@@ -1263,7 +1750,7 @@ export default function ContractsPage() {
                         value={contractStatus}
                         onChange={(event) => setContractStatus(event.target.value as ContractStatus)}
                         required
-                        className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-950 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                       >
                         <option value="Active">Ativo</option>
                         <option value="Inactive">Inativo</option>
@@ -1274,7 +1761,7 @@ export default function ContractsPage() {
                     </FormField>
                   </div>
 
-                  <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-2xl border border-orange-100 dark:border-orange-500/20 bg-orange-50 dark:bg-orange-500/10/40 px-5 py-4 transition hover:bg-orange-50 dark:hover:bg-orange-500/10 dark:bg-orange-500/10">
+                  <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-2xl border border-orange-100 bg-orange-50 px-5 py-4 transition hover:bg-orange-50">
                     <input
                       type="checkbox"
                       checked={isTemporaryRental}
@@ -1291,58 +1778,87 @@ export default function ContractsPage() {
                     />
 
                     <div>
-                      <p className="text-sm font-black text-slate-800 dark:text-slate-100">
+                      <p className="text-sm font-black text-slate-800">
                         Este contrato é de locação temporária
                       </p>
-                      <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                      <p className="mt-1 text-xs font-semibold text-slate-500">
                         Use esta opção para contratos de curto prazo. Esta marcação será utilizada na impressão e no modelo do contrato.
                       </p>
                     </div>
                   </label>
 
                   {isTemporaryRental && (
-                    <div className="mt-5 grid gap-5 md:grid-cols-2">
-                      <FormField label="Hora de entrada (check-in)">
-                        <input
-                          type="time"
-                          value={checkInTime}
-                          onChange={(event) => {
-                            setCheckInTime(event.target.value);
-                            setFormError("");
-                          }}
-                          required={isTemporaryRental}
-                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
-                        />
-                      </FormField>
+                    <div className="mt-5 rounded-3xl border border-orange-100 bg-orange-50 px-5 py-5">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <h3 className="text-sm font-black text-slate-800">
+                            Horários da locação temporária
+                          </h3>
+                          <p className="mt-1 text-xs font-semibold text-slate-500">
+                            Campos opcionais. Caso não informe, o contrato será gerado sem horários definidos.
+                          </p>
+                        </div>
 
-                      <FormField label="Hora de saída (check-out)">
-                        <input
-                          type="time"
-                          value={checkOutTime}
-                          onChange={(event) => {
-                            setCheckOutTime(event.target.value);
-                            setFormError("");
-                          }}
-                          required={isTemporaryRental}
-                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
-                        />
-                      </FormField>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={handleApplyDefaultTemporaryRentalTimes}
+                            className="rounded-2xl bg-orange-500/15 px-4 py-3 text-xs font-black text-orange-700 transition hover:bg-orange-500/25"
+                          >
+                            Usar padrão
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleOpenDefaultTimeModal}
+                            className="rounded-2xl bg-slate-100 px-4 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+                          >
+                            ✏️
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="mt-5 grid gap-5 md:grid-cols-2">
+                        <FormField label="Hora de entrada (check-in) (opcional)">
+                          <input
+                            type="time"
+                            value={checkInTime}
+                            onChange={(event) => {
+                              setCheckInTime(event.target.value);
+                              setFormError("");
+                            }}
+                            className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          />
+                        </FormField>
+
+                        <FormField label="Hora de saída (check-out) (opcional)">
+                          <input
+                            type="time"
+                            value={checkOutTime}
+                            onChange={(event) => {
+                              setCheckOutTime(event.target.value);
+                              setFormError("");
+                            }}
+                            className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          />
+                        </FormField>
+                      </div>
                     </div>
                   )}
                 </div>
 
-                <div className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-950 px-8 py-6">
+                <div className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-100 bg-white px-8 py-6">
                   <button
                     type="button"
                     onClick={resetForm}
-                    className="rounded-2xl bg-slate-100 dark:bg-slate-800 dark:bg-slate-700 px-6 py-4 text-sm font-black text-slate-600 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
+                    className="rounded-2xl bg-slate-100 px-6 py-4 text-sm font-black text-slate-600 transition hover:bg-slate-200"
                   >
                     Cancelar
                   </button>
 
                   <button
                     type="submit"
-                    className="rounded-2xl bg-orange-50 dark:bg-orange-500/100 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600"
+                    className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
                   >
                     {isEditing ? "Salvar alterações" : "Criar contrato"}
                   </button>
@@ -1364,7 +1880,7 @@ type FormFieldProps = {
 function FormField({ label, children }: FormFieldProps) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-black text-slate-700 dark:text-slate-200">
+      <label className="mb-2 block text-sm font-black text-slate-700">
         {label}
       </label>
       {children}
@@ -1381,26 +1897,26 @@ type SummaryCardProps = {
 
 function SummaryCard({ icon, title, value, detail }: SummaryCardProps) {
   return (
-    <div className="rounded-3xl border border-orange-100 dark:border-orange-500/20 bg-white dark:bg-slate-900 dark:bg-slate-950 p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
-      <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 dark:bg-orange-500/20 text-xl text-orange-600 dark:text-orange-400">
+    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
+      <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-xl text-orange-600">
         {icon}
       </div>
 
-      <p className="text-sm font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500">{title}</p>
-      <h3 className="mt-3 text-3xl font-black text-slate-950 dark:text-white">{value}</h3>
-      <p className="mt-3 text-sm font-bold text-orange-600 dark:text-orange-400">{detail}</p>
+      <p className="text-sm font-bold text-slate-500">{title}</p>
+      <h3 className="mt-3 text-3xl font-black text-slate-950">{value}</h3>
+      <p className="mt-3 text-sm font-bold text-orange-600">{detail}</p>
     </div>
   );
 }
 
 function StatusBadge({ status }: { status: ContractDisplayStatus }) {
   const statusConfig = {
-    Active: { label: "Ativo", className: "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300" },
-    Expiring: { label: "Vencendo", className: "bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300" },
-    Inactive: { label: "Inativo", className: "bg-slate-100 dark:bg-slate-800 dark:bg-slate-700 text-slate-600 dark:text-slate-300" },
-    Canceled: { label: "Cancelado", className: "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300" },
-    Finished: { label: "Finalizado", className: "bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300" },
-    Deleted: { label: "Excluído", className: "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200" },
+    Active: { label: "Ativo", className: "bg-emerald-100 text-emerald-700" },
+    Expiring: { label: "Vencendo", className: "bg-amber-100 text-amber-700" },
+    Inactive: { label: "Inativo", className: "bg-slate-100 text-slate-600" },
+    Canceled: { label: "Cancelado", className: "bg-red-100 text-red-700" },
+    Finished: { label: "Finalizado", className: "bg-blue-100 text-blue-700" },
+    Deleted: { label: "Excluído", className: "bg-zinc-200 text-zinc-700" },
   };
 
   return (
@@ -1531,6 +2047,190 @@ function isReceivableChargeLinkedToContract(charge: ReceivableCharge, contract: 
   return chargeDueDate >= lowerLimit && chargeDueDate <= upperLimit;
 }
 
+
+
+function buildStandardResidentialContractHtml(
+  contract: Contract,
+  property?: Property,
+  tenant?: RentixTenant,
+  showToolbar = true
+) {
+  const companySettings = getCompanySettingsForContractPrint();
+  const landlordName =
+    companySettings.legalName || companySettings.name || "LOCADOR NÃO INFORMADO";
+  const landlordDocument = formatDocumentForPrint(companySettings.document || "");
+  const landlordAddress = formatFullAddressForPrint({
+    street: companySettings.street,
+    number: companySettings.number,
+    neighborhood: companySettings.neighborhood,
+    city: companySettings.city,
+    state: companySettings.state,
+    zipCode: companySettings.zipCode,
+    complement: companySettings.complement,
+  });
+  const tenantName = contract.tenantName || tenant?.name || "LOCATÁRIO NÃO INFORMADO";
+  const tenantDocument = formatDocumentForPrint(tenant?.cpf || tenant?.document || "");
+  const tenantAddress = formatFullAddressForPrint({
+    street: tenant?.street,
+    number: tenant?.number,
+    neighborhood: tenant?.neighborhood,
+    city: tenant?.city,
+    state: tenant?.state,
+    zipCode: tenant?.zipCode,
+    complement: tenant?.complement,
+  });
+  const propertyName = contract.propertyName || property?.name || "IMÓVEL NÃO INFORMADO";
+  const propertyAddress = formatFullAddressForPrint({
+    street: property?.street,
+    number: property?.number,
+    neighborhood: property?.neighborhood,
+    city: property?.city,
+    state: property?.state,
+    zipCode: property?.zipCode,
+    complement: property?.complement,
+  });
+  const currentDate = new Date();
+  const locationText = property?.city && property?.state ? `${property.city}/${property.state}` : companySettings.city && companySettings.state ? `${companySettings.city}/${companySettings.state}` : "______/__";
+  const durationInMonths = getContractDurationInMonths(contract.startDate, contract.endDate);
+  const monthlyAmount = formatCurrency(contract.rentValue);
+  const penaltyAmount = formatCurrency(Number(contract.rentValue || 0) * 3);
+  const dueDay = getContractRentDueDay(contract.startDate);
+
+  return `<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Contrato de Locação Residencial</title>
+  <style>
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; }
+    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
+    .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
+    .print-button { background: #f97316; color: #ffffff; }
+    .close-button { background: #f1f5f9; color: #334155; }
+    .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }
+    .page-inner { padding: 18mm; }
+    .content { font-size: 12.5px; line-height: 1.55; }
+    h1 { margin: 0 0 18px; text-align: center; font-size: 16px; line-height: 1.35; text-transform: uppercase; }
+    h2 { margin: 16px 0 8px; font-size: 13px; text-transform: uppercase; }
+    p { margin: 0 0 8px; text-align: justify; }
+    .section-title { font-weight: 800; text-transform: uppercase; }
+    .clause { margin-top: 12px; }
+    .signature-area { margin-top: 54px; page-break-inside: avoid; }
+    .signature-label { margin: 30px 0 54px; font-size: 13px; font-weight: 800; text-transform: uppercase; }
+    .signature-line { width: 82%; margin: 0 auto 6px; border-top: 1px solid #111827; }
+    .signature-name { text-align: center; font-weight: 800; }
+    .witness-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 72px; }
+    .witness-line { border-top: 1px solid #111827; padding-top: 6px; font-weight: 800; text-align: center; }
+    @media print {
+      body { background: #ffffff; }
+      .toolbar { display: none; }
+      .page { width: 210mm; min-height: 297mm; margin: 0; box-shadow: none; }
+      .page-inner { padding: 18mm; }
+    }
+  </style>
+</head>
+<body>
+  ${showToolbar ? `<div class="toolbar">
+    <button class="close-button" onclick="window.close()">Fechar</button>
+    <button class="print-button" onclick="window.print()">Imprimir contrato</button>
+  </div>` : ""}
+
+  <main class="page">
+    <div class="page-inner">
+      <div class="content">
+        <h1>Contrato de Locação Residencial</h1>
+
+        <p><strong>${escapeHtml(landlordName)}</strong>, inscrito(a) no CPF/CNPJ nº <strong>${escapeHtml(landlordDocument || "não informado")}</strong>, telefone <strong>${escapeHtml(companySettings.phone || "não informado")}</strong>, e-mail <strong>${escapeHtml(companySettings.email || "não informado")}</strong>, residente e domiciliado(a) em <strong>${escapeHtml(landlordAddress || "endereço não informado")}</strong>, a seguir denominado(a) <strong>LOCADOR(A)</strong>, e de outro lado, <strong>${escapeHtml(tenantName)}</strong>, inscrito(a) no CPF/CNPJ nº <strong>${escapeHtml(tenantDocument || "não informado")}</strong>, telefone <strong>${escapeHtml(tenant?.phone || "não informado")}</strong>, e-mail <strong>${escapeHtml(tenant?.email || "não informado")}</strong>, residente e domiciliado(a) em <strong>${escapeHtml(tenantAddress || "endereço não informado")}</strong>, denominado(a) <strong>LOCATÁRIO(A)</strong>, têm entre si justo e contratado o presente contrato de locação residencial.</p>
+
+        <div class="clause">
+          <h2>Cláusula Primeira - Do Imóvel, Prazo e Entrega</h2>
+          <p>O(A) LOCADOR(A) dá em locação ao(à) LOCATÁRIO(A) o imóvel <strong>${escapeHtml(propertyName)}</strong>, localizado em <strong>${escapeHtml(propertyAddress || "endereço não informado")}</strong>, pelo prazo de <strong>${durationInMonths}</strong> mês(es), com início em <strong>${escapeHtml(formatDate(contract.startDate))}</strong> e término em <strong>${escapeHtml(formatDate(contract.endDate))}</strong>.</p>
+          <p>O(A) LOCATÁRIO(A), após vistoria, declara receber o imóvel nas condições em que se encontra, obrigando-se a restituí-lo ao final da locação em perfeito estado de conservação, livre, desocupado e com contas de consumo quitadas.</p>
+          <p>Antes do vencimento do prazo ajustado, o imóvel não poderá ser retomado pelo(a) LOCADOR(A), salvo em caso de infração contratual. Em caso de devolução antecipada pelo(a) LOCATÁRIO(A), será aplicada a multa prevista neste instrumento.</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Segunda - Do Aluguel e Pagamento</h2>
+          <p>O valor mensal do aluguel será de <strong>${escapeHtml(monthlyAmount)}</strong>, com vencimento todo dia <strong>${dueDay}</strong> de cada mês, devendo ser pago ao(à) LOCADOR(A) ou ao responsável por ele indicado.</p>
+          <p>O pagamento deverá ser realizado por meio acordado entre as partes, podendo ser depósito bancário, transferência, PIX ou outro meio formalmente informado pelo(a) LOCADOR(A).</p>
+          <p>Decorrido o prazo de 30 (trinta) dias do vencimento sem pagamento, o débito poderá ser encaminhado para cobrança amigável ou judicial, acrescido de multa, juros, correção monetária, custas e honorários quando aplicável.</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Terceira - Do Reajuste</h2>
+          <p>O aluguel poderá ser reajustado ao término do prazo contratado ou no período legalmente permitido, mediante acordo entre as partes ou conforme índice definido em ajuste complementar.</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Quarta - Da Vistoria e Conservação</h2>
+          <p>O(A) LOCATÁRIO(A) declara haver visitado e examinado o imóvel locado, aceitando-o no estado em que se encontra, obrigando-se a zelar por sua conservação, higiene e limpeza.</p>
+          <p>Todos os reparos decorrentes do uso normal, mau uso, negligência, entupimentos, danos em instalações, pintura, vidros, fechaduras, torneiras, pias, banheiros, ralos e demais acessórios serão de responsabilidade do(a) LOCATÁRIO(A).</p>
+          <p>Fica proibida qualquer alteração no imóvel sem autorização prévia e por escrito do(a) LOCADOR(A).</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Quinta - Dos Encargos e Despesas</h2>
+          <p>Além do aluguel, compete ao(à) LOCATÁRIO(A) o pagamento das despesas ordinárias de consumo de água, energia elétrica, esgoto, saneamento, taxa de lixo, condomínio quando houver e demais encargos incidentes sobre o uso do imóvel.</p>
+          <p>Na devolução do imóvel, o(a) LOCATÁRIO(A) deverá apresentar os comprovantes de quitação das contas de consumo e providenciar o encerramento ou transferência dos serviços, quando aplicável.</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Sexta - Da Destinação do Imóvel</h2>
+          <p>O imóvel objeto deste contrato destina-se exclusivamente para fins residenciais, ficando o(a) LOCATÁRIO(A) proibido(a) de mudar sua destinação, ceder, transferir, sublocar ou emprestar o imóvel, no todo ou em parte, sem autorização expressa do(a) LOCADOR(A).</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Sétima - Das Obrigações do Locatário</h2>
+          <p>O(A) LOCATÁRIO(A) compromete-se a utilizar o imóvel de forma regular, não depositar materiais inflamáveis, explosivos ou corrosivos, respeitar normas de vizinhança, condomínio e legislação aplicável, bem como comunicar imediatamente ao(à) LOCADOR(A) qualquer ocorrência que possa afetar o imóvel.</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Oitava - Da Responsabilidade do Locador</h2>
+          <p>O(A) LOCADOR(A) não responderá por danos sofridos pelo(a) LOCATÁRIO(A) em razão de mau uso, caso fortuito, força maior, incêndios, arrombamentos, furtos, defeitos decorrentes de uso indevido, rompimentos, vazamentos ou eventos não causados diretamente pelo(a) LOCADOR(A).</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Nona - Do Direito de Preferência</h2>
+          <p>Em caso de venda do imóvel, o(a) LOCATÁRIO(A) poderá ser comunicado(a) para exercício do direito de preferência, quando aplicável, conforme legislação vigente.</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Décima - Da Multa Contratual</h2>
+          <p>Fica estipulada multa equivalente a 03 (três) meses de aluguel vigente, correspondente nesta data a <strong>${escapeHtml(penaltyAmount)}</strong>, a ser aplicada à parte que infringir quaisquer cláusulas deste contrato, sem prejuízo de perdas, danos, despesas, custas e demais encargos legais.</p>
+        </div>
+
+        <div class="clause">
+          <h2>Cláusula Décima Primeira - Do Foro</h2>
+          <p>As partes elegem o foro da comarca do local do imóvel, ou outro competente nos termos da legislação aplicável, para dirimir dúvidas ou litígios oriundos deste contrato, com renúncia de qualquer outro, por mais privilegiado que seja.</p>
+        </div>
+
+        <p style="margin-top: 28px;">E assim, por estarem justas e convencionadas, as partes assinam o presente instrumento particular de contrato de locação residencial em 2 (duas) vias de igual teor, juntamente com as testemunhas abaixo.</p>
+
+        <p style="margin-top: 28px;"><strong>${escapeHtml(locationText)}, ${escapeHtml(formatLongDateForPrint(currentDate))}.</strong></p>
+
+        <div class="signature-area">
+          <p class="signature-label">LOCADOR(A):</p>
+          <div class="signature-line"></div>
+          <div class="signature-name">${escapeHtml(landlordName)}</div>
+
+          <p class="signature-label">LOCATÁRIO(A):</p>
+          <div class="signature-line"></div>
+          <div class="signature-name">${escapeHtml(tenantName)}</div>
+
+          <div class="witness-grid">
+            <div class="witness-line">Testemunha</div>
+            <div class="witness-line">Testemunha</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>`;
+}
 
 function buildTemporaryRentalContractHtml(
   contract: Contract,
@@ -2029,6 +2729,31 @@ function getContractDurationInDays(startDateValue: string, endDateValue: string)
   const millisecondsPerDay = 1000 * 60 * 60 * 24;
 
   return Math.max(Math.floor((end.getTime() - start.getTime()) / millisecondsPerDay) + 1, 1);
+}
+
+function getContractDurationInMonths(startDateValue: string, endDateValue: string) {
+  if (!startDateValue || !endDateValue) return 1;
+
+  const start = new Date(`${startDateValue}T00:00:00`);
+  const end = new Date(`${endDateValue}T00:00:00`);
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+    return 1;
+  }
+
+  const monthDifference =
+    (end.getFullYear() - start.getFullYear()) * 12 +
+    (end.getMonth() - start.getMonth());
+
+  return Math.max(monthDifference, 1);
+}
+
+function getContractRentDueDay(startDateValue: string) {
+  if (!startDateValue) return "____";
+
+  const [, , day] = startDateValue.split("-");
+
+  return day || "____";
 }
 
 function formatLongDateForPrint(value: Date) {

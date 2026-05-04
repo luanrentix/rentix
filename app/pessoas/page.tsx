@@ -11,7 +11,12 @@ const ACCOUNTS_PAYABLE_STORAGE_KEY = "rentix_accounts_payable";
 
 type PersonType = "Individual" | "Company";
 
-type PersonStatusFilter = "Active" | "Inactive" | "All" | "Tenant" | "NotTenant";
+type PersonStatusFilter =
+  | "Active"
+  | "Inactive"
+  | "All"
+  | "Tenant"
+  | "NotTenant";
 
 type PersonHistoryTab =
   | "RegistrationInfo"
@@ -68,11 +73,12 @@ type PersonHistoryModalData = {
 export default function TenantsPage() {
   const [tenants, setTenants] = useState<RentixTenant[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isBlackTheme, setIsBlackTheme] = useState(false);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTenantId, setEditingTenantId] = useState<number | null>(null);
   const [tenantToDelete, setTenantToDelete] = useState<RentixTenant | null>(
-    null
+    null,
   );
   const [blockedInactivePerson, setBlockedInactivePerson] =
     useState<RentixTenant | null>(null);
@@ -84,7 +90,8 @@ export default function TenantsPage() {
     useState<PersonHistoryTab>("RegistrationInfo");
 
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<PersonStatusFilter>("Active");
+  const [statusFilter, setStatusFilter] =
+    useState<PersonStatusFilter>("Active");
 
   const [tenantName, setTenantName] = useState("");
   const [tenantPersonType, setTenantPersonType] =
@@ -104,6 +111,43 @@ export default function TenantsPage() {
   const [cpfError, setCpfError] = useState("");
   const [isCnpjLoading, setIsCnpjLoading] = useState(false);
   const [cnpjSearchError, setCnpjSearchError] = useState("");
+
+  useEffect(() => {
+    function applyStoredTheme() {
+      const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
+      const legacyTheme = localStorage.getItem("rentix_theme");
+
+      try {
+        const parsedThemeSettings = storedThemeSettings
+          ? (JSON.parse(storedThemeSettings) as { mode?: string })
+          : null;
+
+        const isBlackThemeSelected =
+          parsedThemeSettings?.mode === "black" ||
+          parsedThemeSettings?.mode === "dark" ||
+          legacyTheme === "black" ||
+          legacyTheme === "dark";
+
+        document.documentElement.classList.toggle("dark", isBlackThemeSelected);
+        document.body.classList.toggle("dark", isBlackThemeSelected);
+        setIsBlackTheme(isBlackThemeSelected);
+      } catch {
+        const isLegacyBlackTheme = legacyTheme === "black" || legacyTheme === "dark";
+
+        document.documentElement.classList.toggle("dark", isLegacyBlackTheme);
+        document.body.classList.toggle("dark", isLegacyBlackTheme);
+        setIsBlackTheme(isLegacyBlackTheme);
+      }
+    }
+
+    applyStoredTheme();
+
+    window.addEventListener("storage", applyStoredTheme);
+
+    return () => {
+      window.removeEventListener("storage", applyStoredTheme);
+    };
+  }, []);
 
   const filteredTenants = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -163,7 +207,7 @@ export default function TenantsPage() {
       }));
 
       setTenants(
-        normalizedTenants.length > 0 ? normalizedTenants : initialTenants
+        normalizedTenants.length > 0 ? normalizedTenants : initialTenants,
       );
     } else {
       setTenants(
@@ -173,7 +217,7 @@ export default function TenantsPage() {
           email: formatEmailValue((tenant as RentixTenant).email || ""),
           isTenant: true,
           isActive: true,
-        }))
+        })),
       );
     }
 
@@ -224,7 +268,7 @@ export default function TenantsPage() {
 
     try {
       const response = await fetch(
-        `https://viacep.com.br/ws/${cleanZipCode}/json/`
+        `https://viacep.com.br/ws/${cleanZipCode}/json/`,
       );
 
       const data = (await response.json()) as ViaCepResponse;
@@ -260,16 +304,17 @@ export default function TenantsPage() {
 
     if (!isValidDocument(formattedDocument, tenantPersonType)) {
       setCpfError(
-        tenantPersonType === "Company" ? "CNPJ inválido." : "CPF inválido."
+        tenantPersonType === "Company" ? "CNPJ inválido." : "CPF inválido.",
       );
       return;
     }
 
     const documentAlreadyExists = tenants.some((tenant) => {
-      const currentTenantDocument = (tenant.cpf || tenant.document || "").replace(
-        /\D/g,
+      const currentTenantDocument = (
+        tenant.cpf ||
+        tenant.document ||
         ""
-      );
+      ).replace(/\D/g, "");
 
       return (
         currentTenantDocument === documentDigits &&
@@ -281,7 +326,7 @@ export default function TenantsPage() {
       setCpfError(
         tenantPersonType === "Company"
           ? "Já existe uma pessoa cadastrada com este CNPJ."
-          : "Já existe uma pessoa cadastrada com este CPF."
+          : "Já existe uma pessoa cadastrada com este CPF.",
       );
       return;
     }
@@ -302,7 +347,9 @@ export default function TenantsPage() {
     if (tenantPersonType !== "Company") return;
 
     if (cleanCnpj.length !== 14) {
-      setCnpjSearchError("Informe um CNPJ com 14 números para buscar os dados.");
+      setCnpjSearchError(
+        "Informe um CNPJ com 14 números para buscar os dados.",
+      );
       return;
     }
 
@@ -316,7 +363,7 @@ export default function TenantsPage() {
       setCnpjSearchError("");
 
       const response = await fetch(
-        `https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`
+        `https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`,
       );
 
       if (!response.ok) {
@@ -341,8 +388,12 @@ export default function TenantsPage() {
       setTenantCity(toUpperCaseValue(data.municipio || tenantCity));
       setTenantStreet(toUpperCaseValue(data.logradouro || tenantStreet));
       setTenantNumber(toUpperCaseValue(data.numero || tenantNumber));
-      setTenantNeighborhood(toUpperCaseValue(data.bairro || tenantNeighborhood));
-      setTenantComplement(toUpperCaseValue(data.complemento || tenantComplement));
+      setTenantNeighborhood(
+        toUpperCaseValue(data.bairro || tenantNeighborhood),
+      );
+      setTenantComplement(
+        toUpperCaseValue(data.complemento || tenantComplement),
+      );
     } catch {
       setCnpjSearchError("Não foi possível consultar o CNPJ no momento.");
     } finally {
@@ -408,13 +459,20 @@ export default function TenantsPage() {
         const contractStatus = String(contract.status || "").toLowerCase();
         const contractEndDate = String(contract.endDate || "");
 
-        const isSamePerson = String(contractPersonId || "") === String(personId);
+        const isSamePerson =
+          String(contractPersonId || "") === String(personId);
         const isDeleted = contractStatus === "deleted";
         const isCanceled = contractStatus === "canceled";
         const isFinished = contractStatus === "finished";
         const isInactive = contractStatus === "inactive";
 
-        if (!isSamePerson || isDeleted || isCanceled || isFinished || isInactive) {
+        if (
+          !isSamePerson ||
+          isDeleted ||
+          isCanceled ||
+          isFinished ||
+          isInactive
+        ) {
           return false;
         }
 
@@ -460,7 +518,9 @@ export default function TenantsPage() {
   }
 
   function personHasAnyHistory(personId: number) {
-    return personHasAnyContract(personId) || personHasFinancialHistory(personId);
+    return (
+      personHasAnyContract(personId) || personHasFinancialHistory(personId)
+    );
   }
 
   function getEditingTenant() {
@@ -470,7 +530,11 @@ export default function TenantsPage() {
   }
 
   function handleActiveChange(checked: boolean) {
-    if (!checked && editingTenantId && personHasActiveContract(editingTenantId)) {
+    if (
+      !checked &&
+      editingTenantId &&
+      personHasActiveContract(editingTenantId)
+    ) {
       const tenant = getEditingTenant();
 
       if (tenant) {
@@ -497,7 +561,7 @@ export default function TenantsPage() {
 
     if (!isValidDocument(tenantCpf, tenantPersonType)) {
       setCpfError(
-        tenantPersonType === "Company" ? "CNPJ inválido." : "CPF inválido."
+        tenantPersonType === "Company" ? "CNPJ inválido." : "CPF inválido.",
       );
       return;
     }
@@ -505,10 +569,11 @@ export default function TenantsPage() {
     const normalizedDocument = tenantCpf.replace(/\D/g, "");
 
     const documentAlreadyExists = tenants.some((tenant) => {
-      const currentTenantDocument = (tenant.cpf || tenant.document || "").replace(
-        /\D/g,
+      const currentTenantDocument = (
+        tenant.cpf ||
+        tenant.document ||
         ""
-      );
+      ).replace(/\D/g, "");
 
       return (
         currentTenantDocument === normalizedDocument &&
@@ -520,12 +585,16 @@ export default function TenantsPage() {
       setCpfError(
         tenantPersonType === "Company"
           ? "Já existe uma pessoa cadastrada com este CNPJ."
-          : "Já existe uma pessoa cadastrada com este CPF."
+          : "Já existe uma pessoa cadastrada com este CPF.",
       );
       return;
     }
 
-    if (!tenantIsActive && editingTenantId && personHasActiveContract(editingTenantId)) {
+    if (
+      !tenantIsActive &&
+      editingTenantId &&
+      personHasActiveContract(editingTenantId)
+    ) {
       const tenant = getEditingTenant();
 
       if (tenant) {
@@ -557,8 +626,8 @@ export default function TenantsPage() {
                 isTenant: tenantIsTenant,
                 isActive: tenantIsActive,
               }
-            : tenant
-        )
+            : tenant,
+        ),
       );
 
       resetForm();
@@ -592,7 +661,9 @@ export default function TenantsPage() {
     const currentDocument = tenant.cpf || tenant.document || "";
     const currentPersonType =
       tenant.personType ||
-      (currentDocument.replace(/\D/g, "").length > 11 ? "Company" : "Individual");
+      (currentDocument.replace(/\D/g, "").length > 11
+        ? "Company"
+        : "Individual");
 
     setEditingTenantId(tenant.id);
     setTenantName(toUpperCaseValue(tenant.name));
@@ -600,7 +671,7 @@ export default function TenantsPage() {
     setTenantCpf(
       currentPersonType === "Company"
         ? formatCnpj(currentDocument)
-        : formatCpf(currentDocument)
+        : formatCpf(currentDocument),
     );
     setTenantPhone(formatPhone(tenant.phone));
     setTenantEmail(formatEmailValue(tenant.email || ""));
@@ -665,7 +736,7 @@ export default function TenantsPage() {
     const contracts = getPersonRelatedRecords(CONTRACTS_STORAGE_KEY, tenant.id);
     const receivableRecords = getPersonRelatedRecords(
       ACCOUNTS_RECEIVABLE_STORAGE_KEY,
-      tenant.id
+      tenant.id,
     );
     setSelectedPersonHistory({
       person: tenant,
@@ -674,7 +745,7 @@ export default function TenantsPage() {
       accountsReceivableRecords: receivableRecords,
       accountsReceivableTotal: receivableRecords.reduce(
         (total, record) => total + getFinancialRecordAmount(record),
-        0
+        0,
       ),
     });
   }
@@ -697,7 +768,7 @@ export default function TenantsPage() {
     if (!tenantToDelete) return;
 
     setTenants((currentTenants) =>
-      currentTenants.filter((tenant) => tenant.id !== tenantToDelete.id)
+      currentTenants.filter((tenant) => tenant.id !== tenantToDelete.id),
     );
 
     setTenantToDelete(null);
@@ -717,13 +788,203 @@ export default function TenantsPage() {
 
   return (
     <AppShell>
-      <div className="space-y-8">
+      <style jsx global>{`
+        .dark .rentix-people-page {
+          color: #f8fafc;
+        }
+
+        .dark .rentix-people-page .bg-white {
+          background-color: #0f172a !important;
+        }
+
+        .dark .rentix-people-page .bg-slate-50,
+        .dark .rentix-people-page .bg-slate-100 {
+          background-color: #111827 !important;
+        }
+
+        .dark .rentix-people-page .bg-orange-50,
+        .dark .rentix-people-page .bg-orange-100,
+        .dark .rentix-people-page .bg-orange-50\/50,
+        .dark .rentix-people-page .bg-orange-50\/60,
+        .dark .rentix-people-page .bg-orange-50\/40 {
+          background-color: rgba(249, 115, 22, 0.13) !important;
+        }
+
+        .dark .rentix-people-page .bg-red-50,
+        .dark .rentix-people-page .bg-red-100 {
+          background-color: rgba(239, 68, 68, 0.12) !important;
+        }
+
+        .dark .rentix-people-page .bg-emerald-50,
+        .dark .rentix-people-page .bg-emerald-50\/50,
+        .dark .rentix-people-page .bg-emerald-100 {
+          background-color: rgba(16, 185, 129, 0.12) !important;
+        }
+
+        .dark .rentix-people-page .text-slate-950,
+        .dark .rentix-people-page .text-slate-900,
+        .dark .rentix-people-page .text-slate-800,
+        .dark .rentix-people-page .text-slate-700 {
+          color: #f8fafc !important;
+        }
+
+        .dark .rentix-people-page .text-slate-600,
+        .dark .rentix-people-page .text-slate-500,
+        .dark .rentix-people-page .text-slate-400 {
+          color: #cbd5e1 !important;
+        }
+
+        .dark .rentix-people-page .text-orange-600,
+        .dark .rentix-people-page .text-orange-700,
+        .dark .rentix-people-page .text-orange-800 {
+          color: #fb923c !important;
+        }
+
+        .dark .rentix-people-page .border-orange-100,
+        .dark .rentix-people-page .border-orange-200,
+        .dark .rentix-people-page .border-red-100,
+        .dark .rentix-people-page .border-red-200,
+        .dark .rentix-people-page .border-emerald-200,
+        .dark .rentix-people-page .border-slate-100,
+        .dark .rentix-people-page .border-slate-200,
+        .dark .rentix-people-page .border-slate-300 {
+          border-color: #334155 !important;
+        }
+
+        .dark .rentix-people-page input,
+        .dark .rentix-people-page select,
+        .dark .rentix-people-page textarea {
+          background-color: #020617 !important;
+          border-color: #334155 !important;
+          color: #f8fafc !important;
+        }
+
+        .dark .rentix-people-page input::placeholder,
+        .dark .rentix-people-page textarea::placeholder {
+          color: #64748b !important;
+        }
+
+
+        .rentix-people-page .rentix-force-light,
+        .rentix-people-page .rentix-force-light .bg-white,
+        .rentix-people-page .rentix-force-light .bg-slate-50,
+        .rentix-people-page .rentix-force-light .bg-slate-100 {
+          background-color: #ffffff !important;
+          color: #0f172a !important;
+        }
+
+        .rentix-people-page .rentix-force-light .bg-slate-50,
+        .rentix-people-page .rentix-force-light .bg-slate-100 {
+          background-color: #f8fafc !important;
+        }
+
+        .rentix-people-page .rentix-force-light .bg-orange-50,
+        .rentix-people-page .rentix-force-light .bg-orange-100,
+        .rentix-people-page .rentix-force-light .bg-orange-50\/50,
+        .rentix-people-page .rentix-force-light .bg-orange-50\/60,
+        .rentix-people-page .rentix-force-light .bg-orange-50\/40 {
+          background-color: #fff7ed !important;
+        }
+
+        .rentix-people-page .rentix-force-light .bg-red-50,
+        .rentix-people-page .rentix-force-light .bg-red-100 {
+          background-color: #fef2f2 !important;
+        }
+
+        .rentix-people-page .rentix-force-light .bg-emerald-50,
+        .rentix-people-page .rentix-force-light .bg-emerald-50\/50,
+        .rentix-people-page .rentix-force-light .bg-emerald-100 {
+          background-color: #ecfdf5 !important;
+        }
+
+        .rentix-people-page .rentix-force-light .text-white,
+        .rentix-people-page .rentix-force-light .text-slate-950,
+        .rentix-people-page .rentix-force-light .text-slate-900,
+        .rentix-people-page .rentix-force-light .text-slate-800,
+        .rentix-people-page .rentix-force-light .text-slate-700 {
+          color: #0f172a !important;
+        }
+
+        .rentix-people-page .rentix-force-light .text-slate-600,
+        .rentix-people-page .rentix-force-light .text-slate-500,
+        .rentix-people-page .rentix-force-light .text-slate-400 {
+          color: #64748b !important;
+        }
+
+        .rentix-people-page .rentix-force-light .text-orange-600,
+        .rentix-people-page .rentix-force-light .text-orange-700,
+        .rentix-people-page .rentix-force-light .text-orange-800,
+        .rentix-people-page .rentix-force-light .text-orange-500 {
+          color: #ea580c !important;
+        }
+
+        .rentix-people-page .rentix-force-light .text-red-500,
+        .rentix-people-page .rentix-force-light .text-red-600,
+        .rentix-people-page .rentix-force-light .text-red-700 {
+          color: #dc2626 !important;
+        }
+
+        .rentix-people-page .rentix-force-light .text-emerald-700,
+        .rentix-people-page .rentix-force-light .text-emerald-800 {
+          color: #047857 !important;
+        }
+
+        .rentix-people-page .rentix-force-light .border-orange-100,
+        .rentix-people-page .rentix-force-light .border-orange-200 {
+          border-color: #fed7aa !important;
+        }
+
+        .rentix-people-page .rentix-force-light .border-slate-100,
+        .rentix-people-page .rentix-force-light .border-slate-200,
+        .rentix-people-page .rentix-force-light .border-slate-300,
+        .rentix-people-page .rentix-force-light .border-slate-700,
+        .rentix-people-page .rentix-force-light .border-slate-800 {
+          border-color: #e2e8f0 !important;
+        }
+
+        .rentix-people-page .rentix-force-light input,
+        .rentix-people-page .rentix-force-light select,
+        .rentix-people-page .rentix-force-light textarea {
+          background-color: #ffffff !important;
+          border-color: #e2e8f0 !important;
+          color: #334155 !important;
+        }
+
+        .rentix-people-page .rentix-force-light input::placeholder,
+        .rentix-people-page .rentix-force-light textarea::placeholder {
+          color: #94a3b8 !important;
+        }
+
+        .rentix-people-page .rentix-force-light .bg-slate-900,
+        .rentix-people-page .rentix-force-light .bg-slate-950,
+        .rentix-people-page .rentix-force-light .bg-slate-800 {
+          background-color: #f8fafc !important;
+        }
+
+        .rentix-people-page .rentix-force-light button.bg-slate-900,
+        .rentix-people-page .rentix-force-light button.bg-slate-800,
+        .rentix-people-page .rentix-force-light button.bg-slate-700 {
+          background-color: #f1f5f9 !important;
+          color: #475569 !important;
+        }
+      `}</style>
+      <div className="rentix-people-page space-y-8">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <h1 className="text-4xl font-black tracking-tight text-slate-950 dark:text-white">
+            <h1
+              className={
+                isBlackTheme
+                  ? "text-4xl font-black tracking-tight text-white"
+                  : "text-4xl font-black tracking-tight text-slate-950"
+              }
+            >
               Pessoas
             </h1>
-            <p className="mt-2 text-slate-500 dark:text-slate-400 dark:text-slate-500">
+            <p
+              className={
+                isBlackTheme ? "mt-2 text-slate-300" : "mt-2 text-slate-500"
+              }
+            >
               Gerencie as pessoas cadastradas
             </p>
           </div>
@@ -731,19 +992,43 @@ export default function TenantsPage() {
           <button
             type="button"
             onClick={handleOpenCreateForm}
-            className="rounded-2xl bg-orange-50 dark:bg-orange-950/300 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600"
+            className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 dark:shadow-orange-950/30"
           >
             + Nova pessoa
           </button>
         </div>
 
-        <div className="rounded-3xl border border-orange-100 dark:border-orange-900/40 bg-white dark:bg-slate-900 shadow-sm">
-          <div className="flex flex-col gap-4 border-b border-slate-100 dark:border-slate-800 px-6 py-5 xl:flex-row xl:items-end xl:justify-between">
+        <div
+          className={
+            isBlackTheme
+              ? "rounded-3xl border border-orange-500/20 bg-slate-900 shadow-sm"
+              : "rounded-3xl border border-orange-100 bg-white shadow-sm"
+          }
+        >
+          <div
+            className={
+              isBlackTheme
+                ? "flex flex-col gap-4 border-b border-slate-800 px-6 py-5 xl:flex-row xl:items-end xl:justify-between"
+                : "flex flex-col gap-4 border-b border-slate-100 px-6 py-5 xl:flex-row xl:items-end xl:justify-between"
+            }
+          >
             <div>
-              <h2 className="text-2xl font-black text-slate-950 dark:text-white">
+              <h2
+                className={
+                  isBlackTheme
+                    ? "text-2xl font-black text-white"
+                    : "text-2xl font-black text-slate-950"
+                }
+              >
                 Pessoas
               </h2>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
+              <p
+                className={
+                  isBlackTheme
+                    ? "mt-1 text-sm text-slate-400"
+                    : "mt-1 text-sm text-slate-500"
+                }
+              >
                 Exibindo {filteredTenants.length} de {tenants.length} pessoa(s).
               </p>
             </div>
@@ -755,7 +1040,11 @@ export default function TenantsPage() {
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Nome, CPF/CNPJ, telefone ou e-mail"
-                  className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 md:w-80"
+                  className={
+                    isBlackTheme
+                      ? "w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-4 text-sm font-semibold text-slate-200 outline-none transition placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 md:w-80"
+                      : "w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 md:w-80"
+                  }
                 />
               </FormField>
 
@@ -765,7 +1054,11 @@ export default function TenantsPage() {
                   onChange={(event) =>
                     setStatusFilter(event.target.value as PersonStatusFilter)
                   }
-                  className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 md:w-48"
+                  className={
+                    isBlackTheme
+                      ? "w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-4 text-sm font-semibold text-slate-200 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 md:w-48"
+                      : "w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 md:w-48"
+                  }
                 >
                   <option value="Active">Ativos</option>
                   <option value="Inactive">Inativos</option>
@@ -777,72 +1070,156 @@ export default function TenantsPage() {
             </div>
           </div>
 
-          <div className="overflow-hidden">
+          <div
+            className={
+              isBlackTheme
+                ? "overflow-hidden bg-slate-900"
+                : "overflow-hidden bg-white"
+            }
+          >
             <table className="w-full text-left">
-              <thead className="bg-orange-50 dark:bg-orange-950/30">
+              <thead className={isBlackTheme ? "bg-slate-800" : "bg-orange-50"}>
                 <tr>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">
+                  <th
+                    className={
+                      isBlackTheme
+                        ? "px-6 py-4 text-sm font-black text-slate-200"
+                        : "px-6 py-4 text-sm font-black text-slate-700"
+                    }
+                  >
                     Nome
                   </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">
+                  <th
+                    className={
+                      isBlackTheme
+                        ? "px-6 py-4 text-sm font-black text-slate-200"
+                        : "px-6 py-4 text-sm font-black text-slate-700"
+                    }
+                  >
                     Telefone
                   </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">
+                  <th
+                    className={
+                      isBlackTheme
+                        ? "px-6 py-4 text-sm font-black text-slate-200"
+                        : "px-6 py-4 text-sm font-black text-slate-700"
+                    }
+                  >
                     CPF/CNPJ
                   </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">
+                  <th
+                    className={
+                      isBlackTheme
+                        ? "px-6 py-4 text-sm font-black text-slate-200"
+                        : "px-6 py-4 text-sm font-black text-slate-700"
+                    }
+                  >
                     Tipo
                   </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-200">
+                  <th
+                    className={
+                      isBlackTheme
+                        ? "px-6 py-4 text-sm font-black text-slate-200"
+                        : "px-6 py-4 text-sm font-black text-slate-700"
+                    }
+                  >
                     Situação
                   </th>
-                  <th className="px-6 py-4 text-right text-sm font-black text-slate-700 dark:text-slate-200">
+                  <th
+                    className={
+                      isBlackTheme
+                        ? "px-6 py-4 text-right text-sm font-black text-slate-200"
+                        : "px-6 py-4 text-right text-sm font-black text-slate-700"
+                    }
+                  >
                     Ações
                   </th>
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              <tbody
+                className={
+                  isBlackTheme
+                    ? "divide-y divide-slate-800"
+                    : "divide-y divide-slate-100"
+                }
+              >
                 {filteredTenants.map((tenant) => (
-                  <tr key={tenant.id} className="transition hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800/80">
-                    <td className="px-6 py-4 font-black text-slate-900 dark:text-slate-100">
+                  <tr
+                    key={tenant.id}
+                    className={
+                      isBlackTheme
+                        ? "bg-slate-800 transition hover:bg-slate-700/80"
+                        : "bg-white transition hover:bg-orange-50/40"
+                    }
+                  >
+                    <td
+                      className={
+                        isBlackTheme
+                          ? "px-6 py-4 font-black text-slate-100"
+                          : "px-6 py-4 font-black text-slate-900"
+                      }
+                    >
                       <button
                         type="button"
                         onClick={() => handleOpenPersonHistory(tenant)}
-                        className="text-left font-black text-slate-900 dark:text-slate-100 underline-offset-4 transition hover:text-orange-600 hover:underline"
+                        className={
+                          isBlackTheme
+                            ? "text-left font-black text-slate-100 underline-offset-4 transition hover:text-orange-400 hover:underline"
+                            : "text-left font-black text-slate-900 underline-offset-4 transition hover:text-orange-600 hover:underline"
+                        }
                         title="Abrir histórico da pessoa"
                       >
                         {tenant.name}
                       </button>
                     </td>
 
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                    <td
+                      className={
+                        isBlackTheme
+                          ? "px-6 py-4 text-sm font-semibold text-slate-300"
+                          : "px-6 py-4 text-sm font-semibold text-slate-600"
+                      }
+                    >
                       {formatPhone(tenant.phone)}
                     </td>
 
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                    <td
+                      className={
+                        isBlackTheme
+                          ? "px-6 py-4 text-sm font-semibold text-slate-300"
+                          : "px-6 py-4 text-sm font-semibold text-slate-600"
+                      }
+                    >
                       {formatDocument(
                         tenant.cpf || tenant.document,
-                        tenant.personType
+                        tenant.personType,
                       )}
                     </td>
 
                     <td className="px-6 py-4">
                       <span
                         className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${
-                          tenant.isTenant ?? true
-                            ? "bg-green-50 dark:bg-emerald-950/30 text-green-700"
-                            : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 dark:text-slate-500"
+                          (tenant.isTenant ?? true)
+                            ? isBlackTheme
+                              ? "bg-emerald-950/40 text-emerald-300"
+                              : "bg-green-50 text-green-700"
+                            : isBlackTheme
+                              ? "bg-slate-700 text-slate-300"
+                              : "bg-slate-100 text-slate-500"
                         }`}
                       >
-                        {tenant.isTenant ?? true
+                        {(tenant.isTenant ?? true)
                           ? "Inquilino"
                           : "Não inquilino"}
                       </span>
                     </td>
 
                     <td className="px-6 py-4">
-                      <ActiveBadge isActive={tenant.isActive ?? true} />
+                      <ActiveBadge
+                        isActive={tenant.isActive ?? true}
+                        isBlackTheme={isBlackTheme}
+                      />
                     </td>
 
                     <td className="px-6 py-4">
@@ -850,7 +1227,11 @@ export default function TenantsPage() {
                         <button
                           type="button"
                           onClick={() => handleEditTenant(tenant)}
-                          className="rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-700"
+                          className={
+                            isBlackTheme
+                              ? "rounded-xl bg-slate-700 px-4 py-2 text-sm font-bold text-slate-100 transition hover:bg-slate-600"
+                              : "rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+                          }
                         >
                           Editar
                         </button>
@@ -858,7 +1239,11 @@ export default function TenantsPage() {
                         <button
                           type="button"
                           onClick={() => handleDeleteTenant(tenant)}
-                          className="rounded-xl bg-red-50 dark:bg-red-950/30 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-100 dark:bg-red-950/40"
+                          className={
+                            isBlackTheme
+                              ? "rounded-xl bg-red-950/40 px-4 py-2 text-sm font-bold text-red-300 transition hover:bg-red-950/60"
+                              : "rounded-xl bg-red-50 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-100"
+                          }
                         >
                           Excluir
                         </button>
@@ -884,7 +1269,7 @@ export default function TenantsPage() {
 
         {selectedPersonHistory && (
           <div className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
-            <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-[2rem] border border-orange-100 dark:border-orange-900/40 bg-white dark:bg-slate-900 shadow-2xl">
+            <div className={`max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-[2rem] border border-orange-100 dark:border-orange-900/40 bg-white dark:bg-slate-900 shadow-2xl ${isBlackTheme ? "" : "rentix-force-light"}`}>
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-8 py-6">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.2em] text-orange-500">
@@ -917,6 +1302,7 @@ export default function TenantsPage() {
                     <div className="mt-3">
                       <ActiveBadge
                         isActive={selectedPersonHistory.person.isActive ?? true}
+                        isBlackTheme={isBlackTheme}
                       />
                     </div>
                   </div>
@@ -926,7 +1312,7 @@ export default function TenantsPage() {
                       Tipo
                     </p>
                     <p className="mt-3 text-sm font-black text-slate-900 dark:text-slate-100">
-                      {selectedPersonHistory.person.isTenant ?? true
+                      {(selectedPersonHistory.person.isTenant ?? true)
                         ? "Inquilino"
                         : "Não inquilino"}
                     </p>
@@ -947,7 +1333,9 @@ export default function TenantsPage() {
                     <PersonHistoryTabButton
                       label="Informações do cadastro"
                       isActive={activePersonHistoryTab === "RegistrationInfo"}
-                      onClick={() => setActivePersonHistoryTab("RegistrationInfo")}
+                      onClick={() =>
+                        setActivePersonHistoryTab("RegistrationInfo")
+                      }
                     />
                     <PersonHistoryTabButton
                       label="Histórico de aluguéis"
@@ -957,12 +1345,16 @@ export default function TenantsPage() {
                     <PersonHistoryTabButton
                       label="Contratos vinculados"
                       isActive={activePersonHistoryTab === "LinkedContracts"}
-                      onClick={() => setActivePersonHistoryTab("LinkedContracts")}
+                      onClick={() =>
+                        setActivePersonHistoryTab("LinkedContracts")
+                      }
                     />
                     <PersonHistoryTabButton
                       label="Movimentações financeiras"
                       isActive={activePersonHistoryTab === "FinancialMovements"}
-                      onClick={() => setActivePersonHistoryTab("FinancialMovements")}
+                      onClick={() =>
+                        setActivePersonHistoryTab("FinancialMovements")
+                      }
                     />
                   </div>
                 </div>
@@ -985,7 +1377,8 @@ export default function TenantsPage() {
                         <PersonDetailItem
                           label="Tipo de pessoa"
                           value={
-                            selectedPersonHistory.person.personType === "Company"
+                            selectedPersonHistory.person.personType ===
+                            "Company"
                               ? "Pessoa jurídica"
                               : "Pessoa física"
                           }
@@ -995,29 +1388,34 @@ export default function TenantsPage() {
                           value={formatDocument(
                             selectedPersonHistory.person.cpf ||
                               selectedPersonHistory.person.document,
-                            selectedPersonHistory.person.personType
+                            selectedPersonHistory.person.personType,
                           )}
                         />
                         <PersonDetailItem
                           label="Telefone"
-                          value={formatPhone(selectedPersonHistory.person.phone)}
+                          value={formatPhone(
+                            selectedPersonHistory.person.phone,
+                          )}
                         />
                         <PersonDetailItem
                           label="E-mail"
                           value={
-                            selectedPersonHistory.person.email || "Não informado"
+                            selectedPersonHistory.person.email ||
+                            "Não informado"
                           }
                         />
                         <PersonDetailItem
                           label="CEP"
                           value={
-                            selectedPersonHistory.person.zipCode || "Não informado"
+                            selectedPersonHistory.person.zipCode ||
+                            "Não informado"
                           }
                         />
                         <PersonDetailItem
                           label="Estado"
                           value={
-                            selectedPersonHistory.person.state || "Não informado"
+                            selectedPersonHistory.person.state ||
+                            "Não informado"
                           }
                         />
                         <PersonDetailItem
@@ -1029,13 +1427,15 @@ export default function TenantsPage() {
                         <PersonDetailItem
                           label="Logradouro"
                           value={
-                            selectedPersonHistory.person.street || "Não informado"
+                            selectedPersonHistory.person.street ||
+                            "Não informado"
                           }
                         />
                         <PersonDetailItem
                           label="Número"
                           value={
-                            selectedPersonHistory.person.number || "Não informado"
+                            selectedPersonHistory.person.number ||
+                            "Não informado"
                           }
                         />
                         <PersonDetailItem
@@ -1062,7 +1462,8 @@ export default function TenantsPage() {
                         Histórico de aluguéis
                       </h3>
                       <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                        Resumo dos vínculos de aluguel relacionados a esta pessoa.
+                        Resumo dos vínculos de aluguel relacionados a esta
+                        pessoa.
                       </p>
 
                       <div className="mt-5 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 p-5">
@@ -1070,8 +1471,9 @@ export default function TenantsPage() {
                           Contratos de aluguel encontrados
                         </p>
                         <p className="mt-2 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                          Total de {selectedPersonHistory.contractsCount} contrato(s)
-                          vinculado(s), sendo {selectedPersonHistory.activeContractsCount}
+                          Total de {selectedPersonHistory.contractsCount}{" "}
+                          contrato(s) vinculado(s), sendo{" "}
+                          {selectedPersonHistory.activeContractsCount}
                           ativo(s).
                         </p>
                       </div>
@@ -1120,7 +1522,8 @@ export default function TenantsPage() {
                         Movimentações financeiras
                       </h3>
                       <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                        Informações buscadas diretamente nas contas a receber vinculadas a esta pessoa.
+                        Informações buscadas diretamente nas contas a receber
+                        vinculadas a esta pessoa.
                       </p>
 
                       <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -1130,11 +1533,14 @@ export default function TenantsPage() {
                         />
                         <PersonDetailItem
                           label="Valor total"
-                          value={formatCurrency(selectedPersonHistory.accountsReceivableTotal)}
+                          value={formatCurrency(
+                            selectedPersonHistory.accountsReceivableTotal,
+                          )}
                         />
                       </div>
 
-                      {selectedPersonHistory.accountsReceivableRecords.length > 0 && (
+                      {selectedPersonHistory.accountsReceivableRecords.length >
+                        0 && (
                         <div className="mt-5 overflow-hidden rounded-2xl border border-slate-100 dark:border-slate-800">
                           <table className="w-full text-left">
                             <thead className="bg-slate-50 dark:bg-slate-800">
@@ -1157,30 +1563,39 @@ export default function TenantsPage() {
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
                               {selectedPersonHistory.accountsReceivableRecords.map(
                                 (record, index) => (
-                                  <tr key={getFinancialRecordKey(record, index)}>
+                                  <tr
+                                    key={getFinancialRecordKey(record, index)}
+                                  >
                                     <td className="px-4 py-4 text-sm font-black text-slate-800 dark:text-slate-100">
                                       {getFinancialRecordDescription(record)}
                                     </td>
                                     <td className="px-4 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
-                                      {formatDateValue(getFinancialRecordDueDate(record))}
+                                      {formatDateValue(
+                                        getFinancialRecordDueDate(record),
+                                      )}
                                     </td>
                                     <td className="px-4 py-4">
                                       <FinancialStatusBadge
-                                        status={getFinancialRecordStatus(record)}
+                                        status={getFinancialRecordStatus(
+                                          record,
+                                        )}
                                       />
                                     </td>
                                     <td className="px-4 py-4 text-right text-sm font-black text-slate-900 dark:text-slate-100">
-                                      {formatCurrency(getFinancialRecordAmount(record))}
+                                      {formatCurrency(
+                                        getFinancialRecordAmount(record),
+                                      )}
                                     </td>
                                   </tr>
-                                )
+                                ),
                               )}
                             </tbody>
                           </table>
                         </div>
                       )}
 
-                      {selectedPersonHistory.accountsReceivableRecords.length === 0 && (
+                      {selectedPersonHistory.accountsReceivableRecords
+                        .length === 0 && (
                         <EmptyPersonHistoryState
                           title="Nenhuma conta a receber encontrada"
                           description="Esta pessoa ainda não possui contas a receber vinculadas no sistema."
@@ -1196,7 +1611,7 @@ export default function TenantsPage() {
 
         {isFormOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
-            <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 dark:border-orange-900/40 bg-white dark:bg-slate-900 shadow-2xl">
+            <div className={`max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 dark:border-orange-900/40 bg-white dark:bg-slate-900 shadow-2xl ${isBlackTheme ? "" : "rentix-force-light"}`}>
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-8 py-6">
                 <div>
                   <h2 className="text-2xl font-black text-slate-950 dark:text-white">
@@ -1228,7 +1643,9 @@ export default function TenantsPage() {
                         <input
                           type="text"
                           value={tenantName}
-                          onChange={(event) => setTenantName(toUpperCaseValue(event.target.value))}
+                          onChange={(event) =>
+                            setTenantName(toUpperCaseValue(event.target.value))
+                          }
                           placeholder={
                             tenantPersonType === "Company"
                               ? "Ex: Empresa LTDA"
@@ -1243,7 +1660,9 @@ export default function TenantsPage() {
                         <select
                           value={tenantPersonType}
                           onChange={(event) =>
-                            handlePersonTypeChange(event.target.value as PersonType)
+                            handlePersonTypeChange(
+                              event.target.value as PersonType,
+                            )
                           }
                           className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         >
@@ -1287,7 +1706,9 @@ export default function TenantsPage() {
                             disabled={isCnpjLoading}
                             className="mt-3 w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            {isCnpjLoading ? "Buscando CNPJ..." : "Buscar dados da empresa"}
+                            {isCnpjLoading
+                              ? "Buscando CNPJ..."
+                              : "Buscar dados da empresa"}
                           </button>
                         )}
 
@@ -1418,7 +1839,9 @@ export default function TenantsPage() {
                         <input
                           type="text"
                           value={tenantCity}
-                          onChange={(event) => setTenantCity(toUpperCaseValue(event.target.value))}
+                          onChange={(event) =>
+                            setTenantCity(toUpperCaseValue(event.target.value))
+                          }
                           placeholder="Cidade"
                           required
                           className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
@@ -1430,7 +1853,9 @@ export default function TenantsPage() {
                           type="text"
                           value={tenantStreet}
                           onChange={(event) =>
-                            setTenantStreet(toUpperCaseValue(event.target.value))
+                            setTenantStreet(
+                              toUpperCaseValue(event.target.value),
+                            )
                           }
                           placeholder="Rua, avenida..."
                           required
@@ -1443,7 +1868,9 @@ export default function TenantsPage() {
                           type="text"
                           value={tenantNumber}
                           onChange={(event) =>
-                            setTenantNumber(toUpperCaseValue(event.target.value))
+                            setTenantNumber(
+                              toUpperCaseValue(event.target.value),
+                            )
                           }
                           placeholder="Número da casa"
                           required
@@ -1456,7 +1883,9 @@ export default function TenantsPage() {
                           type="text"
                           value={tenantNeighborhood}
                           onChange={(event) =>
-                            setTenantNeighborhood(toUpperCaseValue(event.target.value))
+                            setTenantNeighborhood(
+                              toUpperCaseValue(event.target.value),
+                            )
                           }
                           placeholder="Bairro"
                           required
@@ -1469,7 +1898,9 @@ export default function TenantsPage() {
                           type="text"
                           value={tenantComplement}
                           onChange={(event) =>
-                            setTenantComplement(toUpperCaseValue(event.target.value))
+                            setTenantComplement(
+                              toUpperCaseValue(event.target.value),
+                            )
                           }
                           placeholder="Apartamento, bloco, referência..."
                           className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
@@ -1491,7 +1922,7 @@ export default function TenantsPage() {
                   <button
                     type="submit"
                     disabled={Boolean(cpfError)}
-                    className="rounded-2xl bg-orange-50 dark:bg-orange-950/300 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 dark:shadow-orange-950/30 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isEditing ? "Salvar alterações" : "Cadastrar pessoa"}
                   </button>
@@ -1503,7 +1934,7 @@ export default function TenantsPage() {
 
         {blockedInactivePerson && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-[2rem] border border-orange-100 dark:border-orange-900/40 bg-white dark:bg-slate-900 p-8 shadow-2xl">
+            <div className={`w-full max-w-md rounded-[2rem] border border-orange-100 dark:border-orange-900/40 bg-white dark:bg-slate-900 p-8 shadow-2xl ${isBlackTheme ? "" : "rentix-force-light"}`}>
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 dark:bg-orange-950/30 text-3xl">
                 ⚠️
               </div>
@@ -1514,8 +1945,8 @@ export default function TenantsPage() {
                 </h3>
 
                 <p className="mt-3 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                  Esta pessoa possui contrato ativo vinculado e não pode
-                  ser inativada. Para alterar a situação do cadastro, encerre ou
+                  Esta pessoa possui contrato ativo vinculado e não pode ser
+                  inativada. Para alterar a situação do cadastro, encerre ou
                   remova o contrato ativo primeiro.
                 </p>
 
@@ -1525,8 +1956,9 @@ export default function TenantsPage() {
                   </p>
                   <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                     {formatDocument(
-                      blockedInactivePerson.cpf || blockedInactivePerson.document,
-                      blockedInactivePerson.personType
+                      blockedInactivePerson.cpf ||
+                        blockedInactivePerson.document,
+                      blockedInactivePerson.personType,
                     )}
                   </p>
                 </div>
@@ -1536,7 +1968,7 @@ export default function TenantsPage() {
                 <button
                   type="button"
                   onClick={handleCloseBlockedInactivePerson}
-                  className="w-full rounded-2xl bg-orange-50 dark:bg-orange-950/300 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600"
+                  className="w-full rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 dark:shadow-orange-950/30"
                 >
                   Entendi
                 </button>
@@ -1547,7 +1979,7 @@ export default function TenantsPage() {
 
         {blockedDeletePerson && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-[2rem] border border-orange-100 dark:border-orange-900/40 bg-white dark:bg-slate-900 p-8 shadow-2xl">
+            <div className={`w-full max-w-md rounded-[2rem] border border-orange-100 dark:border-orange-900/40 bg-white dark:bg-slate-900 p-8 shadow-2xl ${isBlackTheme ? "" : "rentix-force-light"}`}>
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 dark:bg-orange-950/30 text-3xl">
                 ⚠️
               </div>
@@ -1570,7 +2002,7 @@ export default function TenantsPage() {
                   <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
                     {formatDocument(
                       blockedDeletePerson.cpf || blockedDeletePerson.document,
-                      blockedDeletePerson.personType
+                      blockedDeletePerson.personType,
                     )}
                   </p>
                 </div>
@@ -1580,7 +2012,7 @@ export default function TenantsPage() {
                 <button
                   type="button"
                   onClick={handleCloseBlockedDeletePerson}
-                  className="w-full rounded-2xl bg-orange-50 dark:bg-orange-950/300 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600"
+                  className="w-full rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 dark:shadow-orange-950/30"
                 >
                   Entendi
                 </button>
@@ -1591,7 +2023,7 @@ export default function TenantsPage() {
 
         {tenantToDelete && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-[2rem] bg-white dark:bg-slate-900 p-8 shadow-2xl">
+            <div className={`w-full max-w-md rounded-[2rem] bg-white dark:bg-slate-900 p-8 shadow-2xl ${isBlackTheme ? "" : "rentix-force-light"}`}>
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 dark:bg-red-950/30 text-3xl">
                 🗑️
               </div>
@@ -1612,7 +2044,7 @@ export default function TenantsPage() {
                   <p className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
                     {formatDocument(
                       tenantToDelete.cpf || tenantToDelete.document,
-                      tenantToDelete.personType
+                      tenantToDelete.personType,
                     )}
                   </p>
                 </div>
@@ -1630,7 +2062,7 @@ export default function TenantsPage() {
                 <button
                   type="button"
                   onClick={handleConfirmDeleteTenant}
-                  className="rounded-2xl bg-red-50 dark:bg-red-950/300 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 dark:shadow-red-950/30 transition hover:bg-red-600"
+                  className="rounded-2xl bg-red-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600 dark:shadow-red-950/30"
                 >
                   Sim, excluir
                 </button>
@@ -1722,15 +2154,25 @@ function FormField({ label, children }: FormFieldProps) {
   );
 }
 
-function ActiveBadge({ isActive }: { isActive: boolean }) {
+function ActiveBadge({
+  isActive,
+  isBlackTheme = false,
+}: {
+  isActive: boolean;
+  isBlackTheme?: boolean;
+}) {
   const activeConfig = isActive
     ? {
         label: "Ativo",
-        className: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700",
+        className: isBlackTheme
+          ? "bg-emerald-950/40 text-emerald-300"
+          : "bg-emerald-100 text-emerald-700",
       }
     : {
         label: "Inativo",
-        className: "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300",
+        className: isBlackTheme
+          ? "bg-slate-700 text-slate-300"
+          : "bg-slate-100 text-slate-600",
       };
 
   return (
@@ -1755,7 +2197,10 @@ function getRecordStringValue(record: Record<string, unknown>, keys: string[]) {
 }
 
 function getFinancialRecordKey(record: Record<string, unknown>, index: number) {
-  return getRecordStringValue(record, ["id", "receivableId", "accountId"]) || `financial-record-${index}`;
+  return (
+    getRecordStringValue(record, ["id", "receivableId", "accountId"]) ||
+    `financial-record-${index}`
+  );
 }
 
 function getFinancialRecordDescription(record: Record<string, unknown>) {
@@ -1784,7 +2229,11 @@ function getFinancialRecordDueDate(record: Record<string, unknown>) {
 }
 
 function getFinancialRecordStatus(record: Record<string, unknown>) {
-  return getRecordStringValue(record, ["status", "paymentStatus", "payment_status"]);
+  return getRecordStringValue(record, [
+    "status",
+    "paymentStatus",
+    "payment_status",
+  ]);
 }
 
 function getFinancialRecordAmount(record: Record<string, unknown>) {
@@ -1835,23 +2284,43 @@ function formatDateValue(value: string) {
 function FinancialStatusBadge({ status }: { status: string }) {
   const normalizedStatus = status.toLowerCase();
 
-  const config = normalizedStatus.includes("paid") || normalizedStatus.includes("pago")
-    ? { label: "Pago", className: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700" }
-    : normalizedStatus.includes("overdue") || normalizedStatus.includes("vencido")
-      ? { label: "Vencido", className: "bg-red-100 dark:bg-red-950/40 text-red-700" }
-      : normalizedStatus.includes("pending") || normalizedStatus.includes("pendente")
-        ? { label: "Pendente", className: "bg-amber-100 dark:bg-amber-950/40 text-amber-700" }
-        : { label: status || "Não informado", className: "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300" };
+  const config =
+    normalizedStatus.includes("paid") || normalizedStatus.includes("pago")
+      ? {
+          label: "Pago",
+          className: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700",
+        }
+      : normalizedStatus.includes("overdue") ||
+          normalizedStatus.includes("vencido")
+        ? {
+            label: "Vencido",
+            className: "bg-red-100 dark:bg-red-950/40 text-red-700",
+          }
+        : normalizedStatus.includes("pending") ||
+            normalizedStatus.includes("pendente")
+          ? {
+              label: "Pendente",
+              className: "bg-amber-100 dark:bg-amber-950/40 text-amber-700",
+            }
+          : {
+              label: status || "Não informado",
+              className:
+                "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300",
+            };
 
   return (
-    <span className={`rounded-full px-3 py-1 text-xs font-black ${config.className}`}>
+    <span
+      className={`rounded-full px-3 py-1 text-xs font-black ${config.className}`}
+    >
       {config.label}
     </span>
   );
 }
 
 function formatEmailValue(value: string) {
-  return String(value ?? "").trim().toLowerCase();
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
 }
 
 function toUpperCaseValue(value: string) {
@@ -1859,7 +2328,9 @@ function toUpperCaseValue(value: string) {
 }
 
 function formatCpf(value: string) {
-  const digits = String(value ?? "").replace(/\D/g, "").slice(0, 11);
+  const digits = String(value ?? "")
+    .replace(/\D/g, "")
+    .slice(0, 11);
 
   return digits
     .replace(/^(\d{3})(\d)/, "$1.$2")
@@ -1868,7 +2339,9 @@ function formatCpf(value: string) {
 }
 
 function formatCnpj(value: string) {
-  const digits = String(value ?? "").replace(/\D/g, "").slice(0, 14);
+  const digits = String(value ?? "")
+    .replace(/\D/g, "")
+    .slice(0, 14);
 
   return digits
     .replace(/^(\d{2})(\d)/, "$1.$2")
@@ -1896,7 +2369,9 @@ function isValidDocument(value: string, personType: PersonType) {
 }
 
 function formatPhone(value?: string) {
-  const digits = String(value ?? "").replace(/\D/g, "").slice(0, 11);
+  const digits = String(value ?? "")
+    .replace(/\D/g, "")
+    .slice(0, 11);
 
   if (!digits) return "-";
 
@@ -1955,7 +2430,7 @@ function isValidCnpj(value: string) {
   const calculateDigit = (base: string, weights: number[]) => {
     const sum = weights.reduce(
       (total, weight, index) => total + Number(base[index]) * weight,
-      0
+      0,
     );
 
     const rest = sum % 11;

@@ -234,6 +234,45 @@ export default function AccountsReceivablePage() {
   const [reportStartDate, setReportStartDate] = useState("");
   const [reportEndDate, setReportEndDate] = useState("");
   const [reportFormError, setReportFormError] = useState("");
+  const [isBlackTheme, setIsBlackTheme] = useState(false);
+
+  useEffect(() => {
+    function applyStoredTheme() {
+      const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
+      const legacyTheme = localStorage.getItem("rentix_theme");
+
+      try {
+        const parsedThemeSettings = storedThemeSettings
+          ? (JSON.parse(storedThemeSettings) as { mode?: string })
+          : null;
+
+        const isBlackThemeSelected =
+          parsedThemeSettings?.mode === "black" ||
+          parsedThemeSettings?.mode === "dark" ||
+          legacyTheme === "black" ||
+          legacyTheme === "dark";
+
+        document.documentElement.classList.toggle("dark", isBlackThemeSelected);
+        document.body.classList.toggle("dark", isBlackThemeSelected);
+        setIsBlackTheme(isBlackThemeSelected);
+      } catch {
+        const isLegacyBlackTheme =
+          legacyTheme === "black" || legacyTheme === "dark";
+
+        document.documentElement.classList.toggle("dark", isLegacyBlackTheme);
+        document.body.classList.toggle("dark", isLegacyBlackTheme);
+        setIsBlackTheme(isLegacyBlackTheme);
+      }
+    }
+
+    applyStoredTheme();
+
+    window.addEventListener("storage", applyStoredTheme);
+
+    return () => {
+      window.removeEventListener("storage", applyStoredTheme);
+    };
+  }, []);
 
   function openChargeFromContractPayload(payload: ReceivableFromContractPayload) {
     const normalizedInstallmentQuantity = Math.max(
@@ -2171,7 +2210,468 @@ export default function AccountsReceivablePage() {
 
   return (
     <AppShell>
-      <div className="space-y-8">
+      <style jsx global>{`
+        .rentix-accounts-receivable-page-light {
+          color: #0f172a;
+        }
+
+        .rentix-accounts-receivable-page-light .bg-white,
+        .rentix-accounts-receivable-page-light [class*="dark:bg-slate"],
+        .rentix-accounts-receivable-page-light [class*="dark:from-slate"],
+        .rentix-accounts-receivable-page-light [class*="dark:to-slate"] {
+          background-color: #ffffff !important;
+          background-image: none !important;
+        }
+
+        .rentix-accounts-receivable-page-light .bg-slate-50,
+        .rentix-accounts-receivable-page-light .bg-slate-100 {
+          background-color: #f8fafc !important;
+        }
+
+        .rentix-accounts-receivable-page-light .bg-orange-50,
+        .rentix-accounts-receivable-page-light .bg-orange-100 {
+          background-color: #fff7ed !important;
+        }
+
+        .rentix-accounts-receivable-page-light .bg-red-50,
+        .rentix-accounts-receivable-page-light .bg-red-100 {
+          background-color: #fef2f2 !important;
+        }
+
+        .rentix-accounts-receivable-page-light .bg-emerald-50,
+        .rentix-accounts-receivable-page-light .bg-emerald-100 {
+          background-color: #ecfdf5 !important;
+        }
+
+        .rentix-accounts-receivable-page-light .bg-amber-50,
+        .rentix-accounts-receivable-page-light .bg-amber-100 {
+          background-color: #fffbeb !important;
+        }
+
+        .rentix-accounts-receivable-page-light .text-slate-950,
+        .rentix-accounts-receivable-page-light .text-slate-900,
+        .rentix-accounts-receivable-page-light .text-slate-800,
+        .rentix-accounts-receivable-page-light .text-slate-700,
+        .rentix-accounts-receivable-page-light [class*="dark:text-slate-100"],
+        .rentix-accounts-receivable-page-light [class*="dark:text-white"] {
+          color: #0f172a !important;
+        }
+
+        .rentix-accounts-receivable-page-light .text-slate-600,
+        .rentix-accounts-receivable-page-light .text-slate-500,
+        .rentix-accounts-receivable-page-light .text-slate-400,
+        .rentix-accounts-receivable-page-light [class*="dark:text-slate-300"],
+        .rentix-accounts-receivable-page-light [class*="dark:text-slate-400"],
+        .rentix-accounts-receivable-page-light [class*="dark:text-slate-500"] {
+          color: #475569 !important;
+        }
+
+        .rentix-accounts-receivable-page-light .text-orange-600,
+        .rentix-accounts-receivable-page-light .text-orange-700 {
+          color: #ea580c !important;
+        }
+
+        .rentix-accounts-receivable-page-light .text-red-600,
+        .rentix-accounts-receivable-page-light .text-red-700 {
+          color: #dc2626 !important;
+        }
+
+        .rentix-accounts-receivable-page-light .text-emerald-600,
+        .rentix-accounts-receivable-page-light .text-emerald-700 {
+          color: #047857 !important;
+        }
+
+        .rentix-accounts-receivable-page-light .border-slate-100,
+        .rentix-accounts-receivable-page-light .border-slate-200,
+        .rentix-accounts-receivable-page-light .border-slate-300,
+        .rentix-accounts-receivable-page-light [class*="dark:border-slate"] {
+          border-color: #e2e8f0 !important;
+        }
+
+        .rentix-accounts-receivable-page-light .border-orange-100,
+        .rentix-accounts-receivable-page-light .border-orange-200,
+        .rentix-accounts-receivable-page-light [class*="dark:border-orange"] {
+          border-color: #fed7aa !important;
+        }
+
+        .rentix-accounts-receivable-page-light input,
+        .rentix-accounts-receivable-page-light select,
+        .rentix-accounts-receivable-page-light textarea {
+          background-color: #ffffff !important;
+          border-color: #cbd5e1 !important;
+          color: #0f172a !important;
+          color-scheme: light !important;
+        }
+
+        .rentix-accounts-receivable-page-light input::placeholder,
+        .rentix-accounts-receivable-page-light textarea::placeholder {
+          color: #94a3b8 !important;
+        }
+
+        .rentix-accounts-receivable-page-light table,
+        .rentix-accounts-receivable-page-light tbody,
+        .rentix-accounts-receivable-page-light tbody tr {
+          background-color: #ffffff !important;
+        }
+
+        .rentix-accounts-receivable-page-light thead {
+          background-color: #fff7ed !important;
+        }
+
+        .rentix-accounts-receivable-page-light tbody tr:hover {
+          background-color: #f8fafc !important;
+        }
+
+        .rentix-accounts-receivable-page-light .shadow-sm,
+        .rentix-accounts-receivable-page-light .shadow-md,
+        .rentix-accounts-receivable-page-light .shadow-2xl {
+          box-shadow: 0 18px 45px rgba(15, 23, 42, 0.10) !important;
+        }
+
+        .dark .rentix-accounts-receivable-page-black {
+          color: #f8fafc;
+        }
+
+        .dark .rentix-accounts-receivable-page-black .bg-white {
+          background-color: #0f172a !important;
+        }
+
+        .dark .rentix-accounts-receivable-page-black .bg-slate-50,
+        .dark .rentix-accounts-receivable-page-black .bg-slate-100 {
+          background-color: #111827 !important;
+        }
+
+        .dark .rentix-accounts-receivable-page-black .bg-orange-50,
+        .dark .rentix-accounts-receivable-page-black .bg-orange-100 {
+          background-color: rgba(249, 115, 22, 0.13) !important;
+        }
+
+        .dark .rentix-accounts-receivable-page-black .bg-red-50,
+        .dark .rentix-accounts-receivable-page-black .bg-red-100 {
+          background-color: rgba(239, 68, 68, 0.12) !important;
+        }
+
+        .dark .rentix-accounts-receivable-page-black .bg-emerald-50,
+        .dark .rentix-accounts-receivable-page-black .bg-emerald-100 {
+          background-color: rgba(16, 185, 129, 0.12) !important;
+        }
+
+        .dark .rentix-accounts-receivable-page-black .bg-amber-50,
+        .dark .rentix-accounts-receivable-page-black .bg-amber-100 {
+          background-color: rgba(245, 158, 11, 0.14) !important;
+        }
+
+        .dark .rentix-accounts-receivable-page-black .text-slate-950,
+        .dark .rentix-accounts-receivable-page-black .text-slate-900,
+        .dark .rentix-accounts-receivable-page-black .text-slate-800,
+        .dark .rentix-accounts-receivable-page-black .text-slate-700 {
+          color: #f8fafc !important;
+        }
+
+        .dark .rentix-accounts-receivable-page-black .text-slate-600,
+        .dark .rentix-accounts-receivable-page-black .text-slate-500,
+        .dark .rentix-accounts-receivable-page-black .text-slate-400 {
+          color: #cbd5e1 !important;
+        }
+
+        .dark .rentix-accounts-receivable-page-black .border-orange-100,
+        .dark .rentix-accounts-receivable-page-black .border-orange-200,
+        .dark .rentix-accounts-receivable-page-black .border-red-100,
+        .dark .rentix-accounts-receivable-page-black .border-red-200,
+        .dark .rentix-accounts-receivable-page-black .border-emerald-200,
+        .dark .rentix-accounts-receivable-page-black .border-slate-100,
+        .dark .rentix-accounts-receivable-page-black .border-slate-200,
+        .dark .rentix-accounts-receivable-page-black .border-slate-300 {
+          border-color: #334155 !important;
+        }
+
+        .dark .rentix-accounts-receivable-page-black input,
+        .dark .rentix-accounts-receivable-page-black select,
+        .dark .rentix-accounts-receivable-page-black textarea {
+          background-color: #020617 !important;
+          border-color: #334155 !important;
+          color: #f8fafc !important;
+          color-scheme: dark !important;
+        }
+
+        .dark .rentix-accounts-receivable-page-black input::placeholder,
+        .dark .rentix-accounts-receivable-page-black textarea::placeholder {
+          color: #64748b !important;
+        }
+
+        .dark .rentix-accounts-receivable-page-black table,
+        .dark .rentix-accounts-receivable-page-black tbody,
+        .dark .rentix-accounts-receivable-page-black tbody tr {
+          background-color: #0f172a !important;
+        }
+
+        .dark .rentix-accounts-receivable-page-black thead {
+          background-color: rgba(249, 115, 22, 0.15) !important;
+        }
+
+        .dark .rentix-accounts-receivable-page-black tbody tr:hover {
+          background-color: #1e293b !important;
+        }
+
+
+        /* Rentix explicit theme override - Accounts Receivable
+           Keeps this screen independent from a stale global .dark class. */
+        .rentix-accounts-receivable-page-light,
+        .rentix-accounts-receivable-page-light * {
+          color-scheme: light !important;
+        }
+
+        .rentix-accounts-receivable-page-light .bg-white,
+        .rentix-accounts-receivable-page-light .dark\:bg-white {
+          background-color: #ffffff !important;
+        }
+
+        .rentix-accounts-receivable-page-light .bg-slate-50,
+        .rentix-accounts-receivable-page-light .dark\:bg-slate-50 {
+          background-color: #f8fafc !important;
+        }
+
+        .rentix-accounts-receivable-page-light .bg-slate-100,
+        .rentix-accounts-receivable-page-light .dark\:bg-slate-100 {
+          background-color: #f1f5f9 !important;
+        }
+
+        .rentix-accounts-receivable-page-light .bg-slate-800,
+        .rentix-accounts-receivable-page-light .bg-slate-900,
+        .rentix-accounts-receivable-page-light .bg-slate-950,
+        .rentix-accounts-receivable-page-light .dark\:bg-slate-700,
+        .rentix-accounts-receivable-page-light .dark\:bg-slate-800,
+        .rentix-accounts-receivable-page-light .dark\:bg-slate-900,
+        .rentix-accounts-receivable-page-light .dark\:bg-slate-950 {
+          background-color: #ffffff !important;
+        }
+
+        .rentix-accounts-receivable-page-light .bg-gradient-to-r {
+          background-image: linear-gradient(to right, #ecfdf5, #ffffff) !important;
+        }
+
+        .rentix-accounts-receivable-page-light .bg-orange-50,
+        .rentix-accounts-receivable-page-light .dark\:bg-orange-950\/30,
+        .rentix-accounts-receivable-page-light .dark\:bg-orange-900\/40 {
+          background-color: #fff7ed !important;
+        }
+
+        .rentix-accounts-receivable-page-light .bg-emerald-50,
+        .rentix-accounts-receivable-page-light .dark\:bg-emerald-950\/30 {
+          background-color: #ecfdf5 !important;
+        }
+
+        .rentix-accounts-receivable-page-light .bg-red-50,
+        .rentix-accounts-receivable-page-light .dark\:bg-red-950\/30 {
+          background-color: #fef2f2 !important;
+        }
+
+        .rentix-accounts-receivable-page-light .bg-amber-50,
+        .rentix-accounts-receivable-page-light .dark\:bg-amber-950\/30 {
+          background-color: #fffbeb !important;
+        }
+
+        .rentix-accounts-receivable-page-light .text-white,
+        .rentix-accounts-receivable-page-light .text-slate-100,
+        .rentix-accounts-receivable-page-light .dark\:text-white,
+        .rentix-accounts-receivable-page-light .dark\:text-slate-100 {
+          color: #0f172a !important;
+        }
+
+        .rentix-accounts-receivable-page-light .text-slate-950,
+        .rentix-accounts-receivable-page-light .text-slate-900,
+        .rentix-accounts-receivable-page-light .text-slate-800,
+        .rentix-accounts-receivable-page-light .text-slate-700,
+        .rentix-accounts-receivable-page-light .dark\:text-slate-100,
+        .rentix-accounts-receivable-page-light .dark\:text-slate-200 {
+          color: #0f172a !important;
+        }
+
+        .rentix-accounts-receivable-page-light .text-slate-600,
+        .rentix-accounts-receivable-page-light .text-slate-500,
+        .rentix-accounts-receivable-page-light .text-slate-400,
+        .rentix-accounts-receivable-page-light .dark\:text-slate-300,
+        .rentix-accounts-receivable-page-light .dark\:text-slate-400,
+        .rentix-accounts-receivable-page-light .dark\:text-slate-500 {
+          color: #64748b !important;
+        }
+
+        .rentix-accounts-receivable-page-light .text-orange-600,
+        .rentix-accounts-receivable-page-light .text-orange-700,
+        .rentix-accounts-receivable-page-light .dark\:text-orange-300,
+        .rentix-accounts-receivable-page-light .dark\:text-orange-400 {
+          color: #ea580c !important;
+        }
+
+        .rentix-accounts-receivable-page-light .text-emerald-700,
+        .rentix-accounts-receivable-page-light .dark\:text-emerald-300 {
+          color: #047857 !important;
+        }
+
+        .rentix-accounts-receivable-page-light .text-red-600,
+        .rentix-accounts-receivable-page-light .text-red-700,
+        .rentix-accounts-receivable-page-light .dark\:text-red-300 {
+          color: #dc2626 !important;
+        }
+
+        .rentix-accounts-receivable-page-light .border-slate-100,
+        .rentix-accounts-receivable-page-light .border-slate-200,
+        .rentix-accounts-receivable-page-light .border-slate-300,
+        .rentix-accounts-receivable-page-light .border-slate-700,
+        .rentix-accounts-receivable-page-light .dark\:border-slate-700 {
+          border-color: #e2e8f0 !important;
+        }
+
+        .rentix-accounts-receivable-page-light .ring-slate-100,
+        .rentix-accounts-receivable-page-light .ring-slate-200,
+        .rentix-accounts-receivable-page-light .ring-slate-700,
+        .rentix-accounts-receivable-page-light .dark\:ring-slate-700 {
+          --tw-ring-color: #e2e8f0 !important;
+        }
+
+        .rentix-accounts-receivable-page-light input,
+        .rentix-accounts-receivable-page-light select,
+        .rentix-accounts-receivable-page-light textarea {
+          background-color: #ffffff !important;
+          border-color: #cbd5e1 !important;
+          color: #0f172a !important;
+          color-scheme: light !important;
+        }
+
+        .rentix-accounts-receivable-page-light input::placeholder,
+        .rentix-accounts-receivable-page-light textarea::placeholder {
+          color: #94a3b8 !important;
+        }
+
+        .rentix-accounts-receivable-page-light table,
+        .rentix-accounts-receivable-page-light tbody,
+        .rentix-accounts-receivable-page-light tbody tr,
+        .rentix-accounts-receivable-page-light .dark\:bg-slate-800 {
+          background-color: #ffffff !important;
+        }
+
+        .rentix-accounts-receivable-page-light thead,
+        .rentix-accounts-receivable-page-light .bg-orange-50 {
+          background-color: #fff7ed !important;
+        }
+
+        .rentix-accounts-receivable-page-light tbody tr:hover,
+        .rentix-accounts-receivable-page-light .hover\:bg-slate-50:hover,
+        .rentix-accounts-receivable-page-light .dark\:hover\:bg-slate-800:hover,
+        .rentix-accounts-receivable-page-light .dark\:hover\:bg-slate-700:hover {
+          background-color: #f8fafc !important;
+        }
+
+        .rentix-accounts-receivable-page-light .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+        .rentix-accounts-receivable-page-light .dark\:divide-slate-700 > :not([hidden]) ~ :not([hidden]) {
+          border-color: #e2e8f0 !important;
+        }
+
+        .rentix-accounts-receivable-page-light .shadow-sm,
+        .rentix-accounts-receivable-page-light .shadow-md,
+        .rentix-accounts-receivable-page-light .shadow-lg,
+        .rentix-accounts-receivable-page-light .shadow-xl,
+        .rentix-accounts-receivable-page-light .shadow-2xl {
+          box-shadow: 0 18px 45px rgba(15, 23, 42, 0.10) !important;
+        }
+
+        .rentix-accounts-receivable-page-light .bg-emerald-600,
+        .rentix-accounts-receivable-page-light .bg-orange-500,
+        .rentix-accounts-receivable-page-light .bg-red-500 {
+          color: #ffffff !important;
+        }
+
+        .rentix-accounts-receivable-page-black,
+        .rentix-accounts-receivable-page-black * {
+          color-scheme: dark !important;
+        }
+
+        .rentix-accounts-receivable-page-black .bg-white,
+        .rentix-accounts-receivable-page-black .bg-slate-50,
+        .rentix-accounts-receivable-page-black .bg-slate-100 {
+          background-color: #0f172a !important;
+        }
+
+        .rentix-accounts-receivable-page-black .bg-gradient-to-r {
+          background-image: linear-gradient(to right, #0f172a, #111827) !important;
+        }
+
+        .rentix-accounts-receivable-page-black .text-slate-950,
+        .rentix-accounts-receivable-page-black .text-slate-900,
+        .rentix-accounts-receivable-page-black .text-slate-800,
+        .rentix-accounts-receivable-page-black .text-slate-700 {
+          color: #f8fafc !important;
+        }
+
+        .rentix-accounts-receivable-page-black .text-slate-600,
+        .rentix-accounts-receivable-page-black .text-slate-500,
+        .rentix-accounts-receivable-page-black .text-slate-400 {
+          color: #cbd5e1 !important;
+        }
+
+        .rentix-accounts-receivable-page-black input,
+        .rentix-accounts-receivable-page-black select,
+        .rentix-accounts-receivable-page-black textarea {
+          background-color: #020617 !important;
+          border-color: #334155 !important;
+          color: #f8fafc !important;
+          color-scheme: dark !important;
+        }
+
+
+        .rentix-accounts-receivable-page-light .bg-slate-900,
+        .rentix-accounts-receivable-page-light .bg-emerald-600,
+        .rentix-accounts-receivable-page-light .bg-orange-500,
+        .rentix-accounts-receivable-page-light .bg-red-600,
+        .rentix-accounts-receivable-page-light .bg-red-500,
+        .rentix-accounts-receivable-page-light .bg-amber-600 {
+          color: #ffffff !important;
+        }
+
+        .rentix-accounts-receivable-page-light .bg-slate-900.text-white,
+        .rentix-accounts-receivable-page-light button.bg-slate-900,
+        .rentix-accounts-receivable-page-light button.bg-emerald-600,
+        .rentix-accounts-receivable-page-light button.bg-orange-500,
+        .rentix-accounts-receivable-page-light button.bg-red-600 {
+          color: #ffffff !important;
+        }
+
+        .rentix-accounts-receivable-page-light .bg-slate-900:not(button):not(.text-white) {
+          background-color: #ffffff !important;
+        }
+
+        .rentix-accounts-receivable-page-light .bg-gradient-to-r.from-slate-50,
+        .rentix-accounts-receivable-page-light .bg-gradient-to-r.from-emerald-50,
+        .rentix-accounts-receivable-page-light .bg-gradient-to-r.from-orange-50 {
+          background-image: linear-gradient(to right, #f8fafc, #ffffff) !important;
+        }
+
+        .rentix-accounts-receivable-page-black .bg-slate-900,
+        .rentix-accounts-receivable-page-black .dark\:bg-slate-900,
+        .rentix-accounts-receivable-page-black .dark\:bg-slate-800 {
+          background-color: #0f172a !important;
+        }
+
+        .rentix-accounts-receivable-page-black .bg-slate-50,
+        .rentix-accounts-receivable-page-black .bg-slate-100,
+        .rentix-accounts-receivable-page-black .bg-white {
+          background-color: #0f172a !important;
+        }
+
+        .rentix-accounts-receivable-page-black .bg-gradient-to-r {
+          background-image: linear-gradient(to right, #0f172a, #111827) !important;
+        }
+
+      `}</style>
+
+      <div
+        data-rentix-theme={isBlackTheme ? "black" : "light"}
+        className={
+          isBlackTheme
+            ? "rentix-accounts-receivable-page-black space-y-8"
+            : "rentix-accounts-receivable-page-light space-y-8"
+        }
+      >
         <div>
           <p className="text-sm font-semibold text-orange-600">Financeiro</p>
 
@@ -2209,7 +2709,7 @@ export default function AccountsReceivablePage() {
                 Filtros Financeiros
               </h2>
 
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
+              <p className={`mt-1 text-sm leading-6 ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
                 Refine a visualização sem alterar os dados originais.
               </p>
             </div>
@@ -2222,7 +2722,7 @@ export default function AccountsReceivablePage() {
                     onClick={() => setStatusFilter(status)}
                     className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
                       statusFilter === status
-                        ? "bg-orange-50 dark:bg-orange-950/300 text-white shadow-sm"
+                        ? "bg-orange-500 text-white shadow-sm"
                         : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
                     }`}
                   >
@@ -2277,7 +2777,7 @@ export default function AccountsReceivablePage() {
                   Lista de Contas a Receber
                 </h2>
 
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                <p className={`mt-1 text-sm leading-6 ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
                   Visualize os recebimentos pendentes, pagos e vencidos.
                 </p>
               </div>
@@ -2292,14 +2792,14 @@ export default function AccountsReceivablePage() {
 
                 <button
                   onClick={openReportModal}
-                  className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
+                  className="rounded-xl bg-[#0f172a] px-5 py-3 text-sm font-bold text-[#ffffff] shadow-sm transition hover:bg-[#1e293b]"
                 >
                   Relatório PDF
                 </button>
 
                 <button
                   onClick={() => setIsSearchOpen(true)}
-                  className="rounded-xl bg-orange-50 dark:bg-orange-950/300 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
+                  className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
                 >
                   Buscar inquilino
                 </button>
@@ -2405,7 +2905,7 @@ export default function AccountsReceivablePage() {
 
                             <button
                               onClick={() => openReceivePaymentModal(charge)}
-                              className="rounded-xl bg-orange-50 dark:bg-orange-950/300 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
+                              className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
                             >
                               Receber
                             </button>
@@ -2442,21 +2942,39 @@ export default function AccountsReceivablePage() {
       </div>
 
       {isReportOpen && (
-        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
-            <div className="border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-slate-50 to-white dark:from-slate-800 dark:to-slate-900 p-6">
+        <div className={`fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
+          <div
+            className={`flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl shadow-2xl ring-1 ${
+              isBlackTheme
+                ? "bg-[#0f172a] ring-[#334155]"
+                : "bg-[#ffffff] ring-[#dbe4ef]"
+            }`}
+          >
+            <div
+              className={`border-b p-6 ${
+                isBlackTheme
+                  ? "border-[#334155] bg-[#111827]"
+                  : "border-[#e2e8f0] bg-[#ffffff]"
+              }`}
+            >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-xl shadow-lg shadow-slate-900/20">
+                  <div
+                    className={`flex h-12 w-12 items-center justify-center rounded-2xl text-xl shadow-lg ${
+                      isBlackTheme
+                        ? "bg-[#020617] shadow-black/30"
+                        : "bg-[#f8fafc] shadow-slate-200/70 ring-1 ring-[#e2e8f0]"
+                    }`}
+                  >
                     📄
                   </div>
 
                   <div>
-                    <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">
+                    <h2 className={`text-xl font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
                       Relatório de contas a receber
                     </h2>
 
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                    <p className={`mt-1 text-sm leading-6 ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
                       Visualize o relatório na tela ou gere um PDF com filtros por pessoa,
                       status, vencidas, a vencer ou período.
                     </p>
@@ -2466,7 +2984,11 @@ export default function AccountsReceivablePage() {
                 <button
                   type="button"
                   onClick={closeReportModal}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 dark:text-slate-500 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:hover:bg-slate-700 dark:bg-slate-800 hover:text-slate-900 dark:text-slate-100"
+                  className={`flex h-10 w-10 items-center justify-center rounded-xl shadow-sm ring-1 transition ${
+                    isBlackTheme
+                      ? "bg-[#1e293b] text-[#cbd5e1] ring-[#334155] hover:bg-[#334155] hover:text-[#ffffff]"
+                      : "bg-[#ffffff] text-[#64748b] ring-[#dbe4ef] hover:bg-[#f8fafc] hover:text-[#0f172a]"
+                  }`}
                   aria-label="Fechar relatório"
                 >
                   ✕
@@ -2474,10 +2996,10 @@ export default function AccountsReceivablePage() {
               </div>
             </div>
 
-            <div className="flex-1 space-y-5 overflow-y-auto p-6">
+            <div className={`flex-1 space-y-5 overflow-y-auto p-6 ${isBlackTheme ? "bg-[#0f172a]" : "bg-[#ffffff]"}`}>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Pessoa/Inquilino
                   </label>
 
@@ -2487,7 +3009,11 @@ export default function AccountsReceivablePage() {
                       setReportFormError("");
                       setReportTenantId(event.target.value);
                     }}
-                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100 dark:ring-slate-700"
+                    className={`h-12 w-full rounded-xl border px-4 text-sm outline-none transition focus:ring-4 ${
+                      isBlackTheme
+                        ? "border-[#334155] bg-[#020617] text-[#f8fafc] focus:border-[#64748b] focus:ring-[#334155]/40"
+                        : "border-[#dbe4ef] bg-[#ffffff] text-[#0f172a] focus:border-[#0f172a] focus:ring-[#e2e8f0]"
+                    }`}
                   >
                     <option value="">Todas as pessoas</option>
                     {tenants.map((tenant) => (
@@ -2499,7 +3025,7 @@ export default function AccountsReceivablePage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Status
                   </label>
 
@@ -2509,7 +3035,11 @@ export default function AccountsReceivablePage() {
                       setReportFormError("");
                       setReportStatusFilter(event.target.value as StatusFilter);
                     }}
-                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100 dark:ring-slate-700"
+                    className={`h-12 w-full rounded-xl border px-4 text-sm outline-none transition focus:ring-4 ${
+                      isBlackTheme
+                        ? "border-[#334155] bg-[#020617] text-[#f8fafc] focus:border-[#64748b] focus:ring-[#334155]/40"
+                        : "border-[#dbe4ef] bg-[#ffffff] text-[#0f172a] focus:border-[#0f172a] focus:ring-[#e2e8f0]"
+                    }`}
                   >
                     <option value="All">Todos</option>
                     <option value="Pending">Pendente</option>
@@ -2520,7 +3050,7 @@ export default function AccountsReceivablePage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                   Filtro de vencimento
                 </label>
 
@@ -2541,8 +3071,10 @@ export default function AccountsReceivablePage() {
                       }}
                       className={`rounded-2xl border px-3 py-3 text-sm font-bold transition ${
                         reportDueFilter === filter
-                          ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-                          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 dark:bg-slate-800"
+                          ? "border-[#0f172a] bg-[#0f172a] text-[#ffffff] shadow-sm"
+                          : isBlackTheme
+                            ? "border-[#334155] bg-[#020617] text-[#cbd5e1] hover:bg-[#1e293b]"
+                            : "border-[#dbe4ef] bg-[#ffffff] text-[#475569] hover:bg-[#f8fafc] hover:text-[#0f172a]"
                       }`}
                     >
                       {getReportDueFilterLabel(filter)}
@@ -2552,9 +3084,15 @@ export default function AccountsReceivablePage() {
               </div>
 
               {reportDueFilter === "DateRange" && (
-                <div className="grid gap-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4 md:grid-cols-2">
+                <div
+                  className={`grid gap-4 rounded-2xl border p-4 md:grid-cols-2 ${
+                    isBlackTheme
+                      ? "border-[#334155] bg-[#111827]"
+                      : "border-[#dbe4ef] bg-[#f8fafc]"
+                  }`}
+                >
                   <div>
-                    <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                    <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                       Data inicial
                     </label>
 
@@ -2565,12 +3103,16 @@ export default function AccountsReceivablePage() {
                         setReportFormError("");
                         setReportStartDate(event.target.value);
                       }}
-                      className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100 dark:ring-slate-700"
+                      className={`h-12 w-full rounded-xl border px-4 text-sm outline-none transition focus:ring-4 ${
+                      isBlackTheme
+                        ? "border-[#334155] bg-[#020617] text-[#f8fafc] focus:border-[#64748b] focus:ring-[#334155]/40"
+                        : "border-[#dbe4ef] bg-[#ffffff] text-[#0f172a] focus:border-[#0f172a] focus:ring-[#e2e8f0]"
+                    }`}
                     />
                   </div>
 
                   <div>
-                    <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                    <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                       Data final
                     </label>
 
@@ -2581,41 +3123,63 @@ export default function AccountsReceivablePage() {
                         setReportFormError("");
                         setReportEndDate(event.target.value);
                       }}
-                      className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-slate-900 focus:ring-4 focus:ring-slate-100 dark:ring-slate-700"
+                      className={`h-12 w-full rounded-xl border px-4 text-sm outline-none transition focus:ring-4 ${
+                      isBlackTheme
+                        ? "border-[#334155] bg-[#020617] text-[#f8fafc] focus:border-[#64748b] focus:ring-[#334155]/40"
+                        : "border-[#dbe4ef] bg-[#ffffff] text-[#0f172a] focus:border-[#0f172a] focus:ring-[#e2e8f0]"
+                    }`}
                     />
                   </div>
                 </div>
               )}
 
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4">
-                <p className="text-sm font-black text-slate-900 dark:text-slate-100">
+              <div
+                className={`rounded-2xl border p-4 ${
+                  isBlackTheme
+                    ? "border-[#334155] bg-[#111827]"
+                    : "border-[#dbe4ef] bg-[#f8fafc]"
+                }`}
+              >
+                <p className={`text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
                   Prévia do relatório
                 </p>
 
                 <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  <div className="rounded-xl bg-white dark:bg-slate-900 p-4 ring-1 ring-slate-200 dark:ring-slate-700">
-                    <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                  <div
+                    className={`rounded-xl p-4 ring-1 ${
+                      isBlackTheme ? "bg-[#020617] ring-[#334155]" : "bg-[#ffffff] ring-[#dbe4ef]"
+                    }`}
+                  >
+                    <p className={`text-xs font-bold uppercase ${isBlackTheme ? "text-[#94a3b8]" : "text-[#64748b]"}`}>
                       Registros
                     </p>
-                    <p className="mt-1 text-xl font-black text-slate-900 dark:text-slate-100">
+                    <p className={`mt-1 text-xl font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
                       {getReportFilteredCharges().length}
                     </p>
                   </div>
 
-                  <div className="rounded-xl bg-white dark:bg-slate-900 p-4 ring-1 ring-slate-200 dark:ring-slate-700">
-                    <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                  <div
+                    className={`rounded-xl p-4 ring-1 ${
+                      isBlackTheme ? "bg-[#020617] ring-[#334155]" : "bg-[#ffffff] ring-[#dbe4ef]"
+                    }`}
+                  >
+                    <p className={`text-xs font-bold uppercase ${isBlackTheme ? "text-[#94a3b8]" : "text-[#64748b]"}`}>
                       Total filtrado
                     </p>
-                    <p className="mt-1 text-xl font-black text-slate-900 dark:text-slate-100">
+                    <p className={`mt-1 text-xl font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
                       {formatCurrency(getReportTotalAmount(getReportFilteredCharges()))}
                     </p>
                   </div>
 
-                  <div className="rounded-xl bg-white dark:bg-slate-900 p-4 ring-1 ring-slate-200 dark:ring-slate-700">
-                    <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                  <div
+                    className={`rounded-xl p-4 ring-1 ${
+                      isBlackTheme ? "bg-[#020617] ring-[#334155]" : "bg-[#ffffff] ring-[#dbe4ef]"
+                    }`}
+                  >
+                    <p className={`text-xs font-bold uppercase ${isBlackTheme ? "text-[#94a3b8]" : "text-[#64748b]"}`}>
                       Tipo
                     </p>
-                    <p className="mt-1 text-sm font-black text-slate-900 dark:text-slate-100">
+                    <p className={`mt-1 text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
                       {getReportDueFilterLabel(reportDueFilter)}
                     </p>
                   </div>
@@ -2623,17 +3187,27 @@ export default function AccountsReceivablePage() {
               </div>
 
               {reportFormError && (
-                <div className="rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm font-bold text-red-700">
+                <div className={`rounded-2xl border px-4 py-3 text-sm font-bold ${isBlackTheme ? "border-red-900/60 bg-red-950/30 text-red-300" : "border-red-200 bg-red-50 text-red-700"}`}>
                   {reportFormError}
                 </div>
               )}
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 md:flex-row md:justify-end">
+            <div
+              className={`flex flex-col-reverse gap-3 border-t p-5 md:flex-row md:justify-end ${
+                isBlackTheme
+                  ? "border-[#334155] bg-[#0f172a]"
+                  : "border-[#e2e8f0] bg-[#ffffff]"
+              }`}
+            >
               <button
                 type="button"
                 onClick={closeReportModal}
-                className="rounded-xl bg-slate-100 dark:bg-slate-800 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
+                className={`rounded-xl px-5 py-3 text-sm font-bold transition ${
+                  isBlackTheme
+                    ? "bg-[#1e293b] text-[#cbd5e1] hover:bg-[#334155]"
+                    : "bg-[#f1f5f9] text-[#475569] hover:bg-[#e2e8f0]"
+                }`}
               >
                 Cancelar
               </button>
@@ -2641,7 +3215,11 @@ export default function AccountsReceivablePage() {
               <button
                 type="button"
                 onClick={viewAccountsReceivableReport}
-                className="rounded-xl bg-white dark:bg-slate-900 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:hover:bg-slate-700 dark:bg-slate-800"
+                className={`rounded-xl px-5 py-3 text-sm font-bold shadow-sm ring-1 transition ${
+                  isBlackTheme
+                    ? "bg-[#020617] text-[#f8fafc] ring-[#334155] hover:bg-[#1e293b]"
+                    : "bg-[#f8fafc] text-[#334155] ring-[#dbe4ef] hover:bg-[#e2e8f0]"
+                }`}
               >
                 Visualizar relatório
               </button>
@@ -2649,7 +3227,7 @@ export default function AccountsReceivablePage() {
               <button
                 type="button"
                 onClick={generateAccountsReceivablePdf}
-                className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
+                className="rounded-xl bg-[#0f172a] px-5 py-3 text-sm font-bold text-[#ffffff] shadow-sm transition hover:bg-[#1e293b]"
               >
                 Gerar PDF
               </button>
@@ -2659,7 +3237,7 @@ export default function AccountsReceivablePage() {
       )}
 
       {isSearchOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
           <div className="w-full max-w-xl overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-orange-50 to-white dark:from-orange-950/40 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
@@ -2669,11 +3247,11 @@ export default function AccountsReceivablePage() {
                   </div>
 
                   <div>
-                    <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">
+                    <h2 className={`text-xl font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
                       Buscar por Inquilino
                     </h2>
 
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                    <p className={`mt-1 text-sm leading-6 ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
                       Selecione um inquilino para visualizar somente as contas
                       dele.
                     </p>
@@ -2682,7 +3260,11 @@ export default function AccountsReceivablePage() {
 
                 <button
                   onClick={clearTenantFilter}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 dark:text-slate-500 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:hover:bg-slate-700 dark:bg-slate-800 hover:text-slate-900 dark:text-slate-100"
+                  className={`flex h-10 w-10 items-center justify-center rounded-xl shadow-sm ring-1 transition ${
+                    isBlackTheme
+                      ? "bg-[#1e293b] text-[#cbd5e1] ring-[#334155] hover:bg-[#334155] hover:text-[#ffffff]"
+                      : "bg-[#ffffff] text-[#64748b] ring-[#dbe4ef] hover:bg-[#f8fafc] hover:text-[#0f172a]"
+                  }`}
                   aria-label="Fechar busca"
                 >
                   ✕
@@ -2690,9 +3272,9 @@ export default function AccountsReceivablePage() {
               </div>
             </div>
 
-            <div className="flex-1 space-y-5 overflow-y-auto p-6">
+            <div className={`flex-1 space-y-5 overflow-y-auto p-6 ${isBlackTheme ? "bg-[#0f172a]" : "bg-[#ffffff]"}`}>
               <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                   Nome do inquilino
                 </label>
 
@@ -2770,14 +3352,18 @@ export default function AccountsReceivablePage() {
               <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-700 pt-5 md:flex-row md:justify-end">
                 <button
                   onClick={clearTenantFilter}
-                  className="rounded-xl bg-slate-100 dark:bg-slate-800 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
+                  className={`rounded-xl px-5 py-3 text-sm font-bold transition ${
+                  isBlackTheme
+                    ? "bg-[#1e293b] text-[#cbd5e1] hover:bg-[#334155]"
+                    : "bg-[#f1f5f9] text-[#475569] hover:bg-[#e2e8f0]"
+                }`}
                 >
                   Ver todas as contas
                 </button>
 
                 <button
                   onClick={() => setIsSearchOpen(false)}
-                  className="rounded-xl bg-orange-50 dark:bg-orange-950/300 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
+                  className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
                 >
                   Fechar
                 </button>
@@ -2788,7 +3374,7 @@ export default function AccountsReceivablePage() {
       )}
 
       {isCreateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
           <div className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-950/40 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
@@ -2798,11 +3384,11 @@ export default function AccountsReceivablePage() {
                   </div>
 
                   <div>
-                    <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">
+                    <h2 className={`text-xl font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
                       {editingChargeId ? "Editar cobrança" : "Nova cobrança"}
                     </h2>
 
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                    <p className={`mt-1 text-sm leading-6 ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
                       {editingChargeId
                         ? "Ajuste os dados da conta a receber selecionada."
                         : "Cadastre uma conta a receber avulsa, única ou parcelada."}
@@ -2812,7 +3398,11 @@ export default function AccountsReceivablePage() {
 
                 <button
                   onClick={closeCreateModal}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 dark:text-slate-500 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:hover:bg-slate-700 dark:bg-slate-800 hover:text-slate-900 dark:text-slate-100"
+                  className={`flex h-10 w-10 items-center justify-center rounded-xl shadow-sm ring-1 transition ${
+                    isBlackTheme
+                      ? "bg-[#1e293b] text-[#cbd5e1] ring-[#334155] hover:bg-[#334155] hover:text-[#ffffff]"
+                      : "bg-[#ffffff] text-[#64748b] ring-[#dbe4ef] hover:bg-[#f8fafc] hover:text-[#0f172a]"
+                  }`}
                   aria-label="Fechar cadastro"
                 >
                   ✕
@@ -2823,7 +3413,7 @@ export default function AccountsReceivablePage() {
             <div className="max-h-[calc(92vh-120px)] space-y-5 overflow-y-auto p-6">
               {!editingChargeId && (
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Tipo de lançamento
                   </label>
 
@@ -2840,7 +3430,7 @@ export default function AccountsReceivablePage() {
                           : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 dark:bg-slate-800"
                       }`}
                     >
-                      <p className="text-sm font-black text-slate-900 dark:text-slate-100">
+                      <p className={`text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
                         Conta única
                       </p>
                       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
@@ -2860,7 +3450,7 @@ export default function AccountsReceivablePage() {
                           : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 dark:bg-slate-800"
                       }`}
                     >
-                      <p className="text-sm font-black text-slate-900 dark:text-slate-100">
+                      <p className={`text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
                         Sequência de parcelas
                       </p>
                       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
@@ -2871,10 +3461,16 @@ export default function AccountsReceivablePage() {
                 </div>
               )}
 
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4">
+              <div
+                className={`rounded-2xl border p-4 ${
+                  isBlackTheme
+                    ? "border-[#334155] bg-[#111827]"
+                    : "border-[#dbe4ef] bg-[#f8fafc]"
+                }`}
+              >
                 <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
                   <div>
-                    <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                    <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                       Inquilino/Pessoa
                     </label>
 
@@ -2904,7 +3500,7 @@ export default function AccountsReceivablePage() {
                     <button
                       type="button"
                       onClick={openTenantCreateModal}
-                      className="h-12 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
+                      className="h-12 rounded-xl bg-[#0f172a] px-5 text-sm font-bold text-[#ffffff] shadow-sm transition hover:bg-slate-800"
                     >
                       NOVO
                     </button>
@@ -2919,7 +3515,7 @@ export default function AccountsReceivablePage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                   Imóvel
                   <span className="ml-1 text-xs font-semibold text-slate-400 dark:text-slate-500">
                     opcional
@@ -2950,7 +3546,7 @@ export default function AccountsReceivablePage() {
 
               <div className="grid gap-4 md:grid-cols-3">
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Valor total
                   </label>
 
@@ -2971,7 +3567,7 @@ export default function AccountsReceivablePage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Data de lançamento
                   </label>
 
@@ -2992,7 +3588,7 @@ export default function AccountsReceivablePage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Primeiro vencimento
                   </label>
 
@@ -3015,7 +3611,7 @@ export default function AccountsReceivablePage() {
 
               {isEditingPaidCharge && (
                 <div className="rounded-2xl border border-emerald-100 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30/40 p-4">
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Data de pagamento
                   </label>
 
@@ -3040,7 +3636,7 @@ export default function AccountsReceivablePage() {
                 <div className="space-y-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30/40 p-4">
                   <div className="grid gap-4 md:grid-cols-[220px_1fr] md:items-end">
                     <div>
-                      <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                      <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                         Quantidade de parcelas
                       </label>
 
@@ -3112,7 +3708,7 @@ export default function AccountsReceivablePage() {
               )}
 
               {chargeFormError && (
-                <div className="rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm font-bold text-red-700">
+                <div className={`rounded-2xl border px-4 py-3 text-sm font-bold ${isBlackTheme ? "border-red-900/60 bg-red-950/30 text-red-300" : "border-red-200 bg-red-50 text-red-700"}`}>
                   {chargeFormError}
                 </div>
               )}
@@ -3146,7 +3742,11 @@ export default function AccountsReceivablePage() {
                   {!isEditingPaidCharge && (
                     <button
                       onClick={closeCreateModal}
-                      className="rounded-xl bg-slate-100 dark:bg-slate-800 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
+                      className={`rounded-xl px-5 py-3 text-sm font-bold transition ${
+                  isBlackTheme
+                    ? "bg-[#1e293b] text-[#cbd5e1] hover:bg-[#334155]"
+                    : "bg-[#f1f5f9] text-[#475569] hover:bg-[#e2e8f0]"
+                }`}
                     >
                       Cancelar
                     </button>
@@ -3166,7 +3766,7 @@ export default function AccountsReceivablePage() {
       )}
 
       {chargePendingPaymentReceipt && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+        <div className={`fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
           <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-950/40 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
@@ -3176,11 +3776,11 @@ export default function AccountsReceivablePage() {
                   </div>
 
                   <div>
-                    <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">
+                    <h2 className={`text-xl font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
                       Receber cobrança
                     </h2>
 
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                    <p className={`mt-1 text-sm leading-6 ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
                       Informe os dados do pagamento para confirmar o
                       recebimento.
                     </p>
@@ -3190,7 +3790,11 @@ export default function AccountsReceivablePage() {
                 <button
                   type="button"
                   onClick={closeReceivePaymentModal}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 dark:text-slate-500 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:hover:bg-slate-700 dark:bg-slate-800 hover:text-slate-900 dark:text-slate-100"
+                  className={`flex h-10 w-10 items-center justify-center rounded-xl shadow-sm ring-1 transition ${
+                    isBlackTheme
+                      ? "bg-[#1e293b] text-[#cbd5e1] ring-[#334155] hover:bg-[#334155] hover:text-[#ffffff]"
+                      : "bg-[#ffffff] text-[#64748b] ring-[#dbe4ef] hover:bg-[#f8fafc] hover:text-[#0f172a]"
+                  }`}
                   aria-label="Fechar recebimento"
                 >
                   ✕
@@ -3198,7 +3802,7 @@ export default function AccountsReceivablePage() {
               </div>
             </div>
 
-            <div className="flex-1 space-y-5 overflow-y-auto p-6">
+            <div className={`flex-1 space-y-5 overflow-y-auto p-6 ${isBlackTheme ? "bg-[#0f172a]" : "bg-[#ffffff]"}`}>
               <div className="rounded-2xl border border-emerald-100 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 p-4">
                 <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
                   Cobrança selecionada
@@ -3235,7 +3839,7 @@ export default function AccountsReceivablePage() {
 
               <div className="grid gap-4 md:grid-cols-3">
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Juros
                     <span className="ml-1 text-xs font-semibold text-slate-400 dark:text-slate-500">
                       se houver
@@ -3264,7 +3868,7 @@ export default function AccountsReceivablePage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Desconto
                     <span className="ml-1 text-xs font-semibold text-slate-400 dark:text-slate-500">
                       se houver
@@ -3293,7 +3897,7 @@ export default function AccountsReceivablePage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Valor final
                   </label>
 
@@ -3319,7 +3923,13 @@ export default function AccountsReceivablePage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4">
+              <div
+                className={`rounded-2xl border p-4 ${
+                  isBlackTheme
+                    ? "border-[#334155] bg-[#111827]"
+                    : "border-[#dbe4ef] bg-[#f8fafc]"
+                }`}
+              >
                 <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
                   <div>
                     <h3 className="text-sm font-black text-slate-900 dark:text-slate-100">
@@ -3335,7 +3945,7 @@ export default function AccountsReceivablePage() {
                   <button
                     type="button"
                     onClick={addPaymentEntry}
-                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
+                    className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-bold text-[#ffffff] shadow-sm transition hover:bg-slate-800"
                   >
                     Adicionar forma
                   </button>
@@ -3348,7 +3958,7 @@ export default function AccountsReceivablePage() {
                       className="grid gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 md:grid-cols-[1fr_180px_auto] md:items-end"
                     >
                       <div>
-                        <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                        <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                           Tipo do pagamento {index + 1}
                         </label>
 
@@ -3371,7 +3981,7 @@ export default function AccountsReceivablePage() {
                       </div>
 
                       <div>
-                        <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                        <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                           Valor
                         </label>
 
@@ -3403,7 +4013,7 @@ export default function AccountsReceivablePage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                   Observação
                   <span className="ml-1 text-xs font-semibold text-slate-400 dark:text-slate-500">
                     opcional
@@ -3419,13 +4029,19 @@ export default function AccountsReceivablePage() {
               </div>
 
               {paymentFormError && (
-                <div className="rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm font-bold text-red-700">
+                <div className={`rounded-2xl border px-4 py-3 text-sm font-bold ${isBlackTheme ? "border-red-900/60 bg-red-950/30 text-red-300" : "border-red-200 bg-red-50 text-red-700"}`}>
                   {paymentFormError}
                 </div>
               )}
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 md:flex-row md:justify-end">
+            <div
+              className={`flex flex-col-reverse gap-3 border-t p-5 md:flex-row md:justify-end ${
+                isBlackTheme
+                  ? "border-[#334155] bg-[#0f172a]"
+                  : "border-[#e2e8f0] bg-[#ffffff]"
+              }`}
+            >
               <button
                 type="button"
                 onClick={closeReceivePaymentModal}
@@ -3447,7 +4063,7 @@ export default function AccountsReceivablePage() {
       )}
 
       {isPaymentConfirmationOpen && chargePendingPaymentReceipt && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+        <div className={`fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
           <div className="flex max-h-[94vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="flex-1 overflow-y-auto p-6 text-center">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 text-3xl ring-1 ring-emerald-100 dark:ring-emerald-900/50">
@@ -3533,7 +4149,13 @@ export default function AccountsReceivablePage() {
               </div>
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 md:flex-row md:justify-end">
+            <div
+              className={`flex flex-col-reverse gap-3 border-t p-5 md:flex-row md:justify-end ${
+                isBlackTheme
+                  ? "border-[#334155] bg-[#0f172a]"
+                  : "border-[#e2e8f0] bg-[#ffffff]"
+              }`}
+            >
               <button
                 type="button"
                 onClick={closePaymentConfirmation}
@@ -3556,7 +4178,7 @@ export default function AccountsReceivablePage() {
 
 
       {chargePendingDeletion && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+        <div className={`fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
           <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="p-6 text-center">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 dark:bg-red-950/30 text-3xl ring-1 ring-red-100 dark:ring-red-900/50">
@@ -3605,7 +4227,13 @@ export default function AccountsReceivablePage() {
               </div>
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 md:flex-row md:justify-end">
+            <div
+              className={`flex flex-col-reverse gap-3 border-t p-5 md:flex-row md:justify-end ${
+                isBlackTheme
+                  ? "border-[#334155] bg-[#0f172a]"
+                  : "border-[#e2e8f0] bg-[#ffffff]"
+              }`}
+            >
               <button
                 type="button"
                 onClick={closeDeleteChargeConfirmation}
@@ -3627,7 +4255,7 @@ export default function AccountsReceivablePage() {
       )}
 
       {chargePendingPaymentReversal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+        <div className={`fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
           <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="p-6 text-center">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 dark:bg-amber-950/30 text-3xl ring-1 ring-amber-100 dark:ring-amber-900/50">
@@ -3677,7 +4305,13 @@ export default function AccountsReceivablePage() {
               </div>
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 md:flex-row md:justify-end">
+            <div
+              className={`flex flex-col-reverse gap-3 border-t p-5 md:flex-row md:justify-end ${
+                isBlackTheme
+                  ? "border-[#334155] bg-[#0f172a]"
+                  : "border-[#e2e8f0] bg-[#ffffff]"
+              }`}
+            >
               <button
                 type="button"
                 onClick={closePaymentReversalConfirmation}
@@ -3699,7 +4333,7 @@ export default function AccountsReceivablePage() {
       )}
 
       {isTenantCreateOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-0 backdrop-blur-sm md:p-4">
+        <div className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-0 backdrop-blur-sm md:p-4 ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
           <div className="flex max-h-screen w-full max-w-6xl flex-col overflow-hidden rounded-none bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700 md:max-h-[94vh] md:rounded-3xl">
             <div className="border-b border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 px-6 py-5 md:px-8">
               <div className="flex items-start justify-between gap-4">
@@ -3708,7 +4342,7 @@ export default function AccountsReceivablePage() {
                     Nova pessoa
                   </h2>
 
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                  <p className={`mt-1 text-sm leading-6 ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
                     Preencha os dados pessoais e endereço da pessoa.
                   </p>
                 </div>
@@ -3796,7 +4430,7 @@ export default function AccountsReceivablePage() {
                       type="button"
                       onClick={searchCompanyByCnpj}
                       disabled={isCnpjLoading}
-                      className="mt-3 w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="mt-3 w-full rounded-2xl bg-[#0f172a] px-4 py-3 text-sm font-black text-[#ffffff] shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {isCnpjLoading
                         ? "Buscando CNPJ..."
@@ -3879,7 +4513,7 @@ export default function AccountsReceivablePage() {
                       type="button"
                       onClick={verifyZipCode}
                       disabled={isZipCodeLoading}
-                      className="h-14 rounded-2xl bg-orange-50 dark:bg-orange-950/300 px-4 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 disabled:bg-orange-300"
+                      className="h-14 rounded-2xl bg-orange-500 px-4 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 disabled:bg-orange-300"
                     >
                       {isZipCodeLoading ? "..." : "Buscar"}
                     </button>
@@ -3997,7 +4631,7 @@ export default function AccountsReceivablePage() {
               <button
                 type="button"
                 onClick={createTenantFromModal}
-                className="rounded-2xl bg-orange-50 dark:bg-orange-950/300 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600"
+                className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600"
               >
                 Cadastrar pessoa
               </button>
