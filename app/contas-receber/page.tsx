@@ -5,22 +5,332 @@ import type { ReactNode } from "react";
 import AppShell from "@/components/layout/app-shell";
 
 const RECEIVABLE_FROM_CONTRACT_STORAGE_KEY = "rentix_new_charge_from_contract";
+const PRINT_TEMPLATES_STORAGE_KEY = "rentix_print_templates";
+const LEGACY_SETTINGS_TEMPORARY_CONTRACT_CONTENT = `CONTRATO TEMPORÁRIO
+
+LOCADOR: {companyName}
+LOCATÁRIO: {personName}
+IMÓVEL: {propertyName}
+PERÍODO: {startDate} até {endDate}
+HORÁRIO: Entrada {entryTime} / Saída {exitTime}
+
+CLÁUSULAS E CONDIÇÕES:
+1. O presente contrato tem finalidade de locação temporária.
+2. O locatário declara estar ciente das regras de uso do imóvel.
+3. As informações financeiras e condições acordadas deverão constar no documento final.
+
+{contractDefaultNotes}
+
+{contractCity}, {currentDate}.
+
+__________________________________
+LOCADOR
+
+__________________________________
+LOCATÁRIO`;
+
+const DEFAULT_SETTINGS_TEMPORARY_CONTRACT_CONTENT = `INSTRUMENTO PARTICULAR DE CONTRATO DE LOCAÇÃO IMOBILIÁRIA TEMPORÁRIA
+
+I - LOCADOR:
+{landlordName}, pessoa jurídica de direito privado, inscrita no CPF/CNPJ nº {landlordDocument}, com endereço em {landlordAddress}, doravante denominada LOCADOR.
+E-mail: {companyEmail}
+Telefone: {companyPhone}
+
+II - LOCATÁRIO:
+{tenantName}, brasileiro(a), estado civil não informado, profissão não informada, inscrito(a) no CPF/CNPJ nº {tenantDocument}, Carteira de Identidade nº __________, residente e domiciliado(a) em {tenantAddress}, doravante denominado(a) LOCATÁRIO.
+E-mail: {tenantEmail}
+
+III - OBJETO DA LOCAÇÃO:
+{propertyName}, localizado em {propertyAddress}.
+
+IV - PRAZO DE VIGÊNCIA:
+O prazo de locação é de {contractDays} dia(s), com entrada (check-in) em {startDate} às {entryTime} e saída (check-out) em {endDate} às {exitTime}, sem prorrogação automática.
+
+V - ATIVIDADE OBRIGATÓRIA:
+Durante o período de locação, o locatário compromete-se a utilizar o imóvel exclusivamente para fins recreativos e de lazer, respeitando todas as normas legais e regulamentações aplicáveis. O locatário deverá zelar pela conservação do imóvel e de suas instalações, garantindo sua limpeza e manutenção adequadas. Qualquer dano causado durante o período de locação será de responsabilidade do locatário, que se compromete a ressarcir integralmente o locador pelos prejuízos decorrentes.
+
+VI - ALUGUEL PELO PERÍODO:
+Igual a {amount}.
+
+VII - PAGAMENTO DO ALUGUEL:
+Pela execução do objeto deste contrato, o LOCATÁRIO pagará ao LOCADOR o valor total de {amount}, conforme forma de pagamento acordada entre as partes.
+A liberação das chaves está condicionada à quitação integral de todas as parcelas.
+Parágrafo Segundo: O pagamento será efetuado por meio de [PIX/DINHEIRO/TRANSFERÊNCIA], conforme dados a serem informados pelo LOCADOR.
+
+VIII - CONDIÇÕES ESPECIAIS:
+Não há.
+
+Pelo presente instrumento, as partes acima identificadas e qualificadas têm entre si justas e acertadas o presente INSTRUMENTO PARTICULAR DE CONTRATO DE LOCAÇÃO, que se regerá pelas cláusulas e condições abaixo pactuadas.
+
+Cláusula Primeira - Da Vistoria e Conservação
+1.1. O imóvel é entregue em perfeitas condições de higiene e conservação.
+1.2. O LOCATÁRIO tem o prazo de 2 (duas) horas após a entrada para conferir o local e reportar qualquer dano preexistente por escrito, com fotos ou vídeos.
+1.3. Caso não haja manifestação no prazo acima, entende-se que o imóvel e seus utensílios foram recebidos em perfeito estado.
+1.4. O LOCATÁRIO deverá restituir o imóvel nas mesmas condições em que o recebeu, sob pena de arcar com os custos de reparo ou reposição de itens danificados.
+
+Cláusula Segunda - Do Objeto e Destinação
+2.1. O objeto deste contrato é a locação temporária do imóvel identificado neste instrumento.
+2.2. O imóvel destina-se exclusivamente para fins recreativos e de lazer, conforme detalhado no preâmbulo.
+2.3. É proibido ao LOCATÁRIO sublocar, ceder, emprestar ou transferir a locação a terceiros, total ou parcialmente, sem autorização prévia e por escrito do LOCADOR.
+2.4. Após o recebimento das chaves, o LOCATÁRIO assume a posse temporária e a responsabilidade total pela guarda e conservação do imóvel e seus bens.
+
+Cláusula Terceira - Da Utilização e Finalidade
+3.1. O imóvel deve ser utilizado exclusivamente para fins recreativos e de lazer.
+3.2. É proibida a realização de eventos com venda de ingressos, atividades comerciais ou festas abertas ao público sem autorização prévia por escrito do LOCADOR.
+
+Cláusula Quarta - Do Prazo e da Desocupação
+4.1. A locação é firmada por curto prazo, com início em {startDate} às {entryTime} e término em {endDate} às {exitTime}.
+4.2. Findo o prazo estipulado, o contrato se encerra automaticamente, devendo o LOCATÁRIO desocupar o imóvel e entregar as chaves, independente de aviso prévio.
+4.3. Caso o LOCATÁRIO deseje prorrogar a estadia, deverá consultar a disponibilidade e valores com o LOCADOR com antecedência, sendo necessária a formalização de novo ajuste por escrito.
+4.4. O atraso na desocupação do imóvel após o horário de término sujeitará o LOCATÁRIO à multa por hora excedente, sem prejuízo das demais penalidades.
+
+Cláusula Quinta - Do Valor e Pacote Escolhido
+5.1. O valor da locação temporária é de {amount}, referente ao período contratado.
+
+Cláusula Sexta - Das Obrigações e Regras de Convivência
+6.1. O LOCADOR deverá entregar o imóvel em bom estado de conservação e limpeza.
+6.2. O LOCATÁRIO deverá utilizar o imóvel apenas para os fins contratados, responsabilizando-se por danos ocorridos durante a locação, exceto desgaste natural de uso.
+6.3. O LOCATÁRIO deverá respeitar os limites de hóspedes e convidados definidos previamente pelas partes.
+6.4. Animais de estimação somente serão permitidos mediante autorização do LOCADOR, respondendo o LOCATÁRIO por higiene e eventuais danos.
+6.5. O LOCATÁRIO deve respeitar o sossego dos vizinhos, sendo proibidos ruídos excessivos, especialmente em horário noturno.
+
+Cláusula Sétima - Das Comunicações e Notificações
+7.1. As partes concordam que comunicações urgentes poderão ser realizadas por WhatsApp ou e-mail, utilizando os contatos fornecidos neste contrato.
+7.2. Para notificações formais, as partes elegem os endereços declarados neste instrumento.
+
+Cláusula Oitava - Da Ausência de Garantia e Condição de Acesso
+8.1. Esta locação é celebrada sem as modalidades de garantia previstas na Lei 8.245/91.
+8.2. O acesso ao imóvel e a entrega das chaves só ocorrerão mediante a quitação integral do valor total da locação e eventuais taxas acordadas.
+
+Cláusula Nona - Do Inadimplemento, Cancelamento e Multas
+9.1. O descumprimento de qualquer cláusula deste contrato sujeitará o infrator à multa de 20% sobre o valor total do contrato, sem prejuízo da responsabilidade por eventuais danos materiais comprovados.
+9.2. O atraso no pagamento sujeitará o LOCATÁRIO à multa moratória, juros e eventual cancelamento da reserva.
+9.3. Em caso de desistência por iniciativa do LOCATÁRIO após a assinatura, não haverá devolução de valor já pago, salvo acordo escrito entre as partes.
+
+Cláusula Décima - Da Rescisão
+10.1. O descumprimento de cláusula contratual autoriza a rescisão imediata do instrumento, sem prejuízo da cobrança de perdas e danos.
+10.2. Caso o LOCATÁRIO encerre a locação antes do horário previsto, não haverá reembolso proporcional do valor contratado.
+
+Cláusula Décima Primeira - Da Assinatura Eletrônica e Comunicações Digitais
+11.1. As partes reconhecem como válida a assinatura deste contrato em formato eletrônico, conforme legislação vigente.
+11.2. Os e-mails e números de WhatsApp informados são considerados canais oficiais de comunicação.
+
+Cláusula Décima Segunda - Foro
+12.1. As partes elegem o foro da comarca do local do imóvel para dirimir dúvidas ou litígios oriundos deste contrato, renunciando a qualquer outro, por mais privilegiado que seja.
+
+{contractCity}, {currentDate}.
+
+LOCADOR:
+__________________________________
+{landlordName}
+
+LOCATÁRIO:
+__________________________________
+{tenantName}
+
+TESTEMUNHA:
+__________________________________
+Nome: ______________________________
+CPF: ______________________________
+Email: ______________________________`;
+
+
+const LEGACY_SETTINGS_STANDARD_CONTRACT_CONTENT = `CONTRATO DE LOCAÇÃO RESIDENCIAL
+
+I - LOCADOR:
+{landlordName}, inscrito(a) no CPF/CNPJ nº {landlordDocument}, com endereço em {landlordAddress}, telefone {companyPhone}, e-mail {companyEmail}, a seguir denominado(a) LOCADOR.
+
+II - LOCATÁRIO:
+{tenantName}, inscrito(a) no CPF/CNPJ nº {tenantDocument}, residente e domiciliado(a) em {tenantAddress}, telefone {tenantPhone}, e-mail {tenantEmail}, a seguir denominado(a) LOCATÁRIO.
+
+CLÁUSULA PRIMEIRA - DO IMÓVEL E DO PRAZO
+O LOCADOR dá em locação ao LOCATÁRIO o imóvel denominado {propertyName}, localizado em {propertyAddress}, pelo prazo de {contractMonths} mês(es), com início em {startDate} e término em {endDate}. Ao receber o imóvel, o LOCATÁRIO declara tê-lo vistoriado e aceito nas condições em que se encontra, obrigando-se a devolvê-lo livre, desocupado e em perfeito estado de conservação, com contas de água, energia e demais encargos quitados.
+
+Parágrafo Primeiro - Antes do vencimento do prazo ajustado, o LOCADOR não poderá retomar o imóvel, salvo por infração contratual. Caso o LOCATÁRIO devolva o imóvel antes do prazo, ficará sujeito à multa contratual prevista neste instrumento.
+
+Parágrafo Segundo - Na devolução das chaves, o LOCATÁRIO deverá apresentar comprovantes de quitação das contas de água, energia e demais despesas relacionadas ao imóvel.
+
+CLÁUSULA SEGUNDA - DO ALUGUEL E FORMA DE PAGAMENTO
+O aluguel mensal será de {amount}, com vencimento conforme acordado entre as partes. O pagamento deverá ser realizado por meio de depósito, transferência, dinheiro ou Pix, utilizando a chave {pixKey}, salvo outra forma expressamente acordada.
+
+Parágrafo Primeiro - O atraso no pagamento autoriza a cobrança de multa, juros, correção monetária e demais despesas necessárias à cobrança, sem prejuízo da rescisão contratual.
+
+Parágrafo Segundo - Decorridos 30 (trinta) dias do vencimento sem pagamento, o débito poderá ser encaminhado para cobrança administrativa, extrajudicial ou judicial.
+
+CLÁUSULA TERCEIRA - DO REAJUSTE
+O valor do aluguel poderá ser reajustado ao final do prazo contratual ou em eventual renovação, mediante acordo entre as partes e observando a legislação aplicável.
+
+CLÁUSULA QUARTA - DA CONSERVAÇÃO E VISTORIA
+O LOCATÁRIO declara haver visitado e examinado o imóvel locado, obrigando-se a zelar por sua conservação, limpeza, instalações, pintura, telhado, portas, janelas, vidros, fechaduras, torneiras, instalações elétricas, hidráulicas e demais acessórios, devolvendo-o ao final da locação no mesmo estado em que recebeu, salvo desgaste natural de uso.
+
+Parágrafo Primeiro - Fica assegurado ao LOCADOR o direito de vistoriar o imóvel sempre que necessário, mediante aviso prévio ao LOCATÁRIO.
+
+Parágrafo Segundo - Qualquer alteração, reforma ou benfeitoria no imóvel dependerá de autorização prévia e por escrito do LOCADOR.
+
+CLÁUSULA QUINTA - DOS ENCARGOS
+Além do aluguel, competem ao LOCATÁRIO as despesas ordinárias de consumo de água, energia elétrica, esgoto, saneamento, taxa de lixo, condomínio quando houver e demais encargos relacionados ao uso do imóvel durante a vigência do contrato.
+
+Parágrafo Único - Caso o LOCADOR efetue o pagamento de qualquer despesa de responsabilidade do LOCATÁRIO, este deverá reembolsar integralmente o valor, acrescido de multa, juros e correção quando aplicáveis.
+
+CLÁUSULA SEXTA - DA DESTINAÇÃO DO IMÓVEL
+O imóvel objeto deste contrato destina-se exclusivamente para fim residencial, ficando o LOCATÁRIO proibido de alterar sua destinação, ceder, transferir, sublocar ou emprestar o imóvel, no todo ou em parte, sem autorização expressa do LOCADOR.
+
+CLÁUSULA SÉTIMA - DAS PROIBIÇÕES E RESPONSABILIDADES
+O LOCATÁRIO obriga-se a não depositar no imóvel materiais inflamáveis, explosivos, corrosivos ou quaisquer objetos que possam comprometer a segurança do imóvel, dos vizinhos ou de terceiros.
+
+CLÁUSULA OITAVA - DA INADIMPLÊNCIA E RESCISÃO
+O descumprimento de qualquer cláusula deste contrato poderá acarretar a rescisão da locação, cobrança dos valores devidos, perdas e danos, além das medidas judiciais cabíveis.
+
+CLÁUSULA NONA - DA MULTA CONTRATUAL
+Fica estipulada multa equivalente a 03 (três) meses de aluguel vigente na data da infração, na qual incorrerá a parte que infringir quaisquer cláusulas deste contrato, facultando à parte inocente considerar rescindida a locação.
+
+CLÁUSULA DÉCIMA - DO FORO
+As partes elegem o foro da comarca de {contractCity} para dirimir quaisquer dúvidas ou questões oriundas deste contrato, com renúncia de qualquer outro, por mais privilegiado que seja.
+
+{contractDefaultNotes}
+
+E assim, por estarem justas e convencionadas, as partes assinam o presente instrumento particular de CONTRATO DE LOCAÇÃO RESIDENCIAL, em 2 (duas) vias de igual teor, juntamente com as testemunhas abaixo.
+
+{contractCity}, {currentDate}.
+
+LOCADOR:
+__________________________________
+{landlordName}
+
+LOCATÁRIO:
+__________________________________
+{tenantName}
+
+TESTEMUNHA:
+__________________________________
+Nome: ______________________________
+CPF: ______________________________
+
+TESTEMUNHA:
+__________________________________
+Nome: ______________________________
+CPF: ______________________________`;
+
+const ORIGINAL_STANDARD_RESIDENTIAL_CONTRACT_TEMPLATE = `CONTRATO DE LOCAÇÃO RESIDENCIAL
+
+{landlordName}, inscrito(a) no CPF/CNPJ nº {landlordDocument}, telefone {companyPhone}, residente e domiciliado(a) em {landlordAddress}, a seguir denominado(a) LOCADOR, e de outro lado, {tenantName}, inscrito(a) no CPF/CNPJ nº {tenantDocument}, telefone {tenantPhone}, residente e domiciliado(a) em {tenantAddress}, denominado(a) LOCATÁRIO.
+
+CLÁUSULA PRIMEIRA - O LOCADOR dá em locação o imóvel situado em {propertyAddress}, denominado {propertyName}, pelo prazo de {contractMonths} mês(es), ao iniciar em {startDate} e para terminar em {endDate}, data em que o LOCATÁRIO, após vistoria do mesmo, o aceita nas condições em que se encontra, e se obriga a restituir o imóvel locado em perfeito estado de conservação, inteiramente livre e desocupado, com conta de luz, água e demais encargos pagos e desligados quando aplicável, sob pena de acrescentar-se a obrigação de fazer e a multa contratual prevista na CLÁUSULA DÉCIMA SEXTA.
+
+Parágrafo Primeiro - Antes do vencimento do prazo ajustado nesta cláusula, não poderá o LOCADOR retomar o imóvel, salvo se motivado por infração contratual do LOCATÁRIO. No caso de devolução do imóvel ao LOCADOR antes do prazo, deverá o LOCATÁRIO pagar a multa prevista na CLÁUSULA DÉCIMA SEXTA.
+
+Parágrafo Segundo - Quando da devolução das chaves ao final do contrato, o LOCATÁRIO deverá apresentar contas de água e luz pagas durante o tempo em que estiver no imóvel e, quando cabível, comprovar seu desligamento ou transferência.
+
+Parágrafo Terceiro - Na hipótese do LOCATÁRIO abandonar o imóvel, fica o LOCADOR autorizado a tomar as medidas necessárias para resguardar a posse, conservação e segurança do imóvel, evitando depredação ou invasão.
+
+Parágrafo Quarto - No caso de falecimento do LOCATÁRIO, ficarão sub-rogados nos seus direitos e obrigações o cônjuge ou companheiro e, sucessivamente, os herdeiros, nos termos da legislação aplicável.
+
+CLÁUSULA SEGUNDA - O valor mensal do aluguel será de {amount}, a ser pago pelo LOCATÁRIO ao LOCADOR até o dia {dueDay} de cada mês, por depósito bancário, transferência, dinheiro ou Pix, utilizando a chave {pixKey}, ou por outro meio formalmente acordado entre as partes.
+
+Parágrafo Primeiro - Decorrido o prazo de 30 (trinta) dias do vencimento, o débito poderá ser encaminhado para cobrança amigável ou judicial, ficando o LOCATÁRIO responsável pelos encargos, honorários, custas e demais despesas decorrentes da cobrança.
+
+Parágrafo Segundo - Os encargos constantes da CLÁUSULA SEXTA, incluindo taxa de lixo quando houver, deverão ser pagos juntamente com o aluguel ou diretamente aos órgãos responsáveis, conforme a natureza da cobrança.
+
+Parágrafo Terceiro - O não cumprimento das obrigações pecuniárias expressas neste contrato pelo LOCATÁRIO faculta ao LOCADOR adotar medidas de cobrança, inclusive protesto ou inclusão em cadastros de proteção ao crédito, quando legalmente permitido.
+
+CLÁUSULA TERCEIRA - O aluguel mensal pactuado na CLÁUSULA SEGUNDA poderá ser reajustado ao final do prazo contratual ou em eventual renovação, mediante acordo entre as partes e observada a legislação vigente.
+
+CLÁUSULA QUARTA - Se necessária a propositura de ação de despejo, consignação em pagamento de aluguéis ou acessórios da locação, cobranças, citações, intimações e notificações poderão ser realizadas pelas formas previstas em lei, inclusive correspondência com aviso de recebimento, quando admitido.
+
+CLÁUSULA QUINTA - O LOCATÁRIO declara haver visitado e examinado o imóvel locado, aceitando-o nas condições em que se encontra, obrigando-se a zelar por tudo o que nele houver e realizar, por sua conta, os reparos decorrentes do uso normal durante a locação, especialmente os relativos a limpeza, conservação, instalações elétricas, hidráulicas, pintura, telhado, vidraçaria, fechaduras, torneiras, pias, banheiros, ralos e demais acessórios.
+
+Parágrafo Primeiro - É assegurado ao LOCADOR o direito de vistoriar o imóvel sempre que julgar conveniente, mediante prévia comunicação ao LOCATÁRIO, respeitada a legislação aplicável.
+
+Parágrafo Segundo - O LOCATÁRIO deverá entregar imediatamente ao LOCADOR toda e qualquer correspondência, intimação, documento de cobrança, carnê ou comunicação relativa ao imóvel, ainda que dirigida ao LOCATÁRIO.
+
+Parágrafo Terceiro - Rescindida a contratação, amigável ou judicialmente, deverá o LOCATÁRIO entregar o imóvel em perfeito estado de conservação e limpeza, respondendo por danos comprovados mediante recibos, orçamentos ou documentos hábeis.
+
+Parágrafo Quarto - Fica expressamente proibida toda e qualquer alteração no imóvel sem prévia autorização por escrito do LOCADOR.
+
+CLÁUSULA SEXTA - Além do aluguel, compete ao LOCATÁRIO o pagamento das despesas ordinárias de consumo de água, energia elétrica, taxas de esgoto, saneamento, taxa de lixo, condomínio quando houver e demais encargos relacionados ao uso do imóvel. Cabe ao LOCATÁRIO solicitar contratação, transferência ou regularização dos serviços em seu nome quando aplicável, respondendo civil e criminalmente por uso irregular.
+
+Parágrafo Primeiro - As taxas e despesas ordinárias de condomínio que incidam ou venham a incidir sobre o imóvel serão pagas pelo LOCATÁRIO aos responsáveis pela cobrança, devendo apresentar comprovantes quando solicitado.
+
+Parágrafo Segundo - Na hipótese de os encargos serem pagos pelo LOCADOR por inadimplência do LOCATÁRIO, os respectivos valores serão reembolsados pelo LOCATÁRIO com multa, juros e correção monetária quando aplicáveis.
+
+Parágrafo Terceiro - O não pagamento dos encargos sob responsabilidade do LOCATÁRIO poderá dar ensejo à rescisão contratual, despejo e aplicação da multa prevista na CLÁUSULA DÉCIMA SEXTA.
+
+CLÁUSULA SÉTIMA - No ato da devolução do imóvel, o LOCATÁRIO deverá apresentar os comprovantes dos últimos pagamentos de água, energia elétrica e demais encargos, bem como comprovar o encerramento, transferência ou regularização dos serviços quando necessário.
+
+CLÁUSULA OITAVA - O LOCATÁRIO obriga-se a não depositar no imóvel materiais inflamáveis, explosivos, corrosivos ou quaisquer bens que possam causar risco ao imóvel, aos vizinhos ou a terceiros. Benfeitorias somente poderão ser realizadas com autorização prévia do LOCADOR, ficando incorporadas ao imóvel sem direito a retenção ou abatimento, salvo acordo escrito em sentido contrário.
+
+CLÁUSULA NONA - No caso de desapropriação do imóvel locado, ficará o LOCADOR desobrigado das cláusulas deste contrato, reservando-se ao LOCATÁRIO apenas os direitos que eventualmente lhe sejam assegurados pela autoridade competente.
+
+CLÁUSULA DÉCIMA - Nenhuma intimação ou exigência da Saúde Pública ou órgão público será motivo para o LOCATÁRIO abandonar o imóvel ou pedir rescisão contratual, salvo decisão ou vistoria oficial que comprove risco estrutural ou impossibilidade de uso do imóvel.
+
+CLÁUSULA DÉCIMA PRIMEIRA - Quaisquer tolerâncias ou concessões do LOCADOR para com o LOCATÁRIO, quando não manifestadas por escrito, não constituirão precedente invocável e não alterarão as obrigações contratuais.
+
+CLÁUSULA DÉCIMA SEGUNDA - O LOCADOR não responderá por danos sofridos pelo LOCATÁRIO em razão de vazamentos, chuvas, rompimento de canos, defeitos em esgoto ou fossa, incêndios, arrombamentos, roubos, furtos, caso fortuito ou força maior, salvo quando comprovada responsabilidade legal do LOCADOR.
+
+CLÁUSULA DÉCIMA TERCEIRA - O LOCATÁRIO não terá direito de reter o pagamento do aluguel ou de qualquer quantia devida ao LOCADOR sob alegação de não terem sido atendidas exigências ou solicitações, devendo eventuais controvérsias ser resolvidas pelos meios legais cabíveis.
+
+CLÁUSULA DÉCIMA QUARTA - O imóvel objeto do presente contrato destina-se exclusivamente para fim residencial, ficando o LOCATÁRIO proibido de mudar a destinação, ceder, transferir, sublocar ou emprestar o imóvel, no todo ou em parte, a qualquer título, sem autorização expressa do LOCADOR.
+
+Parágrafo Único - A ocupação do imóvel por pessoa não autorizada ou a permanência de terceiros após a saída do LOCATÁRIO caracterizará infração contratual grave, sujeitando o LOCATÁRIO à rescisão e à multa prevista na CLÁUSULA DÉCIMA SEXTA.
+
+CLÁUSULA DÉCIMA QUINTA - Em caso de venda do imóvel, o LOCATÁRIO será notificado acerca do direito de preferência previsto na Lei do Inquilinato. Não se manifestando no prazo legal, será considerado não interessado. Não efetuando a compra, o LOCATÁRIO autoriza o LOCADOR a mostrar o imóvel a interessados, mediante agendamento prévio.
+
+CLÁUSULA DÉCIMA SEXTA - Fica estipulada a multa equivalente a 03 (três) meses de aluguel vigente na data da ocorrência, na qual incorrerá a parte que infringir quaisquer cláusulas deste contrato, facultando à parte inocente considerar rescindida a locação, promover a cobrança dos valores devidos e tomar as medidas judiciais cabíveis.
+
+CLÁUSULA DÉCIMA SÉTIMA - Elegem as partes contratantes o foro da comarca de {contractCity}, para dirimir as questões oriundas da interpretação ou aplicação deste contrato, com exclusão de qualquer outro, por mais privilegiado que seja.
+
+{contractDefaultNotes}
+
+E assim, por estarem justas e convencionadas, as partes assinam o presente instrumento particular de CONTRATO DE LOCAÇÃO RESIDENCIAL, em 2 (duas) vias de igual teor, juntamente com as testemunhas abaixo.
+
+{contractCity}, {currentDate}.
+
+____________________________________
+LOCADOR: {landlordName}
+
+____________________________________
+LOCATÁRIO: {tenantName}
+
+____________________________________
+Testemunha:
+Nome: ______________________________
+CPF: ______________________________
+
+____________________________________
+Testemunha:
+Nome: ______________________________
+CPF: ______________________________`;
+
 
 type Contract = {
   id: string;
   propertyId: string;
+  propertyName?: string;
   tenantId: string;
+  tenantName?: string;
   startDate: string;
+  endDate?: string;
   value?: number | string;
   amount?: number | string;
   rentValue?: number | string;
   monthlyValue?: number | string;
-  status: "Active" | "Finished";
+  status: "Active" | "Finished" | "Inactive" | "Canceled" | "Deleted" | string;
+  isTemporaryRental?: boolean;
+  checkInTime?: string;
+  checkOutTime?: string;
 };
 
 type Property = {
   id: string;
   name: string;
+  zipCode?: string;
+  state?: string;
+  city?: string;
+  street?: string;
+  number?: string;
+  district?: string;
+  neighborhood?: string;
+  complement?: string;
 };
 
 type PersonType = "Individual" | "Company";
@@ -39,10 +349,14 @@ type Tenant = {
   number?: string;
   district?: string;
   complement?: string;
+  document?: string;
+  email?: string;
+  neighborhood?: string;
 };
 
 type Charge = {
   id: string;
+  contractId?: string | number | null;
   property: string;
   tenant: string;
   dueDate: string;
@@ -188,6 +502,7 @@ export default function AccountsReceivablePage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
 
   const [formTenant, setFormTenant] = useState("");
+  const [formContractId, setFormContractId] = useState("");
   const [formProperty, setFormProperty] = useState("");
   const [formAmount, setFormAmount] = useState("");
   const [formIssueDate, setFormIssueDate] = useState("");
@@ -235,6 +550,8 @@ export default function AccountsReceivablePage() {
   const [reportEndDate, setReportEndDate] = useState("");
   const [reportFormError, setReportFormError] = useState("");
   const [isBlackTheme, setIsBlackTheme] = useState(false);
+  const [pendingContractPrintRequest, setPendingContractPrintRequest] =
+    useState<Contract | null>(null);
 
   useEffect(() => {
     function applyStoredTheme() {
@@ -287,6 +604,7 @@ export default function AccountsReceivablePage() {
       normalizedInstallmentQuantity > 1 ? totalAmount : monthlyAmount;
 
     setFormTenant(String(payload.tenantId || ""));
+    setFormContractId(String(payload.contractId || ""));
     setFormProperty(String(payload.propertyId || ""));
     setFormAmount(formatAmountInput(receivableAmount));
     setFormIssueDate(payload.issueDate || getLocalDateValue(new Date()));
@@ -498,9 +816,15 @@ export default function AccountsReceivablePage() {
 
   const automaticCharges = useMemo<Charge[]>(() => {
     const today = new Date();
+    const manualContractIds = new Set(
+      manualCharges
+        .map((charge) => String(charge.contractId || ""))
+        .filter(Boolean),
+    );
 
     return contracts
       .filter((contract) => contract.status === "Active")
+      .filter((contract) => !manualContractIds.has(String(contract.id)))
       .map((contract) => {
         const property = properties.find(
           (item) => item.id === contract.propertyId,
@@ -531,7 +855,7 @@ export default function AccountsReceivablePage() {
           status,
         };
       });
-  }, [contracts, properties, tenants, paid]);
+  }, [contracts, properties, tenants, paid, manualCharges]);
 
   const manualChargesWithStatus = useMemo<Charge[]>(() => {
     const today = new Date();
@@ -1531,6 +1855,7 @@ export default function AccountsReceivablePage() {
     setFormIssueDate(getLocalDateValue(today));
     setFormDueDate(getLocalDateValue(dueDate));
     setFormPaymentDate("");
+    setFormContractId("");
     setFormLaunchType("single");
     setEditingChargeId(null);
     setChargeFormError("");
@@ -1548,6 +1873,7 @@ export default function AccountsReceivablePage() {
     const paymentRecord = getChargePayment(charge.id);
 
     setEditingChargeId(charge.id);
+    setFormContractId(String(charge.contractId || ""));
     setFormTenant(tenant ? String(tenant.id) : "");
     setFormProperty(property ? String(property.id) : "");
     setFormAmount(formatAmountInput(charge.amount));
@@ -1707,6 +2033,7 @@ export default function AccountsReceivablePage() {
 
   function resetCreateForm() {
     setFormTenant("");
+    setFormContractId("");
     setFormProperty("");
     setFormAmount("");
     setFormIssueDate("");
@@ -1740,6 +2067,13 @@ export default function AccountsReceivablePage() {
     if (!charge) {
       setChargeFormError(
         "Esta cobrança não pode ser excluída porque foi gerada automaticamente por contrato.",
+      );
+      return;
+    }
+
+    if (charge.contractId) {
+      setChargeFormError(
+        "Esta parcela pertence a um contrato e não pode ser excluída individualmente. Exclua ou cancele o contrato para remover as parcelas vinculadas.",
       );
       return;
     }
@@ -2023,6 +2357,449 @@ export default function AccountsReceivablePage() {
     ];
   }
 
+  function getContractById(contractId: string | number | null | undefined) {
+    if (!contractId) return null;
+
+    return (
+      contracts.find((contract) => String(contract.id) === String(contractId)) || null
+    );
+  }
+
+  function handleAfterContractCarnetGenerated(contractId: string | number | null | undefined) {
+    const linkedContract = getContractById(contractId);
+
+    if (!linkedContract) return;
+
+    setPendingContractPrintRequest(linkedContract);
+  }
+
+  function redirectToContractsPage() {
+    window.location.href = "/contratos";
+  }
+
+  function closeContractPrintQuestion() {
+    setPendingContractPrintRequest(null);
+    redirectToContractsPage();
+  }
+
+  function confirmContractPrintQuestion() {
+    if (!pendingContractPrintRequest) return;
+
+    const wasContractPrintOpened = openContractPrintWindow(pendingContractPrintRequest);
+
+    if (!wasContractPrintOpened) return;
+
+    setPendingContractPrintRequest(null);
+    redirectToContractsPage();
+  }
+
+  function getContractPrintCompanySettings() {
+    const defaultCompanySettings = {
+      companyName: "Rentix",
+      tradeName: "Rentix",
+      legalName: "",
+      document: "",
+      phone: "",
+      email: "",
+      city: "",
+      state: "",
+      street: "",
+      number: "",
+      neighborhood: "",
+      complement: "",
+      zipCode: "",
+      pixKey: "",
+      contractCity: "",
+      contractDefaultNotes: "",
+    };
+
+    const possibleStorageKeys = [
+      "rentix_company_settings",
+      "rentix_company_config",
+      "rentix_company_registration",
+      "rentix_company",
+      "rentix_settings",
+      "rentix_system_settings",
+      "rentix_configuration",
+    ];
+
+    for (const storageKey of possibleStorageKeys) {
+      try {
+        const storedCompanySettings = localStorage.getItem(storageKey);
+
+        if (!storedCompanySettings) continue;
+
+        const parsedSettings = JSON.parse(storedCompanySettings) as Record<string, unknown>;
+        const source =
+          typeof parsedSettings.company === "object" && parsedSettings.company !== null
+            ? (parsedSettings.company as Record<string, unknown>)
+            : parsedSettings;
+
+        return {
+          ...defaultCompanySettings,
+          companyName: String(
+            source.companyName ||
+              source.tradeName ||
+              source.name ||
+              source.nomeFantasia ||
+              defaultCompanySettings.companyName,
+          ),
+          tradeName: String(
+            source.tradeName ||
+              source.companyName ||
+              source.name ||
+              source.nomeFantasia ||
+              defaultCompanySettings.tradeName,
+          ),
+          legalName: String(source.legalName || source.razaoSocial || source.businessName || ""),
+          document: String(source.document || source.cnpj || source.cpfCnpj || ""),
+          phone: String(source.phone || source.companyPhone || source.whatsapp || ""),
+          email: String(source.email || source.companyEmail || ""),
+          city: String(source.city || source.cidade || ""),
+          state: String(source.state || source.uf || ""),
+          street: String(source.street || source.logradouro || source.address || ""),
+          number: String(source.number || source.numero || ""),
+          neighborhood: String(source.neighborhood || source.bairro || ""),
+          complement: String(source.complement || source.complemento || ""),
+          zipCode: String(source.zipCode || source.cep || ""),
+          pixKey: String(source.pixKey || source.pix || ""),
+          contractCity: String(source.contractCity || source.cityForContract || ""),
+          contractDefaultNotes: String(source.contractDefaultNotes || source.defaultContractNotes || ""),
+        };
+      } catch {
+        continue;
+      }
+    }
+
+    return defaultCompanySettings;
+  }
+
+  function formatContractPrintAddress(address: {
+    street?: string;
+    number?: string;
+    district?: string;
+    neighborhood?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    complement?: string;
+  }) {
+    return [
+      address.street,
+      address.number ? `nº ${address.number}` : "",
+      address.complement,
+      address.neighborhood || address.district
+        ? `Bairro: ${address.neighborhood || address.district}`
+        : "",
+      address.city && address.state ? `${address.city}/${address.state}` : address.city || address.state,
+      address.zipCode ? `CEP ${address.zipCode}` : "",
+    ]
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  function getContractDurationInMonthsForPrint(startDateValue: string, endDateValue?: string) {
+    if (!startDateValue || !endDateValue) return 1;
+
+    const start = new Date(`${startDateValue}T00:00:00`);
+    const end = new Date(`${endDateValue}T00:00:00`);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+      return 1;
+    }
+
+    const monthDifference =
+      (end.getFullYear() - start.getFullYear()) * 12 +
+      (end.getMonth() - start.getMonth());
+
+    return Math.max(monthDifference, 1);
+  }
+
+  function getConfiguredTemporaryContractTemplateContentForReceivable() {
+    try {
+      const storedTemplates = localStorage.getItem(PRINT_TEMPLATES_STORAGE_KEY);
+
+      if (!storedTemplates) return null;
+
+      const parsedTemplates = JSON.parse(storedTemplates) as Record<string, unknown>;
+      const temporaryContractTemplate = parsedTemplates.temporaryContract;
+      const legacyContractTemplate = parsedTemplates.contract;
+      let templateContent = "";
+
+      if (
+        temporaryContractTemplate &&
+        typeof temporaryContractTemplate === "object" &&
+        !Array.isArray(temporaryContractTemplate) &&
+        typeof (temporaryContractTemplate as { content?: unknown }).content === "string"
+      ) {
+        templateContent = (temporaryContractTemplate as { content: string }).content;
+      }
+
+      if (!templateContent && typeof legacyContractTemplate === "string") {
+        templateContent = legacyContractTemplate;
+      }
+
+      const cleanTemplateContent = templateContent.trim();
+
+      if (!cleanTemplateContent) return null;
+
+      if (
+        cleanTemplateContent === DEFAULT_SETTINGS_TEMPORARY_CONTRACT_CONTENT.trim() ||
+        cleanTemplateContent === LEGACY_SETTINGS_TEMPORARY_CONTRACT_CONTENT.trim()
+      ) {
+        return null;
+      }
+
+      return templateContent;
+    } catch {
+      return null;
+    }
+  }
+
+  function normalizeContractTemplateContent(value: string) {
+    return String(value || "")
+      .replace(/\r\n/g, "\n")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
+  function getConfiguredStandardContractTemplateContentForReceivable() {
+    try {
+      const storedTemplates = localStorage.getItem(PRINT_TEMPLATES_STORAGE_KEY);
+
+      if (!storedTemplates) return null;
+
+      const parsedTemplates = JSON.parse(storedTemplates) as Record<string, unknown>;
+      const standardContractTemplate = parsedTemplates.standardContract;
+      let templateContent = "";
+
+      if (
+        standardContractTemplate &&
+        typeof standardContractTemplate === "object" &&
+        !Array.isArray(standardContractTemplate) &&
+        typeof (standardContractTemplate as { content?: unknown }).content === "string"
+      ) {
+        templateContent = (standardContractTemplate as { content: string }).content;
+      }
+
+      const cleanTemplateContent = templateContent.trim();
+
+      if (!cleanTemplateContent) return null;
+
+      const normalizedTemplateContent = normalizeContractTemplateContent(cleanTemplateContent);
+      const normalizedLegacyTemplateContent = normalizeContractTemplateContent(LEGACY_SETTINGS_STANDARD_CONTRACT_CONTENT);
+      const normalizedOriginalTemplateContent = normalizeContractTemplateContent(ORIGINAL_STANDARD_RESIDENTIAL_CONTRACT_TEMPLATE);
+
+      if (
+        normalizedTemplateContent === normalizedLegacyTemplateContent ||
+        normalizedTemplateContent === normalizedOriginalTemplateContent
+      ) {
+        return null;
+      }
+
+      return templateContent;
+    } catch {
+      return null;
+    }
+  }
+
+  function renderContractPrintTemplate(templateContent: string, templateData: Record<string, string>) {
+    return Object.entries(templateData).reduce((renderedContent, [key, value]) => {
+      return renderedContent.replace(new RegExp(`{${key}}`, "g"), value);
+    }, templateContent);
+  }
+
+  function buildConfiguredContractPrintHtml(templateContent: string, templateData: Record<string, string>) {
+    const renderedTemplateContent = renderContractPrintTemplate(templateContent, templateData);
+
+    return `<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Contrato</title>
+  <style>
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; }
+    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
+    .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
+    .print-button { background: #f97316; color: #ffffff; }
+    .close-button { background: #f1f5f9; color: #334155; }
+    .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }
+    .page-inner { padding: 18mm; }
+    .content { white-space: pre-wrap; font-size: 12.5px; line-height: 1.65; font-weight: 600; }
+    @media print {
+      body { background: #ffffff; }
+      .toolbar { display: none; }
+      .page { width: 210mm; min-height: 297mm; margin: 0; box-shadow: none; }
+      .page-inner { padding: 18mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button class="close-button" type="button" onclick="window.close()">Fechar</button>
+    <button class="print-button" type="button" onclick="window.print()">Imprimir contrato</button>
+  </div>
+
+  <main class="page">
+    <div class="page-inner">
+      <div class="content">${escapeHtml(renderedTemplateContent)}</div>
+    </div>
+  </main>
+</body>
+</html>`;
+  }
+
+  function formatDocumentForContractPrint(value: string) {
+    const digits = String(value || "").replace(/\D/g, "");
+
+    if (digits.length > 11) {
+      return digits
+        .slice(0, 14)
+        .replace(/^(\d{2})(\d)/, "$1.$2")
+        .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+        .replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3/$4")
+        .replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/, "$1.$2.$3/$4-$5");
+    }
+
+    return digits
+      .slice(0, 11)
+      .replace(/^(\d{3})(\d)/, "$1.$2")
+      .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+      .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3-$4");
+  }
+
+  function getContractDurationInDaysForPrint(startDateValue: string, endDateValue?: string) {
+    if (!startDateValue || !endDateValue) return 1;
+
+    const start = new Date(`${startDateValue}T00:00:00`);
+    const end = new Date(`${endDateValue}T00:00:00`);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 1;
+
+    const millisecondsPerDay = 1000 * 60 * 60 * 24;
+
+    return Math.max(Math.floor((end.getTime() - start.getTime()) / millisecondsPerDay) + 1, 1);
+  }
+
+  function getContractRentDueDayForPrint(startDateValue: string) {
+    if (!startDateValue) return "____";
+
+    const [, , day] = startDateValue.split("-");
+
+    return day || "____";
+  }
+
+  function formatContractDateForTemplate(value?: string) {
+    if (!value) return "-";
+
+    const [year, month, day] = value.split("-");
+
+    if (!year || !month || !day) return formatDate(value);
+
+    return `${day}/${month}/${year}`;
+  }
+
+  function getContractPrintHtml(contract: Contract) {
+    const property = properties.find((item) => String(item.id) === String(contract.propertyId));
+    const tenant = tenants.find((item) => String(item.id) === String(contract.tenantId)) as
+      | (Tenant & { document?: string; email?: string; neighborhood?: string })
+      | undefined;
+    const companySettings = getContractPrintCompanySettings();
+    const landlordName =
+      companySettings.legalName ||
+      companySettings.companyName ||
+      companySettings.tradeName ||
+      "LOCADOR NÃO INFORMADO";
+    const landlordDocument = formatDocumentForContractPrint(companySettings.document || "");
+    const tenantName = contract.tenantName || tenant?.name || "LOCATÁRIO NÃO INFORMADO";
+    const tenantDocument = formatDocumentForContractPrint(tenant?.cpf || tenant?.document || "");
+    const propertyName = contract.propertyName || property?.name || "IMÓVEL NÃO INFORMADO";
+    const propertyAddress = formatContractPrintAddress(property || {});
+    const locationText =
+      companySettings.contractCity ||
+      (property?.city && property?.state
+        ? `${property.city}/${property.state}`
+        : companySettings.city && companySettings.state
+          ? `${companySettings.city}/${companySettings.state}`
+          : "______/__");
+    const monthlyAmount = formatCurrency(getContractAmount(contract));
+    const templateData: Record<string, string> = {
+      companyName: landlordName,
+      tradeName: companySettings.tradeName || companySettings.companyName || landlordName,
+      landlordName,
+      landlordDocument: landlordDocument || "não informado",
+      landlordAddress: formatContractPrintAddress(companySettings) || "endereço não informado",
+      companyEmail: companySettings.email || "não informado",
+      companyPhone: companySettings.phone || "não informado",
+      personName: tenantName,
+      tenantName,
+      tenantDocument: tenantDocument || "não informado",
+      tenantAddress: formatContractPrintAddress(tenant || {}) || "endereço não informado",
+      tenantPhone: tenant?.phone || "não informado",
+      tenantEmail: tenant?.email || "não informado",
+      propertyName,
+      propertyAddress: propertyAddress || "endereço não informado",
+      startDate: formatContractDateForTemplate(contract.startDate),
+      endDate: formatContractDateForTemplate(contract.endDate),
+      entryTime: contract.checkInTime || "____:____",
+      exitTime: contract.checkOutTime || "____:____",
+      checkInTime: contract.checkInTime || "____:____",
+      checkOutTime: contract.checkOutTime || "____:____",
+      contractDays: String(getContractDurationInDaysForPrint(contract.startDate, contract.endDate)),
+      contractMonths: String(getContractDurationInMonthsForPrint(contract.startDate, contract.endDate)),
+      amount: monthlyAmount,
+      rentValue: monthlyAmount,
+      monthlyAmount,
+      penaltyAmount: formatCurrency(getContractAmount(contract) * 3),
+      dueDay: String(getContractRentDueDayForPrint(contract.startDate)),
+      pixKey: companySettings.pixKey || "não informado",
+      contractCity: locationText,
+      currentDate: new Date().toLocaleDateString("pt-BR", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      }),
+      contractDefaultNotes: companySettings.contractDefaultNotes || "",
+    };
+
+    const templateContent = contract.isTemporaryRental
+      ? getConfiguredTemporaryContractTemplateContentForReceivable() || DEFAULT_SETTINGS_TEMPORARY_CONTRACT_CONTENT
+      : getConfiguredStandardContractTemplateContentForReceivable() || ORIGINAL_STANDARD_RESIDENTIAL_CONTRACT_TEMPLATE;
+
+    return buildConfiguredContractPrintHtml(templateContent, templateData);
+  }
+
+  function openContractPrintWindow(contract: Contract) {
+    const printWindow = window.open(
+      "",
+      "_blank",
+      `toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=${window.screen.width},height=${window.screen.height}`,
+    );
+
+    if (!printWindow) {
+      setChargeFormError(
+        "Não foi possível abrir o contrato. Verifique se o navegador bloqueou pop-ups.",
+      );
+      return false;
+    }
+
+    printWindow.document.write(getContractPrintHtml(contract));
+    printWindow.document.close();
+    printWindow.focus();
+
+    try {
+      printWindow.moveTo(0, 0);
+      printWindow.resizeTo(window.screen.availWidth, window.screen.availHeight);
+    } catch {}
+
+    return true;
+  }
+
+
   function reprintPaymentCarnet(charge: Charge) {
     const carnetCharges = getCarnetChargesFromCharge(charge);
 
@@ -2124,6 +2901,7 @@ export default function AccountsReceivablePage() {
     if (formLaunchType === "single") {
       const savedCharge: Charge = {
         id: editingChargeId || `manual-${Date.now()}`,
+        contractId: formContractId || null,
         property: chargeProperty,
         tenant: tenant.name,
         dueDate: new Date(`${formDueDate}T00:00:00`).toISOString(),
@@ -2158,6 +2936,7 @@ export default function AccountsReceivablePage() {
         },
       ]);
       closeCreateModal();
+      handleAfterContractCarnetGenerated(savedCharge.contractId);
       return;
     }
 
@@ -2184,6 +2963,7 @@ export default function AccountsReceivablePage() {
 
     const newCharges: Charge[] = installmentPreview.map((installment) => ({
       id: `${installmentGroupId}-${installment.installmentNumber}`,
+      contractId: formContractId || null,
       property: chargeProperty,
       tenant: tenant.name,
       dueDate: new Date(`${installment.dueDate}T00:00:00`).toISOString(),
@@ -2206,6 +2986,7 @@ export default function AccountsReceivablePage() {
 
     generatePaymentCarnet(newCharges);
     closeCreateModal();
+    handleAfterContractCarnetGenerated(formContractId);
   }
 
   return (
@@ -3716,7 +4497,7 @@ export default function AccountsReceivablePage() {
               <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-700 pt-5 md:flex-row md:items-center md:justify-between">
                 {editingChargeId && (
                   <div className="flex flex-col-reverse gap-3 md:flex-row">
-                    {!isEditingPaidCharge && (
+                    {!isEditingPaidCharge && !formContractId && (
                       <button
                         type="button"
                         onClick={openDeleteChargeConfirmation}
@@ -3724,6 +4505,12 @@ export default function AccountsReceivablePage() {
                       >
                         Excluir cobrança
                       </button>
+                    )}
+
+                    {!isEditingPaidCharge && formContractId && (
+                      <div className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-500 shadow-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700">
+                        Vinculada ao contrato
+                      </div>
                     )}
 
                     {isEditingPaidCharge && (
@@ -4332,6 +5119,72 @@ export default function AccountsReceivablePage() {
         </div>
       )}
 
+      {pendingContractPrintRequest && (
+        <div className={`fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
+          <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
+            <div className="p-6 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50 dark:bg-orange-950/30 text-3xl ring-1 ring-orange-100 dark:ring-orange-900/50">
+                📄
+              </div>
+
+              <h2 className="mt-5 text-xl font-black text-slate-950 dark:text-white">
+                Deseja imprimir o contrato agora?
+              </h2>
+
+              <p className="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                As parcelas do contrato foram salvas e o carnê foi aberto. Você também pode abrir o contrato vinculado para impressão.
+              </p>
+
+              <div className="mt-5 rounded-2xl border border-orange-100 dark:border-orange-900/50 bg-orange-50 dark:bg-orange-950/30 p-4 text-left">
+                <p className="text-xs font-black uppercase tracking-wide text-orange-700">
+                  Contrato vinculado
+                </p>
+
+                <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                  <p>
+                    <span className="font-black text-slate-950 dark:text-white">Imóvel:</span>{" "}
+                    {pendingContractPrintRequest.propertyName ||
+                      properties.find((property) => String(property.id) === String(pendingContractPrintRequest.propertyId))?.name ||
+                      "Não informado"}
+                  </p>
+
+                  <p>
+                    <span className="font-black text-slate-950 dark:text-white">Inquilino:</span>{" "}
+                    {pendingContractPrintRequest.tenantName ||
+                      tenants.find((tenant) => String(tenant.id) === String(pendingContractPrintRequest.tenantId))?.name ||
+                      "Não informado"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className={`flex flex-col-reverse gap-3 border-t p-5 md:flex-row md:justify-end ${
+                isBlackTheme
+                  ? "border-[#334155] bg-[#0f172a]"
+                  : "border-[#e2e8f0] bg-[#ffffff]"
+              }`}
+            >
+              <button
+                type="button"
+                onClick={closeContractPrintQuestion}
+                className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-3 text-sm font-black text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
+              >
+                Não, voltar para contratos
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmContractPrintQuestion}
+                className="rounded-2xl bg-orange-500 px-6 py-3 text-sm font-black text-white shadow-lg shadow-orange-500/20 dark:shadow-orange-950/30 transition hover:bg-orange-600"
+              >
+                Sim, imprimir e voltar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isTenantCreateOpen && (
         <div className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-0 backdrop-blur-sm md:p-4 ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
           <div className="flex max-h-screen w-full max-w-6xl flex-col overflow-hidden rounded-none bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700 md:max-h-[94vh] md:rounded-3xl">
@@ -4634,6 +5487,76 @@ export default function AccountsReceivablePage() {
                 className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600"
               >
                 Cadastrar pessoa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {pendingContractPrintRequest && (
+        <div className={`fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
+          <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
+            <div className="p-6 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50 dark:bg-orange-950/30 text-3xl ring-1 ring-orange-100 dark:ring-orange-900/50">
+                📝
+              </div>
+
+              <h2 className="mt-5 text-xl font-black text-slate-950 dark:text-white">
+                Imprimir contrato agora?
+              </h2>
+
+              <p className="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                As parcelas foram lançadas e o carnê foi aberto. Deseja abrir também o contrato vinculado antes de voltar para a tela de contratos?
+              </p>
+
+              <div className="mt-5 rounded-2xl border border-orange-100 dark:border-orange-900/50 bg-orange-50 dark:bg-orange-950/30 p-4 text-left">
+                <p className="text-xs font-black uppercase tracking-wide text-orange-600">
+                  Contrato vinculado
+                </p>
+
+                <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+                  <p>
+                    <span className="font-black text-slate-950 dark:text-white">Tipo:</span>{" "}
+                    {pendingContractPrintRequest.isTemporaryRental
+                      ? "Contrato temporário"
+                      : "Contrato padrão"}
+                  </p>
+
+                  <p>
+                    <span className="font-black text-slate-950 dark:text-white">Início:</span>{" "}
+                    {formatContractDateForTemplate(pendingContractPrintRequest.startDate)}
+                  </p>
+
+                  <p>
+                    <span className="font-black text-slate-950 dark:text-white">Fim:</span>{" "}
+                    {formatContractDateForTemplate(pendingContractPrintRequest.endDate)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className={`flex flex-col-reverse gap-3 border-t p-5 md:flex-row md:justify-end ${
+                isBlackTheme
+                  ? "border-[#334155] bg-[#0f172a]"
+                  : "border-[#e2e8f0] bg-[#ffffff]"
+              }`}
+            >
+              <button
+                type="button"
+                onClick={closeContractPrintQuestion}
+                className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-3 text-sm font-black text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
+              >
+                Não, voltar para contratos
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmContractPrintQuestion}
+                className="rounded-2xl bg-orange-500 px-6 py-3 text-sm font-black text-white shadow-lg shadow-orange-500/20 dark:shadow-orange-950/30 transition hover:bg-orange-600"
+              >
+                Sim, imprimir e voltar
               </button>
             </div>
           </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type UserSettings = {
@@ -46,7 +46,7 @@ type ThemeSettings = {
   mode: ThemeMode;
 };
 
-type PrintDocumentKey = "temporaryContract" | "paymentBooklet";
+type PrintDocumentKey = "temporaryContract" | "standardContract" | "paymentBooklet";
 
 type PrintModalMode = "view" | "edit";
 
@@ -64,6 +64,11 @@ type PrintTemplates = Record<PrintDocumentKey, PrintDocumentTemplate>;
 type PrintModalState = {
   isOpen: boolean;
   mode: PrintModalMode;
+  documentKey: PrintDocumentKey | null;
+};
+
+type RestorePrintModalState = {
+  isOpen: boolean;
   documentKey: PrintDocumentKey | null;
 };
 
@@ -299,6 +304,82 @@ Nome: ______________________________
 CPF: ______________________________
 Email: ______________________________`;
 
+const defaultStandardContractTemplateContent = `CONTRATO DE LOCAÇÃO RESIDENCIAL
+
+I - LOCADOR:
+{landlordName}, inscrito(a) no CPF/CNPJ nº {landlordDocument}, com endereço em {landlordAddress}, telefone {companyPhone}, e-mail {companyEmail}, a seguir denominado(a) LOCADOR.
+
+II - LOCATÁRIO:
+{tenantName}, inscrito(a) no CPF/CNPJ nº {tenantDocument}, residente e domiciliado(a) em {tenantAddress}, telefone {tenantPhone}, e-mail {tenantEmail}, a seguir denominado(a) LOCATÁRIO.
+
+CLÁUSULA PRIMEIRA - DO IMÓVEL E DO PRAZO
+O LOCADOR dá em locação ao LOCATÁRIO o imóvel denominado {propertyName}, localizado em {propertyAddress}, pelo prazo de {contractMonths} mês(es), com início em {startDate} e término em {endDate}. Ao receber o imóvel, o LOCATÁRIO declara tê-lo vistoriado e aceito nas condições em que se encontra, obrigando-se a devolvê-lo livre, desocupado e em perfeito estado de conservação, com contas de água, energia e demais encargos quitados.
+
+Parágrafo Primeiro - Antes do vencimento do prazo ajustado, o LOCADOR não poderá retomar o imóvel, salvo por infração contratual. Caso o LOCATÁRIO devolva o imóvel antes do prazo, ficará sujeito à multa contratual prevista neste instrumento.
+
+Parágrafo Segundo - Na devolução das chaves, o LOCATÁRIO deverá apresentar comprovantes de quitação das contas de água, energia e demais despesas relacionadas ao imóvel.
+
+CLÁUSULA SEGUNDA - DO ALUGUEL E FORMA DE PAGAMENTO
+O aluguel mensal será de {amount}, com vencimento conforme acordado entre as partes. O pagamento deverá ser realizado por meio de depósito, transferência, dinheiro ou Pix, utilizando a chave {pixKey}, salvo outra forma expressamente acordada.
+
+Parágrafo Primeiro - O atraso no pagamento autoriza a cobrança de multa, juros, correção monetária e demais despesas necessárias à cobrança, sem prejuízo da rescisão contratual.
+
+Parágrafo Segundo - Decorridos 30 (trinta) dias do vencimento sem pagamento, o débito poderá ser encaminhado para cobrança administrativa, extrajudicial ou judicial.
+
+CLÁUSULA TERCEIRA - DO REAJUSTE
+O valor do aluguel poderá ser reajustado ao final do prazo contratual ou em eventual renovação, mediante acordo entre as partes e observando a legislação aplicável.
+
+CLÁUSULA QUARTA - DA CONSERVAÇÃO E VISTORIA
+O LOCATÁRIO declara haver visitado e examinado o imóvel locado, obrigando-se a zelar por sua conservação, limpeza, instalações, pintura, telhado, portas, janelas, vidros, fechaduras, torneiras, instalações elétricas, hidráulicas e demais acessórios, devolvendo-o ao final da locação no mesmo estado em que recebeu, salvo desgaste natural de uso.
+
+Parágrafo Primeiro - Fica assegurado ao LOCADOR o direito de vistoriar o imóvel sempre que necessário, mediante aviso prévio ao LOCATÁRIO.
+
+Parágrafo Segundo - Qualquer alteração, reforma ou benfeitoria no imóvel dependerá de autorização prévia e por escrito do LOCADOR.
+
+CLÁUSULA QUINTA - DOS ENCARGOS
+Além do aluguel, competem ao LOCATÁRIO as despesas ordinárias de consumo de água, energia elétrica, esgoto, saneamento, taxa de lixo, condomínio quando houver e demais encargos relacionados ao uso do imóvel durante a vigência do contrato.
+
+Parágrafo Único - Caso o LOCADOR efetue o pagamento de qualquer despesa de responsabilidade do LOCATÁRIO, este deverá reembolsar integralmente o valor, acrescido de multa, juros e correção quando aplicáveis.
+
+CLÁUSULA SEXTA - DA DESTINAÇÃO DO IMÓVEL
+O imóvel objeto deste contrato destina-se exclusivamente para fim residencial, ficando o LOCATÁRIO proibido de alterar sua destinação, ceder, transferir, sublocar ou emprestar o imóvel, no todo ou em parte, sem autorização expressa do LOCADOR.
+
+CLÁUSULA SÉTIMA - DAS PROIBIÇÕES E RESPONSABILIDADES
+O LOCATÁRIO obriga-se a não depositar no imóvel materiais inflamáveis, explosivos, corrosivos ou quaisquer objetos que possam comprometer a segurança do imóvel, dos vizinhos ou de terceiros.
+
+CLÁUSULA OITAVA - DA INADIMPLÊNCIA E RESCISÃO
+O descumprimento de qualquer cláusula deste contrato poderá acarretar a rescisão da locação, cobrança dos valores devidos, perdas e danos, além das medidas judiciais cabíveis.
+
+CLÁUSULA NONA - DA MULTA CONTRATUAL
+Fica estipulada multa equivalente a 03 (três) meses de aluguel vigente na data da infração, na qual incorrerá a parte que infringir quaisquer cláusulas deste contrato, facultando à parte inocente considerar rescindida a locação.
+
+CLÁUSULA DÉCIMA - DO FORO
+As partes elegem o foro da comarca de {contractCity} para dirimir quaisquer dúvidas ou questões oriundas deste contrato, com renúncia de qualquer outro, por mais privilegiado que seja.
+
+{contractDefaultNotes}
+
+E assim, por estarem justas e convencionadas, as partes assinam o presente instrumento particular de CONTRATO DE LOCAÇÃO RESIDENCIAL, em 2 (duas) vias de igual teor, juntamente com as testemunhas abaixo.
+
+{contractCity}, {currentDate}.
+
+LOCADOR:
+__________________________________
+{landlordName}
+
+LOCATÁRIO:
+__________________________________
+{tenantName}
+
+TESTEMUNHA:
+__________________________________
+Nome: ______________________________
+CPF: ______________________________
+
+TESTEMUNHA:
+__________________________________
+Nome: ______________________________
+CPF: ______________________________`;
+
 const legacyPaymentBookletTemplateContent = `CARNÊ DE PAGAMENTO
 
 EMPRESA: {companyName}
@@ -327,6 +408,14 @@ const defaultPrintTemplates: PrintTemplates = {
     isEditable: true,
     content: defaultTemporaryContractTemplateContent,
   },
+  standardContract: {
+    title: "Contrato padrão",
+    description: "Modelo usado na geração do contrato residencial padrão em PDF.",
+    moduleName: "Contratos",
+    icon: "🏠",
+    isEditable: true,
+    content: defaultStandardContractTemplateContent,
+  },
   paymentBooklet: {
     title: "Carnê",
     description: "Modelo usado na geração de carnês e parcelas de cobrança em PDF.",
@@ -342,6 +431,63 @@ const defaultPrintModalState: PrintModalState = {
   mode: "view",
   documentKey: null,
 };
+
+const defaultRestorePrintModalState: RestorePrintModalState = {
+  isOpen: false,
+  documentKey: null,
+};
+
+const printTemplateVariableGroups = [
+  {
+    title: "Empresa / Locador",
+    variables: [
+      { label: "Nome do locador", value: "{landlordName}" },
+      { label: "Documento do locador", value: "{landlordDocument}" },
+      { label: "Endereço do locador", value: "{landlordAddress}" },
+      { label: "E-mail da empresa", value: "{companyEmail}" },
+      { label: "Telefone da empresa", value: "{companyPhone}" },
+      { label: "Chave Pix", value: "{pixKey}" },
+    ],
+  },
+  {
+    title: "Locatário / Pessoa",
+    variables: [
+      { label: "Nome do locatário", value: "{tenantName}" },
+      { label: "Nome da pessoa", value: "{personName}" },
+      { label: "Documento do locatário", value: "{tenantDocument}" },
+      { label: "Endereço do locatário", value: "{tenantAddress}" },
+      { label: "Telefone do locatário", value: "{tenantPhone}" },
+      { label: "E-mail do locatário", value: "{tenantEmail}" },
+    ],
+  },
+  {
+    title: "Imóvel / Contrato",
+    variables: [
+      { label: "Nome do imóvel", value: "{propertyName}" },
+      { label: "Endereço do imóvel", value: "{propertyAddress}" },
+      { label: "Data inicial", value: "{startDate}" },
+      { label: "Data final", value: "{endDate}" },
+      { label: "Dias do contrato", value: "{contractDays}" },
+      { label: "Meses do contrato", value: "{contractMonths}" },
+      { label: "Dia do vencimento", value: "{dueDay}" },
+      { label: "Valor", value: "{amount}" },
+      { label: "Multa", value: "{penaltyAmount}" },
+    ],
+  },
+  {
+    title: "Impressão / Assinatura",
+    variables: [
+      { label: "Cidade de assinatura", value: "{contractCity}" },
+      { label: "Data atual", value: "{currentDate}" },
+      { label: "Observações padrão", value: "{contractDefaultNotes}" },
+      { label: "Horário entrada", value: "{entryTime}" },
+      { label: "Horário saída", value: "{exitTime}" },
+      { label: "Número do contrato", value: "{contractNumber}" },
+      { label: "Parcela", value: "{installmentNumber}" },
+      { label: "Vencimento", value: "{dueDate}" },
+    ],
+  },
+];
 
 function extractPaymentBookletInstructions(content: string) {
   const cleanContent = String(content || "").trim();
@@ -367,6 +513,10 @@ function normalizeStoredPrintTemplates(storedTemplates: Partial<PrintTemplates>)
     ...defaultPrintTemplates.temporaryContract,
     ...(storedTemplates.temporaryContract || {}),
   };
+  const standardContract = {
+    ...defaultPrintTemplates.standardContract,
+    ...(storedTemplates.standardContract || {}),
+  };
   const paymentBooklet = {
     ...defaultPrintTemplates.paymentBooklet,
     ...(storedTemplates.paymentBooklet || {}),
@@ -374,6 +524,10 @@ function normalizeStoredPrintTemplates(storedTemplates: Partial<PrintTemplates>)
 
   if (temporaryContract.content.trim() === legacyTemporaryContractTemplateContent.trim()) {
     temporaryContract.content = defaultTemporaryContractTemplateContent;
+  }
+
+  if (!standardContract.content.trim()) {
+    standardContract.content = defaultStandardContractTemplateContent;
   }
 
   if (paymentBooklet.content.trim() === legacyPaymentBookletTemplateContent.trim()) {
@@ -384,6 +538,7 @@ function normalizeStoredPrintTemplates(storedTemplates: Partial<PrintTemplates>)
 
   return {
     temporaryContract,
+    standardContract,
     paymentBooklet,
   };
 }
@@ -579,6 +734,7 @@ function renderPrintTemplatePreview(content: string, documentKey: PrintDocumentK
     tenantDocument: "123.456.789-00",
     tenantAddress: "Rua das Flores, nº 25, Centro, Rolim de Moura/RO, CEP 76940-000",
     tenantEmail: "joao@email.com",
+    tenantPhone: "(69) 99999-1111",
     propertyName: "Casa Temporada Centro",
     propertyAddress: "Avenida Norte, nº 500, Bairro Jardim, Rolim de Moura/RO",
     startDate: "10/05/2026",
@@ -586,6 +742,7 @@ function renderPrintTemplatePreview(content: string, documentKey: PrintDocumentK
     entryTime: "14:00",
     exitTime: "10:00",
     contractDays: "3",
+    contractMonths: "12",
     amount: "R$ 1.200,00",
     dueDate: "10/05/2026",
     pixKey: "pix@rentix.com",
@@ -761,6 +918,7 @@ export default function ConfiguracoesPage() {
   const [printTemplates, setPrintTemplates] = useState<PrintTemplates>(defaultPrintTemplates);
   const [initialPrintTemplates, setInitialPrintTemplates] = useState<PrintTemplates>(defaultPrintTemplates);
   const [printModalState, setPrintModalState] = useState<PrintModalState>(defaultPrintModalState);
+  const [restorePrintModalState, setRestorePrintModalState] = useState<RestorePrintModalState>(defaultRestorePrintModalState);
   const [passwordSettings, setPasswordSettings] = useState<PasswordSettings>(defaultPasswordSettings);
   const [validationErrors, setValidationErrors] = useState<SettingsValidationErrors>({});
   const [successMessage, setSuccessMessage] = useState("");
@@ -770,11 +928,16 @@ export default function ConfiguracoesPage() {
   const [resetOptions, setResetOptions] = useState<ResetOptions>(defaultResetOptions);
   const [resetConfirmationText, setResetConfirmationText] = useState("");
   const [resetError, setResetError] = useState("");
+  const printTemplateTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const userInitials = useMemo(() => getInitialLetters(userSettings.name), [userSettings.name]);
 
   const selectedPrintTemplate = printModalState.documentKey
     ? printTemplates[printModalState.documentKey]
+    : null;
+
+  const selectedRestorePrintTemplate = restorePrintModalState.documentKey
+    ? printTemplates[restorePrintModalState.documentKey]
     : null;
 
   const validationErrorMessages = useMemo(
@@ -1021,11 +1184,59 @@ export default function ConfiguracoesPage() {
     }));
   }
 
-  function handleResetPrintTemplate(documentKey: PrintDocumentKey) {
+  function handleInsertPrintTemplateVariable(variableValue: string) {
+    if (!printModalState.documentKey) return;
+
+    const textareaElement = printTemplateTextareaRef.current;
+    const currentContent = selectedPrintTemplate?.content || "";
+    const startPosition = textareaElement?.selectionStart ?? currentContent.length;
+    const endPosition = textareaElement?.selectionEnd ?? currentContent.length;
+    const contentBeforeSelection = currentContent.slice(0, startPosition);
+    const contentAfterSelection = currentContent.slice(endPosition);
+    const nextContent = `${contentBeforeSelection}${variableValue}${contentAfterSelection}`;
+    const nextCursorPosition = startPosition + variableValue.length;
+
+    handleUpdatePrintTemplateContent(printModalState.documentKey, nextContent);
+
+    window.requestAnimationFrame(() => {
+      if (!printTemplateTextareaRef.current) return;
+
+      printTemplateTextareaRef.current.focus();
+      printTemplateTextareaRef.current.setSelectionRange(nextCursorPosition, nextCursorPosition);
+    });
+  }
+
+  function handleOpenRestorePrintModal(documentKey: PrintDocumentKey) {
+    setRestorePrintModalState({
+      isOpen: true,
+      documentKey,
+    });
+  }
+
+  function handleCloseRestorePrintModal() {
+    setRestorePrintModalState(defaultRestorePrintModalState);
+  }
+
+  function handleConfirmRestorePrintTemplate() {
+    if (!restorePrintModalState.documentKey) return;
+
+    const documentKey = restorePrintModalState.documentKey;
+
     setPrintTemplates((currentTemplates) => ({
       ...currentTemplates,
-      [documentKey]: defaultPrintTemplates[documentKey],
+      [documentKey]: {
+        ...defaultPrintTemplates[documentKey],
+      },
     }));
+
+    if (printModalState.documentKey === documentKey) {
+      setPrintModalState((currentState) => ({
+        ...currentState,
+        mode: currentState.mode === "edit" ? "view" : currentState.mode,
+      }));
+    }
+
+    handleCloseRestorePrintModal();
   }
 
   function handleBackToDashboard() {
@@ -1834,11 +2045,11 @@ export default function ConfiguracoesPage() {
                                 </p>
                               </div>
 
-                              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                              <div className="mt-4 flex items-center justify-end gap-2 overflow-x-auto">
                                 <button
                                   type="button"
                                   onClick={() => handleOpenPrintModal(documentKey, "view")}
-                                  className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                                  className="shrink-0 whitespace-nowrap rounded-2xl bg-slate-100 px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
                                 >
                                   Visualizar
                                 </button>
@@ -1846,9 +2057,17 @@ export default function ConfiguracoesPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleOpenPrintModal(documentKey, "edit")}
-                                  className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                                  className="shrink-0 whitespace-nowrap rounded-2xl bg-orange-500 px-4 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
                                 >
-                                  Editar modelo
+                                  Editar
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenRestorePrintModal(documentKey)}
+                                  className="shrink-0 whitespace-nowrap rounded-2xl bg-red-50 px-4 py-3 text-sm font-black text-red-700 transition hover:bg-red-100"
+                                >
+                                  Restaurar
                                 </button>
                               </div>
                             </div>
@@ -1863,7 +2082,7 @@ export default function ConfiguracoesPage() {
                       Campos dinâmicos disponíveis
                     </p>
                     <p className="mt-1 text-sm font-semibold leading-6 text-amber-700">
-                      Use variáveis como {"{companyName}"}, {"{personName}"}, {"{propertyName}"}, {"{dueDate}"}, {"{amount}"} e {"{pixKey}"}.
+                      Use variáveis como {"{landlordName}"}, {"{tenantName}"}, {"{propertyName}"}, {"{propertyAddress}"}, {"{startDate}"}, {"{endDate}"}, {"{amount}"}, {"{pixKey}"}, {"{contractCity}"} e {"{currentDate}"}.
                       Elas serão substituídas pelos dados reais no momento da geração do PDF.
                     </p>
                   </div>
@@ -1967,7 +2186,7 @@ export default function ConfiguracoesPage() {
 
         {printModalState.isOpen && selectedPrintTemplate && printModalState.documentKey && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
-            <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
+            <div className="flex max-h-[96vh] w-full max-w-[96vw] flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
               <div className="border-b border-slate-100 bg-gradient-to-r from-orange-50 via-white to-white px-6 py-5">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-4">
@@ -1998,7 +2217,7 @@ export default function ConfiguracoesPage() {
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto p-6">
+              <div className="min-h-0 flex-1 overflow-y-auto p-6 lg:p-8">
                 {printModalState.mode === "view" ? (
                   <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                     <div className="mx-auto min-h-[620px] max-w-3xl rounded-2xl bg-white p-8 shadow-sm">
@@ -2008,55 +2227,92 @@ export default function ConfiguracoesPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-                    <div className="space-y-4">
+                  <div className="grid grid-cols-1 gap-5 xl:grid-cols-[360px_1fr]">
+                    <aside className="space-y-4 xl:max-h-[68vh] xl:overflow-y-auto xl:pr-1">
                       <div className="rounded-3xl border border-orange-100 bg-orange-50 px-4 py-4">
                         <p className="text-sm font-black text-orange-800">
                           Edição do modelo
                         </p>
                         <p className="mt-1 text-sm font-semibold leading-6 text-orange-700">
-                          Edite somente o texto padrão do impresso. A prévia ao lado será atualizada em tempo real com dados simulados.
+                          Edite o texto completo do impresso ao lado. Use as variáveis para preencher os dados reais do contrato automaticamente.
                         </p>
                       </div>
 
+                      <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="text-sm font-black text-slate-800">
+                              Variáveis clicáveis
+                            </p>
+                            <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                              Clique para inserir no ponto selecionado do texto.
+                            </p>
+                          </div>
+
+                          <span className="w-fit rounded-full bg-orange-50 px-3 py-1 text-xs font-black text-orange-700">
+                            Inserção rápida
+                          </span>
+                        </div>
+
+                        <div className="mt-4 space-y-4">
+                          {printTemplateVariableGroups.map((group) => (
+                            <div key={group.title}>
+                              <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">
+                                {group.title}
+                              </p>
+
+                              <div className="flex flex-wrap gap-2">
+                                {group.variables.map((variable) => (
+                                  <button
+                                    key={`${group.title}-${variable.value}`}
+                                    type="button"
+                                    onClick={() => handleInsertPrintTemplateVariable(variable.value)}
+                                    className="rounded-full border border-orange-100 bg-orange-50 px-3 py-2 text-xs font-black text-orange-700 transition hover:border-orange-200 hover:bg-orange-100"
+                                    title={`Inserir ${variable.value}`}
+                                  >
+                                    + {variable.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenRestorePrintModal(printModalState.documentKey!)}
+                        className="w-full rounded-2xl bg-red-50 px-5 py-3 text-sm font-black text-red-700 transition hover:bg-red-100"
+                      >
+                        Restaurar este impresso para o padrão
+                      </button>
+                    </aside>
+
+                    <div className="min-w-0 space-y-3">
+                      <div className="flex flex-col gap-2 rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-sm font-black text-slate-800">
+                            Texto completo do impresso
+                          </p>
+                          <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                            Área maior para revisar e editar o contrato com mais conforto.
+                          </p>
+                        </div>
+
+                        <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-black text-slate-600 shadow-sm">
+                          {selectedPrintTemplate.content.length} caracteres
+                        </span>
+                      </div>
+
                       <textarea
+                        ref={printTemplateTextareaRef}
                         value={selectedPrintTemplate.content}
                         onChange={(event) =>
                           handleUpdatePrintTemplateContent(printModalState.documentKey!, event.target.value)
                         }
-                        rows={22}
-                        className="w-full resize-none rounded-3xl border border-slate-200 bg-white px-5 py-4 font-mono text-sm font-semibold leading-6 text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                        rows={34}
+                        className="h-[68vh] min-h-[680px] w-full resize-none rounded-3xl border border-slate-200 bg-white px-6 py-5 font-mono text-sm font-semibold leading-7 text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                       />
-
-                      <button
-                        type="button"
-                        onClick={() => handleResetPrintTemplate(printModalState.documentKey!)}
-                        className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
-                      >
-                        Restaurar modelo padrão
-                      </button>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4">
-                        <p className="text-sm font-black text-slate-800">
-                          Pré-visualização em tempo real
-                        </p>
-                        <p className="mt-1 text-sm font-semibold leading-6 text-slate-500">
-                          Esta prévia usa dados de exemplo apenas para mostrar como o texto ficará no documento final.
-                        </p>
-                      </div>
-
-                      <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                        <div className="mx-auto min-h-[620px] rounded-2xl bg-white p-8 shadow-sm">
-                          <pre className="whitespace-pre-wrap font-sans text-sm font-semibold leading-7 text-slate-700">
-                            {renderPrintTemplatePreview(
-                              selectedPrintTemplate.content,
-                              printModalState.documentKey
-                            )}
-                          </pre>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 )}
@@ -2080,6 +2336,60 @@ export default function ConfiguracoesPage() {
                     Concluir edição
                   </button>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {restorePrintModalState.isOpen && selectedRestorePrintTemplate && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+            <div className="w-full max-w-lg overflow-hidden rounded-[2rem] border border-red-100 bg-white shadow-2xl">
+              <div className="bg-gradient-to-r from-red-50 via-white to-white px-6 py-6">
+                <div className="flex flex-col items-center text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-red-100 text-3xl">
+                    ↩️
+                  </div>
+
+                  <h2 className="mt-4 text-2xl font-black text-slate-950">
+                    Restaurar impresso padrão
+                  </h2>
+
+                  <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
+                    Esta ação vai substituir o texto atual pelo modelo padrão do Rentix. A alteração só será gravada definitivamente ao clicar em Salvar configurações.
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-100 bg-white px-6 py-5">
+                <div className="rounded-3xl border border-red-100 bg-red-50 px-4 py-4">
+                  <p className="text-xs font-black uppercase tracking-wide text-red-700">
+                    Impresso selecionado
+                  </p>
+                  <p className="mt-1 text-sm font-black text-slate-900">
+                    {selectedRestorePrintTemplate.title}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                    {selectedRestorePrintTemplate.description}
+                  </p>
+                </div>
+
+                <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={handleCloseRestorePrintModal}
+                    className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleConfirmRestorePrintTemplate}
+                    className="rounded-2xl bg-red-500 px-6 py-3 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600"
+                  >
+                    Restaurar padrão
+                  </button>
+                </div>
               </div>
             </div>
           </div>
