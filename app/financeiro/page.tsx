@@ -3,97 +3,99 @@
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/app-shell";
 
-type PropertyStatus = "Available" | "Rented";
+type FinancialStatus = "Pending" | "Paid" | "Overdue" | "Canceled";
+type PeriodShortcut =
+  | "CurrentMonth"
+  | "CurrentQuarter"
+  | "CurrentYear"
+  | "All"
+  | "Custom";
 
-type Property = {
+type RawRecord = Record<string, unknown>;
+
+type NormalizedReceivable = {
   id: string;
-  name: string;
-  address?: string;
-  rentValue?: number;
-  status?: PropertyStatus;
-};
-
-type Tenant = {
-  id: string | number;
-  name: string;
-  phone?: string;
-  document?: string;
-};
-
-type ContractStatus =
-  | "Active"
-  | "Inactive"
-  | "Canceled"
-  | "Finished"
-  | "Deleted";
-
-type Contract = {
-  id: string | number;
-  propertyId: string;
-  propertyName?: string;
-  tenantId: string | number;
-  tenantName?: string;
-  startDate: string;
-  endDate?: string;
-  rentValue?: number;
-  value?: number;
-  status?: ContractStatus;
-};
-
-type PayableStatus = "Pending" | "Paid" | "Overdue" | "Canceled";
-
-type PayableAccount = {
-  id: string;
-  description: string;
-  amount: number;
-  dueDate: string;
-  paymentDate?: string | null;
-  status: PayableStatus;
-  propertyId?: string;
-  propertyName?: string;
-  createdAt: string;
-  canceledAt?: string | null;
-};
-
-type ReceivableStatus = "Pending" | "Paid" | "Overdue" | "Canceled";
-
-type ReceivableCharge = {
-  id: string;
-  contractId: string;
-  propertyName: string;
   tenantName: string;
+  propertyName: string;
   dueDate: string;
   amount: number;
-  status: ReceivableStatus;
-  paymentDate?: string | null;
-  canceledAt?: string | null;
+  status: FinancialStatus;
+  paymentDate: string | null;
+  paidAmount: number;
 };
 
-type FinanceStatusFilter = "All" | ReceivableStatus;
+type NormalizedPayable = {
+  id: string;
+  personName: string;
+  description: string;
+  category: string;
+  dueDate: string;
+  amount: number;
+  status: FinancialStatus;
+  paymentDate: string | null;
+  paidAmount: number;
+};
 
-const PROPERTIES_STORAGE_KEY = "rentix_properties";
-const TENANTS_STORAGE_KEY = "rentix_tenants";
-const CONTRACTS_STORAGE_KEY = "rentix_contracts";
-const PAYABLES_STORAGE_KEY = "rentix_payables";
-const LEGACY_EXPENSES_STORAGE_KEY = "rentix_expenses";
+type ChargePayment = {
+  chargeId: string;
+  paidAt?: string;
+  amountPaid?: number;
+  interest?: number;
+  discount?: number;
+};
+
+type ExpensePayment = {
+  expenseId: string;
+  paidAt?: string;
+  amountPaid?: number;
+  interest?: number;
+  discount?: number;
+};
+
+type BalanceSummary = {
+  totalToReceive: number;
+  totalReceived: number;
+  totalToPay: number;
+  totalPaid: number;
+  overdueReceivable: number;
+  overduePayable: number;
+  operationalResult: number;
+  projectedBalance: number;
+  openReceivableCount: number;
+  receivedCount: number;
+  openPayableCount: number;
+  paidCount: number;
+};
+
+const RECEIVABLE_STORAGE_KEYS = [
+  "rentix_manual_charges",
+  "rentix_receivables",
+  "rentix_accounts_receivable",
+  "rentix_accounts_receivables",
+  "rentix_receivable_accounts",
+  "rentix_contract_receivables",
+];
+
+const PAYABLE_STORAGE_KEYS = [
+  "rentix_expenses",
+  "rentix_payables",
+  "rentix_accounts_payable",
+  "rentix_accounts_payables",
+  "rentix_payable_accounts",
+];
+
+const CHARGE_PAYMENTS_STORAGE_KEY = "rentix_charge_payments";
+const EXPENSE_PAYMENTS_STORAGE_KEY = "rentix_expense_payments";
 const PAID_CHARGES_STORAGE_KEY = "rentix_paid_charges";
 const CANCELED_CHARGES_STORAGE_KEY = "rentix_canceled_charges";
 
 export default function FinancialPage() {
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [contracts, setContracts] = useState<Contract[]>([]);
-  const [payables, setPayables] = useState<PayableAccount[]>([]);
-  const [paidChargeIds, setPaidChargeIds] = useState<string[]>([]);
-  const [canceledChargeIds, setCanceledChargeIds] = useState<string[]>([]);
-  const [receivableFilter, setReceivableFilter] =
-    useState<FinanceStatusFilter>("All");
-
-  const [isPayableFormOpen, setIsPayableFormOpen] = useState(false);
-  const [payableDescription, setPayableDescription] = useState("");
-  const [payableAmount, setPayableAmount] = useState("");
-  const [payableDueDate, setPayableDueDate] = useState("");
-  const [payablePropertyId, setPayablePropertyId] = useState("");
+  const [receivables, setReceivables] = useState<NormalizedReceivable[]>([]);
+  const [payables, setPayables] = useState<NormalizedPayable[]>([]);
+  const [periodShortcut, setPeriodShortcut] =
+    useState<PeriodShortcut>("CurrentMonth");
+  const [startDate, setStartDate] = useState(getStartOfCurrentMonth());
+  const [endDate, setEndDate] = useState(getEndOfCurrentMonth());
   const [isBlackTheme, setIsBlackTheme] = useState(false);
 
   useEffect(() => {
@@ -126,7 +128,6 @@ export default function FinancialPage() {
     }
 
     applyStoredTheme();
-
     window.addEventListener("storage", applyStoredTheme);
 
     return () => {
@@ -135,291 +136,174 @@ export default function FinancialPage() {
   }, []);
 
   useEffect(() => {
-    const storedProperties = localStorage.getItem(PROPERTIES_STORAGE_KEY);
-    const storedTenants = localStorage.getItem(TENANTS_STORAGE_KEY);
-    const storedContracts = localStorage.getItem(CONTRACTS_STORAGE_KEY);
-    const storedPayables = localStorage.getItem(PAYABLES_STORAGE_KEY);
-    const legacyExpenses = localStorage.getItem(LEGACY_EXPENSES_STORAGE_KEY);
-    const storedPaidCharges = localStorage.getItem(PAID_CHARGES_STORAGE_KEY);
-    const storedCanceledCharges = localStorage.getItem(
-      CANCELED_CHARGES_STORAGE_KEY,
-    );
+    function loadFinancialData() {
+      const nextReceivables = readReceivablesDirectlyFromStorage();
+      const nextPayables = readPayablesDirectlyFromStorage();
 
-    if (storedProperties) {
-      setProperties(JSON.parse(storedProperties));
+      setReceivables(nextReceivables);
+      setPayables(nextPayables);
     }
 
-    if (storedTenants) {
-      setTenants(JSON.parse(storedTenants));
-    }
+    loadFinancialData();
 
-    if (storedContracts) {
-      setContracts(JSON.parse(storedContracts));
-    }
+    const refreshEvents = [
+      "storage",
+      "rentix-financial-updated",
+      "rentix-receivables-updated",
+      "rentix-payables-updated",
+      "rentix-accounts-receivable-updated",
+      "rentix-accounts-payable-updated",
+    ];
 
-    if (storedPayables) {
-      setPayables(JSON.parse(storedPayables));
-    } else if (legacyExpenses) {
-      const parsedExpenses = JSON.parse(legacyExpenses) as Array<{
-        id: string;
-        description: string;
-        amount: number;
-        date: string;
-        propertyId?: string;
-      }>;
+    refreshEvents.forEach((eventName) => {
+      window.addEventListener(eventName, loadFinancialData);
+    });
 
-      const migratedPayables = parsedExpenses.map((expense) => ({
-        id: expense.id || crypto.randomUUID(),
-        description: expense.description || "Despesa",
-        amount: Number(expense.amount || 0),
-        dueDate: expense.date || getTodayDate(),
-        status: "Pending" as PayableStatus,
-        propertyId: expense.propertyId || "",
-        propertyName: "",
-        paymentDate: null,
-        createdAt: new Date().toISOString(),
-        canceledAt: null,
-      }));
+    const interval = window.setInterval(loadFinancialData, 1200);
 
-      setPayables(migratedPayables);
-      localStorage.setItem(
-        PAYABLES_STORAGE_KEY,
-        JSON.stringify(migratedPayables),
-      );
-    }
-
-    if (storedPaidCharges) {
-      setPaidChargeIds(JSON.parse(storedPaidCharges));
-    }
-
-    if (storedCanceledCharges) {
-      setCanceledChargeIds(JSON.parse(storedCanceledCharges));
-    }
+    return () => {
+      refreshEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, loadFinancialData);
+      });
+      window.clearInterval(interval);
+    };
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem(PAYABLES_STORAGE_KEY, JSON.stringify(payables));
-  }, [payables]);
+  function updatePeriodShortcut(nextShortcut: PeriodShortcut) {
+    setPeriodShortcut(nextShortcut);
 
-  useEffect(() => {
-    localStorage.setItem(
-      PAID_CHARGES_STORAGE_KEY,
-      JSON.stringify(paidChargeIds),
-    );
-  }, [paidChargeIds]);
+    if (nextShortcut === "CurrentMonth") {
+      setStartDate(getStartOfCurrentMonth());
+      setEndDate(getEndOfCurrentMonth());
+      return;
+    }
 
-  useEffect(() => {
-    localStorage.setItem(
-      CANCELED_CHARGES_STORAGE_KEY,
-      JSON.stringify(canceledChargeIds),
-    );
-  }, [canceledChargeIds]);
+    if (nextShortcut === "CurrentQuarter") {
+      setStartDate(getStartOfCurrentQuarter());
+      setEndDate(getEndOfCurrentQuarter());
+      return;
+    }
 
-  const receivableCharges = useMemo(() => {
-    const today = getTodayDate();
+    if (nextShortcut === "CurrentYear") {
+      setStartDate(getStartOfCurrentYear());
+      setEndDate(getEndOfCurrentYear());
+      return;
+    }
 
-    return contracts
-      .filter((contract) => getContractDisplayStatus(contract) === "Active")
-      .map((contract) => {
-        const property = properties.find(
-          (propertyItem) =>
-            String(propertyItem.id) === String(contract.propertyId),
-        );
-
-        const tenant = tenants.find(
-          (tenantItem) => String(tenantItem.id) === String(contract.tenantId),
-        );
-
-        const dueDate = buildCurrentMonthDueDate(contract.startDate);
-        const chargeId = `${contract.id}-${dueDate}`;
-
-        const isPaid = paidChargeIds.includes(chargeId);
-        const isCanceled = canceledChargeIds.includes(chargeId);
-        const isOverdue = dueDate < today && !isPaid && !isCanceled;
-
-        return {
-          id: chargeId,
-          contractId: String(contract.id),
-          propertyName:
-            contract.propertyName || property?.name || "Imóvel não encontrado",
-          tenantName:
-            contract.tenantName || tenant?.name || "Inquilino não encontrado",
-          dueDate,
-          amount: getContractValue(contract),
-          status: isCanceled
-            ? "Canceled"
-            : isPaid
-              ? "Paid"
-              : isOverdue
-                ? "Overdue"
-                : "Pending",
-          paymentDate: isPaid ? getTodayDate() : null,
-          canceledAt: isCanceled ? getTodayDate() : null,
-        } as ReceivableCharge;
-      });
-  }, [contracts, properties, tenants, paidChargeIds, canceledChargeIds]);
-
-  const filteredReceivables = useMemo(() => {
-    if (receivableFilter === "All") return receivableCharges;
-
-    return receivableCharges.filter(
-      (charge) => charge.status === receivableFilter,
-    );
-  }, [receivableCharges, receivableFilter]);
-
-  const totalReceivable = receivableCharges
-    .filter((charge) => charge.status !== "Canceled")
-    .reduce((total, charge) => total + Number(charge.amount || 0), 0);
-
-  const totalReceived = receivableCharges
-    .filter((charge) => charge.status === "Paid")
-    .reduce((total, charge) => total + Number(charge.amount || 0), 0);
-
-  const totalPending = receivableCharges
-    .filter((charge) => charge.status === "Pending")
-    .reduce((total, charge) => total + Number(charge.amount || 0), 0);
-
-  const totalOverdue = receivableCharges
-    .filter((charge) => charge.status === "Overdue")
-    .reduce((total, charge) => total + Number(charge.amount || 0), 0);
-
-  const totalPayable = payables
-    .filter((payable) => payable.status !== "Canceled")
-    .reduce((total, payable) => total + Number(payable.amount || 0), 0);
-
-  const totalPaidPayables = payables
-    .filter((payable) => payable.status === "Paid")
-    .reduce((total, payable) => total + Number(payable.amount || 0), 0);
-
-  const totalOpenPayables = payables
-    .filter(
-      (payable) => payable.status === "Pending" || payable.status === "Overdue",
-    )
-    .reduce((total, payable) => total + Number(payable.amount || 0), 0);
-
-  const estimatedProfit = totalReceivable - totalPayable;
-  const realizedProfit = totalReceived - totalPaidPayables;
-
-  const paidCharges = receivableCharges.filter(
-    (charge) => charge.status === "Paid",
-  ).length;
-
-  const paymentRate =
-    receivableCharges.length > 0
-      ? Math.round((paidCharges / receivableCharges.length) * 100)
-      : 0;
-
-  function handleMarkReceivableAsPaid(chargeId: string) {
-    setPaidChargeIds((currentIds) =>
-      currentIds.includes(chargeId) ? currentIds : [...currentIds, chargeId],
-    );
-
-    setCanceledChargeIds((currentIds) =>
-      currentIds.filter((currentId) => currentId !== chargeId),
-    );
+    if (nextShortcut === "All") {
+      setStartDate("");
+      setEndDate("");
+      return;
+    }
   }
 
-  function handleUndoReceivablePayment(chargeId: string) {
-    setPaidChargeIds((currentIds) =>
-      currentIds.filter((currentId) => currentId !== chargeId),
-    );
+  function updateStartDate(value: string) {
+    setStartDate(value);
+    setPeriodShortcut("Custom");
   }
 
-  function handleCancelReceivable(chargeId: string) {
-    setCanceledChargeIds((currentIds) =>
-      currentIds.includes(chargeId) ? currentIds : [...currentIds, chargeId],
-    );
-
-    setPaidChargeIds((currentIds) =>
-      currentIds.filter((currentId) => currentId !== chargeId),
-    );
+  function updateEndDate(value: string) {
+    setEndDate(value);
+    setPeriodShortcut("Custom");
   }
 
-  function handleCreatePayable(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  const periodLabel = getPeriodLabel(periodShortcut, startDate, endDate);
 
-    const property = properties.find(
-      (propertyItem) => String(propertyItem.id) === String(payablePropertyId),
+  const balance = useMemo<BalanceSummary>(() => {
+    const openReceivables = receivables.filter((receivable) => {
+      if (receivable.status === "Canceled" || receivable.status === "Paid") {
+        return false;
+      }
+
+      return isDateInsideRange(receivable.dueDate, startDate, endDate);
+    });
+
+    const receivedReceivables = receivables.filter((receivable) => {
+      if (receivable.status !== "Paid") return false;
+
+      return isDateInsideRange(
+        receivable.paymentDate || receivable.dueDate,
+        startDate,
+        endDate,
+      );
+    });
+
+    const openPayables = payables.filter((payable) => {
+      if (payable.status === "Canceled" || payable.status === "Paid") {
+        return false;
+      }
+
+      return isDateInsideRange(payable.dueDate, startDate, endDate);
+    });
+
+    const paidPayables = payables.filter((payable) => {
+      if (payable.status !== "Paid") return false;
+
+      return isDateInsideRange(
+        payable.paymentDate || payable.dueDate,
+        startDate,
+        endDate,
+      );
+    });
+
+    const totalToReceive = sumAmounts(openReceivables, "amount");
+    const totalReceived = sumAmounts(receivedReceivables, "paidAmount");
+    const totalToPay = sumAmounts(openPayables, "amount");
+    const totalPaid = sumAmounts(paidPayables, "paidAmount");
+    const overdueReceivable = sumAmounts(
+      openReceivables.filter((item) => item.status === "Overdue"),
+      "amount",
     );
+    const overduePayable = sumAmounts(
+      openPayables.filter((item) => item.status === "Overdue"),
+      "amount",
+    );
+    const operationalResult = totalReceived - totalPaid;
+    const projectedBalance =
+      totalReceived + totalToReceive - totalPaid - totalToPay;
 
-    const newPayable: PayableAccount = {
-      id: crypto.randomUUID(),
-      description: payableDescription,
-      amount: Number(payableAmount),
-      dueDate: payableDueDate,
-      propertyId: payablePropertyId || "",
-      propertyName: property?.name || "",
-      status: getPayableStatus(payableDueDate, false, false),
-      paymentDate: null,
-      createdAt: new Date().toISOString(),
-      canceledAt: null,
+    return {
+      totalToReceive,
+      totalReceived,
+      totalToPay,
+      totalPaid,
+      overdueReceivable,
+      overduePayable,
+      operationalResult,
+      projectedBalance,
+      openReceivableCount: openReceivables.length,
+      receivedCount: receivedReceivables.length,
+      openPayableCount: openPayables.length,
+      paidCount: paidPayables.length,
     };
+  }, [receivables, payables, startDate, endDate]);
 
-    setPayables((currentPayables) => [newPayable, ...currentPayables]);
-    resetPayableForm();
-  }
+  const nextReceivables = useMemo(() => {
+    return receivables
+      .filter((receivable) => receivable.status !== "Canceled")
+      .filter((receivable) => receivable.status !== "Paid")
+      .filter((receivable) => isDateInsideRange(receivable.dueDate, startDate, endDate))
+      .sort(sortByDueDate)
+      .slice(0, 6);
+  }, [receivables, startDate, endDate]);
 
-  function resetPayableForm() {
-    setPayableDescription("");
-    setPayableAmount("");
-    setPayableDueDate("");
-    setPayablePropertyId("");
-    setIsPayableFormOpen(false);
-  }
-
-  function handleMarkPayableAsPaid(payableId: string) {
-    setPayables((currentPayables) =>
-      currentPayables.map((payable) =>
-        payable.id === payableId
-          ? {
-              ...payable,
-              status: "Paid",
-              paymentDate: getTodayDate(),
-            }
-          : payable,
-      ),
-    );
-  }
-
-  function handleUndoPayablePayment(payableId: string) {
-    setPayables((currentPayables) =>
-      currentPayables.map((payable) =>
-        payable.id === payableId
-          ? {
-              ...payable,
-              status: getPayableStatus(payable.dueDate, false, false),
-              paymentDate: null,
-            }
-          : payable,
-      ),
-    );
-  }
-
-  function handleCancelPayable(payableId: string) {
-    setPayables((currentPayables) =>
-      currentPayables.map((payable) =>
-        payable.id === payableId
-          ? {
-              ...payable,
-              status: "Canceled",
-              canceledAt: new Date().toISOString(),
-            }
-          : payable,
-      ),
-    );
-  }
-
-  const normalizedPayables = payables.map((payable) => ({
-    ...payable,
-    status:
-      payable.status === "Paid" || payable.status === "Canceled"
-        ? payable.status
-        : getPayableStatus(payable.dueDate, false, false),
-  }));
+  const nextPayables = useMemo(() => {
+    return payables
+      .filter((payable) => payable.status !== "Canceled")
+      .filter((payable) => payable.status !== "Paid")
+      .filter((payable) => isDateInsideRange(payable.dueDate, startDate, endDate))
+      .sort(sortByDueDate)
+      .slice(0, 6);
+  }, [payables, startDate, endDate]);
 
   return (
     <AppShell>
       <style jsx global>{`
+        .rentix-financial-page-light,
+        .rentix-financial-page-light * {
+          color-scheme: light !important;
+        }
+
         .rentix-financial-page-light .bg-white {
           background-color: #ffffff !important;
         }
@@ -428,32 +312,8 @@ export default function FinancialPage() {
           background-color: #f8fafc !important;
         }
 
-        .rentix-financial-page-light .bg-slate-100 {
-          background-color: #f1f5f9 !important;
-        }
-
         .rentix-financial-page-light .bg-orange-50 {
           background-color: #fff7ed !important;
-        }
-
-        .rentix-financial-page-light .bg-orange-100 {
-          background-color: #ffedd5 !important;
-        }
-
-        .rentix-financial-page-light .bg-red-50 {
-          background-color: #fef2f2 !important;
-        }
-
-        .rentix-financial-page-light .bg-red-100 {
-          background-color: #fee2e2 !important;
-        }
-
-        .rentix-financial-page-light .bg-emerald-50 {
-          background-color: #ecfdf5 !important;
-        }
-
-        .rentix-financial-page-light .bg-emerald-100 {
-          background-color: #d1fae5 !important;
         }
 
         .rentix-financial-page-light .text-slate-950,
@@ -471,16 +331,8 @@ export default function FinancialPage() {
           color: #64748b !important;
         }
 
-        .rentix-financial-page-light .text-slate-400 {
-          color: #94a3b8 !important;
-        }
-
         .rentix-financial-page-light .border-orange-100 {
           border-color: #ffedd5 !important;
-        }
-
-        .rentix-financial-page-light .border-slate-100 {
-          border-color: #f1f5f9 !important;
         }
 
         .rentix-financial-page-light .border-slate-200 {
@@ -488,96 +340,50 @@ export default function FinancialPage() {
         }
 
         .rentix-financial-page-light input,
-        .rentix-financial-page-light select,
-        .rentix-financial-page-light textarea {
+        .rentix-financial-page-light select {
           background-color: #ffffff !important;
-          border-color: #e2e8f0 !important;
-          color: #334155 !important;
+          border-color: #fed7aa !important;
+          color: #0f172a !important;
           color-scheme: light !important;
         }
 
-        .rentix-financial-page-light input::placeholder,
-        .rentix-financial-page-light textarea::placeholder {
-          color: #94a3b8 !important;
+        .rentix-financial-page-black,
+        .rentix-financial-page-black * {
+          color-scheme: dark !important;
         }
 
-        .rentix-financial-page-light tbody tr {
-          background-color: #ffffff !important;
-        }
-
-        .rentix-financial-page-light tbody tr:hover {
-          background-color: #f8fafc !important;
-        }
-
-        .dark .rentix-financial-page-black {
-          color: #f8fafc;
-        }
-
-        .dark .rentix-financial-page-black .bg-white {
+        .rentix-financial-page-black .bg-white,
+        .rentix-financial-page-black .bg-slate-50 {
           background-color: #0f172a !important;
         }
 
-        .dark .rentix-financial-page-black .bg-slate-50,
-        .dark .rentix-financial-page-black .bg-slate-100 {
-          background-color: #111827 !important;
-        }
-
-        .dark .rentix-financial-page-black .bg-orange-50,
-        .dark .rentix-financial-page-black .bg-orange-100 {
+        .rentix-financial-page-black .bg-orange-50 {
           background-color: rgba(249, 115, 22, 0.13) !important;
         }
 
-        .dark .rentix-financial-page-black .bg-red-50,
-        .dark .rentix-financial-page-black .bg-red-100 {
-          background-color: rgba(239, 68, 68, 0.12) !important;
-        }
-
-        .dark .rentix-financial-page-black .bg-emerald-50,
-        .dark .rentix-financial-page-black .bg-emerald-100 {
-          background-color: rgba(16, 185, 129, 0.12) !important;
-        }
-
-        .dark .rentix-financial-page-black .text-slate-950,
-        .dark .rentix-financial-page-black .text-slate-900,
-        .dark .rentix-financial-page-black .text-slate-800,
-        .dark .rentix-financial-page-black .text-slate-700 {
+        .rentix-financial-page-black .text-slate-950,
+        .rentix-financial-page-black .text-slate-900,
+        .rentix-financial-page-black .text-slate-800,
+        .rentix-financial-page-black .text-slate-700 {
           color: #f8fafc !important;
         }
 
-        .dark .rentix-financial-page-black .text-slate-600,
-        .dark .rentix-financial-page-black .text-slate-500,
-        .dark .rentix-financial-page-black .text-slate-400 {
+        .rentix-financial-page-black .text-slate-600,
+        .rentix-financial-page-black .text-slate-500 {
           color: #cbd5e1 !important;
         }
 
-        .dark .rentix-financial-page-black .border-orange-100,
-        .dark .rentix-financial-page-black .border-orange-200,
-        .dark .rentix-financial-page-black .border-slate-100,
-        .dark .rentix-financial-page-black .border-slate-200,
-        .dark .rentix-financial-page-black .border-slate-300 {
+        .rentix-financial-page-black .border-orange-100,
+        .rentix-financial-page-black .border-slate-200 {
           border-color: #334155 !important;
         }
 
-        .dark .rentix-financial-page-black input,
-        .dark .rentix-financial-page-black select,
-        .dark .rentix-financial-page-black textarea {
+        .rentix-financial-page-black input,
+        .rentix-financial-page-black select {
           background-color: #020617 !important;
           border-color: #334155 !important;
           color: #f8fafc !important;
           color-scheme: dark !important;
-        }
-
-        .dark .rentix-financial-page-black input::placeholder,
-        .dark .rentix-financial-page-black textarea::placeholder {
-          color: #64748b !important;
-        }
-
-        .dark .rentix-financial-page-black tbody tr {
-          background-color: #1e293b !important;
-        }
-
-        .dark .rentix-financial-page-black tbody tr:hover {
-          background-color: #334155 !important;
         }
       `}</style>
 
@@ -586,573 +392,341 @@ export default function FinancialPage() {
           isBlackTheme
             ? "rentix-financial-page-black"
             : "rentix-financial-page-light"
-        } space-y-8`}
+        } space-y-6`}
       >
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <h1 className="text-4xl font-black tracking-tight text-slate-950 dark:text-white">
-              Financeiro
+            <p className="text-sm font-black text-orange-600"></p>
+            <h1 className="mt-1 text-4xl font-black tracking-tight text-slate-950 dark:text-white">
+              FINANCEIRO DO DJANHO
             </h1>
-            <p className="mt-2 text-slate-500 dark:text-slate-400 dark:text-slate-500">
-              Controle empresarial de receitas, despesas, baixas, estornos e
-              resultado financeiro.
+            <p className="mt-2 max-w-4xl text-sm font-semibold text-slate-500 dark:text-slate-400">
+              Resultado direto das contas a receber, contas a pagar e baixas
+              realizadas no período informado.
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsPayableFormOpen(true)}
-            className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/20 transition hover:bg-orange-600"
-          >
-            + Nova conta a pagar
-          </button>
+          <div className="rounded-3xl border border-orange-100 bg-white p-4 shadow-sm dark:border-orange-500/30 dark:bg-slate-900">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <label className="mb-2 block text-xs font-black uppercase text-slate-500 dark:text-slate-400">
+                  Atalho
+                </label>
+                <select
+                  value={periodShortcut}
+                  onChange={(event) =>
+                    updatePeriodShortcut(event.target.value as PeriodShortcut)
+                  }
+                  className="h-12 w-full rounded-2xl border px-4 text-sm font-black outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
+                >
+                  <option value="CurrentMonth">Mês atual</option>
+                  <option value="CurrentQuarter">Trimestre atual</option>
+                  <option value="CurrentYear">Ano atual</option>
+                  <option value="All">Todo o período</option>
+                  <option value="Custom">Personalizado</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-black uppercase text-slate-500 dark:text-slate-400">
+                  Início
+                </label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(event) => updateStartDate(event.target.value)}
+                  className="h-12 w-full rounded-2xl border px-4 text-sm font-black outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-black uppercase text-slate-500 dark:text-slate-400">
+                  Fim
+                </label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(event) => updateEndDate(event.target.value)}
+                  className="h-12 w-full rounded-2xl border px-4 text-sm font-black outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-          <FinancialCard
-            icon="📥"
-            title="Total a receber"
-            value={formatCurrency(totalReceivable)}
-            detail={`${receivableCharges.length} cobrança(s)`}
-          />
-
-          <FinancialCard
-            icon="✅"
-            title="Recebido"
-            value={formatCurrency(totalReceived)}
-            detail={`${paymentRate}% de recebimento`}
-          />
-
-          <FinancialCard
-            icon="📤"
-            title="Total a pagar"
-            value={formatCurrency(totalPayable)}
-            detail={`${payables.length} conta(s)`}
-          />
-
-          <FinancialCard
-            icon="📊"
-            title="Lucro estimado"
-            value={formatCurrency(estimatedProfit)}
-            detail="Receber - pagar"
-            isPositive={estimatedProfit >= 0}
-          />
-        </div>
-
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-          <StatusCard
-            title="Pendente"
-            value={formatCurrency(totalPending)}
-            amount={
-              receivableCharges.filter((charge) => charge.status === "Pending")
-                .length
-            }
-            description="Recebimentos aguardando baixa"
-            badge="A receber"
-            badgeClassName="bg-yellow-100 text-yellow-700"
-          />
-
-          <StatusCard
-            title="Vencido"
-            value={formatCurrency(totalOverdue)}
-            amount={
-              receivableCharges.filter((charge) => charge.status === "Overdue")
-                .length
-            }
-            description="Recebimentos em atraso"
-            badge="Atenção"
-            badgeClassName="bg-red-100 dark:bg-red-50 dark:bg-red-500/100/20 text-red-700"
-          />
-
-          <StatusCard
-            title="Pago em despesas"
-            value={formatCurrency(totalPaidPayables)}
-            amount={
-              normalizedPayables.filter((payable) => payable.status === "Paid")
-                .length
-            }
-            description="Contas pagas"
-            badge="Pago"
-            badgeClassName="bg-emerald-100 dark:bg-emerald-50 dark:bg-emerald-500/100/20 text-emerald-700"
-          />
-
-          <StatusCard
-            title="Saldo realizado"
-            value={formatCurrency(realizedProfit)}
-            amount={
-              normalizedPayables.filter(
-                (payable) => payable.status !== "Canceled",
-              ).length
-            }
-            description="Recebido - contas pagas"
-            badge="Realizado"
-            badgeClassName="bg-orange-100 dark:bg-orange-50 dark:bg-orange-500/100/20 text-orange-700"
-          />
-        </div>
-
-        <div className="rounded-3xl border border-orange-100 dark:border-orange-500/30 bg-white dark:bg-slate-900 shadow-sm">
-          <div className="flex flex-col gap-4 border-b border-slate-100 dark:border-slate-700 px-6 py-5 xl:flex-row xl:items-end xl:justify-between">
+        <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm dark:border-orange-500/30 dark:bg-slate-900">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h2 className="text-2xl font-black text-slate-950 dark:text-white">
-                Contas a receber
+              <p className="text-sm font-black uppercase tracking-wide text-orange-600">
+                Resultado {periodLabel}
+              </p>
+              <h2
+                className={`mt-2 text-5xl font-black ${
+                  balance.operationalResult >= 0
+                    ? "text-emerald-600"
+                    : "text-red-600"
+                }`}
+              >
+                {formatCurrency(balance.operationalResult)}
               </h2>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                Cobranças geradas automaticamente pelos contratos ativos.
+              <p className="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                Total recebido menos total pago, usando a data real de baixa.
               </p>
             </div>
 
-            <FormField label="Filtrar por status">
-              <select
-                value={receivableFilter}
-                onChange={(event) =>
-                  setReceivableFilter(event.target.value as FinanceStatusFilter)
-                }
-                className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20 md:w-64"
+            <div className="rounded-2xl bg-orange-50 px-6 py-5 text-left dark:bg-orange-500/10 lg:text-right">
+              <p className="text-xs font-black uppercase tracking-wide text-orange-600">
+                Saldo projetado
+              </p>
+              <p
+                className={`mt-1 text-3xl font-black ${
+                  balance.projectedBalance >= 0
+                    ? "text-slate-950 dark:text-white"
+                    : "text-red-600"
+                }`}
               >
-                <option value="All">Todos</option>
-                <option value="Pending">Pendentes</option>
-                <option value="Paid">Pagos</option>
-                <option value="Overdue">Vencidos</option>
-                <option value="Canceled">Cancelados</option>
-              </select>
-            </FormField>
-          </div>
-
-          <div className="overflow-hidden">
-            <table className="w-full text-left">
-              <thead className="bg-orange-50 dark:bg-orange-500/10">
-                <tr>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300">
-                    Imóvel
-                  </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300">
-                    Inquilino
-                  </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300">
-                    Vencimento
-                  </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300">
-                    Valor
-                  </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300">
-                    Status
-                  </th>
-                  <th className="px-6 py-4 text-right text-sm font-black text-slate-700 dark:text-slate-300">
-                    Ações
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                {filteredReceivables.map((charge) => (
-                  <tr
-                    key={charge.id}
-                    className="transition hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800"
-                  >
-                    <td className="px-6 py-4 font-black text-slate-900 dark:text-slate-100">
-                      {charge.propertyName}
-                    </td>
-
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
-                      {charge.tenantName}
-                    </td>
-
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
-                      {formatDate(charge.dueDate)}
-                    </td>
-
-                    <td className="px-6 py-4 text-sm font-black text-slate-900 dark:text-slate-100">
-                      {formatCurrency(charge.amount)}
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <PaymentStatusBadge status={charge.status} />
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <div className="flex justify-end gap-2">
-                        {charge.status === "Paid" ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleUndoReceivablePayment(charge.id)
-                            }
-                            className="rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
-                          >
-                            Estornar
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleMarkReceivableAsPaid(charge.id)
-                            }
-                            disabled={charge.status === "Canceled"}
-                            className="rounded-xl bg-emerald-50 dark:bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 dark:bg-emerald-50 dark:bg-emerald-500/100/20 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            Receber
-                          </button>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => handleCancelReceivable(charge.id)}
-                          disabled={charge.status === "Canceled"}
-                          className="rounded-xl bg-red-50 dark:bg-red-500/10 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-100 dark:bg-red-50 dark:bg-red-500/100/20 dark:hover:bg-red-50 dark:bg-red-500/10 dark:hover:bg-red-50 dark:bg-red-500/100/100/20 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-
-                {filteredReceivables.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={6}
-                      className="px-6 py-10 text-center text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500"
-                    >
-                      Nenhuma conta a receber encontrada.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-orange-100 dark:border-orange-500/30 bg-white dark:bg-slate-900 shadow-sm">
-          <div className="border-b border-slate-100 dark:border-slate-700 px-6 py-5">
-            <h2 className="text-2xl font-black text-slate-950 dark:text-white">
-              Contas a pagar
-            </h2>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
-              Despesas cadastradas manualmente com baixa e cancelamento.
-            </p>
-          </div>
-
-          <div className="overflow-hidden">
-            <table className="w-full text-left">
-              <thead className="bg-orange-50 dark:bg-orange-500/10">
-                <tr>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300">
-                    Descrição
-                  </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300">
-                    Imóvel
-                  </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300">
-                    Vencimento
-                  </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300">
-                    Valor
-                  </th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700 dark:text-slate-300">
-                    Status
-                  </th>
-                  <th className="px-6 py-4 text-right text-sm font-black text-slate-700 dark:text-slate-300">
-                    Ações
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                {normalizedPayables.map((payable) => (
-                  <tr
-                    key={payable.id}
-                    className="transition hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800"
-                  >
-                    <td className="px-6 py-4 font-black text-slate-900 dark:text-slate-100">
-                      {payable.description}
-                    </td>
-
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
-                      {payable.propertyName || "Geral"}
-                    </td>
-
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
-                      {formatDate(payable.dueDate)}
-                    </td>
-
-                    <td className="px-6 py-4 text-sm font-black text-red-600">
-                      - {formatCurrency(payable.amount)}
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <PayableStatusBadge status={payable.status} />
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <div className="flex justify-end gap-2">
-                        {payable.status === "Paid" ? (
-                          <button
-                            type="button"
-                            onClick={() => handleUndoPayablePayment(payable.id)}
-                            className="rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
-                          >
-                            Estornar
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleMarkPayableAsPaid(payable.id)}
-                            disabled={payable.status === "Canceled"}
-                            className="rounded-xl bg-emerald-50 dark:bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 dark:bg-emerald-50 dark:bg-emerald-500/100/20 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            Pagar
-                          </button>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => handleCancelPayable(payable.id)}
-                          disabled={payable.status === "Canceled"}
-                          className="rounded-xl bg-red-50 dark:bg-red-500/10 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-100 dark:bg-red-50 dark:bg-red-500/100/20 dark:hover:bg-red-50 dark:bg-red-500/10 dark:hover:bg-red-50 dark:bg-red-500/100/100/20 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-
-                {normalizedPayables.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={6}
-                      className="px-6 py-10 text-center text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500"
-                    >
-                      Nenhuma conta a pagar cadastrada.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {isPayableFormOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
-            <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-[2rem] border border-orange-100 dark:border-orange-500/30 bg-white dark:bg-slate-900 shadow-2xl">
-              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 px-8 py-6">
-                <div>
-                  <h2 className="text-2xl font-black text-slate-950 dark:text-white">
-                    Nova conta a pagar
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                    Cadastre uma despesa operacional do sistema.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={resetPayableForm}
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 text-xl font-black text-slate-600 dark:text-slate-300 transition hover:bg-red-50 dark:bg-red-500/10 dark:hover:bg-red-50 dark:bg-red-500/100/10 hover:text-red-600"
-                >
-                  ×
-                </button>
-              </div>
-
-              <form onSubmit={handleCreatePayable}>
-                <div className="grid gap-5 p-8 md:grid-cols-2 xl:grid-cols-4">
-                  <FormField label="Descrição">
-                    <input
-                      type="text"
-                      value={payableDescription}
-                      onChange={(event) =>
-                        setPayableDescription(event.target.value)
-                      }
-                      placeholder="Ex: Manutenção, IPTU, limpeza..."
-                      required
-                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
-                    />
-                  </FormField>
-
-                  <FormField label="Valor">
-                    <input
-                      type="number"
-                      value={payableAmount}
-                      onChange={(event) => setPayableAmount(event.target.value)}
-                      placeholder="Ex: 350"
-                      required
-                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
-                    />
-                  </FormField>
-
-                  <FormField label="Vencimento">
-                    <input
-                      type="date"
-                      value={payableDueDate}
-                      onChange={(event) =>
-                        setPayableDueDate(event.target.value)
-                      }
-                      required
-                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
-                    />
-                  </FormField>
-
-                  <FormField label="Imóvel vinculado">
-                    <select
-                      value={payablePropertyId}
-                      onChange={(event) =>
-                        setPayablePropertyId(event.target.value)
-                      }
-                      className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-500/20"
-                    >
-                      <option value="">Despesa geral</option>
-                      {properties.map((property) => (
-                        <option key={property.id} value={property.id}>
-                          {property.name}
-                        </option>
-                      ))}
-                    </select>
-                  </FormField>
-                </div>
-
-                <div className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 px-8 py-6">
-                  <button
-                    type="button"
-                    onClick={resetPayableForm}
-                    className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-4 text-sm font-black text-slate-600 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
-                  >
-                    Cancelar
-                  </button>
-
-                  <button
-                    type="submit"
-                    className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/20 transition hover:bg-orange-600"
-                  >
-                    Cadastrar conta
-                  </button>
-                </div>
-              </form>
+                {formatCurrency(balance.projectedBalance)}
+              </p>
+              <p className="mt-1 text-xs font-bold text-slate-500 dark:text-slate-400">
+                Recebido + a receber - pago - a pagar
+              </p>
             </div>
           </div>
-        )}
+        </div>
+
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <BalanceCard
+            icon="📥"
+            title="A receber"
+            value={formatCurrency(balance.totalToReceive)}
+            detail={`${balance.openReceivableCount} conta(s) em aberto`}
+          />
+
+          <BalanceCard
+            icon="✅"
+            title="Recebido"
+            value={formatCurrency(balance.totalReceived)}
+            detail={`${balance.receivedCount} recebimento(s) baixado(s)`}
+          />
+
+          <BalanceCard
+            icon="📤"
+            title="A pagar"
+            value={formatCurrency(balance.totalToPay)}
+            detail={`${balance.openPayableCount} conta(s) em aberto`}
+            danger
+          />
+
+          <BalanceCard
+            icon="💳"
+            title="Pago"
+            value={formatCurrency(balance.totalPaid)}
+            detail={`${balance.paidCount} despesa(s) paga(s)`}
+          />
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-3">
+          <SimpleSummaryCard
+            title="Vencidos a receber"
+            value={formatCurrency(balance.overdueReceivable)}
+            description="Valores vencidos que ainda não foram recebidos."
+            danger={balance.overdueReceivable > 0}
+          />
+
+          <SimpleSummaryCard
+            title="Vencidos a pagar"
+            value={formatCurrency(balance.overduePayable)}
+            description="Despesas vencidas que ainda não foram pagas."
+            danger={balance.overduePayable > 0}
+          />
+
+          <SimpleSummaryCard
+            title="Leitura do período"
+            value={balance.projectedBalance >= 0 ? "Positiva" : "Negativa"}
+            description="Resultado considerando entradas e saídas abertas."
+            danger={balance.projectedBalance < 0}
+          />
+        </div>
+
+        <div className="grid gap-5 xl:grid-cols-2">
+          <StatementList
+            title="Próximos recebimentos"
+            emptyMessage="Nenhuma conta a receber em aberto no período."
+            items={nextReceivables.map((receivable) => ({
+              id: receivable.id,
+              title: receivable.tenantName,
+              subtitle: receivable.propertyName,
+              date: receivable.dueDate,
+              amount: receivable.amount,
+              status: receivable.status,
+              negative: false,
+            }))}
+          />
+
+          <StatementList
+            title="Próximos pagamentos"
+            emptyMessage="Nenhuma conta a pagar em aberto no período."
+            items={nextPayables.map((payable) => ({
+              id: payable.id,
+              title: payable.description,
+              subtitle: payable.personName || payable.category || "Geral",
+              date: payable.dueDate,
+              amount: payable.amount,
+              status: payable.status,
+              negative: true,
+            }))}
+          />
+        </div>
       </div>
     </AppShell>
   );
 }
 
-type FormFieldProps = {
-  label: string;
-  children: React.ReactNode;
-};
-
-function FormField({ label, children }: FormFieldProps) {
-  return (
-    <div>
-      <label className="mb-2 block text-sm font-black text-slate-700 dark:text-slate-300">
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-type FinancialCardProps = {
-  icon: string;
-  title: string;
-  value: string;
-  detail: string;
-  isPositive?: boolean;
-};
-
-function FinancialCard({
-  icon,
+function BalanceCard({
   title,
   value,
   detail,
-  isPositive = true,
-}: FinancialCardProps) {
+  icon,
+  danger = false,
+}: {
+  title: string;
+  value: string;
+  detail: string;
+  icon: string;
+  danger?: boolean;
+}) {
   return (
-    <div className="rounded-3xl border border-orange-100 dark:border-orange-500/30 bg-white dark:bg-slate-900 p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
-      <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 dark:bg-orange-50 dark:bg-orange-500/100/20 text-xl text-orange-600">
+    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm dark:border-orange-500/30 dark:bg-slate-900">
+      <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50 text-xl dark:bg-orange-500/10">
         {icon}
       </div>
-
-      <p className="text-sm font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500">
+      <p className="text-sm font-black text-slate-500 dark:text-slate-400">
         {title}
       </p>
-
       <h3
         className={`mt-3 text-3xl font-black ${
-          isPositive ? "text-slate-950 dark:text-white" : "text-red-600"
+          danger ? "text-red-600" : "text-slate-950 dark:text-white"
         }`}
       >
         {value}
       </h3>
-
       <p className="mt-3 text-sm font-bold text-orange-600">{detail}</p>
     </div>
   );
 }
 
-type StatusCardProps = {
-  title: string;
-  value: string;
-  amount: number;
-  description: string;
-  badge: string;
-  badgeClassName: string;
-};
-
-function StatusCard({
+function SimpleSummaryCard({
   title,
   value,
-  amount,
   description,
-  badge,
-  badgeClassName,
-}: StatusCardProps) {
+  danger = false,
+}: {
+  title: string;
+  value: string;
+  description: string;
+  danger?: boolean;
+}) {
   return (
-    <div className="rounded-3xl border border-orange-100 dark:border-orange-500/30 bg-white dark:bg-slate-900 p-6 shadow-sm">
-      <div className="mb-5 flex items-center justify-between">
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-black ${badgeClassName}`}
-        >
-          {badge}
-        </span>
-
-        <span className="text-sm font-black text-slate-400 dark:text-slate-500">
-          {amount}
-        </span>
-      </div>
-
-      <p className="text-sm font-bold text-slate-500 dark:text-slate-400 dark:text-slate-500">
+    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm dark:border-orange-500/30 dark:bg-slate-900">
+      <p className="text-sm font-black text-slate-500 dark:text-slate-400">
         {title}
       </p>
-      <h3 className="mt-3 text-3xl font-black text-slate-950 dark:text-white">
+      <h3
+        className={`mt-3 text-3xl font-black ${
+          danger ? "text-red-600" : "text-slate-950 dark:text-white"
+        }`}
+      >
         {value}
       </h3>
-      <p className="mt-3 text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
+      <p className="mt-3 text-sm font-semibold text-slate-500 dark:text-slate-400">
         {description}
       </p>
     </div>
   );
 }
 
-function PaymentStatusBadge({ status }: { status: ReceivableStatus }) {
-  const statusConfig = {
-    Pending: {
-      label: "Pendente",
-      className: "bg-yellow-100 text-yellow-700",
-    },
+function StatementList({
+  title,
+  items,
+  emptyMessage,
+}: {
+  title: string;
+  emptyMessage: string;
+  items: Array<{
+    id: string;
+    title: string;
+    subtitle: string;
+    date: string;
+    amount: number;
+    status: FinancialStatus;
+    negative: boolean;
+  }>;
+}) {
+  return (
+    <div className="rounded-3xl border border-orange-100 bg-white shadow-sm dark:border-orange-500/30 dark:bg-slate-900">
+      <div className="border-b border-slate-200 px-6 py-5 dark:border-slate-700">
+        <h2 className="text-xl font-black text-slate-950 dark:text-white">
+          {title}
+        </h2>
+      </div>
+
+      <div className="divide-y divide-slate-100 dark:divide-slate-700">
+        {items.length === 0 ? (
+          <div className="px-6 py-8 text-sm font-semibold text-slate-500 dark:text-slate-400">
+            {emptyMessage}
+          </div>
+        ) : (
+          items.map((item) => (
+            <div
+              key={item.id}
+              className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div>
+                <p className="font-black text-slate-900 dark:text-slate-100">
+                  {item.title}
+                </p>
+                <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                  {item.subtitle} · Vencimento {formatDate(item.date)}
+                </p>
+              </div>
+
+              <div className="text-left sm:text-right">
+                <p
+                  className={`text-lg font-black ${
+                    item.negative ? "text-red-600" : "text-emerald-600"
+                  }`}
+                >
+                  {item.negative ? "- " : ""}
+                  {formatCurrency(item.amount)}
+                </p>
+                <FinancialStatusBadge status={item.status} />
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FinancialStatusBadge({ status }: { status: FinancialStatus }) {
+  const statusConfig: Record<
+    FinancialStatus,
+    { label: string; className: string }
+  > = {
+    Pending: { label: "Pendente", className: "bg-yellow-100 text-yellow-700" },
     Paid: {
       label: "Pago",
-      className:
-        "bg-emerald-100 dark:bg-emerald-50 dark:bg-emerald-500/100/20 text-emerald-700",
+      className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20",
     },
     Overdue: {
       label: "Vencido",
-      className:
-        "bg-red-100 dark:bg-red-50 dark:bg-red-500/100/20 text-red-700",
+      className: "bg-red-100 text-red-700 dark:bg-red-500/20",
     },
     Canceled: {
       label: "Cancelado",
       className:
-        "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300",
+        "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
     },
   };
 
@@ -1165,89 +739,459 @@ function PaymentStatusBadge({ status }: { status: ReceivableStatus }) {
   );
 }
 
-function PayableStatusBadge({ status }: { status: PayableStatus }) {
-  const statusConfig = {
-    Pending: {
-      label: "Pendente",
-      className: "bg-yellow-100 text-yellow-700",
-    },
-    Paid: {
-      label: "Pago",
-      className:
-        "bg-emerald-100 dark:bg-emerald-50 dark:bg-emerald-500/100/20 text-emerald-700",
-    },
-    Overdue: {
-      label: "Vencido",
-      className:
-        "bg-red-100 dark:bg-red-50 dark:bg-red-500/100/20 text-red-700",
-    },
-    Canceled: {
-      label: "Cancelado",
-      className:
-        "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300",
-    },
-  };
-
-  return (
-    <span
-      className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${statusConfig[status].className}`}
-    >
-      {statusConfig[status].label}
-    </span>
+function readReceivablesDirectlyFromStorage() {
+  const paymentRecords = parseStoredArray<ChargePayment>(
+    localStorage.getItem(CHARGE_PAYMENTS_STORAGE_KEY),
   );
+  const paidChargeIds = parseStoredArray<string>(
+    localStorage.getItem(PAID_CHARGES_STORAGE_KEY),
+  );
+  const canceledChargeIds = parseStoredArray<string>(
+    localStorage.getItem(CANCELED_CHARGES_STORAGE_KEY),
+  );
+
+  const receivables = RECEIVABLE_STORAGE_KEYS.flatMap((storageKey) =>
+    parseStoredArray<RawRecord>(localStorage.getItem(storageKey)).map((record) =>
+      normalizeReceivableRecord(record, {
+        paymentRecords,
+        paidChargeIds,
+        canceledChargeIds,
+      }),
+    ),
+  );
+
+  return mergeReceivables(receivables);
 }
 
-function getContractDisplayStatus(contract: Contract): ContractStatus {
-  if (contract.status === "Deleted") return "Deleted";
-  if (contract.status === "Canceled") return "Canceled";
-  if (contract.status === "Finished") return "Finished";
-  if (contract.status === "Inactive") return "Inactive";
-  if (contract.status === "Active")
-    return getAutomaticContractStatus(contract.endDate);
+function readPayablesDirectlyFromStorage() {
+  const paymentRecords = parseStoredArray<ExpensePayment>(
+    localStorage.getItem(EXPENSE_PAYMENTS_STORAGE_KEY),
+  );
 
-  return getAutomaticContractStatus(contract.endDate);
+  const payables = PAYABLE_STORAGE_KEYS.flatMap((storageKey) =>
+    parseStoredArray<RawRecord>(localStorage.getItem(storageKey)).map((record) =>
+      normalizePayableRecord(record, paymentRecords),
+    ),
+  );
+
+  return mergePayables(payables);
 }
 
-function getAutomaticContractStatus(endDate?: string): ContractStatus {
-  if (!endDate) return "Active";
+function normalizeReceivableRecord(
+  record: RawRecord,
+  context: {
+    paymentRecords: ChargePayment[];
+    paidChargeIds: string[];
+    canceledChargeIds: string[];
+  },
+): NormalizedReceivable {
+  const id =
+    getStringValue(record, ["id", "receivableId", "accountId", "chargeId"]) ||
+    crypto.randomUUID();
+  const dueDate = getDateValue(record, [
+    "dueDate",
+    "date",
+    "installmentDate",
+    "expirationDate",
+    "maturityDate",
+    "vencimento",
+  ]);
+  const amount = getNumberValue(record, [
+    "amount",
+    "value",
+    "total",
+    "rentValue",
+    "installmentValue",
+  ]);
+  const paymentRecord = context.paymentRecords.find(
+    (payment) => String(payment.chargeId) === String(id),
+  );
+  const rawStatus = normalizeStatus(
+    getStringValue(record, ["status", "state", "situation"]),
+  );
+  const isPaid =
+    rawStatus === "Paid" ||
+    context.paidChargeIds.includes(id) ||
+    Boolean(paymentRecord);
+  const isCanceled =
+    rawStatus === "Canceled" || context.canceledChargeIds.includes(id);
+  const paymentDate =
+    normalizeDate(paymentRecord?.paidAt) ||
+    getNullableDateValue(record, ["paymentDate", "paidAt", "receivedAt"]);
 
-  const today = new Date();
-  const contractEndDate = new Date(`${endDate}T23:59:59`);
-
-  return contractEndDate >= today ? "Active" : "Inactive";
+  return {
+    id,
+    tenantName:
+      getStringValue(record, [
+        "tenantName",
+        "tenant",
+        "customerName",
+        "personName",
+        "payerName",
+      ]) || "Pessoa não informada",
+    propertyName:
+      getStringValue(record, [
+        "propertyName",
+        "property",
+        "realEstateName",
+        "assetName",
+      ]) || "Sem imóvel vinculado",
+    dueDate,
+    amount,
+    status: getFinancialStatus(dueDate, isPaid, isCanceled),
+    paymentDate,
+    paidAmount:
+      getNumberValue(paymentRecord || {}, ["amountPaid", "amount", "value"]) ||
+      getNumberValue(record, ["amountPaid", "paidAmount"]) ||
+      amount,
+  };
 }
 
-function getPayableStatus(
+function normalizePayableRecord(
+  record: RawRecord,
+  paymentRecords: ExpensePayment[],
+): NormalizedPayable {
+  const id =
+    getStringValue(record, ["id", "expenseId", "payableId", "accountId"]) ||
+    crypto.randomUUID();
+  const dueDate = getDateValue(record, [
+    "dueDate",
+    "date",
+    "expirationDate",
+    "maturityDate",
+    "vencimento",
+  ]);
+  const amount = getNumberValue(record, [
+    "amount",
+    "value",
+    "total",
+    "expenseValue",
+  ]);
+  const paymentRecord = paymentRecords.find(
+    (payment) => String(payment.expenseId) === String(id),
+  );
+  const rawStatus = normalizeStatus(
+    getStringValue(record, ["status", "state", "situation"]),
+  );
+  const isPaid = rawStatus === "Paid" || Boolean(paymentRecord);
+  const isCanceled = rawStatus === "Canceled";
+  const paymentDate =
+    normalizeDate(paymentRecord?.paidAt) ||
+    getNullableDateValue(record, ["paymentDate", "paidAt"]);
+
+  return {
+    id,
+    personName:
+      getStringValue(record, [
+        "personName",
+        "supplierName",
+        "tenantName",
+        "name",
+        "payerName",
+      ]) || "Pessoa não informada",
+    description:
+      getStringValue(record, ["description", "title", "name"]) ||
+      "Conta a pagar",
+    category: getStringValue(record, ["category", "group"]) || "Outros",
+    dueDate,
+    amount,
+    status: getFinancialStatus(dueDate, isPaid, isCanceled),
+    paymentDate,
+    paidAmount:
+      getNumberValue(paymentRecord || {}, ["amountPaid", "amount", "value"]) ||
+      getNumberValue(record, ["amountPaid", "paidAmount"]) ||
+      amount,
+  };
+}
+
+function mergeReceivables(receivables: NormalizedReceivable[]) {
+  const merged = new Map<string, NormalizedReceivable>();
+
+  receivables.forEach((receivable) => {
+    if (receivable.amount <= 0) return;
+
+    const current = merged.get(receivable.id);
+
+    if (!current) {
+      merged.set(receivable.id, receivable);
+      return;
+    }
+
+    if (current.status !== "Paid" && receivable.status === "Paid") {
+      merged.set(receivable.id, receivable);
+      return;
+    }
+
+    if (current.status === receivable.status) {
+      merged.set(receivable.id, {
+        ...current,
+        tenantName: current.tenantName || receivable.tenantName,
+        propertyName: current.propertyName || receivable.propertyName,
+        paymentDate: current.paymentDate || receivable.paymentDate,
+        paidAmount: Math.max(current.paidAmount, receivable.paidAmount),
+      });
+    }
+  });
+
+  return Array.from(merged.values()).sort(sortByDueDate);
+}
+
+function mergePayables(payables: NormalizedPayable[]) {
+  const merged = new Map<string, NormalizedPayable>();
+
+  payables.forEach((payable) => {
+    if (payable.amount <= 0) return;
+
+    const current = merged.get(payable.id);
+
+    if (!current) {
+      merged.set(payable.id, payable);
+      return;
+    }
+
+    if (current.status !== "Paid" && payable.status === "Paid") {
+      merged.set(payable.id, payable);
+      return;
+    }
+
+    if (current.status === payable.status) {
+      merged.set(payable.id, {
+        ...current,
+        personName: current.personName || payable.personName,
+        description: current.description || payable.description,
+        paymentDate: current.paymentDate || payable.paymentDate,
+        paidAmount: Math.max(current.paidAmount, payable.paidAmount),
+      });
+    }
+  });
+
+  return Array.from(merged.values()).sort(sortByDueDate);
+}
+
+function parseStoredArray<T>(storedValue: string | null): T[] {
+  if (!storedValue) return [];
+
+  try {
+    const parsedValue = JSON.parse(storedValue);
+    return Array.isArray(parsedValue) ? (parsedValue as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function getFinancialStatus(
   dueDate: string,
   isPaid: boolean,
   isCanceled: boolean,
-): PayableStatus {
+): FinancialStatus {
   if (isCanceled) return "Canceled";
   if (isPaid) return "Paid";
 
   return dueDate < getTodayDate() ? "Overdue" : "Pending";
 }
 
-function getContractValue(contract: Contract) {
-  return Number(contract.rentValue ?? contract.value ?? 0);
+function normalizeStatus(status?: string): FinancialStatus | "" {
+  const normalizedStatus = String(status || "")
+    .trim()
+    .toLowerCase();
+
+  if (
+    ["paid", "pago", "received", "recebido", "settled", "baixado"].includes(
+      normalizedStatus,
+    )
+  ) {
+    return "Paid";
+  }
+
+  if (
+    ["canceled", "cancelled", "cancelado", "void"].includes(normalizedStatus)
+  ) {
+    return "Canceled";
+  }
+
+  if (["overdue", "vencido", "late", "atrasado"].includes(normalizedStatus)) {
+    return "Overdue";
+  }
+
+  if (["pending", "pendente", "open", "aberto"].includes(normalizedStatus)) {
+    return "Pending";
+  }
+
+  return "";
 }
 
-function buildCurrentMonthDueDate(startDate: string) {
-  const today = new Date();
-  const contractStartDate = new Date(`${startDate}T00:00:00`);
+function getStringValue(record: RawRecord, keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
 
-  const dueDay = Number.isNaN(contractStartDate.getDate())
-    ? 10
-    : contractStartDate.getDate();
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      return String(value);
+    }
+  }
 
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(
-    2,
-    "0",
-  )}-${String(dueDay).padStart(2, "0")}`;
+  return "";
+}
+
+function getNumberValue(record: RawRecord, keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      const rawNumber = String(value).trim();
+      const normalizedNumber = rawNumber.includes(",")
+        ? rawNumber.replace(/\./g, "").replace(",", ".")
+        : rawNumber;
+      const numberValue = Number(normalizedNumber);
+
+      if (!Number.isNaN(numberValue)) return numberValue;
+    }
+  }
+
+  return 0;
+}
+
+function getDateValue(record: RawRecord, keys: string[]) {
+  for (const key of keys) {
+    const normalizedDate = normalizeDate(record[key]);
+
+    if (normalizedDate) return normalizedDate;
+  }
+
+  return getTodayDate();
+}
+
+function getNullableDateValue(record: RawRecord, keys: string[]) {
+  for (const key of keys) {
+    const normalizedDate = normalizeDate(record[key]);
+
+    if (normalizedDate) return normalizedDate;
+  }
+
+  return null;
+}
+
+function normalizeDate(value: unknown) {
+  if (!value) return "";
+
+  const rawValue = String(value).trim();
+
+  if (!rawValue) return "";
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(rawValue)) {
+    return rawValue.slice(0, 10);
+  }
+
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(rawValue)) {
+    const [day, month, year] = rawValue.split("/");
+
+    return `${year}-${month}-${day}`;
+  }
+
+  const parsedDate = new Date(rawValue);
+
+  if (Number.isNaN(parsedDate.getTime())) return "";
+
+  return parsedDate.toISOString().slice(0, 10);
+}
+
+function isDateInsideRange(date: string | null, startDate: string, endDate: string) {
+  const normalizedDate = normalizeDate(date);
+
+  if (!normalizedDate) return false;
+  if (startDate && normalizedDate < startDate) return false;
+  if (endDate && normalizedDate > endDate) return false;
+
+  return true;
+}
+
+function sortByDueDate<T extends { dueDate: string }>(firstItem: T, secondItem: T) {
+  return firstItem.dueDate.localeCompare(secondItem.dueDate);
+}
+
+function sumAmounts<T extends Record<string, unknown>>(
+  items: T[],
+  key: keyof T,
+) {
+  return items.reduce((total, item) => {
+    const amount = Number(item[key] || 0);
+
+    return total + (Number.isFinite(amount) ? amount : 0);
+  }, 0);
 }
 
 function getTodayDate() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function getStartOfCurrentMonth() {
+  const today = new Date();
+
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(
+    2,
+    "0",
+  )}-01`;
+}
+
+function getEndOfCurrentMonth() {
+  const today = new Date();
+  const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+  return `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(
+    2,
+    "0",
+  )}-${String(lastDay.getDate()).padStart(2, "0")}`;
+}
+
+function getStartOfCurrentQuarter() {
+  const today = new Date();
+  const quarterStartMonth = Math.floor(today.getMonth() / 3) * 3;
+
+  return `${today.getFullYear()}-${String(quarterStartMonth + 1).padStart(
+    2,
+    "0",
+  )}-01`;
+}
+
+function getEndOfCurrentQuarter() {
+  const today = new Date();
+  const quarterStartMonth = Math.floor(today.getMonth() / 3) * 3;
+  const quarterEndDate = new Date(today.getFullYear(), quarterStartMonth + 3, 0);
+
+  return `${quarterEndDate.getFullYear()}-${String(
+    quarterEndDate.getMonth() + 1,
+  ).padStart(2, "0")}-${String(quarterEndDate.getDate()).padStart(2, "0")}`;
+}
+
+function getStartOfCurrentYear() {
+  const today = new Date();
+
+  return `${today.getFullYear()}-01-01`;
+}
+
+function getEndOfCurrentYear() {
+  const today = new Date();
+
+  return `${today.getFullYear()}-12-31`;
+}
+
+function getPeriodLabel(
+  shortcut: PeriodShortcut,
+  startDate: string,
+  endDate: string,
+) {
+  if (shortcut === "CurrentMonth") return "do mês atual";
+  if (shortcut === "CurrentQuarter") return "do trimestre atual";
+  if (shortcut === "CurrentYear") return "do ano atual";
+  if (shortcut === "All") return "de todo o período";
+
+  if (startDate && endDate) {
+    return `de ${formatDate(startDate)} a ${formatDate(endDate)}`;
+  }
+
+  if (startDate) return `a partir de ${formatDate(startDate)}`;
+  if (endDate) return `até ${formatDate(endDate)}`;
+
+  return "personalizado";
 }
 
 function formatCurrency(value?: number) {
@@ -1258,7 +1202,9 @@ function formatCurrency(value?: number) {
 }
 
 function formatDate(date: string) {
-  if (!date) return "-";
+  const normalizedDate = normalizeDate(date);
 
-  return new Date(`${date}T00:00:00`).toLocaleDateString("pt-BR");
+  if (!normalizedDate) return "-";
+
+  return new Date(`${normalizedDate}T00:00:00`).toLocaleDateString("pt-BR");
 }

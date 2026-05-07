@@ -492,7 +492,13 @@ export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
-  const [isSidebarLocked, setIsSidebarLocked] = useState(false);
+  const [isSidebarLocked, setIsSidebarLocked] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return localStorage.getItem("rentix_sidebar_locked") === "true";
+  });
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeSettingsTab, setActiveSettingsTab] = useState<"user" | "company">("company");
@@ -530,6 +536,10 @@ export default function AppShell({ children }: AppShellProps) {
 
     setThemeSettings(readThemeSettingsFromStorage());
   }, []);
+
+  useEffect(() => {
+    setIsSidebarExpanded(isSidebarLocked);
+  }, [isSidebarLocked]);
 
   useEffect(() => {
     const isBlackMode = themeSettings.mode === "black";
@@ -719,7 +729,7 @@ export default function AppShell({ children }: AppShellProps) {
           onMouseLeave={() => {
             if (!isSidebarLocked) setIsSidebarExpanded(false);
           }}
-          className={`fixed left-0 top-0 z-50 flex h-screen flex-col border-r border-orange-100 bg-white transition-all duration-300 lg:z-30 ${
+          className={`fixed left-0 top-0 z-50 flex h-screen flex-col overflow-hidden border-r border-orange-100 bg-white transition-[width,transform] duration-300 ease-in-out lg:z-30 ${
             isSidebarOpen ? "lg:w-72" : "lg:w-20"
           } ${
             isMobileSidebarOpen
@@ -733,42 +743,36 @@ export default function AppShell({ children }: AppShellProps) {
                 <img
                   src="/logo-rentix.png"
                   alt="Rentix"
-                  className="h-24 w-24 object-contain lg:h-32 lg:w-32"
+                  className={`object-contain transition-all duration-300 ease-in-out ${isSidebarOpen ? "h-24 w-24 lg:h-28 lg:w-28" : "h-12 w-12 lg:h-12 lg:w-12"}`}
                 />
               </div>
 
-              <div
-                className={`mt-4 text-center ${
-                  isSidebarOpen ? "lg:block" : "lg:hidden"
-                }`}
-              >
-                <h1 className="text-2xl font-black text-slate-950">Rentix</h1>
-                <p className="text-xs font-semibold text-orange-600">
-                  Gestão de Locações
-                </p>
-              </div>
             </div>
           </Link>
 
           <div
-            className={`border-b border-orange-100 px-4 py-3 ${
-              isSidebarOpen ? "lg:block" : "lg:hidden"
-            } hidden lg:block`}
+            className={`hidden overflow-hidden border-b border-orange-100 px-4 transition-all duration-300 ease-in-out lg:block ${
+              isSidebarOpen ? "max-h-14 py-3 opacity-100" : "max-h-0 py-0 opacity-0"
+            }`}
           >
-            <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+            <label className="flex items-center gap-2 whitespace-nowrap text-xs font-semibold text-slate-600">
               <input
                 type="checkbox"
                 checked={isSidebarLocked}
                 onChange={(event) => {
-                  setIsSidebarLocked(event.target.checked);
-                  setIsSidebarExpanded(event.target.checked);
+                  const isChecked = event.target.checked;
+
+                  setIsSidebarLocked(isChecked);
+                  setIsSidebarExpanded(isChecked);
+
+                  localStorage.setItem("rentix_sidebar_locked", String(isChecked));
                 }}
               />
               Fixar
             </label>
           </div>
 
-          <nav className="flex-1 space-y-2 overflow-y-auto px-2 py-6">
+          <nav className="flex-1 space-y-2 overflow-y-auto overflow-x-hidden px-2 py-6">
             {menuItems.map((item) => {
               const isActive = isActiveRoute(item.href);
 
@@ -778,14 +782,14 @@ export default function AppShell({ children }: AppShellProps) {
                   href={item.href}
                   title={!isSidebarOpen ? item.label : undefined}
                   onClick={handleCloseMobileSidebar}
-                  className={`group flex items-center rounded-2xl px-3 py-4 text-sm font-bold transition ${
+                  className={`group flex items-center overflow-hidden rounded-2xl px-3 py-4 text-sm font-bold transition-colors duration-200 ${
                     isActive
                       ? "bg-orange-500 text-white shadow-md shadow-orange-100"
                       : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
                   }`}
                 >
                   <span
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors duration-200 ${
                       isActive
                         ? "bg-white/20"
                         : "bg-slate-100 group-hover:bg-orange-100"
@@ -794,7 +798,13 @@ export default function AppShell({ children }: AppShellProps) {
                     {item.icon}
                   </span>
 
-                  <span className={`ml-4 ${isSidebarOpen ? "lg:inline" : "lg:hidden"}`}>
+                  <span
+                    className={`ml-4 whitespace-nowrap transition-all duration-300 ease-in-out ${
+                      isSidebarOpen
+                        ? "max-w-48 translate-x-0 opacity-100"
+                        : "max-w-0 -translate-x-2 overflow-hidden opacity-0"
+                    }`}
+                  >
                     {item.label}
                   </span>
                 </Link>
@@ -804,7 +814,7 @@ export default function AppShell({ children }: AppShellProps) {
         </aside>
 
         <div
-          className={`flex min-h-screen flex-1 flex-col transition-all duration-300 ${
+          className={`flex min-h-screen flex-1 flex-col transition-[margin] duration-300 ease-in-out ${
             isSidebarOpen ? "lg:ml-72" : "lg:ml-20"
           }`}
         >
@@ -815,8 +825,7 @@ export default function AppShell({ children }: AppShellProps) {
                 onClick={() => setIsMobileSidebarOpen(true)}
                 className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500 text-xl font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 lg:hidden"
               >
-                ☰
-              </button>
+                ?              </button>
 
               <div>
                 <p className="text-xs font-semibold text-orange-600 lg:text-sm">
@@ -990,7 +999,7 @@ export default function AppShell({ children }: AppShellProps) {
                     onClick={handleOpenResetModal}
                     className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600"
                   >
-                    🗑️ Resetar dados de teste
+                    🗑?Resetar dados de teste
                   </button>
                 </aside>
 
@@ -1486,8 +1495,7 @@ export default function AppShell({ children }: AppShellProps) {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-4">
                     <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-red-100 text-2xl">
-                      🗑️
-                    </div>
+                      🗑?                    </div>
                     <div>
                       <div className="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-black uppercase tracking-wide text-red-700">
                         Ação crítica
@@ -1546,8 +1554,7 @@ export default function AppShell({ children }: AppShellProps) {
                                   : "border-slate-300 bg-white text-transparent"
                               }`}
                             >
-                              ✓
-                            </span>
+                              ?                            </span>
                           </div>
                           <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
                             {option.description}

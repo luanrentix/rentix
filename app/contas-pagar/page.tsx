@@ -957,9 +957,17 @@ export default function AccountsPayablePage() {
     );
   }
 
+  function dispatchAccountsPayableIntegrationEvents() {
+    window.dispatchEvent(new Event("rentix-payables-updated"));
+    window.dispatchEvent(new Event("rentix-accounts-payable-updated"));
+    window.dispatchEvent(new Event("rentix-financial-updated"));
+  }
+
   function saveExpenses(updatedExpenses: Expense[]) {
     setExpenses(updatedExpenses);
     localStorage.setItem("rentix_expenses", JSON.stringify(updatedExpenses));
+    localStorage.setItem("rentix_payables", JSON.stringify(updatedExpenses));
+    dispatchAccountsPayableIntegrationEvents();
   }
 
   function savePaymentRecords(updatedPaymentRecords: ExpensePayment[]) {
@@ -968,6 +976,7 @@ export default function AccountsPayablePage() {
       "rentix_expense_payments",
       JSON.stringify(updatedPaymentRecords),
     );
+    dispatchAccountsPayableIntegrationEvents();
   }
 
   function openCreateModal() {

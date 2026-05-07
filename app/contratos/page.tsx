@@ -382,6 +382,8 @@ type ContractDisplayStatus = ContractStatus | "Expiring";
 
 type ContractFilterStatus = "All" | ContractStatus | "Expiring";
 
+type ContractDetailsTab = "Data" | "Financial" | "History" | "Prints" | "Notes";
+
 type ContractRenewalRecord = {
   renewedAt: string;
   previousEndDate: string;
@@ -493,6 +495,8 @@ export default function ContractsPage() {
   const [finishReason, setFinishReason] = useState("");
   const [finishReasonError, setFinishReasonError] = useState("");
   const [openActionMenuContractId, setOpenActionMenuContractId] = useState<number | null>(null);
+  const [selectedContractDetails, setSelectedContractDetails] = useState<Contract | null>(null);
+  const [contractDetailsActiveTab, setContractDetailsActiveTab] = useState<ContractDetailsTab>("Data");
 
   const isEditing = editingContractId !== null;
 
@@ -707,6 +711,8 @@ export default function ContractsPage() {
     setFinishReason("");
     setFinishReasonError("");
     setOpenActionMenuContractId(null);
+    setSelectedContractDetails(null);
+    setContractDetailsActiveTab("Data");
     setIsFormOpen(false);
   }
 
@@ -1131,6 +1137,51 @@ export default function ContractsPage() {
 
   function handleCloseContractActions() {
     setOpenActionMenuContractId(null);
+  }
+
+  function handleOpenContractDetails(contract: Contract) {
+    setSelectedContractDetails(contract);
+    setContractDetailsActiveTab("Data");
+    setOpenActionMenuContractId(null);
+  }
+
+  function handleCloseContractDetails() {
+    setSelectedContractDetails(null);
+    setContractDetailsActiveTab("Data");
+  }
+
+  function getContractReceivableCharges(contract: Contract) {
+    const storedManualCharges = localStorage.getItem(MANUAL_CHARGES_STORAGE_KEY);
+    const manualCharges = safeParseLocalStorageArray<ReceivableCharge>(storedManualCharges);
+
+    return manualCharges
+      .filter((charge) => isReceivableChargeLinkedToContract(charge, contract))
+      .sort((firstCharge, secondCharge) => {
+        const firstDate = firstCharge.dueDate ? new Date(firstCharge.dueDate).getTime() : 0;
+        const secondDate = secondCharge.dueDate ? new Date(secondCharge.dueDate).getTime() : 0;
+
+        return firstDate - secondDate;
+      });
+  }
+
+  function getContractReceivableSummary(contract: Contract) {
+    const contractCharges = getContractReceivableCharges(contract);
+    const paidChargeIds = safeParseLocalStorageArray<string>(localStorage.getItem(PAID_CHARGES_STORAGE_KEY));
+    const paidChargeIdSet = new Set(paidChargeIds.map((chargeId) => String(chargeId)));
+    const paidCharges = contractCharges.filter((charge) => paidChargeIdSet.has(String(charge.id)));
+    const pendingCharges = contractCharges.filter((charge) => !paidChargeIdSet.has(String(charge.id)));
+    const totalAmount = contractCharges.reduce((total, charge) => total + Number(charge.amount || 0), 0);
+    const paidAmount = paidCharges.reduce((total, charge) => total + Number(charge.amount || 0), 0);
+    const pendingAmount = pendingCharges.reduce((total, charge) => total + Number(charge.amount || 0), 0);
+
+    return {
+      charges: contractCharges,
+      paidCharges,
+      pendingCharges,
+      totalAmount,
+      paidAmount,
+      pendingAmount,
+    };
   }
 
   function canRenewContract(displayStatus: ContractDisplayStatus) {
@@ -1818,6 +1869,15 @@ export default function ContractsPage() {
 
                             {openActionMenuContractId === contract.id && (
                               <div className="w-56 rounded-3xl border border-slate-100 bg-white p-2 text-left shadow-xl">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenContractDetails(contract)}
+                                  className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100"
+                                >
+                                  <span>Ver detalhes</span>
+                                  <span>👁️</span>
+                                </button>
+
                                 {canRenewContract(displayStatus) && (
                                   <button
                                     type="button"
@@ -1889,6 +1949,256 @@ export default function ContractsPage() {
             </table>
           </div>
         </div>
+
+        {selectedContractDetails && (() => {
+          const detailsDisplayStatus = getDisplayContractStatus(selectedContractDetails);
+          const detailsProperty = properties.find((property) => String(property.id) === String(selectedContractDetails.propertyId));
+          const detailsTenant = tenants.find((tenant) => String(tenant.id) === String(selectedContractDetails.tenantId));
+          const receivableSummary = getContractReceivableSummary(selectedContractDetails);
+          const detailsTabs: { id: ContractDetailsTab; label: string; icon: string }[] = [
+            { id: "Data", label: "Dados", icon: "📌" },
+            { id: "Financial", label: "Financeiro", icon: "💰" },
+            { id: "History", label: "Histórico", icon: "🕘" },
+            { id: "Prints", label: "Impressos", icon: "📄" },
+            { id: "Notes", label: "Observações", icon: "📝" },
+          ];
+
+          return (
+            <div className="fixed inset-0 z-[72] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+              <div className={`flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl ${isBlackTheme ? "rentix-black-theme" : "rentix-force-light"}`}>
+                <div className="border-b border-slate-100 bg-white px-6 py-5">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-500">
+                        Detalhes do contrato
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-3">
+                        <h2 className="text-3xl font-black text-slate-950">
+                          {selectedContractDetails.propertyName || "Contrato"}
+                        </h2>
+                        <StatusBadge status={detailsDisplayStatus} />
+                        <span className={`rounded-full px-3 py-1 text-xs font-black ${selectedContractDetails.isTemporaryRental ? "bg-orange-100 text-orange-700" : "bg-slate-100 text-slate-600"}`}>
+                          {selectedContractDetails.isTemporaryRental ? "Temporário" : "Padrão residencial"}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm font-semibold text-slate-500">
+                        {selectedContractDetails.tenantName || "Inquilino não informado"} • {formatDate(selectedContractDetails.startDate)} até {formatDate(selectedContractDetails.endDate)}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                      {canRenewContract(detailsDisplayStatus) && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenRenewalModal(selectedContractDetails)}
+                          className="rounded-2xl bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
+                        >
+                          Renovar
+                        </button>
+                      )}
+
+                      {canFinishContract(detailsDisplayStatus) && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenFinishModal(selectedContractDetails)}
+                          className="rounded-2xl bg-red-50 px-5 py-3 text-sm font-black text-red-600 transition hover:bg-red-100"
+                        >
+                          Finalizar
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenPrintableContract(selectedContractDetails)}
+                        className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                      >
+                        Imprimir contrato
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleCloseContractDetails}
+                        className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                      >
+                        Fechar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-b border-slate-100 bg-slate-50 px-6 py-3">
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {detailsTabs.map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setContractDetailsActiveTab(tab.id)}
+                        className={`whitespace-nowrap rounded-2xl px-4 py-3 text-sm font-black transition ${
+                          contractDetailsActiveTab === tab.id
+                            ? "bg-orange-500 text-white shadow-md shadow-orange-100"
+                            : "bg-white text-slate-600 ring-1 ring-slate-100 hover:bg-orange-50 hover:text-orange-700"
+                        }`}
+                      >
+                        <span className="mr-2">{tab.icon}</span>
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto bg-white p-6">
+                  {contractDetailsActiveTab === "Data" && (
+                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                      <DetailCard title="Imóvel" value={selectedContractDetails.propertyName || "Não informado"} detail={formatFullAddressForPrint({
+                        street: detailsProperty?.street,
+                        number: detailsProperty?.number,
+                        neighborhood: detailsProperty?.neighborhood,
+                        city: detailsProperty?.city,
+                        state: detailsProperty?.state,
+                        zipCode: detailsProperty?.zipCode,
+                        complement: detailsProperty?.complement,
+                      }) || "Endereço não informado"} />
+                      <DetailCard title="Inquilino" value={selectedContractDetails.tenantName || "Não informado"} detail={detailsTenant?.phone || detailsTenant?.email || "Contato não informado"} />
+                      <DetailCard title="Valor do aluguel" value={formatCurrency(selectedContractDetails.rentValue)} detail="Valor base do contrato" />
+                      <DetailCard title="Período" value={`${formatDate(selectedContractDetails.startDate)} até ${formatDate(selectedContractDetails.endDate)}`} detail={`${getContractDurationInMonths(selectedContractDetails.startDate, selectedContractDetails.endDate)} mês(es) / ${getContractDurationInDays(selectedContractDetails.startDate, selectedContractDetails.endDate)} dia(s)`} />
+                      <DetailCard title="Tipo" value={selectedContractDetails.isTemporaryRental ? "Locação temporária" : "Contrato padrão residencial"} detail={selectedContractDetails.isTemporaryRental ? `Entrada ${selectedContractDetails.checkInTime || "--:--"} / Saída ${selectedContractDetails.checkOutTime || "--:--"}` : "Modelo residencial padrão"} />
+                      <DetailCard title="Status atual" value={getContractStatusLabel(detailsDisplayStatus)} detail={detailsDisplayStatus === "Expiring" ? `Vence em ${getDaysUntilDate(selectedContractDetails.endDate)} dia(s)` : "Controle operacional do contrato"} />
+                    </div>
+                  )}
+
+                  {contractDetailsActiveTab === "Financial" && (
+                    <div className="space-y-5">
+                      <div className="grid gap-5 md:grid-cols-3">
+                        <DetailCard title="Total vinculado" value={formatCurrency(receivableSummary.totalAmount)} detail={`${receivableSummary.charges.length} parcela(s) encontrada(s)`} />
+                        <DetailCard title="Total recebido" value={formatCurrency(receivableSummary.paidAmount)} detail={`${receivableSummary.paidCharges.length} parcela(s) paga(s)`} />
+                        <DetailCard title="Total em aberto" value={formatCurrency(receivableSummary.pendingAmount)} detail={`${receivableSummary.pendingCharges.length} parcela(s) pendente(s)`} />
+                      </div>
+
+                      <div className="overflow-hidden rounded-3xl border border-slate-100 bg-white">
+                        <div className="border-b border-slate-100 bg-slate-50 px-5 py-4">
+                          <h3 className="text-lg font-black text-slate-950">Parcelas vinculadas</h3>
+                          <p className="mt-1 text-sm font-semibold text-slate-500">Cobranças geradas no Contas a Receber para este contrato.</p>
+                        </div>
+
+                        {receivableSummary.charges.length === 0 ? (
+                          <div className="px-5 py-8 text-center text-sm font-semibold text-slate-500">
+                            Nenhuma parcela vinculada encontrada para este contrato.
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full min-w-[720px] text-left">
+                              <thead className="bg-orange-50">
+                                <tr>
+                                  <th className="px-5 py-3 text-xs font-black uppercase text-slate-600">Parcela</th>
+                                  <th className="px-5 py-3 text-xs font-black uppercase text-slate-600">Vencimento</th>
+                                  <th className="px-5 py-3 text-xs font-black uppercase text-slate-600">Valor</th>
+                                  <th className="px-5 py-3 text-xs font-black uppercase text-slate-600">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {receivableSummary.charges.map((charge) => {
+                                  const isPaid = safeParseLocalStorageArray<string>(localStorage.getItem(PAID_CHARGES_STORAGE_KEY)).some((chargeId) => String(chargeId) === String(charge.id));
+
+                                  return (
+                                    <tr key={charge.id}>
+                                      <td className="px-5 py-4 text-sm font-black text-slate-900">
+                                        {charge.installmentNumber && charge.installmentTotal
+                                          ? `${charge.installmentNumber}/${charge.installmentTotal}`
+                                          : "1/1"}
+                                      </td>
+                                      <td className="px-5 py-4 text-sm font-semibold text-slate-600">
+                                        {charge.dueDate ? new Date(charge.dueDate).toLocaleDateString("pt-BR") : "-"}
+                                      </td>
+                                      <td className="px-5 py-4 text-sm font-black text-slate-900">
+                                        {formatCurrency(Number(charge.amount || 0))}
+                                      </td>
+                                      <td className="px-5 py-4">
+                                        <span className={`rounded-full px-3 py-1 text-xs font-black ${isPaid ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                                          {isPaid ? "Pago" : "Em aberto"}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {contractDetailsActiveTab === "History" && (
+                    <div className="space-y-4">
+                      <TimelineItem icon="📄" title="Contrato criado" description="Contrato registrado no módulo de contratos e imóvel vinculado à locação." date={formatDate(selectedContractDetails.startDate)} />
+
+                      {(selectedContractDetails.renewalHistory || []).map((renewal, index) => (
+                        <TimelineItem
+                          key={`${renewal.renewedAt}-${index}`}
+                          icon="🔄"
+                          title="Contrato renovado"
+                          description={`De ${formatDate(renewal.previousEndDate)} para ${formatDate(renewal.newEndDate)} • Valor: ${formatCurrency(renewal.previousRentValue)} para ${formatCurrency(renewal.newRentValue)}${renewal.notes ? ` • ${renewal.notes}` : ""}`}
+                          date={new Date(renewal.renewedAt).toLocaleString("pt-BR")}
+                        />
+                      ))}
+
+                      {selectedContractDetails.finishedAt && (
+                        <TimelineItem icon="✅" title="Contrato finalizado" description={selectedContractDetails.finishReason || "Contrato finalizado."} date={new Date(selectedContractDetails.finishedAt).toLocaleString("pt-BR")} />
+                      )}
+
+                      {selectedContractDetails.statusReason && (
+                        <TimelineItem icon={selectedContractDetails.statusReasonType === "Deleted" ? "🗑️" : "🚫"} title={selectedContractDetails.statusReasonType === "Deleted" ? "Contrato excluído" : "Contrato cancelado"} description={selectedContractDetails.statusReason} date={selectedContractDetails.statusReasonAt ? new Date(selectedContractDetails.statusReasonAt).toLocaleString("pt-BR") : "Data não informada"} />
+                      )}
+                    </div>
+                  )}
+
+                  {contractDetailsActiveTab === "Prints" && (
+                    <div className="grid gap-5 md:grid-cols-2">
+                      <div className="rounded-3xl border border-orange-100 bg-orange-50 p-6">
+                        <p className="text-sm font-black uppercase tracking-wide text-orange-600">Contrato</p>
+                        <h3 className="mt-3 text-2xl font-black text-slate-950">
+                          {selectedContractDetails.isTemporaryRental ? "Contrato temporário" : "Contrato padrão residencial"}
+                        </h3>
+                        <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+                          Usa o mesmo modelo configurado na ferramenta de contratos e em Configurações &gt; Impresso.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenPrintableContract(selectedContractDetails)}
+                          className="mt-5 rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                        >
+                          Abrir impressão do contrato
+                        </button>
+                      </div>
+
+                      <div className="rounded-3xl border border-slate-100 bg-slate-50 p-6">
+                        <p className="text-sm font-black uppercase tracking-wide text-slate-500">Carnê</p>
+                        <h3 className="mt-3 text-2xl font-black text-slate-950">Parcelas financeiras</h3>
+                        <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+                          O carnê permanece no módulo Contas a Receber para manter o fluxo financeiro centralizado.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => (window.location.href = "/contas-receber")}
+                          className="mt-5 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-md shadow-slate-100 transition hover:bg-slate-800"
+                        >
+                          Ir para Contas a Receber
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {contractDetailsActiveTab === "Notes" && (
+                    <div className="grid gap-5 md:grid-cols-2">
+                      <DetailCard title="Motivo / observação de status" value={selectedContractDetails.statusReason || selectedContractDetails.finishReason || "Sem observações registradas"} detail="Informações salvas em cancelamento, exclusão ou finalização." />
+                      <DetailCard title="Última renovação" value={selectedContractDetails.renewedAt ? new Date(selectedContractDetails.renewedAt).toLocaleString("pt-BR") : "Sem renovação registrada"} detail={`${selectedContractDetails.renewalHistory?.length || 0} renovação(ões) no histórico`} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
 
         {renewalContract && (
@@ -2528,6 +2838,19 @@ function SummaryCard({ icon, title, value, detail }: SummaryCardProps) {
   );
 }
 
+function getContractStatusLabel(status: ContractDisplayStatus) {
+  const statusConfig = {
+    Active: "Ativo",
+    Expiring: "Vencendo",
+    Inactive: "Inativo",
+    Canceled: "Cancelado",
+    Finished: "Finalizado",
+    Deleted: "Excluído",
+  };
+
+  return statusConfig[status];
+}
+
 function StatusBadge({ status }: { status: ContractDisplayStatus }) {
   const statusConfig = {
     Active: { label: "Ativo", className: "bg-emerald-100 text-emerald-700" },
@@ -2542,6 +2865,51 @@ function StatusBadge({ status }: { status: ContractDisplayStatus }) {
     <span className={`rounded-full px-3 py-1 text-xs font-black ${statusConfig[status].className}`}>
       {statusConfig[status].label}
     </span>
+  );
+}
+
+function DetailCard({
+  title,
+  value,
+  detail,
+}: {
+  title: string;
+  value: React.ReactNode;
+  detail?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+      <p className="text-xs font-black uppercase tracking-wide text-slate-500">{title}</p>
+      <div className="mt-3 text-lg font-black text-slate-950">{value}</div>
+      {detail && <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">{detail}</p>}
+    </div>
+  );
+}
+
+function TimelineItem({
+  icon,
+  title,
+  description,
+  date,
+}: {
+  icon: string;
+  title: string;
+  description: string;
+  date: string;
+}) {
+  return (
+    <div className="flex gap-4 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-xl">
+        {icon}
+      </div>
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-base font-black text-slate-950">{title}</h3>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">{date}</span>
+        </div>
+        <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">{description}</p>
+      </div>
+    </div>
   );
 }
 
