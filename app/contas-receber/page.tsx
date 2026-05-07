@@ -3005,7 +3005,7 @@ export default function AccountsReceivablePage() {
     const tenantDocumentText = tenantDocument
       ? `, CPF/CNPJ nº ${tenantDocument}`
       : "";
-    const receiptObservation = paymentRecord.note.trim() || "-";
+    const receiptObservation = (paymentRecord.note || "").trim() || "-";
 
     receiptWindow.document.write(`
       <!doctype html>
