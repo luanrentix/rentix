@@ -404,6 +404,8 @@ type PaymentMethod =
   | "BankTransfer"
   | "Other";
 
+type PaymentAdjustmentMode = "amount" | "percentage";
+
 type PaymentAllocation = {
   id: string;
   method: PaymentMethod;
@@ -502,6 +504,7 @@ export default function AccountsReceivablePage() {
   const [search, setSearch] = useState("");
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
+  const [openActionMenuChargeId, setOpenActionMenuChargeId] = useState<string | null>(null);
 
   const [formTenant, setFormTenant] = useState("");
   const [formContractId, setFormContractId] = useState("");
@@ -538,6 +541,12 @@ export default function AccountsReceivablePage() {
     useState(false);
   const [paymentInterest, setPaymentInterest] = useState("");
   const [paymentDiscount, setPaymentDiscount] = useState("");
+  const [paymentInterestInput, setPaymentInterestInput] = useState("");
+  const [paymentDiscountInput, setPaymentDiscountInput] = useState("");
+  const [paymentInterestMode, setPaymentInterestMode] =
+    useState<PaymentAdjustmentMode>("amount");
+  const [paymentDiscountMode, setPaymentDiscountMode] =
+    useState<PaymentAdjustmentMode>("amount");
   const [paymentFinalAmount, setPaymentFinalAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("Cash");
   const [paymentEntries, setPaymentEntries] = useState<PaymentEntry[]>([]);
@@ -1057,28 +1066,36 @@ export default function AccountsReceivablePage() {
     return value.toFixed(2).replace(".", ",");
   }
 
-  function normalizeAmountToCents(value: unknown) {
+  function getAmountInCents(value: unknown) {
     return Math.round(normalizeAmount(value) * 100);
   }
 
-  function formatAmountInputFromCents(valueInCents: number) {
-    return formatAmountInput(Math.max(valueInCents, 0) / 100);
-  }
-
-  function getInstallmentPreviewTotalInCents(installments: InstallmentPreview[]) {
-    return installments.reduce(
-      (total, installment) => total + normalizeAmountToCents(installment.amount),
-      0,
-    );
+  function formatCentsAsAmountInput(valueInCents: number) {
+    return formatAmountInput(valueInCents / 100);
   }
 
   function distributeAmountInCents(totalInCents: number, quantity: number) {
-    const normalizedQuantity = Math.max(1, quantity);
-    const baseAmountInCents = Math.floor(totalInCents / normalizedQuantity);
-    const remainderInCents = totalInCents % normalizedQuantity;
+    if (quantity <= 0) return [];
 
-    return Array.from({ length: normalizedQuantity }, (_, index) =>
-      baseAmountInCents + (index < remainderInCents ? 1 : 0),
+    const normalizedTotalInCents = Math.max(Math.round(totalInCents), 0);
+    const baseAmountInCents = Math.floor(normalizedTotalInCents / quantity);
+    let centsRemainder = normalizedTotalInCents - baseAmountInCents * quantity;
+
+    return Array.from({ length: quantity }, () => {
+      const extraCent = centsRemainder > 0 ? 1 : 0;
+
+      if (centsRemainder > 0) {
+        centsRemainder -= 1;
+      }
+
+      return baseAmountInCents + extraCent;
+    });
+  }
+
+  function getInstallmentsTotalInCents(installments: InstallmentPreview[]) {
+    return installments.reduce(
+      (total, installment) => total + getAmountInCents(installment.amount),
+      0,
     );
   }
 
@@ -1095,6 +1112,94 @@ export default function AccountsReceivablePage() {
     discount: number,
   ) {
     return Math.max(charge.amount + interest - discount, 0);
+  }
+
+  function getPaymentAdjustmentAmountInput(
+    charge: Charge,
+    value: string,
+    mode: PaymentAdjustmentMode,
+  ) {
+    const normalizedValue = normalizeAmount(value);
+
+    if (normalizedValue <= 0) return "";
+
+    if (mode === "percentage") {
+      return formatAmountInput(charge.amount * (normalizedValue / 100));
+    }
+
+    return value;
+  }
+
+  function updatePaymentInterestInput(
+    charge: Charge,
+    value: string,
+    mode = paymentInterestMode,
+  ) {
+    const hasInterestValue = normalizeAmount(value) > 0;
+    const calculatedInterest = getPaymentAdjustmentAmountInput(charge, value, mode);
+    const calculatedDiscount = hasInterestValue
+      ? ""
+      : getPaymentAdjustmentAmountInput(
+          charge,
+          paymentDiscountInput,
+          paymentDiscountMode,
+        );
+
+    setPaymentFormError("");
+    setPaymentInterestInput(value);
+    setPaymentInterestMode(mode);
+    setPaymentInterest(calculatedInterest);
+
+    if (hasInterestValue) {
+      setPaymentDiscountInput("");
+      setPaymentDiscount("");
+    }
+
+    updatePaymentFinalAmountFromAdjustments(
+      charge,
+      calculatedInterest,
+      calculatedDiscount,
+    );
+  }
+
+  function updatePaymentDiscountInput(
+    charge: Charge,
+    value: string,
+    mode = paymentDiscountMode,
+  ) {
+    const hasDiscountValue = normalizeAmount(value) > 0;
+    const calculatedInterest = hasDiscountValue
+      ? ""
+      : getPaymentAdjustmentAmountInput(
+          charge,
+          paymentInterestInput,
+          paymentInterestMode,
+        );
+    const calculatedDiscount = getPaymentAdjustmentAmountInput(charge, value, mode);
+
+    setPaymentFormError("");
+    setPaymentDiscountInput(value);
+    setPaymentDiscountMode(mode);
+    setPaymentDiscount(calculatedDiscount);
+
+    if (hasDiscountValue) {
+      setPaymentInterestInput("");
+      setPaymentInterest("");
+    }
+
+    updatePaymentFinalAmountFromAdjustments(
+      charge,
+      calculatedInterest,
+      calculatedDiscount,
+    );
+  }
+
+  function changePaymentInterestMode(charge: Charge, mode: PaymentAdjustmentMode) {
+    updatePaymentInterestInput(charge, paymentInterestInput, mode);
+  }
+
+  function changePaymentDiscountMode(charge: Charge, mode: PaymentAdjustmentMode) {
+    updatePaymentDiscountInput(charge, paymentDiscountInput, mode);
   }
 
   function updatePaymentFinalAmountFromAdjustments(
@@ -1126,19 +1231,50 @@ export default function AccountsReceivablePage() {
     }
 
     if (difference > 0) {
-      setPaymentInterest(formatAmountInput(difference));
+      const formattedDifference = formatAmountInput(difference);
+
+      setPaymentInterestMode("amount");
+      setPaymentDiscountMode("amount");
+      setPaymentInterestInput(formattedDifference);
+      setPaymentDiscountInput("");
+      setPaymentInterest(formattedDifference);
       setPaymentDiscount("");
       return;
     }
 
     if (difference < 0) {
+      const formattedDifference = formatAmountInput(Math.abs(difference));
+
+      setPaymentInterestMode("amount");
+      setPaymentDiscountMode("amount");
+      setPaymentInterestInput("");
+      setPaymentDiscountInput(formattedDifference);
       setPaymentInterest("");
-      setPaymentDiscount(formatAmountInput(Math.abs(difference)));
+      setPaymentDiscount(formattedDifference);
       return;
     }
 
+    setPaymentInterestInput("");
+    setPaymentDiscountInput("");
     setPaymentInterest("");
     setPaymentDiscount("");
+  }
+
+
+  function applyPaymentInterestPercentage(charge: Charge, percentage: number) {
+    updatePaymentInterestInput(charge, formatAmountInput(percentage), "percentage");
+  }
+
+  function applyPaymentDiscountPercentage(charge: Charge, percentage: number) {
+    updatePaymentDiscountInput(charge, formatAmountInput(percentage), "percentage");
+  }
+
+  function clearPaymentInterest(charge: Charge) {
+    updatePaymentInterestInput(charge, "", paymentInterestMode);
+  }
+
+  function clearPaymentDiscount(charge: Charge) {
+    updatePaymentDiscountInput(charge, "", paymentDiscountMode);
   }
 
   function updatePaymentEntriesFromFinalAmount(finalAmount: string) {
@@ -1196,6 +1332,81 @@ export default function AccountsReceivablePage() {
       (total, entry) => total + normalizeAmount(entry.amount),
       0,
     );
+  }
+
+  function getPaymentEntriesDifference() {
+    return getPaymentEntriesTotal() - normalizeAmount(paymentFinalAmount);
+  }
+
+  function getPaymentEntriesBalanceLabel() {
+    const difference = getPaymentEntriesDifference();
+
+    if (difference > 0.01) {
+      return `Troco: ${formatCurrency(difference)}`;
+    }
+
+    if (difference < -0.01) {
+      return `Falta informar: ${formatCurrency(Math.abs(difference))}`;
+    }
+
+    return "Valores conferidos";
+  }
+
+  function getPaymentEntriesBalanceClassName() {
+    const difference = getPaymentEntriesDifference();
+
+    if (difference > 0.01) {
+      return isBlackTheme
+        ? "border-sky-900/60 bg-sky-950/30 text-sky-300"
+        : "border-sky-200 bg-sky-50 text-sky-700";
+    }
+
+    if (difference < -0.01) {
+      return isBlackTheme
+        ? "border-amber-900/60 bg-amber-950/30 text-amber-300"
+        : "border-amber-200 bg-amber-50 text-amber-700";
+    }
+
+    return isBlackTheme
+      ? "border-emerald-900/60 bg-emerald-950/30 text-emerald-300"
+      : "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  function getReceiptStatusLabel(charge: Charge) {
+    const dueDate = getStartOfDay(new Date(charge.dueDate));
+    const today = getStartOfDay(new Date());
+
+    if (charge.status === "Overdue" || dueDate < today) return "Vencida";
+    if (dueDate.getTime() === today.getTime()) return "Vence hoje";
+    if (charge.isDownPayment) return "Entrada";
+
+    return "Em aberto";
+  }
+
+  function getReceiptStatusClassName(charge: Charge) {
+    const statusLabel = getReceiptStatusLabel(charge);
+
+    if (statusLabel === "Vencida") {
+      return isBlackTheme
+        ? "border-red-900/60 bg-red-950/40 text-red-300"
+        : "border-red-200 bg-red-50 text-red-700";
+    }
+
+    if (statusLabel === "Vence hoje") {
+      return isBlackTheme
+        ? "border-amber-900/60 bg-amber-950/40 text-amber-300"
+        : "border-amber-200 bg-amber-50 text-amber-700";
+    }
+
+    if (statusLabel === "Entrada") {
+      return isBlackTheme
+        ? "border-sky-900/60 bg-sky-950/40 text-sky-300"
+        : "border-sky-200 bg-sky-50 text-sky-700";
+    }
+
+    return isBlackTheme
+      ? "border-emerald-900/60 bg-emerald-950/40 text-emerald-300"
+      : "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
 
   function getChargePayment(chargeId: string) {
@@ -1489,11 +1700,7 @@ export default function AccountsReceivablePage() {
   }
 
   function generatePaymentCarnet(carnetCharges: Charge[]) {
-    const printableCarnetCharges = carnetCharges.filter(
-      (charge) => !charge.isDownPayment,
-    );
-
-    if (printableCarnetCharges.length === 0) return;
+    if (carnetCharges.length === 0) return;
 
     const printWindow = window.open(
       "",
@@ -1516,18 +1723,18 @@ export default function AccountsReceivablePage() {
     const companyEmail = companySettings.email || "Não informado";
     const pixKeyType = companySettings.pixKeyType || "Pix";
     const pixKey = companySettings.pixKey || "Não cadastrada";
-    const firstCharge = printableCarnetCharges[0];
+    const firstCharge = carnetCharges[0];
     const paymentBookletInstructions = getPaymentBookletInstructions();
-    const totalAmount = printableCarnetCharges.reduce(
+    const totalAmount = carnetCharges.reduce(
       (total, charge) => total + charge.amount,
       0,
     );
 
-    const rows = printableCarnetCharges
+    const rows = carnetCharges
       .map(
-        (charge, index) => `
+        (charge) => `
           <tr>
-            <td>${index + 1}/${printableCarnetCharges.length}</td>
+            <td>${charge.installmentNumber || 1}/${charge.installmentTotal || carnetCharges.length}</td>
             <td>${escapeHtml(charge.tenant)}</td>
             <td>${escapeHtml(charge.property)}</td>
             <td>${formatDate(charge.dueDate)}</td>
@@ -1537,9 +1744,11 @@ export default function AccountsReceivablePage() {
       )
       .join("");
 
-    const vouchers = printableCarnetCharges
-      .map((charge, index) => {
-        const installmentLabel = `${index + 1}/${printableCarnetCharges.length}`;
+    const vouchers = carnetCharges
+      .map((charge) => {
+        const installmentLabel = `${charge.installmentNumber || 1}/${
+          charge.installmentTotal || carnetCharges.length
+        }`;
         const pixPayload = generatePixPayload({
           pixKey: companySettings.pixKey || "",
           merchantName: companyName,
@@ -1687,7 +1896,7 @@ export default function AccountsReceivablePage() {
                   <p>Imóvel: <strong>${escapeHtml(firstCharge.property)}</strong></p>
                 </div>
                 <div class="summary-meta">
-                  Parcelas: <strong>${printableCarnetCharges.length}</strong><br />
+                  Parcelas: <strong>${carnetCharges.length}</strong><br />
                   Total: <strong>${formatCurrency(totalAmount)}</strong><br />
                   Gerado em: <strong>${new Date().toLocaleString("pt-BR")}</strong>
                 </div>
@@ -1987,6 +2196,10 @@ export default function AccountsReceivablePage() {
     setChargePendingPaymentReceipt(charge);
     setPaymentInterest("");
     setPaymentDiscount("");
+    setPaymentInterestInput("");
+    setPaymentDiscountInput("");
+    setPaymentInterestMode("amount");
+    setPaymentDiscountMode("amount");
     setPaymentFinalAmount(formatAmountInput(charge.amount));
     setPaymentMethod("Cash");
     setPaymentEntries([
@@ -2005,6 +2218,10 @@ export default function AccountsReceivablePage() {
     setIsPaymentConfirmationOpen(false);
     setPaymentInterest("");
     setPaymentDiscount("");
+    setPaymentInterestInput("");
+    setPaymentDiscountInput("");
+    setPaymentInterestMode("amount");
+    setPaymentDiscountMode("amount");
     setPaymentFinalAmount("");
     setPaymentMethod("Cash");
     setPaymentEntries([]);
@@ -2048,9 +2265,9 @@ export default function AccountsReceivablePage() {
       return;
     }
 
-    if (Math.abs(paymentEntriesTotal - amountPaid) > 0.01) {
+    if (paymentEntriesTotal + 0.01 < amountPaid) {
       setPaymentFormError(
-        "A soma das formas de pagamento precisa ser igual ao valor final recebido.",
+        `Falta informar ${formatCurrency(amountPaid - paymentEntriesTotal)} nas formas de pagamento.`,
       );
       return;
     }
@@ -2380,7 +2597,7 @@ export default function AccountsReceivablePage() {
   }
 
   function generateInstallmentPreview() {
-    const totalAmountInCents = normalizeAmountToCents(formAmount);
+    const totalAmountInCents = getAmountInCents(formAmount);
     const quantity = Number(formInstallmentQuantity);
 
     if (!formDueDate || totalAmountInCents <= 0 || !Number.isFinite(quantity)) {
@@ -2389,7 +2606,7 @@ export default function AccountsReceivablePage() {
     }
 
     const normalizedQuantity = Math.max(2, Math.trunc(quantity));
-    const distributedAmountsInCents = distributeAmountInCents(
+    const installmentAmountsInCents = distributeAmountInCents(
       totalAmountInCents,
       normalizedQuantity,
     );
@@ -2404,7 +2621,7 @@ export default function AccountsReceivablePage() {
         return {
           id: `preview-${index + 1}`,
           installmentNumber: index + 1,
-          amount: formatAmountInputFromCents(distributedAmountsInCents[index] || 0),
+          amount: formatCentsAsAmountInput(installmentAmountsInCents[index] || 0),
           dueDate: isDownPayment
             ? downPaymentDate
             : addDaysToDate(
@@ -2422,50 +2639,63 @@ export default function AccountsReceivablePage() {
   }
 
   function updateInstallmentAmount(id: string, amount: string) {
-    const totalAmountInCents = normalizeAmountToCents(formAmount);
-    const editedAmountInCents = normalizeAmountToCents(amount);
+    setChargeFormError("");
 
     setInstallmentPreview((currentInstallments) => {
-      if (currentInstallments.length <= 1 || totalAmountInCents <= 0) {
+      const totalAmountInCents = getAmountInCents(formAmount);
+      const changedInstallment = currentInstallments.find(
+        (installment) => installment.id === id,
+      );
+
+      if (!changedInstallment || totalAmountInCents <= 0) {
         return currentInstallments.map((installment) =>
           installment.id === id ? { ...installment, amount } : installment,
         );
       }
 
-      if (editedAmountInCents > totalAmountInCents) {
-        setChargeFormError(
-          "O valor da parcela não pode ser maior que o valor total da cobrança.",
-        );
-
-        return currentInstallments.map((installment) =>
-          installment.id === id ? { ...installment, amount } : installment,
-        );
-      }
-
-      const installmentsToRecalculate = currentInstallments.filter(
+      const changedAmountInCents = getAmountInCents(amount);
+      const otherInstallments = currentInstallments.filter(
         (installment) => installment.id !== id,
       );
-      const remainingAmountInCents = totalAmountInCents - editedAmountInCents;
-      const recalculatedAmountsInCents = distributeAmountInCents(
-        remainingAmountInCents,
-        installmentsToRecalculate.length,
-      );
-      let recalculatedIndex = 0;
+      const remainingAmountInCents = totalAmountInCents - changedAmountInCents;
 
-      setChargeFormError("");
+      if (remainingAmountInCents < 0) {
+        setChargeFormError(
+          "O valor informado ultrapassa o valor total da cobrança.",
+        );
+
+        return currentInstallments.map((installment) =>
+          installment.id === id ? { ...installment, amount } : installment,
+        );
+      }
+
+      if (otherInstallments.length === 0) {
+        return currentInstallments.map((installment) =>
+          installment.id === id ? { ...installment, amount } : installment,
+        );
+      }
+
+      const redistributedAmountsInCents = distributeAmountInCents(
+        remainingAmountInCents,
+        otherInstallments.length,
+      );
+      let redistributedIndex = 0;
 
       return currentInstallments.map((installment) => {
         if (installment.id === id) {
-          return { ...installment, amount };
+          return {
+            ...installment,
+            amount,
+          };
         }
 
-        const recalculatedAmountInCents =
-          recalculatedAmountsInCents[recalculatedIndex] || 0;
-        recalculatedIndex += 1;
+        const redistributedAmountInCents =
+          redistributedAmountsInCents[redistributedIndex] || 0;
+        redistributedIndex += 1;
 
         return {
           ...installment,
-          amount: formatAmountInputFromCents(recalculatedAmountInCents),
+          amount: formatCentsAsAmountInput(redistributedAmountInCents),
         };
       });
     });
@@ -2952,9 +3182,24 @@ export default function AccountsReceivablePage() {
 
 
   function reprintPaymentCarnet(charge: Charge) {
-    const carnetCharges = getCarnetChargesFromCharge(charge);
+    const carnetCharges = getCarnetChargesFromCharge(charge).filter(
+      (currentCharge) => !currentCharge.isDownPayment,
+    );
 
     generatePaymentCarnet(carnetCharges);
+  }
+
+  function reprintPaymentReceipt(charge: Charge) {
+    const paymentRecord = getChargePayment(charge.id);
+
+    if (!paymentRecord) {
+      setPaymentFormError(
+        "Não existe recibo salvo para esta cobrança. Confirme o recebimento antes de reimprimir.",
+      );
+      return;
+    }
+
+    generatePaymentReceipt(charge, paymentRecord);
   }
 
   function generatePaymentReceipt(charge: Charge, paymentRecord: ChargePayment) {
@@ -2977,12 +3222,6 @@ export default function AccountsReceivablePage() {
     const companyDocument = companySettings.document || "Não informado";
     const companyPhone = companySettings.phone || "Não informado";
     const companyEmail = companySettings.email || "Não informado";
-    const tenantRecord = tenants.find(
-      (tenant) => tenant.name.toLowerCase() === charge.tenant.toLowerCase(),
-    );
-    const tenantDocument = formatDocumentForContractPrint(
-      tenantRecord?.cpf || tenantRecord?.document || "",
-    );
     const receiptNumber = String(paymentRecord.chargeId)
       .replace(/[^a-zA-Z0-9]/g, "")
       .slice(-8)
@@ -3002,10 +3241,8 @@ export default function AccountsReceivablePage() {
         : "Cobrança";
     const receiptDateTime = new Date(paymentRecord.paidAt).toLocaleString("pt-BR");
     const receiptDate = formatDate(paymentRecord.paidAt);
-    const tenantDocumentText = tenantDocument
-      ? `, CPF/CNPJ nº ${tenantDocument}`
-      : "";
-    const receiptObservation = (paymentRecord.note || "").trim() || "-";
+    const receiptObservation = paymentRecord.note?.trim() || "-";
+    const hasObservation = receiptObservation !== "-";
 
     receiptWindow.document.write(`
       <!doctype html>
@@ -3021,34 +3258,36 @@ export default function AccountsReceivablePage() {
             .print-button { background: #111827; color: #ffffff; }
             .close-button { background: #f3f4f6; color: #111827; border: 1px solid #d1d5db !important; }
             .page { width: 185mm; margin: 18px auto; }
-            .receipt { background: #ffffff; border: 1px solid #111827; padding: 14mm 15mm 12mm; min-height: 112mm; }
-            .top { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: start; border-bottom: 2px solid #111827; padding-bottom: 8px; }
+            .receipt { min-height: 112mm; background: #ffffff; border: 1px solid #111827; padding: 12mm 14mm 10mm; }
+            .top { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: start; border-bottom: 2px solid #111827; padding-bottom: 10px; }
             .title { margin: 0; font-size: 30px; line-height: 1; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
             .subtitle { margin-top: 5px; color: #374151; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
             .number { text-align: right; font-size: 12px; line-height: 1.55; }
             .number strong { font-size: 15px; }
-            .value-strip { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; border-bottom: 1px solid #111827; padding: 8px 0; }
-            .value-strip span { font-size: 11px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
-            .value-strip strong { font-size: 20px; font-weight: 900; }
-            .statement { margin: 18px 0 14px; font-size: 13px; line-height: 1.85; text-align: justify; }
-            .statement strong { font-weight: 900; }
-            .details { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid #111827; }
-            .detail { min-height: 54px; border-right: 1px solid #111827; padding: 9px 10px; }
-            .detail:nth-child(4), .detail:nth-child(8) { border-right: 0; }
-            .detail:nth-child(n+5) { border-top: 1px solid #111827; }
-            .detail span { display: block; color: #374151; font-size: 9px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
-            .detail strong { display: block; margin-top: 5px; font-size: 12px; line-height: 1.3; }
-            .payment-box { margin-top: 12px; border: 1px solid #111827; }
+            .reference { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; border-bottom: 1px dashed #cbd5e1; padding: 14px 0; }
+            .reference span { display: block; color: #4b5563; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+            .reference strong { display: block; margin-top: 6px; font-size: 14px; line-height: 1.3; }
+            .amount-grid { display: grid; grid-template-columns: 1.3fr 1fr 1fr; margin-top: 16px; overflow: hidden; border: 1px solid #111827; }
+            .amount-card { min-height: 68px; padding: 11px 12px; border-right: 1px solid #111827; }
+            .amount-card:last-child { border-right: 0; }
+            .amount-card span { display: block; color: #374151; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+            .amount-card strong { display: block; margin-top: 7px; font-size: 18px; line-height: 1.2; }
+            .amount-card.highlight strong { font-size: 24px; }
+            .amount-card.discount strong { color: #b91c1c; }
+            .total-box { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; margin-top: 14px; border: 1px solid #111827; background: #f9fafb; padding: 13px 14px; }
+            .total-box span { display: block; color: #374151; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+            .total-box strong { display: block; margin-top: 4px; font-size: 30px; line-height: 1; font-weight: 900; }
+            .confirmed { border: 1px solid #bbf7d0; background: #ecfdf5; color: #047857; border-radius: 999px; padding: 9px 14px; font-size: 12px; font-weight: 900; white-space: nowrap; }
+            .payment-box { margin-top: 14px; border: 1px solid #111827; }
             .payment-row { display: grid; grid-template-columns: 190px 1fr; border-bottom: 1px solid #d1d5db; }
             .payment-row:last-child { border-bottom: 0; }
-            .payment-row span, .payment-row strong { padding: 7px 10px; font-size: 12px; }
+            .payment-row span, .payment-row strong { padding: 8px 10px; font-size: 12px; }
             .payment-row span { background: #f9fafb; font-weight: 900; border-right: 1px solid #d1d5db; }
             .payment-row strong { text-align: right; font-weight: 800; }
-            .declaration { margin: 16px 0 0; text-align: center; font-size: 12px; }
-            .signature-area { display: grid; grid-template-columns: 1fr 1fr; gap: 34px; margin-top: 28px; }
+            .signature-area { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; margin-top: 28px; }
             .signature { border-top: 1px solid #111827; padding-top: 6px; text-align: center; font-size: 11px; font-weight: 800; }
             .signature small { display: block; margin-top: 3px; color: #4b5563; font-weight: 700; }
-            .footer { margin-top: 14px; border-top: 1px solid #d1d5db; padding-top: 8px; color: #374151; font-size: 10px; line-height: 1.45; text-align: center; }
+            .footer { margin-top: 13px; border-top: 1px solid #d1d5db; padding-top: 8px; color: #374151; font-size: 10px; line-height: 1.45; text-align: center; }
             @page { size: A5 landscape; margin: 7mm; }
             @media print {
               body { background: #ffffff; }
@@ -3077,34 +3316,48 @@ export default function AccountsReceivablePage() {
                 </div>
               </header>
 
-              <div class="value-strip">
-                <span>Valor recebido</span>
-                <strong>${formatCurrency(paymentRecord.amountPaid)}</strong>
+              <div class="reference">
+                <div>
+                  <span>Recebimento</span>
+                  <strong>${escapeHtml(receiptDate)}</strong>
+                </div>
+                <div>
+                  <span>Referência</span>
+                  <strong>${escapeHtml(chargeLabel)}</strong>
+                </div>
+                <div>
+                  <span>Vencimento</span>
+                  <strong>${formatDate(charge.dueDate)}</strong>
+                </div>
               </div>
 
-              <p class="statement">
-                Recebi(emos) de <strong>${escapeHtml(charge.tenant)}</strong>${escapeHtml(tenantDocumentText)},
-                a importância de <strong>${formatCurrency(paymentRecord.amountPaid)}</strong>, referente a
-                <strong>${escapeHtml(chargeLabel)}</strong> da cobrança descrita neste recibo.
-              </p>
+              <div class="amount-grid">
+                <div class="amount-card highlight">
+                  <span>Valor original</span>
+                  <strong>${formatCurrency(charge.amount)}</strong>
+                </div>
+                <div class="amount-card">
+                  <span>Juros</span>
+                  <strong>${formatCurrency(paymentRecord.interest)}</strong>
+                </div>
+                <div class="amount-card discount">
+                  <span>Desconto</span>
+                  <strong>${formatCurrency(paymentRecord.discount)}</strong>
+                </div>
+              </div>
 
-              <div class="details">
-                <div class="detail"><span>Inquilino/Pessoa</span><strong>${escapeHtml(charge.tenant)}</strong></div>
-                <div class="detail"><span>Imóvel</span><strong>${escapeHtml(charge.property)}</strong></div>
-                <div class="detail"><span>Vencimento</span><strong>${formatDate(charge.dueDate)}</strong></div>
-                <div class="detail"><span>Valor original</span><strong>${formatCurrency(charge.amount)}</strong></div>
-                <div class="detail"><span>Referência</span><strong>${escapeHtml(chargeLabel)}</strong></div>
-                <div class="detail"><span>Recebimento</span><strong>${escapeHtml(receiptDate)}</strong></div>
-                <div class="detail"><span>Juros</span><strong>${formatCurrency(paymentRecord.interest)}</strong></div>
-                <div class="detail"><span>Desconto</span><strong>${formatCurrency(paymentRecord.discount)}</strong></div>
+              <div class="total-box">
+                <div>
+                  <span>Total recebido</span>
+                  <strong>${formatCurrency(paymentRecord.amountPaid)}</strong>
+                </div>
+                <div class="confirmed">Pagamento confirmado</div>
               </div>
 
               <div class="payment-box">
                 <div class="payment-row"><span>Forma(s) de pagamento</span><strong>${escapeHtml(paymentMethods)}</strong></div>
-                <div class="payment-row"><span>Observação</span><strong>${escapeHtml(receiptObservation)}</strong></div>
+                ${hasObservation ? `<div class="payment-row"><span>Observação</span><strong>${escapeHtml(receiptObservation)}</strong></div>` : ""}
               </div>
-
-              <p class="declaration">E, para maior clareza, firmo(amos) o presente recibo.</p>
 
               <div class="signature-area">
                 <div class="signature">
@@ -3112,7 +3365,7 @@ export default function AccountsReceivablePage() {
                   <small>Recebedor</small>
                 </div>
                 <div class="signature">
-                  ${escapeHtml(charge.tenant)}
+                  Assinatura / Conferência
                   <small>Pagador</small>
                 </div>
               </div>
@@ -3301,13 +3554,14 @@ export default function AccountsReceivablePage() {
       return;
     }
 
-    const installmentPreviewTotalInCents =
-      getInstallmentPreviewTotalInCents(installmentPreview);
-    const normalizedAmountInCents = normalizeAmountToCents(formAmount);
+    const installmentTotalInCents = getInstallmentsTotalInCents(installmentPreview);
+    const chargeTotalInCents = getAmountInCents(formAmount);
 
-    if (installmentPreviewTotalInCents !== normalizedAmountInCents) {
+    if (installmentTotalInCents !== chargeTotalInCents) {
       setChargeFormError(
-        "A soma das parcelas precisa fechar exatamente com o valor total da cobrança.",
+        `A soma das parcelas precisa fechar exatamente o valor total da cobrança. Diferença: ${formatCurrency(
+          Math.abs(installmentTotalInCents - chargeTotalInCents) / 100,
+        )}.`,
       );
       return;
     }
@@ -3340,7 +3594,12 @@ export default function AccountsReceivablePage() {
 
     const downPaymentCharge = newCharges.find((charge) => charge.isDownPayment);
 
-    generatePaymentCarnet(newCharges);
+    const carnetCharges = newCharges.filter((charge) => !charge.isDownPayment);
+
+    if (carnetCharges.length > 0) {
+      generatePaymentCarnet(carnetCharges);
+    }
+
     closeCreateModal();
 
     if (downPaymentCharge) {
@@ -4031,50 +4290,85 @@ export default function AccountsReceivablePage() {
                       </td>
 
                       <td className="px-5 py-4 text-center">
-                        {charge.status !== "Paid" ? (
-                          <div className="flex flex-wrap justify-center gap-2">
-                            <button
-                              onClick={() => openEditCharge(charge)}
-                              className="rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 shadow-sm transition hover:bg-slate-200 dark:hover:bg-slate-700"
-                            >
-                              Editar
-                            </button>
+                        <div className="relative inline-flex justify-center">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOpenActionMenuChargeId((currentChargeId) =>
+                                currentChargeId === charge.id ? null : charge.id,
+                              )
+                            }
+                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-800 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                          >
+                            Ações
+                            <span className="text-xs">▼</span>
+                          </button>
 
-                            <button
-                              onClick={() => reprintPaymentCarnet(charge)}
-                              className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 px-4 py-2 text-sm font-bold text-emerald-700 shadow-sm ring-1 ring-emerald-100 dark:ring-emerald-900/50 transition hover:bg-emerald-100 dark:hover:bg-emerald-900/50 dark:bg-emerald-900/40"
-                            >
-                              Carnê
-                            </button>
+                          {openActionMenuChargeId === charge.id && (
+                            <div className="absolute right-0 top-11 z-40 w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-2xl ring-1 ring-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:ring-slate-700">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenActionMenuChargeId(null);
+                                  openEditCharge(charge);
+                                }}
+                                className="block w-full px-4 py-3 text-left text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                              >
+                                Editar
+                              </button>
 
-                            <button
-                              onClick={() => openReceivePaymentModal(charge)}
-                              className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
-                            >
-                              Receber
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex flex-wrap justify-center gap-2">
-                            <button
-                              onClick={() => openEditCharge(charge)}
-                              className="rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 shadow-sm transition hover:bg-slate-200 dark:hover:bg-slate-700"
-                            >
-                              Editar
-                            </button>
+                              {charge.status !== "Paid" && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionMenuChargeId(null);
+                                    openReceivePaymentModal(charge);
+                                  }}
+                                  className="block w-full px-4 py-3 text-left text-sm font-bold text-orange-700 transition hover:bg-orange-50 dark:text-orange-300 dark:hover:bg-orange-950/30"
+                                >
+                                  Receber
+                                </button>
+                              )}
 
-                            <button
-                              onClick={() => reprintPaymentCarnet(charge)}
-                              className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 px-4 py-2 text-sm font-bold text-emerald-700 shadow-sm ring-1 ring-emerald-100 dark:ring-emerald-900/50 transition hover:bg-emerald-100 dark:hover:bg-emerald-900/50 dark:bg-emerald-900/40"
-                            >
-                              Carnê
-                            </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenActionMenuChargeId(null);
+                                  reprintPaymentCarnet(charge);
+                                }}
+                                className="block w-full px-4 py-3 text-left text-sm font-bold text-emerald-700 transition hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
+                              >
+                                Reimprimir carnê
+                              </button>
 
-                            <span className="inline-flex items-center text-sm font-semibold text-emerald-600">
-                              Pago
-                            </span>
-                          </div>
-                        )}
+                              {charge.status === "Paid" && getChargePayment(charge.id) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionMenuChargeId(null);
+                                    reprintPaymentReceipt(charge);
+                                  }}
+                                  className="block w-full px-4 py-3 text-left text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                                >
+                                  Reimprimir recibo
+                                </button>
+                              )}
+
+                              {charge.status === "Paid" && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionMenuChargeId(null);
+                                    openEditCharge(charge);
+                                  }}
+                                  className="block w-full px-4 py-3 text-left text-sm font-bold text-amber-700 transition hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30"
+                                >
+                                  Ajustar pagamento
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -4140,7 +4434,7 @@ export default function AccountsReceivablePage() {
               </div>
             </div>
 
-            <div className={`flex-1 space-y-5 overflow-y-auto p-6 ${isBlackTheme ? "bg-[#0f172a]" : "bg-[#ffffff]"}`}>
+            <div className={`flex-1 space-y-5 overflow-x-hidden overflow-y-auto p-6 ${isBlackTheme ? "bg-[#0f172a]" : "bg-[#ffffff]"}`}>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
@@ -4416,7 +4710,7 @@ export default function AccountsReceivablePage() {
               </div>
             </div>
 
-            <div className={`flex-1 space-y-5 overflow-y-auto p-6 ${isBlackTheme ? "bg-[#0f172a]" : "bg-[#ffffff]"}`}>
+            <div className={`flex-1 space-y-5 overflow-x-hidden overflow-y-auto p-6 ${isBlackTheme ? "bg-[#0f172a]" : "bg-[#ffffff]"}`}>
               <div>
                 <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                   Nome do inquilino
@@ -4954,7 +5248,7 @@ export default function AccountsReceivablePage() {
 
       {chargePendingPaymentReceipt && (
         <div className={`fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
-          <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
+          <div className="flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-950/40 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -4989,11 +5283,21 @@ export default function AccountsReceivablePage() {
               </div>
             </div>
 
-            <div className={`flex-1 space-y-5 overflow-y-auto p-6 ${isBlackTheme ? "bg-[#0f172a]" : "bg-[#ffffff]"}`}>
+            <div className={`flex-1 space-y-5 overflow-x-hidden overflow-y-auto p-6 ${isBlackTheme ? "bg-[#0f172a]" : "bg-[#ffffff]"}`}>
               <div className="rounded-2xl border border-emerald-100 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 p-4">
-                <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
-                  Cobrança selecionada
-                </p>
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
+                    Cobrança selecionada
+                  </p>
+
+                  <span
+                    className={`inline-flex w-fit rounded-full border px-3 py-1 text-xs font-black uppercase tracking-wide ${getReceiptStatusClassName(
+                      chargePendingPaymentReceipt,
+                    )}`}
+                  >
+                    {getReceiptStatusLabel(chargePendingPaymentReceipt)}
+                  </span>
+                </div>
 
                 <div className="mt-3 grid gap-3 text-sm text-slate-700 dark:text-slate-300 md:grid-cols-2">
                   <p>
@@ -5024,89 +5328,190 @@ export default function AccountsReceivablePage() {
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-3">
-                <div>
-                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                    Juros
-                    <span className="ml-1 text-xs font-semibold text-slate-400 dark:text-slate-500">
-                      se houver
-                    </span>
-                  </label>
+              <div
+                className={`rounded-3xl border p-5 shadow-sm ${
+                  isBlackTheme
+                    ? "border-[#334155] bg-[#020617]"
+                    : "border-[#dbe4ef] bg-[#ffffff]"
+                }`}
+              >
+                <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className={`text-xs font-black uppercase tracking-[0.18em] ${isBlackTheme ? "text-[#94a3b8]" : "text-[#64748b]"}`}>
+                      Ajustes financeiros
+                    </p>
+                    <h3 className={`mt-1 text-base font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
+                      Juros, desconto e total recebido
+                    </h3>
+                  </div>
 
-                  <input
-                    placeholder="Ex: 25,00"
-                    value={paymentInterest}
-                    onChange={(event) => {
-                      const value = event.target.value;
-
-                      setPaymentFormError("");
-                      setPaymentInterest(value);
-
-                      if (chargePendingPaymentReceipt) {
-                        updatePaymentFinalAmountFromAdjustments(
-                          chargePendingPaymentReceipt,
-                          value,
-                          paymentDiscount,
-                        );
-                      }
-                    }}
-                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50"
-                  />
+                  <div className={`rounded-2xl px-4 py-2 text-sm font-black ring-1 ${
+                    isBlackTheme
+                      ? "bg-[#0f172a] text-[#f8fafc] ring-[#334155]"
+                      : "bg-[#f8fafc] text-[#0f172a] ring-[#dbe4ef]"
+                  }`}>
+                    Original: {formatCurrency(chargePendingPaymentReceipt.amount)}
+                  </div>
                 </div>
 
-                <div>
-                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                    Desconto
-                    <span className="ml-1 text-xs font-semibold text-slate-400 dark:text-slate-500">
-                      se houver
-                    </span>
-                  </label>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className={`mb-2 block text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
+                      Juros
+                    </label>
+                    <div className={`flex overflow-hidden rounded-2xl border ${
+                      isBlackTheme ? "border-[#334155] bg-[#111827]" : "border-[#dbe4ef] bg-[#ffffff]"
+                    }`}>
+                      <input
+                        placeholder={paymentInterestMode === "percentage" ? "Ex: 2,00" : "Ex: 25,00"}
+                        value={paymentInterestInput}
+                        onChange={(event) =>
+                          updatePaymentInterestInput(
+                            chargePendingPaymentReceipt,
+                            event.target.value,
+                          )
+                        }
+                        className="h-11 min-w-0 flex-1 border-0 bg-transparent px-4 text-sm font-black text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => changePaymentInterestMode(chargePendingPaymentReceipt, "amount")}
+                        className={`w-11 shrink-0 border-l text-xs font-black transition ${
+                          paymentInterestMode === "amount"
+                            ? "bg-[#0f172a] text-[#ffffff]"
+                            : isBlackTheme
+                              ? "border-[#334155] text-[#cbd5e1] hover:bg-[#1e293b]"
+                              : "border-[#dbe4ef] text-[#475569] hover:bg-[#f8fafc]"
+                        }`}
+                      >
+                        R$
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => changePaymentInterestMode(chargePendingPaymentReceipt, "percentage")}
+                        className={`w-11 shrink-0 border-l text-xs font-black transition ${
+                          paymentInterestMode === "percentage"
+                            ? "bg-[#0f172a] text-[#ffffff]"
+                            : isBlackTheme
+                              ? "border-[#334155] text-[#cbd5e1] hover:bg-[#1e293b]"
+                              : "border-[#dbe4ef] text-[#475569] hover:bg-[#f8fafc]"
+                        }`}
+                      >
+                        %
+                      </button>
+                    </div>
+                  </div>
 
-                  <input
-                    placeholder="Ex: 50,00"
-                    value={paymentDiscount}
-                    onChange={(event) => {
-                      const value = event.target.value;
+                  <div>
+                    <label className={`mb-2 block text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
+                      Desconto
+                    </label>
+                    <div className={`flex overflow-hidden rounded-2xl border ${
+                      isBlackTheme ? "border-[#334155] bg-[#111827]" : "border-[#dbe4ef] bg-[#ffffff]"
+                    }`}>
+                      <input
+                        placeholder={paymentDiscountMode === "percentage" ? "Ex: 10,00" : "Ex: 50,00"}
+                        value={paymentDiscountInput}
+                        onChange={(event) =>
+                          updatePaymentDiscountInput(
+                            chargePendingPaymentReceipt,
+                            event.target.value,
+                          )
+                        }
+                        className="h-11 min-w-0 flex-1 border-0 bg-transparent px-4 text-sm font-black text-slate-900 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => changePaymentDiscountMode(chargePendingPaymentReceipt, "amount")}
+                        className={`w-11 shrink-0 border-l text-xs font-black transition ${
+                          paymentDiscountMode === "amount"
+                            ? "bg-[#0f172a] text-[#ffffff]"
+                            : isBlackTheme
+                              ? "border-[#334155] text-[#cbd5e1] hover:bg-[#1e293b]"
+                              : "border-[#dbe4ef] text-[#475569] hover:bg-[#f8fafc]"
+                        }`}
+                      >
+                        R$
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => changePaymentDiscountMode(chargePendingPaymentReceipt, "percentage")}
+                        className={`w-11 shrink-0 border-l text-xs font-black transition ${
+                          paymentDiscountMode === "percentage"
+                            ? "bg-[#0f172a] text-[#ffffff]"
+                            : isBlackTheme
+                              ? "border-[#334155] text-[#cbd5e1] hover:bg-[#1e293b]"
+                              : "border-[#dbe4ef] text-[#475569] hover:bg-[#f8fafc]"
+                        }`}
+                      >
+                        %
+                      </button>
+                    </div>
+                  </div>
 
-                      setPaymentFormError("");
-                      setPaymentDiscount(value);
+                  <div className="md:col-span-2">
+                    <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <label className={`block text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
+                        Valor final
+                      </label>
+                      <span className={`text-xs font-bold ${isBlackTheme ? "text-[#94a3b8]" : "text-[#64748b]"}`}>
+                        Original + juros - desconto
+                      </span>
+                    </div>
+                    <input
+                      placeholder="Ex: 250,00"
+                      value={paymentFinalAmount}
+                      onChange={(event) => {
+                        const value = event.target.value;
 
-                      if (chargePendingPaymentReceipt) {
-                        updatePaymentFinalAmountFromAdjustments(
-                          chargePendingPaymentReceipt,
-                          paymentInterest,
-                          value,
-                        );
-                      }
-                    }}
-                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50"
-                  />
+                        setPaymentFormError("");
+                        setPaymentFinalAmount(value);
+                        updatePaymentEntriesFromFinalAmount(value);
+
+                        if (chargePendingPaymentReceipt) {
+                          updatePaymentAdjustmentsFromFinalAmount(
+                            chargePendingPaymentReceipt,
+                            value,
+                          );
+                        }
+                      }}
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:ring-emerald-900/50"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className={`rounded-3xl border p-5 shadow-sm ${
+                  isBlackTheme
+                    ? "border-[#334155] bg-[#020617]"
+                    : "border-[#dbe4ef] bg-[#ffffff]"
+                }`}
+              >
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className={`text-xs font-black uppercase tracking-[0.18em] ${isBlackTheme ? "text-[#94a3b8]" : "text-[#64748b]"}`}>
+                      Total a receber
+                    </p>
+                    <p className={`mt-2 text-3xl font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
+                      {formatCurrency(normalizeAmount(paymentFinalAmount))}
+                    </p>
+                  </div>
+
+                  <div className="grid gap-2 text-sm md:min-w-[260px]">
+                    <div className="flex items-center justify-between gap-6">
+                      <span className={isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}>Informado</span>
+                      <strong className={isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}>{formatCurrency(getPaymentEntriesTotal())}</strong>
+                    </div>
+                    <div className="flex items-center justify-between gap-6">
+                      <span className={isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}>Original</span>
+                      <strong className={isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}>{formatCurrency(chargePendingPaymentReceipt.amount)}</strong>
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                    Valor final
-                  </label>
-
-                  <input
-                    placeholder="Ex: 250,00"
-                    value={paymentFinalAmount}
-                    onChange={(event) => {
-                      const value = event.target.value;
-
-                      setPaymentFormError("");
-                      setPaymentFinalAmount(value);
-                      updatePaymentEntriesFromFinalAmount(value);
-
-                      if (chargePendingPaymentReceipt) {
-                        updatePaymentAdjustmentsFromFinalAmount(
-                          chargePendingPaymentReceipt,
-                          value,
-                        );
-                      }
-                    }}
-                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-black text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50"
-                  />
+                <div className={`mt-4 rounded-2xl border px-4 py-3 text-sm font-black ${getPaymentEntriesBalanceClassName()}`}>
+                  {getPaymentEntriesBalanceLabel()}
                 </div>
               </div>
 
@@ -5132,9 +5537,13 @@ export default function AccountsReceivablePage() {
                   <button
                     type="button"
                     onClick={addPaymentEntry}
-                    className="rounded-xl bg-[#0f172a] px-4 py-2 text-sm font-bold text-[#ffffff] shadow-sm transition hover:bg-slate-800"
+                    className={`rounded-xl border px-4 py-2 text-sm font-bold shadow-sm transition ${
+                      isBlackTheme
+                        ? "border-[#334155] bg-[#020617] text-[#f8fafc] hover:bg-[#1e293b]"
+                        : "border-[#dbe4ef] bg-[#ffffff] text-[#0f172a] hover:bg-[#f8fafc]"
+                    }`}
                   >
-                    Adicionar forma
+                    + Adicionar forma
                   </button>
                 </div>
 
@@ -5194,8 +5603,58 @@ export default function AccountsReceivablePage() {
                   ))}
                 </div>
 
-                <div className="mt-4 rounded-xl bg-white dark:bg-slate-900 px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-slate-700">
-                  Total informado nas formas de pagamento: {formatCurrency(getPaymentEntriesTotal())}
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <div className="rounded-xl bg-white dark:bg-slate-900 px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-slate-700">
+                    Total informado: {formatCurrency(getPaymentEntriesTotal())}
+                  </div>
+
+                  <div className={`rounded-xl border px-4 py-3 text-sm font-black ${getPaymentEntriesBalanceClassName()}`}>
+                    {getPaymentEntriesBalanceLabel()}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className={`rounded-2xl border p-4 ${
+                  isBlackTheme
+                    ? "border-[#334155] bg-[#111827]"
+                    : "border-[#dbe4ef] bg-[#f8fafc]"
+                }`}
+              >
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <h3 className={`text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
+                      Resumo do recebimento
+                    </h3>
+                    <p className={`mt-1 text-xs font-semibold ${isBlackTheme ? "text-[#94a3b8]" : "text-[#64748b]"}`}>
+                      Conferência automática antes de finalizar a baixa financeira.
+                    </p>
+                  </div>
+
+                  <span className={`inline-flex w-fit rounded-full border px-3 py-1 text-xs font-black uppercase tracking-wide ${getReceiptStatusClassName(
+                    chargePendingPaymentReceipt,
+                  )}`}>
+                    {getReceiptStatusLabel(chargePendingPaymentReceipt)}
+                  </span>
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-4">
+                  <div className="rounded-xl bg-white dark:bg-slate-900 p-3 ring-1 ring-slate-200 dark:ring-slate-700">
+                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Original</p>
+                    <p className="mt-1 text-sm font-black text-slate-950 dark:text-white">{formatCurrency(chargePendingPaymentReceipt.amount)}</p>
+                  </div>
+                  <div className="rounded-xl bg-white dark:bg-slate-900 p-3 ring-1 ring-slate-200 dark:ring-slate-700">
+                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Juros</p>
+                    <p className="mt-1 text-sm font-black text-slate-950 dark:text-white">{formatCurrency(normalizeAmount(paymentInterest))}</p>
+                  </div>
+                  <div className="rounded-xl bg-white dark:bg-slate-900 p-3 ring-1 ring-slate-200 dark:ring-slate-700">
+                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Desconto</p>
+                    <p className="mt-1 text-sm font-black text-slate-950 dark:text-white">{formatCurrency(normalizeAmount(paymentDiscount))}</p>
+                  </div>
+                  <div className="rounded-xl bg-white dark:bg-slate-900 p-3 ring-1 ring-slate-200 dark:ring-slate-700">
+                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Final</p>
+                    <p className="mt-1 text-sm font-black text-slate-950 dark:text-white">{formatCurrency(normalizeAmount(paymentFinalAmount))}</p>
+                  </div>
                 </div>
               </div>
 

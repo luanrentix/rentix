@@ -35,6 +35,25 @@ type RentixTenant = Tenant & {
   number?: string;
   neighborhood?: string;
   complement?: string;
+  identityNumber?: string;
+  issuingAuthority?: string;
+  birthDate?: string;
+  maritalStatus?: string;
+  nationality?: string;
+  occupation?: string;
+  tradeName?: string;
+  stateRegistration?: string;
+  municipalRegistration?: string;
+  taxRegime?: string;
+  responsibleName?: string;
+  responsibleCpf?: string;
+  responsibleRg?: string;
+  responsibleRole?: string;
+  secondaryPhone?: string;
+  whatsapp?: string;
+  website?: string;
+  creditLimit?: string;
+  financialNotes?: string;
   isTenant?: boolean;
   isActive?: boolean;
 };
@@ -106,6 +125,25 @@ export default function TenantsPage() {
   const [tenantNumber, setTenantNumber] = useState("");
   const [tenantNeighborhood, setTenantNeighborhood] = useState("");
   const [tenantComplement, setTenantComplement] = useState("");
+  const [tenantIdentityNumber, setTenantIdentityNumber] = useState("");
+  const [tenantIssuingAuthority, setTenantIssuingAuthority] = useState("");
+  const [tenantBirthDate, setTenantBirthDate] = useState("");
+  const [tenantMaritalStatus, setTenantMaritalStatus] = useState("");
+  const [tenantNationality, setTenantNationality] = useState("BRASILEIRO(A)");
+  const [tenantOccupation, setTenantOccupation] = useState("");
+  const [tenantTradeName, setTenantTradeName] = useState("");
+  const [tenantStateRegistration, setTenantStateRegistration] = useState("");
+  const [tenantMunicipalRegistration, setTenantMunicipalRegistration] = useState("");
+  const [tenantTaxRegime, setTenantTaxRegime] = useState("");
+  const [tenantResponsibleName, setTenantResponsibleName] = useState("");
+  const [tenantResponsibleCpf, setTenantResponsibleCpf] = useState("");
+  const [tenantResponsibleRg, setTenantResponsibleRg] = useState("");
+  const [tenantResponsibleRole, setTenantResponsibleRole] = useState("");
+  const [tenantSecondaryPhone, setTenantSecondaryPhone] = useState("");
+  const [tenantWhatsapp, setTenantWhatsapp] = useState("");
+  const [tenantWebsite, setTenantWebsite] = useState("");
+  const [tenantCreditLimit, setTenantCreditLimit] = useState("");
+  const [tenantFinancialNotes, setTenantFinancialNotes] = useState("");
   const [tenantIsTenant, setTenantIsTenant] = useState(true);
   const [tenantIsActive, setTenantIsActive] = useState(true);
   const [cpfError, setCpfError] = useState("");
@@ -202,6 +240,25 @@ export default function TenantsPage() {
         number: toUpperCaseValue(tenant.number || ""),
         neighborhood: toUpperCaseValue(tenant.neighborhood || ""),
         complement: toUpperCaseValue(tenant.complement || ""),
+        identityNumber: toUpperCaseValue(tenant.identityNumber || ""),
+        issuingAuthority: toUpperCaseValue(tenant.issuingAuthority || ""),
+        birthDate: tenant.birthDate || "",
+        maritalStatus: toUpperCaseValue(tenant.maritalStatus || ""),
+        nationality: toUpperCaseValue(tenant.nationality || ""),
+        occupation: toUpperCaseValue(tenant.occupation || ""),
+        tradeName: toUpperCaseValue(tenant.tradeName || ""),
+        stateRegistration: toUpperCaseValue(tenant.stateRegistration || ""),
+        municipalRegistration: toUpperCaseValue(tenant.municipalRegistration || ""),
+        taxRegime: toUpperCaseValue(tenant.taxRegime || ""),
+        responsibleName: toUpperCaseValue(tenant.responsibleName || ""),
+        responsibleCpf: tenant.responsibleCpf || "",
+        responsibleRg: toUpperCaseValue(tenant.responsibleRg || ""),
+        responsibleRole: toUpperCaseValue(tenant.responsibleRole || ""),
+        secondaryPhone: tenant.secondaryPhone || "",
+        whatsapp: tenant.whatsapp || "",
+        website: formatWebsiteValue(tenant.website || ""),
+        creditLimit: tenant.creditLimit || "",
+        financialNotes: toUpperCaseValue(tenant.financialNotes || ""),
         isTenant: tenant.isTenant ?? true,
         isActive: tenant.isActive ?? true,
       }));
@@ -215,6 +272,7 @@ export default function TenantsPage() {
           ...tenant,
           name: toUpperCaseValue(tenant.name),
           email: formatEmailValue((tenant as RentixTenant).email || ""),
+          website: formatWebsiteValue((tenant as RentixTenant).website || ""),
           isTenant: true,
           isActive: true,
         })),
@@ -243,6 +301,25 @@ export default function TenantsPage() {
     setTenantNumber("");
     setTenantNeighborhood("");
     setTenantComplement("");
+    setTenantIdentityNumber("");
+    setTenantIssuingAuthority("");
+    setTenantBirthDate("");
+    setTenantMaritalStatus("");
+    setTenantNationality("BRASILEIRO(A)");
+    setTenantOccupation("");
+    setTenantTradeName("");
+    setTenantStateRegistration("");
+    setTenantMunicipalRegistration("");
+    setTenantTaxRegime("");
+    setTenantResponsibleName("");
+    setTenantResponsibleCpf("");
+    setTenantResponsibleRg("");
+    setTenantResponsibleRole("");
+    setTenantSecondaryPhone("");
+    setTenantWhatsapp("");
+    setTenantWebsite("");
+    setTenantCreditLimit("");
+    setTenantFinancialNotes("");
     setTenantIsTenant(true);
     setTenantIsActive(true);
     setCpfError("");
@@ -339,6 +416,24 @@ export default function TenantsPage() {
     setTenantCpf("");
     setCpfError("");
     setCnpjSearchError("");
+
+    if (personType === "Individual") {
+      setTenantTradeName("");
+      setTenantStateRegistration("");
+      setTenantMunicipalRegistration("");
+      setTenantTaxRegime("");
+      setTenantResponsibleName("");
+      setTenantResponsibleCpf("");
+      setTenantResponsibleRg("");
+      setTenantResponsibleRole("");
+    } else {
+      setTenantIdentityNumber("");
+      setTenantIssuingAuthority("");
+      setTenantBirthDate("");
+      setTenantMaritalStatus("");
+      setTenantNationality("BRASILEIRO(A)");
+      setTenantOccupation("");
+    }
   }
 
   async function handleCnpjSearch() {
@@ -377,6 +472,7 @@ export default function TenantsPage() {
         data.razao_social?.trim() || data.nome_fantasia?.trim() || tenantName;
 
       setTenantName(toUpperCaseValue(companyName));
+      setTenantTradeName(toUpperCaseValue(data.nome_fantasia?.trim() || ""));
       setTenantCpf(formatCnpj(data.cnpj || cleanCnpj));
 
       if (data.ddd_telefone_1) {
@@ -403,6 +499,22 @@ export default function TenantsPage() {
 
   function handlePhoneChange(value: string) {
     setTenantPhone(formatPhone(value));
+  }
+
+  function handleSecondaryPhoneChange(value: string) {
+    setTenantSecondaryPhone(formatPhone(value));
+  }
+
+  function handleWhatsappChange(value: string) {
+    setTenantWhatsapp(formatPhone(value));
+  }
+
+  function handleResponsibleCpfChange(value: string) {
+    setTenantResponsibleCpf(formatCpf(value));
+  }
+
+  function handleCreditLimitChange(value: string) {
+    setTenantCreditLimit(formatMoneyInput(value));
   }
 
   function getPersonIdFromRecord(record: Record<string, unknown>) {
@@ -558,6 +670,20 @@ export default function TenantsPage() {
     const normalizedTenantNumber = toUpperCaseValue(tenantNumber);
     const normalizedTenantNeighborhood = toUpperCaseValue(tenantNeighborhood);
     const normalizedTenantComplement = toUpperCaseValue(tenantComplement);
+    const normalizedTenantIdentityNumber = toUpperCaseValue(tenantIdentityNumber);
+    const normalizedTenantIssuingAuthority = toUpperCaseValue(tenantIssuingAuthority);
+    const normalizedTenantMaritalStatus = toUpperCaseValue(tenantMaritalStatus);
+    const normalizedTenantNationality = toUpperCaseValue(tenantNationality);
+    const normalizedTenantOccupation = toUpperCaseValue(tenantOccupation);
+    const normalizedTenantTradeName = toUpperCaseValue(tenantTradeName);
+    const normalizedTenantStateRegistration = toUpperCaseValue(tenantStateRegistration);
+    const normalizedTenantMunicipalRegistration = toUpperCaseValue(tenantMunicipalRegistration);
+    const normalizedTenantTaxRegime = toUpperCaseValue(tenantTaxRegime);
+    const normalizedTenantResponsibleName = toUpperCaseValue(tenantResponsibleName);
+    const normalizedTenantResponsibleRg = toUpperCaseValue(tenantResponsibleRg);
+    const normalizedTenantResponsibleRole = toUpperCaseValue(tenantResponsibleRole);
+    const normalizedTenantWebsite = formatWebsiteValue(tenantWebsite);
+    const normalizedTenantFinancialNotes = toUpperCaseValue(tenantFinancialNotes);
 
     if (!isValidDocument(tenantCpf, tenantPersonType)) {
       setCpfError(
@@ -623,6 +749,25 @@ export default function TenantsPage() {
                 number: normalizedTenantNumber,
                 neighborhood: normalizedTenantNeighborhood,
                 complement: normalizedTenantComplement,
+                identityNumber: normalizedTenantIdentityNumber,
+                issuingAuthority: normalizedTenantIssuingAuthority,
+                birthDate: tenantBirthDate,
+                maritalStatus: normalizedTenantMaritalStatus,
+                nationality: normalizedTenantNationality,
+                occupation: normalizedTenantOccupation,
+                tradeName: normalizedTenantTradeName,
+                stateRegistration: normalizedTenantStateRegistration,
+                municipalRegistration: normalizedTenantMunicipalRegistration,
+                taxRegime: normalizedTenantTaxRegime,
+                responsibleName: normalizedTenantResponsibleName,
+                responsibleCpf: tenantResponsibleCpf,
+                responsibleRg: normalizedTenantResponsibleRg,
+                responsibleRole: normalizedTenantResponsibleRole,
+                secondaryPhone: tenantSecondaryPhone,
+                whatsapp: tenantWhatsapp,
+                website: normalizedTenantWebsite,
+                creditLimit: tenantCreditLimit,
+                financialNotes: normalizedTenantFinancialNotes,
                 isTenant: tenantIsTenant,
                 isActive: tenantIsActive,
               }
@@ -649,6 +794,25 @@ export default function TenantsPage() {
       number: normalizedTenantNumber,
       neighborhood: normalizedTenantNeighborhood,
       complement: normalizedTenantComplement,
+      identityNumber: normalizedTenantIdentityNumber,
+      issuingAuthority: normalizedTenantIssuingAuthority,
+      birthDate: tenantBirthDate,
+      maritalStatus: normalizedTenantMaritalStatus,
+      nationality: normalizedTenantNationality,
+      occupation: normalizedTenantOccupation,
+      tradeName: normalizedTenantTradeName,
+      stateRegistration: normalizedTenantStateRegistration,
+      municipalRegistration: normalizedTenantMunicipalRegistration,
+      taxRegime: normalizedTenantTaxRegime,
+      responsibleName: normalizedTenantResponsibleName,
+      responsibleCpf: tenantResponsibleCpf,
+      responsibleRg: normalizedTenantResponsibleRg,
+      responsibleRole: normalizedTenantResponsibleRole,
+      secondaryPhone: tenantSecondaryPhone,
+      whatsapp: tenantWhatsapp,
+      website: normalizedTenantWebsite,
+      creditLimit: tenantCreditLimit,
+      financialNotes: normalizedTenantFinancialNotes,
       isTenant: tenantIsTenant,
       isActive: tenantIsActive,
     };
@@ -682,6 +846,25 @@ export default function TenantsPage() {
     setTenantNumber(toUpperCaseValue(tenant.number || ""));
     setTenantNeighborhood(toUpperCaseValue(tenant.neighborhood || ""));
     setTenantComplement(toUpperCaseValue(tenant.complement || ""));
+    setTenantIdentityNumber(toUpperCaseValue(tenant.identityNumber || ""));
+    setTenantIssuingAuthority(toUpperCaseValue(tenant.issuingAuthority || ""));
+    setTenantBirthDate(tenant.birthDate || "");
+    setTenantMaritalStatus(toUpperCaseValue(tenant.maritalStatus || ""));
+    setTenantNationality(toUpperCaseValue(tenant.nationality || "BRASILEIRO(A)"));
+    setTenantOccupation(toUpperCaseValue(tenant.occupation || ""));
+    setTenantTradeName(toUpperCaseValue(tenant.tradeName || ""));
+    setTenantStateRegistration(toUpperCaseValue(tenant.stateRegistration || ""));
+    setTenantMunicipalRegistration(toUpperCaseValue(tenant.municipalRegistration || ""));
+    setTenantTaxRegime(toUpperCaseValue(tenant.taxRegime || ""));
+    setTenantResponsibleName(toUpperCaseValue(tenant.responsibleName || ""));
+    setTenantResponsibleCpf(formatCpf(tenant.responsibleCpf || ""));
+    setTenantResponsibleRg(toUpperCaseValue(tenant.responsibleRg || ""));
+    setTenantResponsibleRole(toUpperCaseValue(tenant.responsibleRole || ""));
+    setTenantSecondaryPhone(formatPhone(tenant.secondaryPhone));
+    setTenantWhatsapp(formatPhone(tenant.whatsapp));
+    setTenantWebsite(formatWebsiteValue(tenant.website || ""));
+    setTenantCreditLimit(tenant.creditLimit || "");
+    setTenantFinancialNotes(toUpperCaseValue(tenant.financialNotes || ""));
     setTenantIsTenant(tenant.isTenant ?? true);
     setTenantIsActive(tenant.isActive ?? true);
     setCpfError("");
@@ -1391,6 +1574,37 @@ export default function TenantsPage() {
                             selectedPersonHistory.person.personType,
                           )}
                         />
+                        {selectedPersonHistory.person.personType === "Company" ? (
+                          <>
+                            <PersonDetailItem
+                              label="Nome fantasia"
+                              value={selectedPersonHistory.person.tradeName || "Não informado"}
+                            />
+                            <PersonDetailItem
+                              label="Inscrição estadual"
+                              value={selectedPersonHistory.person.stateRegistration || "Não informado"}
+                            />
+                            <PersonDetailItem
+                              label="Responsável"
+                              value={selectedPersonHistory.person.responsibleName || "Não informado"}
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <PersonDetailItem
+                              label="RG / Identidade"
+                              value={selectedPersonHistory.person.identityNumber || "Não informado"}
+                            />
+                            <PersonDetailItem
+                              label="Data de nascimento"
+                              value={formatDateValue(selectedPersonHistory.person.birthDate || "")}
+                            />
+                            <PersonDetailItem
+                              label="Profissão"
+                              value={selectedPersonHistory.person.occupation || "Não informado"}
+                            />
+                          </>
+                        )}
                         <PersonDetailItem
                           label="Telefone"
                           value={formatPhone(
@@ -1633,13 +1847,18 @@ export default function TenantsPage() {
 
               <form onSubmit={handleSubmitTenant}>
                 <div className="p-8">
-                  <div className="mb-8">
-                    <h3 className="mb-4 text-sm font-black uppercase tracking-wide text-orange-600">
-                      Dados pessoais
-                    </h3>
+                  <div className="mb-8 space-y-6">
+                    <div>
+                      <h3 className="text-sm font-black uppercase tracking-wide text-orange-600">
+                        Dados principais
+                      </h3>
+                      <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        Identificação principal da pessoa física ou jurídica.
+                      </p>
+                    </div>
 
                     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                      <FormField label="Nome completo / Razão social">
+                      <FormField label={tenantPersonType === "Company" ? "Razão social" : "Nome completo"}>
                         <input
                           type="text"
                           value={tenantName}
@@ -1652,7 +1871,7 @@ export default function TenantsPage() {
                               : "Ex: João Silva"
                           }
                           required
-                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         />
                       </FormField>
 
@@ -1664,22 +1883,18 @@ export default function TenantsPage() {
                               event.target.value as PersonType,
                             )
                           }
-                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         >
                           <option value="Individual">Pessoa física</option>
                           <option value="Company">Pessoa jurídica</option>
                         </select>
                       </FormField>
 
-                      <FormField
-                        label={tenantPersonType === "Company" ? "CNPJ" : "CPF"}
-                      >
+                      <FormField label={tenantPersonType === "Company" ? "CNPJ" : "CPF"}>
                         <input
                           type="text"
                           value={tenantCpf}
-                          onChange={(event) =>
-                            handleCpfChange(event.target.value)
-                          }
+                          onChange={(event) => handleCpfChange(event.target.value)}
                           onBlur={() => {
                             if (tenantPersonType === "Company") {
                               handleCnpjSearch();
@@ -1692,7 +1907,7 @@ export default function TenantsPage() {
                           }
                           maxLength={tenantPersonType === "Company" ? 18 : 14}
                           required
-                          className={`w-full rounded-2xl border px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:ring-2 ${
+                          className={`w-full rounded-2xl border px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:ring-2 ${
                             cpfError
                               ? "border-red-300 focus:border-red-500 focus:ring-red-100"
                               : "border-slate-200 dark:border-slate-700 focus:border-orange-500 focus:ring-orange-100"
@@ -1706,60 +1921,284 @@ export default function TenantsPage() {
                             disabled={isCnpjLoading}
                             className="mt-3 w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            {isCnpjLoading
-                              ? "Buscando CNPJ..."
-                              : "Buscar dados da empresa"}
+                            {isCnpjLoading ? "Buscando CNPJ..." : "Buscar dados da empresa"}
                           </button>
                         )}
 
                         {cpfError && (
-                          <p className="mt-2 text-xs font-bold text-red-500">
-                            {cpfError}
-                          </p>
+                          <p className="mt-2 text-xs font-bold text-red-500">{cpfError}</p>
                         )}
 
                         {cnpjSearchError && tenantPersonType === "Company" && (
-                          <p className="mt-2 text-xs font-bold text-red-500">
-                            {cnpjSearchError}
-                          </p>
+                          <p className="mt-2 text-xs font-bold text-red-500">{cnpjSearchError}</p>
                         )}
-                      </FormField>
-
-                      <FormField label="Telefone">
-                        <input
-                          type="text"
-                          value={tenantPhone}
-                          onChange={(event) =>
-                            handlePhoneChange(event.target.value)
-                          }
-                          placeholder="Ex: (69) 99999-0000"
-                          maxLength={15}
-                          required
-                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        />
-                      </FormField>
-
-                      <FormField label="E-mail (opcional)">
-                        <input
-                          type="email"
-                          value={tenantEmail}
-                          onChange={(event) =>
-                            setTenantEmail(formatEmailValue(event.target.value))
-                          }
-                          placeholder="Ex: pessoa@email.com"
-                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        />
                       </FormField>
                     </div>
 
-                    <div className="mt-5">
-                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-orange-100 dark:border-orange-900/40 bg-orange-50 dark:bg-orange-950/30/50 dark:bg-orange-950/20 px-5 py-4 transition hover:bg-orange-50 dark:bg-orange-950/30 dark:hover:bg-orange-950/30">
+                    {tenantPersonType === "Individual" ? (
+                      <div className="rounded-3xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 p-5">
+                        <h4 className="mb-4 text-sm font-black uppercase tracking-wide text-orange-600">
+                          Documento e dados civis
+                        </h4>
+                        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                          <FormField label="RG / Identidade">
+                            <input
+                              type="text"
+                              value={tenantIdentityNumber}
+                              onChange={(event) => setTenantIdentityNumber(toUpperCaseValue(event.target.value))}
+                              placeholder="Ex: 123456 SSP/RO"
+                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                            />
+                          </FormField>
+
+                          <FormField label="Órgão emissor">
+                            <input
+                              type="text"
+                              value={tenantIssuingAuthority}
+                              onChange={(event) => setTenantIssuingAuthority(toUpperCaseValue(event.target.value))}
+                              placeholder="Ex: SSP/RO"
+                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                            />
+                          </FormField>
+
+                          <FormField label="Data de nascimento">
+                            <input
+                              type="date"
+                              value={tenantBirthDate}
+                              onChange={(event) => setTenantBirthDate(event.target.value)}
+                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                            />
+                          </FormField>
+
+                          <FormField label="Estado civil">
+                            <select
+                              value={tenantMaritalStatus}
+                              onChange={(event) => setTenantMaritalStatus(toUpperCaseValue(event.target.value))}
+                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                            >
+                              <option value="">Selecione</option>
+                              <option value="SOLTEIRO(A)">Solteiro(a)</option>
+                              <option value="CASADO(A)">Casado(a)</option>
+                              <option value="DIVORCIADO(A)">Divorciado(a)</option>
+                              <option value="VIÚVO(A)">Viúvo(a)</option>
+                              <option value="UNIÃO ESTÁVEL">União estável</option>
+                            </select>
+                          </FormField>
+
+                          <FormField label="Nacionalidade">
+                            <input
+                              type="text"
+                              value={tenantNationality}
+                              onChange={(event) => setTenantNationality(toUpperCaseValue(event.target.value))}
+                              placeholder="Ex: Brasileiro(a)"
+                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                            />
+                          </FormField>
+
+                          <FormField label="Profissão">
+                            <input
+                              type="text"
+                              value={tenantOccupation}
+                              onChange={(event) => setTenantOccupation(toUpperCaseValue(event.target.value))}
+                              placeholder="Ex: Empresário"
+                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                            />
+                          </FormField>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-5 rounded-3xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 p-5">
+                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <h4 className="text-sm font-black uppercase tracking-wide text-orange-600">
+                              Dados empresariais
+                            </h4>
+                            <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                              Informações fiscais e responsável da pessoa jurídica.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                          <FormField label="Nome fantasia">
+                            <input
+                              type="text"
+                              value={tenantTradeName}
+                              onChange={(event) => setTenantTradeName(toUpperCaseValue(event.target.value))}
+                              placeholder="Ex: Empresa Comercial"
+                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                            />
+                          </FormField>
+
+                          <FormField label="Inscrição estadual (IE)">
+                            <input
+                              type="text"
+                              value={tenantStateRegistration}
+                              onChange={(event) => setTenantStateRegistration(toUpperCaseValue(event.target.value))}
+                              placeholder="Ex: 0000000000000"
+                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                            />
+                          </FormField>
+
+                          <FormField label="Inscrição municipal (IM)">
+                            <input
+                              type="text"
+                              value={tenantMunicipalRegistration}
+                              onChange={(event) => setTenantMunicipalRegistration(toUpperCaseValue(event.target.value))}
+                              placeholder="Ex: 000000"
+                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                            />
+                          </FormField>
+
+                          <FormField label="Regime tributário">
+                            <select
+                              value={tenantTaxRegime}
+                              onChange={(event) => setTenantTaxRegime(toUpperCaseValue(event.target.value))}
+                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                            >
+                              <option value="">Selecione</option>
+                              <option value="MEI">MEI</option>
+                              <option value="SIMPLES NACIONAL">Simples Nacional</option>
+                              <option value="LUCRO PRESUMIDO">Lucro Presumido</option>
+                              <option value="LUCRO REAL">Lucro Real</option>
+                              <option value="ISENTO">Isento</option>
+                            </select>
+                          </FormField>
+
+                          <FormField label="Nome do responsável">
+                            <input
+                              type="text"
+                              value={tenantResponsibleName}
+                              onChange={(event) => setTenantResponsibleName(toUpperCaseValue(event.target.value))}
+                              placeholder="Ex: João Silva"
+                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                            />
+                          </FormField>
+
+                          <FormField label="CPF do responsável">
+                            <input
+                              type="text"
+                              value={tenantResponsibleCpf}
+                              onChange={(event) => handleResponsibleCpfChange(event.target.value)}
+                              placeholder="Ex: 123.456.789-00"
+                              maxLength={14}
+                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                            />
+                          </FormField>
+
+                          <FormField label="RG do responsável">
+                            <input
+                              type="text"
+                              value={tenantResponsibleRg}
+                              onChange={(event) => setTenantResponsibleRg(toUpperCaseValue(event.target.value))}
+                              placeholder="Ex: 123456 SSP/RO"
+                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                            />
+                          </FormField>
+
+                          <FormField label="Cargo do responsável">
+                            <input
+                              type="text"
+                              value={tenantResponsibleRole}
+                              onChange={(event) => setTenantResponsibleRole(toUpperCaseValue(event.target.value))}
+                              placeholder="Ex: Sócio administrador"
+                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                            />
+                          </FormField>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+                      <h4 className="mb-4 text-sm font-black uppercase tracking-wide text-orange-600">
+                        Contato e controle
+                      </h4>
+
+                      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                        <FormField label="Telefone principal">
+                          <input
+                            type="text"
+                            value={tenantPhone}
+                            onChange={(event) => handlePhoneChange(event.target.value)}
+                            placeholder="Ex: (69) 99999-0000"
+                            maxLength={15}
+                            required
+                            className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          />
+                        </FormField>
+
+                        <FormField label="Telefone secundário">
+                          <input
+                            type="text"
+                            value={tenantSecondaryPhone}
+                            onChange={(event) => handleSecondaryPhoneChange(event.target.value)}
+                            placeholder="Ex: (69) 99999-0000"
+                            maxLength={15}
+                            className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          />
+                        </FormField>
+
+                        <FormField label="WhatsApp">
+                          <input
+                            type="text"
+                            value={tenantWhatsapp}
+                            onChange={(event) => handleWhatsappChange(event.target.value)}
+                            placeholder="Ex: (69) 99999-0000"
+                            maxLength={15}
+                            className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          />
+                        </FormField>
+
+                        <FormField label="E-mail">
+                          <input
+                            type="email"
+                            value={tenantEmail}
+                            onChange={(event) => setTenantEmail(formatEmailValue(event.target.value))}
+                            placeholder="Ex: pessoa@email.com"
+                            className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          />
+                        </FormField>
+
+                        <FormField label="Site">
+                          <input
+                            type="text"
+                            value={tenantWebsite}
+                            onChange={(event) => setTenantWebsite(formatWebsiteValue(event.target.value))}
+                            placeholder="Ex: empresa.com.br"
+                            className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          />
+                        </FormField>
+
+                        <FormField label="Limite de crédito">
+                          <input
+                            type="text"
+                            value={tenantCreditLimit}
+                            onChange={(event) => handleCreditLimitChange(event.target.value)}
+                            placeholder="Ex: 5.000,00"
+                            className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          />
+                        </FormField>
+                      </div>
+
+                      <div className="mt-5">
+                        <FormField label="Observações financeiras">
+                          <textarea
+                            value={tenantFinancialNotes}
+                            onChange={(event) => setTenantFinancialNotes(toUpperCaseValue(event.target.value))}
+                            placeholder="Observações internas sobre análise financeira, crédito ou atendimento."
+                            rows={3}
+                            className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 resize-none"
+                          />
+                        </FormField>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-orange-100 dark:border-orange-900/40 bg-orange-50 dark:bg-orange-950/20 px-5 py-4 transition hover:bg-orange-50 dark:hover:bg-orange-950/30">
                         <input
                           type="checkbox"
                           checked={tenantIsTenant}
-                          onChange={(event) =>
-                            setTenantIsTenant(event.target.checked)
-                          }
+                          onChange={(event) => setTenantIsTenant(event.target.checked)}
                           className="mt-1 h-5 w-5 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
                         />
 
@@ -1767,22 +2206,17 @@ export default function TenantsPage() {
                           <p className="text-sm font-black text-slate-800 dark:text-slate-100">
                             É inquilino
                           </p>
-                          <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                            Quando desmarcado, esta pessoa não poderá ser
-                            vinculada a contratos de aluguel.
+                          <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                            Permite vincular esta pessoa a contratos de aluguel.
                           </p>
                         </div>
                       </label>
-                    </div>
 
-                    <div className="mt-5">
-                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-5 py-4 transition hover:border-orange-200 hover:bg-orange-50 dark:bg-orange-950/30 dark:hover:bg-orange-950/30/40">
+                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-5 py-4 transition hover:border-orange-200 hover:bg-orange-50 dark:hover:bg-orange-950/30">
                         <input
                           type="checkbox"
                           checked={tenantIsActive}
-                          onChange={(event) =>
-                            handleActiveChange(event.target.checked)
-                          }
+                          onChange={(event) => handleActiveChange(event.target.checked)}
                           className="mt-1 h-5 w-5 rounded border-slate-300 accent-orange-500"
                         />
 
@@ -1790,10 +2224,8 @@ export default function TenantsPage() {
                           <p className="text-sm font-black text-slate-800 dark:text-slate-100">
                             Pessoa ativa
                           </p>
-                          <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                            Quando desmarcado, esta pessoa fica inativa no
-                            sistema. Pessoas vinculadas a contratos não podem
-                            ser inativadas.
+                          <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                            Pessoas vinculadas a contratos ativos não podem ser inativadas.
                           </p>
                         </div>
                       </label>
@@ -2315,6 +2747,25 @@ function FinancialStatusBadge({ status }: { status: string }) {
       {config.label}
     </span>
   );
+}
+
+function formatMoneyInput(value: string) {
+  const digits = String(value ?? "").replace(/\D/g, "");
+
+  if (!digits) return "";
+
+  const numericValue = Number(digits) / 100;
+
+  return numericValue.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatWebsiteValue(value: string) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
 }
 
 function formatEmailValue(value: string) {
