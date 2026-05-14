@@ -34,10 +34,7 @@ export class ImoveisController {
   }
 
   @Get(':id')
-  findOne(
-    @Param('id') id: string,
-    @CurrentUser() user: UsuarioAutenticado,
-  ) {
+  findOne(@Param('id') id: string, @CurrentUser() user: UsuarioAutenticado) {
     return this.propertiesService.findOne(id, user.companyId);
   }
 
@@ -51,10 +48,7 @@ export class ImoveisController {
   }
 
   @Delete(':id')
-  remove(
-    @Param('id') id: string,
-    @CurrentUser() user: UsuarioAutenticado,
-  ) {
+  remove(@Param('id') id: string, @CurrentUser() user: UsuarioAutenticado) {
     return this.propertiesService.remove(id, user.companyId);
   }
 }

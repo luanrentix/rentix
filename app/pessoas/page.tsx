@@ -582,7 +582,7 @@ export default function PeoplePage() {
           </section>
         )}
 
-        <section className="overflow-hidden rounded-[1.65rem] border border-orange-100 bg-white shadow-sm">
+        <section className="overflow-x-auto rounded-[1.65rem] border border-orange-100 bg-white shadow-sm">
           <div className="grid gap-5 px-5 py-5 lg:grid-cols-[1fr_420px] lg:items-end">
             <div>
               <h2 className="text-xl font-black text-slate-950">Pessoas</h2>

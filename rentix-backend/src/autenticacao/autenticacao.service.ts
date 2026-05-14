@@ -14,6 +14,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/registro.dto';
 import { LoginDto } from './dto/login.dto';
 import { CriarContaDto } from './dto/criar-conta.dto';
+import { AlterarSenhaDto } from './dto/alterar-senha.dto';
+import { UsuarioAutenticado } from './types/usuario-autenticado.type';
 
 @Injectable()
 export class AutenticacaoService {
@@ -63,6 +65,10 @@ export class AutenticacaoService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (!user.isActive) {
+      throw new UnauthorizedException('Usuario inativo.');
+    }
+
     const passwordMatch = await bcrypt.compare(
       data.password,
       user.passwordHash,
@@ -102,7 +108,9 @@ export class AutenticacaoService {
     }
 
     if (password.length < 8) {
-      throw new BadRequestException('A senha precisa ter pelo menos 8 caracteres.');
+      throw new BadRequestException(
+        'A senha precisa ter pelo menos 8 caracteres.',
+      );
     }
 
     const userExists = await this.prisma.user.findUnique({
@@ -179,6 +187,52 @@ export class AutenticacaoService {
         companyId: user.companyId,
         role: user.role,
       },
+    };
+  }
+
+  async changePassword(user: UsuarioAutenticado, data: AlterarSenhaDto) {
+    const currentPassword = data.currentPassword;
+    const newPassword = data.newPassword;
+
+    if (newPassword.length < 8) {
+      throw new BadRequestException(
+        'A nova senha precisa ter pelo menos 8 caracteres.',
+      );
+    }
+
+    const existingUser = await this.prisma.user.findFirst({
+      where: {
+        id: user.id,
+        companyId: user.companyId,
+      },
+    });
+
+    if (!existingUser || !existingUser.isActive) {
+      throw new UnauthorizedException('Usuario nao encontrado ou inativo.');
+    }
+
+    const passwordMatch = await bcrypt.compare(
+      currentPassword,
+      existingUser.passwordHash,
+    );
+
+    if (!passwordMatch) {
+      throw new UnauthorizedException('Senha atual invalida.');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.user.update({
+      where: {
+        id: existingUser.id,
+      },
+      data: {
+        passwordHash,
+      },
+    });
+
+    return {
+      success: true,
     };
   }
 }

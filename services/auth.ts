@@ -12,6 +12,11 @@ export type CreateAccountRequest = {
   companyName: string;
 };
 
+export type ChangePasswordRequest = {
+  currentPassword: string;
+  newPassword: string;
+};
+
 export type AuthUser = {
   id: string;
   companyId: string;
@@ -39,6 +44,15 @@ export async function createAccountRequest(
   return apiFetch<LoginResponse>('/autenticacao/criar-conta', {
     method: 'POST',
     auth: false,
+    body: JSON.stringify(data),
+  });
+}
+
+export async function changePasswordRequest(
+  data: ChangePasswordRequest,
+): Promise<{ success: boolean }> {
+  return apiFetch<{ success: boolean }>('/autenticacao/me/senha', {
+    method: 'PATCH',
     body: JSON.stringify(data),
   });
 }

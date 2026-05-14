@@ -2166,7 +2166,7 @@ export default function ContractsPage() {
                         <DetailCard title="Total em aberto" value={formatCurrency(receivableSummary.pendingAmount)} detail={`${receivableSummary.pendingCharges.length} parcela(s) pendente(s)`} />
                       </div>
 
-                      <div className="overflow-hidden rounded-3xl border border-slate-100 bg-white">
+                      <div className="overflow-x-auto rounded-3xl border border-slate-100 bg-white">
                         <div className="border-b border-slate-100 bg-slate-50 px-5 py-4">
                           <h3 className="text-lg font-black text-slate-950">Parcelas vinculadas</h3>
                           <p className="mt-1 text-sm font-semibold text-slate-500">Cobranças geradas no Contas a Receber para este contrato.</p>

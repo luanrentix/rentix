@@ -6,14 +6,18 @@ import {
   Param,
   Patch,
   Post,
+  UseGuards,
 } from '@nestjs/common';
 
 import { EmpresasService } from './empresas.service';
 
 import { CriarEmpresaDto } from './dto/criar-empresa.dto';
 import { AtualizarEmpresaDto } from './dto/atualizar-empresa.dto';
+import { JwtGuardAutenticacao } from '../autenticacao/guards/jwt-autenticacao.guard';
+import { SystemOwnerGuard } from '../admin/system-owner.guard';
 
 @Controller('empresas')
+@UseGuards(JwtGuardAutenticacao, SystemOwnerGuard)
 export class EmpresasController {
   constructor(private readonly companiesService: EmpresasService) {}
 
@@ -33,10 +37,7 @@ export class EmpresasController {
   }
 
   @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Body() data: AtualizarEmpresaDto,
-  ) {
+  update(@Param('id') id: string, @Body() data: AtualizarEmpresaDto) {
     return this.companiesService.update(id, data);
   }
 

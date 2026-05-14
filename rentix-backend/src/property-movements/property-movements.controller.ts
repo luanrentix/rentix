@@ -9,7 +9,9 @@ import type { UsuarioAutenticado } from '../autenticacao/types/usuario-autentica
 @Controller('property-movements')
 @UseGuards(JwtGuardAutenticacao)
 export class PropertyMovementsController {
-  constructor(private readonly propertyMovementsService: PropertyMovementsService) {}
+  constructor(
+    private readonly propertyMovementsService: PropertyMovementsService,
+  ) {}
 
   @Post()
   create(

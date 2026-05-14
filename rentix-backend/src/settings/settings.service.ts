@@ -63,6 +63,8 @@ export class SettingsService {
   }
 
   private toJsonValue(value?: Record<string, unknown>) {
-    return value === undefined ? Prisma.JsonNull : (value as Prisma.InputJsonValue);
+    return value === undefined
+      ? Prisma.JsonNull
+      : (value as Prisma.InputJsonValue);
   }
 }

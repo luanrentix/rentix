@@ -37,10 +37,7 @@ export class ContasReceberController {
   }
 
   @Get(':id')
-  findOne(
-    @Param('id') id: string,
-    @CurrentUser() user: UsuarioAutenticado,
-  ) {
+  findOne(@Param('id') id: string, @CurrentUser() user: UsuarioAutenticado) {
     return this.contasReceberService.findOne(id, user.companyId);
   }
 
@@ -54,10 +51,7 @@ export class ContasReceberController {
   }
 
   @Delete(':id')
-  remove(
-    @Param('id') id: string,
-    @CurrentUser() user: UsuarioAutenticado,
-  ) {
+  remove(@Param('id') id: string, @CurrentUser() user: UsuarioAutenticado) {
     return this.contasReceberService.remove(id, user.companyId);
   }
 

@@ -46,7 +46,9 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     });
 
     if (!user) {
-      throw new UnauthorizedException('Invalid or expired authentication token.');
+      throw new UnauthorizedException(
+        'Invalid or expired authentication token.',
+      );
     }
 
     return {

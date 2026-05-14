@@ -33,7 +33,10 @@ export class PropertyMovementsService {
     });
   }
 
-  private async validateCompanyAndProperty(companyId: string, propertyId: string) {
+  private async validateCompanyAndProperty(
+    companyId: string,
+    propertyId: string,
+  ) {
     if (!companyId) {
       throw new BadRequestException('O companyId e obrigatorio.');
     }

@@ -59,7 +59,9 @@ export class FinanceiroService {
           amount: Number(account.amount),
           status: this.getStatus(account.status, account.dueDate),
           paymentDate: payment ? this.toDateOnly(payment.paidAt) : null,
-          paidAmount: payment ? Number(payment.amountPaid) : Number(account.amount),
+          paidAmount: payment
+            ? Number(payment.amountPaid)
+            : Number(account.amount),
         };
       }),
       payables: payables.map<FinancialPayable>((account) => {
@@ -74,7 +76,9 @@ export class FinanceiroService {
           amount: Number(account.amount),
           status: this.getStatus(account.status, account.dueDate),
           paymentDate: payment ? this.toDateOnly(payment.paidAt) : null,
-          paidAmount: payment ? Number(payment.amountPaid) : Number(account.amount),
+          paidAmount: payment
+            ? Number(payment.amountPaid)
+            : Number(account.amount),
         };
       }),
     };
@@ -97,7 +101,9 @@ export class FinanceiroService {
   ): FinancialStatus {
     if (status === FinancialAccountStatus.PAID) return 'Paid';
 
-    return this.toDateOnly(dueDate) < this.getTodayDate() ? 'Overdue' : 'Pending';
+    return this.toDateOnly(dueDate) < this.getTodayDate()
+      ? 'Overdue'
+      : 'Pending';
   }
 
   private toDateOnly(value: Date) {

@@ -2211,7 +2211,7 @@ export default function AccountsPayablePage() {
           </div>
         )}
 
-        <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
           <div className="border-b border-slate-200 dark:border-slate-700 dark:border-slate-800 p-5">
             <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
               <div>

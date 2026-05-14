@@ -34,10 +34,7 @@ export class ContratosController {
   }
 
   @Get(':id')
-  findOne(
-    @Param('id') id: string,
-    @CurrentUser() user: UsuarioAutenticado,
-  ) {
+  findOne(@Param('id') id: string, @CurrentUser() user: UsuarioAutenticado) {
     return this.contractsService.findOne(id, user.companyId);
   }
 
@@ -51,10 +48,7 @@ export class ContratosController {
   }
 
   @Delete(':id')
-  remove(
-    @Param('id') id: string,
-    @CurrentUser() user: UsuarioAutenticado,
-  ) {
+  remove(@Param('id') id: string, @CurrentUser() user: UsuarioAutenticado) {
     return this.contractsService.remove(id, user.companyId);
   }
 }

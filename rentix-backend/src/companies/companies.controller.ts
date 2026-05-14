@@ -33,10 +33,7 @@ export class CompaniesController {
   }
 
   @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Body() data: UpdateCompanyDto,
-  ) {
+  update(@Param('id') id: string, @Body() data: UpdateCompanyDto) {
     return this.companiesService.update(id, data);
   }
 

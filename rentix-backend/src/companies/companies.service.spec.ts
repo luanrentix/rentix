@@ -1,50 +1,25 @@
-import { Injectable } from '@nestjs/common';
-
+import { Test, TestingModule } from '@nestjs/testing';
+import { CompaniesService } from './companies.service';
 import { PrismaService } from '../prisma/prisma.service';
 
-import { CreateCompanyDto } from './dto/create-company.dto';
-import { UpdateCompanyDto } from './dto/update-company.dto';
+describe('CompaniesService', () => {
+  let service: CompaniesService;
 
-@Injectable()
-export class CompaniesService {
-  constructor(private readonly prisma: PrismaService) {}
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CompaniesService,
+        {
+          provide: PrismaService,
+          useValue: {},
+        },
+      ],
+    }).compile();
 
-  async create(data: CreateCompanyDto) {
-    return this.prisma.company.create({
-      data,
-    });
-  }
+    service = module.get<CompaniesService>(CompaniesService);
+  });
 
-  async findAll() {
-    return this.prisma.company.findMany({
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
-  }
-
-  async findOne(id: string) {
-    return this.prisma.company.findUnique({
-      where: {
-        id,
-      },
-    });
-  }
-
-  async update(id: string, data: UpdateCompanyDto) {
-    return this.prisma.company.update({
-      where: {
-        id,
-      },
-      data,
-    });
-  }
-
-  async remove(id: string) {
-    return this.prisma.company.delete({
-      where: {
-        id,
-      },
-    });
-  }
-}
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+});

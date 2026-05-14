@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 
 import { AgendaService } from './agenda.service';
 import { CriarAgendaItemDto } from './dto/criar-agenda-item.dto';
@@ -26,10 +35,7 @@ export class AgendaController {
   }
 
   @Get(':id')
-  findOne(
-    @Param('id') id: string,
-    @CurrentUser() user: UsuarioAutenticado,
-  ) {
+  findOne(@Param('id') id: string, @CurrentUser() user: UsuarioAutenticado) {
     return this.agendaService.findOne(id, user.companyId);
   }
 
@@ -43,10 +49,7 @@ export class AgendaController {
   }
 
   @Delete(':id')
-  remove(
-    @Param('id') id: string,
-    @CurrentUser() user: UsuarioAutenticado,
-  ) {
+  remove(@Param('id') id: string, @CurrentUser() user: UsuarioAutenticado) {
     return this.agendaService.remove(id, user.companyId);
   }
 }

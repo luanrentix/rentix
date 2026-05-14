@@ -145,7 +145,7 @@ export default function AdminPage() {
                     Total atual: {users.length}
                   </p>
 
-                  <div className="mt-5 overflow-hidden rounded-2xl border border-slate-100">
+                  <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-100">
                     <table className="w-full min-w-[720px] text-left text-sm">
                       <thead className="bg-orange-50 text-xs font-black uppercase tracking-wide text-orange-700">
                         <tr>

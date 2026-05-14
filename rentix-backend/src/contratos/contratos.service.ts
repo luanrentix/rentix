@@ -195,9 +195,7 @@ export class ContratosService {
     });
 
     if (existingContract) {
-      throw new BadRequestException(
-        'Este imovel ja possui contrato ativo.',
-      );
+      throw new BadRequestException('Este imovel ja possui contrato ativo.');
     }
   }
 
@@ -210,8 +208,14 @@ export class ContratosService {
       tenant: { connect: { id: createContractDto.tenantId } },
       propertyName: createContractDto.propertyName || null,
       tenantName: createContractDto.tenantName || null,
-      startDate: this.parseDate(createContractDto.startDate, 'Data inicial invalida.'),
-      endDate: this.parseDate(createContractDto.endDate, 'Data final invalida.'),
+      startDate: this.parseDate(
+        createContractDto.startDate,
+        'Data inicial invalida.',
+      ),
+      endDate: this.parseDate(
+        createContractDto.endDate,
+        'Data final invalida.',
+      ),
       rentValue: new Prisma.Decimal(createContractDto.rentValue),
       status: createContractDto.status ?? ContractStatus.ACTIVE,
       deletedAt: this.parseOptionalDate(createContractDto.deletedAt),
@@ -254,7 +258,10 @@ export class ContratosService {
           : undefined,
       startDate:
         updateContractDto.startDate !== undefined
-          ? this.parseDate(updateContractDto.startDate, 'Data inicial invalida.')
+          ? this.parseDate(
+              updateContractDto.startDate,
+              'Data inicial invalida.',
+            )
           : undefined,
       endDate:
         updateContractDto.endDate !== undefined

@@ -1,1 +1,85 @@
 @import "tailwindcss";
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+table {
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  body {
+    background: #f8fafc;
+  }
+
+  main,
+  section,
+  article,
+  header,
+  footer,
+  aside,
+  div {
+    min-width: 0;
+  }
+
+  [class*="min-w-"][class*="table"],
+  table[class*="min-w-"] {
+    width: max-content;
+  }
+
+  div:has(> table),
+  section:has(> table),
+  article:has(> table) {
+    max-width: 100%;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  div:has(> table) table,
+  section:has(> table) table,
+  article:has(> table) table {
+    white-space: nowrap;
+  }
+
+  [class*="max-h-[92vh]"],
+  [class*="max-h-[94vh]"],
+  [class*="max-h-[96vh]"] {
+    max-height: calc(100dvh - 1rem) !important;
+  }
+
+  [class*="rounded-[2rem]"] {
+    border-radius: 1.25rem;
+  }
+
+  .recharts-responsive-container {
+    min-width: 0 !important;
+  }
+}

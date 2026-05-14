@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { changePasswordRequest } from "@/services/auth";
 import {
   getCompanyStorageItem,
   removeCompanyStorageItem,
@@ -1136,8 +1137,8 @@ export default function ConfiguracoesPage() {
       return false;
     }
 
-    if (passwordSettings.newPassword.length < 6) {
-      setPasswordError("A nova senha precisa ter no mínimo 6 caracteres.");
+    if (passwordSettings.newPassword.length < 8) {
+      setPasswordError("A nova senha precisa ter no mínimo 8 caracteres.");
       return false;
     }
 
@@ -1307,13 +1308,31 @@ export default function ConfiguracoesPage() {
       return;
     }
 
-    await saveAppSettings({
-      companyId,
-      userSettings,
-      companySettings,
-      printTemplates,
-      themeSettings,
-    });
+    try {
+      if (passwordSettings.newPassword) {
+        await changePasswordRequest({
+          currentPassword: passwordSettings.currentPassword,
+          newPassword: passwordSettings.newPassword,
+        });
+      }
+
+      await saveAppSettings({
+        companyId,
+        userSettings,
+        companySettings,
+        printTemplates,
+        themeSettings,
+      });
+    } catch (error) {
+      setPasswordError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar as configurações.",
+      );
+      setActiveSettingsTab("user");
+      setIsSaveConfirmModalOpen(false);
+      return;
+    }
 
     setCompanyStorageItem(
       companyId,

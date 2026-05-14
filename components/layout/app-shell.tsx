@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import AuthGuard from "@/components/auth/auth-guard";
 import { useAuth } from "@/context/AuthContext";
+import { changePasswordRequest } from "@/services/auth";
 import {
   getCompanyStorageItem,
   setCompanyStorageItem,
@@ -717,8 +718,8 @@ export default function AppShell({ children }: AppShellProps) {
       return false;
     }
 
-    if (passwordSettings.newPassword.length < 6) {
-      setPasswordError("A nova senha precisa ter no mínimo 6 caracteres.");
+    if (passwordSettings.newPassword.length < 8) {
+      setPasswordError("A nova senha precisa ter no mínimo 8 caracteres.");
       return false;
     }
 
@@ -743,12 +744,29 @@ export default function AppShell({ children }: AppShellProps) {
       return;
     }
 
-    await saveAppSettings({
-      companyId,
-      userSettings,
-      companySettings,
-      themeSettings,
-    });
+    try {
+      if (passwordSettings.newPassword) {
+        await changePasswordRequest({
+          currentPassword: passwordSettings.currentPassword,
+          newPassword: passwordSettings.newPassword,
+        });
+      }
+
+      await saveAppSettings({
+        companyId,
+        userSettings,
+        companySettings,
+        themeSettings,
+      });
+    } catch (error) {
+      setActiveSettingsTab("user");
+      setPasswordError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar as configurações.",
+      );
+      return;
+    }
 
     setCompanyStorageItem(
       companyId,
@@ -804,7 +822,7 @@ export default function AppShell({ children }: AppShellProps) {
           onMouseLeave={() => {
             if (!isSidebarLocked) setIsSidebarExpanded(false);
           }}
-          className={`fixed left-0 top-0 z-50 flex h-screen flex-col overflow-hidden border-r border-orange-100 bg-white transition-[width,transform] duration-300 ease-in-out lg:z-30 ${
+          className={`fixed left-0 top-0 z-50 flex h-dvh max-w-[86vw] flex-col overflow-hidden border-r border-orange-100 bg-white transition-[width,transform] duration-300 ease-in-out lg:z-30 lg:h-screen lg:max-w-none ${
             isSidebarOpen ? "lg:w-72" : "lg:w-20"
           } ${
             isMobileSidebarOpen
@@ -897,26 +915,26 @@ export default function AppShell({ children }: AppShellProps) {
             isSidebarOpen ? "lg:ml-72" : "lg:ml-20"
           }`}
         >
-          <header className="sticky top-0 z-20 flex h-20 items-center justify-between border-b border-slate-200 bg-white/90 px-4 backdrop-blur lg:h-24 lg:px-8">
-            <div className="flex items-center gap-3">
+          <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-3 py-3 backdrop-blur sm:px-4 lg:h-24 lg:px-8 lg:py-0">
+            <div className="flex min-w-0 items-center gap-3">
               <button
                 type="button"
                 onClick={() => setIsMobileSidebarOpen(true)}
-                className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500 text-xl font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 lg:hidden"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-orange-500 text-xl font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 lg:hidden"
               >
                 ?              </button>
 
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs font-semibold text-orange-600 lg:text-sm">
                   Bem-vindo
                 </p>
-                <h2 className="text-xl font-black text-slate-950 lg:text-2xl">
+                <h2 className="truncate text-base font-black text-slate-950 sm:text-xl lg:text-2xl">
                   {companySettings.tradeName || companySettings.companyName || "Rentix"}
                 </h2>
               </div>
             </div>
 
-            <div className="relative flex items-center gap-3 lg:gap-4">
+            <div className="relative flex shrink-0 items-center gap-2 lg:gap-4">
               <div className="hidden text-right sm:block">
                 <p className="text-sm text-slate-500">Olá,</p>
                 <p className="font-bold text-slate-900">{userSettings.name}</p>
@@ -932,7 +950,7 @@ export default function AppShell({ children }: AppShellProps) {
 
               {isUserMenuOpen && (
                 <div
-                  className={`absolute right-0 top-14 z-50 w-72 rounded-3xl border p-3 shadow-2xl transition lg:top-16 ${
+                  className={`absolute right-0 top-14 z-50 w-[calc(100vw-1rem)] max-w-72 rounded-3xl border p-3 shadow-2xl transition lg:top-16 ${
                     themeSettings.mode === "black"
                       ? "border-slate-700 bg-slate-900 shadow-black/40"
                       : "border-orange-100 bg-white shadow-xl"
@@ -989,7 +1007,7 @@ export default function AppShell({ children }: AppShellProps) {
             </div>
           </header>
 
-          <main className="flex-1 overflow-x-hidden px-4 py-5 sm:px-5 lg:px-8 lg:py-8">
+          <main className="min-w-0 flex-1 overflow-x-hidden px-3 py-4 sm:px-5 lg:px-8 lg:py-8">
             {children}
           </main>
         </div>

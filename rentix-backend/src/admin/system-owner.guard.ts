@@ -6,11 +6,15 @@ import {
 } from '@nestjs/common';
 import type { UsuarioAutenticado } from '../autenticacao/types/usuario-autenticado.type';
 
+type RequestWithUser = {
+  user?: UsuarioAutenticado;
+};
+
 @Injectable()
 export class SystemOwnerGuard implements CanActivate {
   canActivate(context: ExecutionContext) {
-    const request = context.switchToHttp().getRequest();
-    const user = request.user as UsuarioAutenticado | undefined;
+    const request = context.switchToHttp().getRequest<RequestWithUser>();
+    const user = request.user;
 
     if (user?.role !== 'SYSTEM_OWNER') {
       throw new ForbiddenException('Acesso restrito ao dono do sistema.');

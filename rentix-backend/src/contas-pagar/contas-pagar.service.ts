@@ -5,10 +5,7 @@ import {
 } from '@nestjs/common';
 import { FinancialAccountStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  CriarContaPagarDto,
-  PagarContaDto,
-} from './dto/criar-conta-pagar.dto';
+import { CriarContaPagarDto, PagarContaDto } from './dto/criar-conta-pagar.dto';
 import { AtualizarContaPagarDto } from './dto/atualizar-conta-pagar.dto';
 
 @Injectable()
@@ -95,7 +92,9 @@ export class ContasPagarService {
           paidAt: this.parseDate(data.paidAt, 'Data de pagamento invalida.'),
           method: data.method,
           paymentItems:
-            data.paymentItems === undefined ? Prisma.JsonNull : data.paymentItems,
+            data.paymentItems === undefined
+              ? Prisma.JsonNull
+              : data.paymentItems,
           interest: new Prisma.Decimal(data.interest || 0),
           discount: new Prisma.Decimal(data.discount || 0),
           amountPaid: new Prisma.Decimal(data.amountPaid),
@@ -174,7 +173,9 @@ export class ContasPagarService {
     }
   }
 
-  private buildCreateData(data: CriarContaPagarDto): Prisma.ContaPagarCreateInput {
+  private buildCreateData(
+    data: CriarContaPagarDto,
+  ): Prisma.ContaPagarCreateInput {
     return {
       company: { connect: { id: data.companyId } },
       person: data.personId ? { connect: { id: data.personId } } : undefined,

@@ -146,22 +146,22 @@ export default function LoginPage() {
   const isSignup = mode === "signup";
 
   return (
-    <main className="min-h-screen overflow-hidden bg-white">
-      <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[42%_58%]">
-        <section className="relative flex min-h-screen flex-col bg-gradient-to-br from-[#ff4b00] via-[#f04400] to-[#d93200] px-6 pt-8 sm:px-9 lg:min-h-screen">
-          <div className="relative z-10 flex items-center gap-5">
-            <div className="flex h-28 w-28 shrink-0 items-center justify-center rounded-[22px] bg-white shadow-lg sm:h-32 sm:w-32">
+    <main className="min-h-dvh overflow-x-hidden bg-white">
+      <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[42%_58%]">
+        <section className="relative flex min-h-dvh flex-col bg-gradient-to-br from-[#ff4b00] via-[#f04400] to-[#d93200] px-4 pt-5 sm:px-9 sm:pt-8 lg:min-h-screen">
+          <div className="relative z-10 flex items-center gap-3 sm:gap-5">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[18px] bg-white shadow-lg sm:h-32 sm:w-32 sm:rounded-[22px]">
               <Image
                 src="/logo-rentix.png"
                 alt="Rentix"
-                width={82}
-                height={82}
+                width={74}
+                height={74}
                 priority
               />
             </div>
 
             <div>
-              <h1 className="text-[42px] font-black leading-none text-white sm:text-[48px]">
+              <h1 className="text-3xl font-black leading-none text-white sm:text-[48px]">
                 Rentix
               </h1>
               <p className="mt-2 text-sm font-bold text-white">
@@ -170,16 +170,16 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div className="relative z-10 mt-6 flex justify-center pb-8">
-            <div className="w-full max-w-[525px] rounded-[30px] bg-white px-6 py-8 shadow-2xl sm:px-10 sm:py-10">
-              <h2 className="text-center text-[30px] font-light leading-tight text-slate-950">
+          <div className="relative z-10 mt-5 flex justify-center pb-6 sm:mt-6 sm:pb-8">
+            <div className="w-full max-w-[525px] rounded-[24px] bg-white px-4 py-6 shadow-2xl sm:rounded-[30px] sm:px-10 sm:py-10">
+              <h2 className="text-center text-2xl font-light leading-tight text-slate-950 sm:text-[30px]">
                 {isSignup ? "Crie sua conta" : "Bem-vindo ao"}{" "}
                 <span className="font-black text-[#ff4b00]">
                   {isSignup ? "Rentix" : "Rentix!"}
                 </span>
               </h2>
 
-              <div className="mt-7 grid grid-cols-2 rounded-2xl bg-slate-100 p-1">
+              <div className="mt-5 grid grid-cols-2 rounded-2xl bg-slate-100 p-1 sm:mt-7">
                 <button
                   type="button"
                   onClick={() => switchMode("login")}
@@ -206,7 +206,7 @@ export default function LoginPage() {
                 </button>
               </div>
 
-              <div className="mt-7 space-y-4">
+              <div className="mt-5 space-y-3 sm:mt-7 sm:space-y-4">
                 {isSignup && (
                   <>
                     <AuthInput
@@ -234,7 +234,7 @@ export default function LoginPage() {
                   onChange={setEmail}
                 />
 
-                <div className="flex h-[58px] items-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_3px_10px_rgba(15,23,42,0.10)]">
+                <div className="flex h-[54px] items-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_3px_10px_rgba(15,23,42,0.10)] sm:h-[58px]">
                   <div className="flex h-full w-[58px] items-center justify-center text-slate-600">
                     <LockKeyhole size={20} />
                   </div>
@@ -310,14 +310,14 @@ export default function LoginPage() {
                     "A recuperação de senha será configurada na próxima etapa.",
                   )
                 }
-                className="mt-6 w-full text-center text-sm font-black text-[#ff4b00]"
+                className="mt-5 w-full text-center text-sm font-black text-[#ff4b00] sm:mt-6"
               >
                 Esqueceu sua senha?
               </button>
             </div>
           </div>
 
-          <p className="relative z-10 mt-auto pb-8 text-center text-base font-black text-white">
+          <p className="relative z-10 mt-auto pb-5 text-center text-sm font-black text-white sm:pb-8 sm:text-base">
             Rentix © 2026
           </p>
         </section>
@@ -413,7 +413,7 @@ function AuthInput({
   onEnter,
 }: AuthInputProps) {
   return (
-    <div className="flex h-[58px] items-center rounded-2xl border border-slate-200 bg-white shadow-[0_3px_10px_rgba(15,23,42,0.10)]">
+    <div className="flex h-[54px] items-center rounded-2xl border border-slate-200 bg-white shadow-[0_3px_10px_rgba(15,23,42,0.10)] sm:h-[58px]">
       <div className="flex h-full w-[58px] items-center justify-center text-slate-600">
         {icon}
       </div>

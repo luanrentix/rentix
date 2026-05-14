@@ -9,10 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ContasPagarService } from './contas-pagar.service';
-import {
-  CriarContaPagarDto,
-  PagarContaDto,
-} from './dto/criar-conta-pagar.dto';
+import { CriarContaPagarDto, PagarContaDto } from './dto/criar-conta-pagar.dto';
 import { AtualizarContaPagarDto } from './dto/atualizar-conta-pagar.dto';
 import { CurrentUser } from '../autenticacao/decorators/usuario-atual.decorator';
 import { JwtGuardAutenticacao } from '../autenticacao/guards/jwt-autenticacao.guard';
@@ -37,10 +34,7 @@ export class ContasPagarController {
   }
 
   @Get(':id')
-  findOne(
-    @Param('id') id: string,
-    @CurrentUser() user: UsuarioAutenticado,
-  ) {
+  findOne(@Param('id') id: string, @CurrentUser() user: UsuarioAutenticado) {
     return this.contasPagarService.findOne(id, user.companyId);
   }
 
@@ -54,10 +48,7 @@ export class ContasPagarController {
   }
 
   @Delete(':id')
-  remove(
-    @Param('id') id: string,
-    @CurrentUser() user: UsuarioAutenticado,
-  ) {
+  remove(@Param('id') id: string, @CurrentUser() user: UsuarioAutenticado) {
     return this.contasPagarService.remove(id, user.companyId);
   }
 

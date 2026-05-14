@@ -47,11 +47,7 @@ export class AgendaService {
     return item;
   }
 
-  async update(
-    id: string,
-    data: AtualizarAgendaItemDto,
-    companyId: string,
-  ) {
+  async update(id: string, data: AtualizarAgendaItemDto, companyId: string) {
     await this.findOne(id, companyId);
 
     return this.prisma.scheduleItem.update({
