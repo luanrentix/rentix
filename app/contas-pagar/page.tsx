@@ -16,6 +16,10 @@ import {
   type PaymentMethod as ApiPaymentMethod,
 } from "@/services/financial.service";
 import { createPerson, getPeople, type Person } from "@/services/people.service";
+import {
+  getCompanyStorageItem,
+  setCompanyStorageItem,
+} from "@/services/company-storage";
 
 type PersonType = "Individual" | "Company";
 
@@ -287,8 +291,16 @@ export default function AccountsPayablePage() {
 
   useEffect(() => {
     function applyStoredTheme() {
-      const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
-      const legacyTheme = localStorage.getItem("rentix_theme");
+      const storedThemeSettings = getCompanyStorageItem(
+        companyId,
+        "rentix_theme_settings",
+        "rentix_theme_settings",
+      );
+      const legacyTheme = getCompanyStorageItem(
+        companyId,
+        "rentix_theme",
+        "rentix_theme",
+      );
 
       try {
         const parsedThemeSettings = storedThemeSettings
@@ -321,11 +333,13 @@ export default function AccountsPayablePage() {
     return () => {
       window.removeEventListener("storage", applyStoredTheme);
     };
-  }, []);
+  }, [companyId]);
 
 
   useEffect(() => {
-    const savedStatusFilter = localStorage.getItem(
+    const savedStatusFilter = getCompanyStorageItem(
+      companyId,
+      "rentix_payable_status_filter",
       "rentix_payable_status_filter",
     );
 
@@ -363,11 +377,11 @@ export default function AccountsPayablePage() {
     ) {
       setStatusFilter(savedStatusFilter);
     }
-  }, []);
+  }, [companyId]);
 
   useEffect(() => {
-    localStorage.setItem("rentix_payable_status_filter", statusFilter);
-  }, [statusFilter]);
+    setCompanyStorageItem(companyId, "rentix_payable_status_filter", statusFilter);
+  }, [companyId, statusFilter]);
 
   useEffect(() => {
     if (formLaunchType !== "installment") {

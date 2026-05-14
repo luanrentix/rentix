@@ -21,6 +21,10 @@ import {
   getCachedCompanySettings,
   getCachedPrintTemplates,
 } from "@/services/settings-cache";
+import {
+  getCompanyStorageItem,
+  setCompanyStorageItem,
+} from "@/services/company-storage";
 
 function createLocalId(prefix: string) {
   const randomId =
@@ -626,8 +630,16 @@ export default function AccountsReceivablePage() {
 
   useEffect(() => {
     function applyStoredTheme() {
-      const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
-      const legacyTheme = localStorage.getItem("rentix_theme");
+      const storedThemeSettings = getCompanyStorageItem(
+        companyId,
+        "rentix_theme_settings",
+        "rentix_theme_settings",
+      );
+      const legacyTheme = getCompanyStorageItem(
+        companyId,
+        "rentix_theme",
+        "rentix_theme",
+      );
 
       try {
         const parsedThemeSettings = storedThemeSettings
@@ -660,7 +672,7 @@ export default function AccountsReceivablePage() {
     return () => {
       window.removeEventListener("storage", applyStoredTheme);
     };
-  }, []);
+  }, [companyId]);
 
   function openChargeFromContractPayload(payload: ReceivableFromContractPayload) {
     const normalizedInstallmentQuantity = Math.max(
@@ -701,10 +713,14 @@ export default function AccountsReceivablePage() {
     const paidData = null;
     const manualData = null;
     const paymentData = null;
-    const savedStatusFilter = localStorage.getItem(
+    const savedStatusFilter = getCompanyStorageItem(
+      companyId,
+      "rentix_receivable_status_filter",
       "rentix_receivable_status_filter",
     );
-    const savedAutoOpenSearch = localStorage.getItem(
+    const savedAutoOpenSearch = getCompanyStorageItem(
+      companyId,
+      "rentix_auto_open_search",
       "rentix_auto_open_search",
     );
 
@@ -748,11 +764,15 @@ export default function AccountsReceivablePage() {
         return;
       }
     }
-  }, []);
+  }, [companyId]);
 
   useEffect(() => {
-    localStorage.setItem("rentix_receivable_status_filter", statusFilter);
-  }, [statusFilter]);
+    setCompanyStorageItem(
+      companyId,
+      "rentix_receivable_status_filter",
+      statusFilter,
+    );
+  }, [companyId, statusFilter]);
 
   useEffect(() => {
     if (formLaunchType !== "installment") {
@@ -4913,7 +4933,8 @@ export default function AccountsReceivablePage() {
                     const value = event.target.checked;
 
                     setAutoOpenSearch(value);
-                    localStorage.setItem(
+                    setCompanyStorageItem(
+                      companyId,
                       "rentix_auto_open_search",
                       JSON.stringify(value),
                     );

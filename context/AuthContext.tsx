@@ -16,6 +16,10 @@ import {
   createAccountRequest,
   loginRequest,
 } from '@/services/auth';
+import {
+  removeCompanyStorageItem,
+  setCompanyStorageItem,
+} from '@/services/company-storage';
 
 type AuthContextData = {
   user: AuthUser | null;
@@ -80,7 +84,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     localStorage.setItem(TOKEN_STORAGE_KEY, response.accessToken);
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.user));
-    localStorage.setItem('rentix_onboarding_pending', 'true');
+    setCompanyStorageItem(
+      response.user.companyId,
+      'rentix_onboarding_pending',
+      'true',
+    );
 
     setToken(response.accessToken);
     setUser(response.user);
@@ -91,12 +99,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     localStorage.removeItem(USER_STORAGE_KEY);
+    removeCompanyStorageItem(user?.companyId, 'rentix_onboarding_pending');
 
     setToken(null);
     setUser(null);
 
     router.push('/');
-  }, [router]);
+  }, [router, user?.companyId]);
 
   const value = useMemo<AuthContextData>(
     () => ({

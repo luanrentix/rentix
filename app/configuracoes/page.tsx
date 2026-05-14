@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import {
+  getCompanyStorageItem,
+  removeCompanyStorageItem,
+  setCompanyStorageItem,
+} from "@/services/company-storage";
 import { getAppSettings, saveAppSettings } from "@/services/settings.service";
 import { setCachedAppSettings } from "@/services/settings-cache";
 
@@ -1020,8 +1025,16 @@ export default function ConfiguracoesPage() {
   }
 
   function loadSettingsFromLocalStorage() {
-    const storedUserSettings = localStorage.getItem("rentix_user_settings");
-    const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
+    const storedUserSettings = getCompanyStorageItem(
+      companyId,
+      "rentix_user_settings",
+      "rentix_user_settings",
+    );
+    const storedThemeSettings = getCompanyStorageItem(
+      companyId,
+      "rentix_theme_settings",
+      "rentix_theme_settings",
+    );
 
     if (storedUserSettings) {
       const parsedUserSettings = {
@@ -1100,7 +1113,7 @@ export default function ConfiguracoesPage() {
 
     selectedModules.forEach((moduleOption) => {
       moduleOption.storageKeys.forEach((storageKey) => {
-        localStorage.removeItem(storageKey);
+        removeCompanyStorageItem(companyId, storageKey);
       });
     });
 
@@ -1302,12 +1315,20 @@ export default function ConfiguracoesPage() {
       themeSettings,
     });
 
-    localStorage.setItem("rentix_user_settings", JSON.stringify(userSettings));
-    localStorage.setItem("rentix_theme_settings", JSON.stringify(themeSettings));
+    setCompanyStorageItem(
+      companyId,
+      "rentix_user_settings",
+      JSON.stringify(userSettings),
+    );
+    setCompanyStorageItem(
+      companyId,
+      "rentix_theme_settings",
+      JSON.stringify(themeSettings),
+    );
     setCachedAppSettings({ userSettings, companySettings, printTemplates, themeSettings });
 
     if (passwordSettings.newPassword) {
-      localStorage.setItem("rentix_user_password_updated", "true");
+      setCompanyStorageItem(companyId, "rentix_user_password_updated", "true");
       setPasswordSettings(defaultPasswordSettings);
     }
 
@@ -1317,7 +1338,11 @@ export default function ConfiguracoesPage() {
     setInitialThemeSettings(themeSettings);
     setValidationErrors({});
     setSuccessMessage("Configurações salvas com sucesso.");
-    localStorage.setItem("rentix_dashboard_success_message", "Configurações salvas com sucesso.");
+    setCompanyStorageItem(
+      companyId,
+      "rentix_dashboard_success_message",
+      "Configurações salvas com sucesso.",
+    );
     setIsSaveConfirmModalOpen(false);
 
     router.push("/dashboard");

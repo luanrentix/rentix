@@ -27,6 +27,10 @@ import {
   getCachedCompanySettings,
   getCachedPrintTemplates,
 } from "@/services/settings-cache";
+import {
+  getCompanyStorageItem,
+  setCompanyStorageItem,
+} from "@/services/company-storage";
 
 const EXPIRING_CONTRACT_DAYS_LIMIT = 30;
 const DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME = "14:00";
@@ -539,8 +543,16 @@ export default function ContractsPage() {
 
   useEffect(() => {
     function applyStoredTheme() {
-      const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
-      const legacyTheme = localStorage.getItem("rentix_theme");
+      const storedThemeSettings = getCompanyStorageItem(
+        companyId,
+        "rentix_theme_settings",
+        "rentix_theme_settings",
+      );
+      const legacyTheme = getCompanyStorageItem(
+        companyId,
+        "rentix_theme",
+        "rentix_theme",
+      );
 
       try {
         const parsedThemeSettings = storedThemeSettings
@@ -568,7 +580,7 @@ export default function ContractsPage() {
     return () => {
       window.removeEventListener("storage", applyStoredTheme);
     };
-  }, []);
+  }, [companyId]);
 
   useEffect(() => {
     if (!companyId) {
@@ -585,7 +597,11 @@ export default function ContractsPage() {
 
 
   useEffect(() => {
-    const storedDefaultTimes = localStorage.getItem(TEMPORARY_RENTAL_TIME_DEFAULTS_STORAGE_KEY);
+    const storedDefaultTimes = getCompanyStorageItem(
+      companyId,
+      TEMPORARY_RENTAL_TIME_DEFAULTS_STORAGE_KEY,
+      TEMPORARY_RENTAL_TIME_DEFAULTS_STORAGE_KEY,
+    );
 
     if (!storedDefaultTimes) return;
 
@@ -610,7 +626,7 @@ export default function ContractsPage() {
       setDraftDefaultCheckInTime(DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME);
       setDraftDefaultCheckOutTime(DEFAULT_TEMPORARY_RENTAL_CHECK_OUT_TIME);
     }
-  }, []);
+  }, [companyId]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -1180,7 +1196,8 @@ export default function ContractsPage() {
     setDraftDefaultCheckOutTime(nextDefaultCheckOutTime);
     setIsDefaultTimeModalOpen(false);
 
-    localStorage.setItem(
+    setCompanyStorageItem(
+      companyId,
       TEMPORARY_RENTAL_TIME_DEFAULTS_STORAGE_KEY,
       JSON.stringify({
         checkInTime: nextDefaultCheckInTime,

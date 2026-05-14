@@ -17,6 +17,7 @@ export class ContasReceberService {
 
   async create(data: CriarContaReceberDto, companyId: string) {
     await this.validateCompany(companyId);
+    await this.validateRelations(companyId, data.contractId, data.tenantId);
 
     return this.prisma.contaReceber.create({
       data: this.buildCreateData({
@@ -56,6 +57,7 @@ export class ContasReceberService {
     await this.ensureExists(id, companyId);
 
     await this.validateCompany(companyId);
+    await this.validateRelations(companyId, data.contractId, data.tenantId);
 
     return this.prisma.contaReceber.update({
       where: { id },
@@ -156,6 +158,44 @@ export class ContasReceberService {
 
     if (!company) {
       throw new BadRequestException('Empresa nao encontrada.');
+    }
+  }
+
+  private async validateRelations(
+    companyId: string,
+    contractId?: string | null,
+    tenantId?: string | null,
+  ) {
+    if (contractId) {
+      const contract = await this.prisma.contract.findFirst({
+        where: {
+          id: contractId,
+          companyId,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!contract) {
+        throw new BadRequestException('Contrato nao encontrado para esta empresa.');
+      }
+    }
+
+    if (tenantId) {
+      const tenant = await this.prisma.person.findFirst({
+        where: {
+          id: tenantId,
+          companyId,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!tenant) {
+        throw new BadRequestException('Pessoa nao encontrada para esta empresa.');
+      }
     }
   }
 

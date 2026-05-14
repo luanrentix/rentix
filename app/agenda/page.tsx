@@ -10,6 +10,7 @@ import {
   updateScheduleItem,
   type ScheduleItem as ApiScheduleItem,
 } from "@/services/schedule.service";
+import { getCompanyStorageItem } from "@/services/company-storage";
 
 type ScheduleStatus = "scheduled" | "completed" | "canceled";
 type SchedulePriority = "low" | "medium" | "high";
@@ -360,8 +361,16 @@ export default function AgendaPage() {
 
   useEffect(() => {
     function applyStoredTheme() {
-      const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
-      const legacyTheme = localStorage.getItem("rentix_theme");
+      const storedThemeSettings = getCompanyStorageItem(
+        companyId,
+        "rentix_theme_settings",
+        "rentix_theme_settings",
+      );
+      const legacyTheme = getCompanyStorageItem(
+        companyId,
+        "rentix_theme",
+        "rentix_theme",
+      );
 
       try {
         const parsedThemeSettings = storedThemeSettings ? (JSON.parse(storedThemeSettings) as { mode?: string }) : null;
@@ -385,7 +394,7 @@ export default function AgendaPage() {
       window.removeEventListener("storage", applyStoredTheme);
       window.removeEventListener("rentix-theme-change", applyStoredTheme);
     };
-  }, []);
+  }, [companyId]);
 
   const calendarDays = useMemo(() => getMonthDays(currentCalendarDate), [currentCalendarDate]);
   const weekDays = useMemo(() => getWeekDays(selectedDate), [selectedDate]);

@@ -17,6 +17,7 @@ export class ContasPagarService {
 
   async create(data: CriarContaPagarDto, companyId: string) {
     await this.validateCompany(companyId);
+    await this.validatePerson(companyId, data.personId);
 
     return this.prisma.contaPagar.create({
       data: this.buildCreateData({
@@ -56,6 +57,7 @@ export class ContasPagarService {
     await this.ensureExists(id, companyId);
 
     await this.validateCompany(companyId);
+    await this.validatePerson(companyId, data.personId);
 
     return this.prisma.contaPagar.update({
       where: { id },
@@ -151,6 +153,24 @@ export class ContasPagarService {
 
     if (!company) {
       throw new BadRequestException('Empresa nao encontrada.');
+    }
+  }
+
+  private async validatePerson(companyId: string, personId?: string | null) {
+    if (!personId) return;
+
+    const person = await this.prisma.person.findFirst({
+      where: {
+        id: personId,
+        companyId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!person) {
+      throw new BadRequestException('Pessoa nao encontrada para esta empresa.');
     }
   }
 

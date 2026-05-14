@@ -15,6 +15,7 @@ import {
   getPropertyMovements,
   type PropertyMovement as ApiPropertyMovement,
 } from "@/services/property-movements.service";
+import { getCompanyStorageItem } from "@/services/company-storage";
 import { getCachedCompanySettings } from "@/services/settings-cache";
 
 
@@ -168,8 +169,17 @@ export default function PropertiesPage() {
 
   useEffect(() => {
     function applyStoredTheme() {
-      const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
-      const legacyTheme = localStorage.getItem("rentix_theme");
+      const currentCompanyId = getCurrentCompanyId();
+      const storedThemeSettings = getCompanyStorageItem(
+        currentCompanyId,
+        "rentix_theme_settings",
+        "rentix_theme_settings",
+      );
+      const legacyTheme = getCompanyStorageItem(
+        currentCompanyId,
+        "rentix_theme",
+        "rentix_theme",
+      );
 
       try {
         const parsedThemeSettings = storedThemeSettings

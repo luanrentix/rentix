@@ -7,6 +7,7 @@ datasource db {
 }
 
 enum UserRole {
+  SYSTEM_OWNER @map("DONO_SISTEMA")
   OWNER   @map("PROPRIETARIO")
   ADMIN   @map("ADMINISTRADOR")
   MANAGER @map("GERENTE")

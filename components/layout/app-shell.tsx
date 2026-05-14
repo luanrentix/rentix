@@ -5,6 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import AuthGuard from "@/components/auth/auth-guard";
 import { useAuth } from "@/context/AuthContext";
+import {
+  getCompanyStorageItem,
+  setCompanyStorageItem,
+  removeCompanyStorageItem,
+} from "@/services/company-storage";
 import { getAppSettings, saveAppSettings } from "@/services/settings.service";
 import { setCachedAppSettings } from "@/services/settings-cache";
 
@@ -76,6 +81,10 @@ const menuItems = [
   { label: "Contas a Receber", href: "/contas-receber", icon: "📥" },
   { label: "Contas a Pagar", href: "/contas-pagar", icon: "📤" },
   { label: "Agenda", href: "/agenda", icon: "📅" },
+];
+
+const systemOwnerMenuItems = [
+  { label: "Admin", href: "/admin", icon: "SYS" },
 ];
 
 const pixKeyTypeOptions: { label: string; value: PixKeyType }[] = [
@@ -451,7 +460,7 @@ function normalizeThemeMode(value: unknown): ThemeMode {
   return String(value || "").toLowerCase() === "black" ? "black" : "light";
 }
 
-function readThemeSettingsFromStorage(): ThemeSettings {
+function readThemeSettingsFromStorage(companyId?: string): ThemeSettings {
   if (typeof window === "undefined") return defaultThemeSettings;
 
   const storageKeys = [
@@ -462,7 +471,11 @@ function readThemeSettingsFromStorage(): ThemeSettings {
   ];
 
   for (const storageKey of storageKeys) {
-    const storedValue = window.localStorage.getItem(storageKey);
+    const storedValue = getCompanyStorageItem(
+      companyId,
+      storageKey,
+      storageKey,
+    );
 
     if (!storedValue) continue;
 
@@ -496,7 +509,7 @@ export default function AppShell({ children }: AppShellProps) {
       return false;
     }
 
-    return localStorage.getItem("rentix_sidebar_locked") === "true";
+    return false;
   });
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -513,6 +526,13 @@ export default function AppShell({ children }: AppShellProps) {
   const [resetError, setResetError] = useState("");
 
   const userInitials = useMemo(() => getInitialLetters(userSettings.name), [userSettings.name]);
+  const visibleMenuItems = useMemo(
+    () =>
+      user?.role === "SYSTEM_OWNER"
+        ? [...menuItems, ...systemOwnerMenuItems]
+        : menuItems,
+    [user?.role],
+  );
 
   useEffect(() => {
     if (!companyId) {
@@ -547,8 +567,11 @@ export default function AppShell({ children }: AppShellProps) {
   }
 
   function loadSettingsFromLocalStorage() {
-    const storedUserSettings = localStorage.getItem("rentix_user_settings");
-    const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
+    const storedUserSettings = getCompanyStorageItem(
+      companyId,
+      "rentix_user_settings",
+      "rentix_user_settings",
+    );
 
     if (storedUserSettings) {
       setUserSettings({
@@ -557,8 +580,18 @@ export default function AppShell({ children }: AppShellProps) {
       });
     }
 
-    setThemeSettings(readThemeSettingsFromStorage());
+    setThemeSettings(readThemeSettingsFromStorage(companyId));
   }
+
+  useEffect(() => {
+    const scopedSidebarLock = getCompanyStorageItem(
+      companyId,
+      "rentix_sidebar_locked",
+      "rentix_sidebar_locked",
+    );
+
+    setIsSidebarLocked(scopedSidebarLock === "true");
+  }, [companyId]);
 
   useEffect(() => {
     setIsSidebarExpanded(isSidebarLocked);
@@ -575,7 +608,7 @@ export default function AppShell({ children }: AppShellProps) {
 
   useEffect(() => {
     function syncThemeFromStorage() {
-      const storedTheme = readThemeSettingsFromStorage();
+      const storedTheme = readThemeSettingsFromStorage(companyId);
 
       setThemeSettings((currentTheme) =>
         currentTheme.mode === storedTheme.mode ? currentTheme : storedTheme
@@ -592,7 +625,7 @@ export default function AppShell({ children }: AppShellProps) {
       window.removeEventListener("rentix-theme-change", syncThemeFromStorage);
       window.clearInterval(syncInterval);
     };
-  }, []);
+  }, [companyId]);
 
   function isActiveRoute(href: string) {
     return pathname === href || pathname.startsWith(`${href}/`);
@@ -661,7 +694,7 @@ export default function AppShell({ children }: AppShellProps) {
 
     selectedModules.forEach((moduleOption) => {
       moduleOption.storageKeys.forEach((storageKey) => {
-        localStorage.removeItem(storageKey);
+        removeCompanyStorageItem(companyId, storageKey);
       });
     });
 
@@ -717,13 +750,21 @@ export default function AppShell({ children }: AppShellProps) {
       themeSettings,
     });
 
-    localStorage.setItem("rentix_user_settings", JSON.stringify(userSettings));
-    localStorage.setItem("rentix_theme_settings", JSON.stringify(themeSettings));
+    setCompanyStorageItem(
+      companyId,
+      "rentix_user_settings",
+      JSON.stringify(userSettings),
+    );
+    setCompanyStorageItem(
+      companyId,
+      "rentix_theme_settings",
+      JSON.stringify(themeSettings),
+    );
     setCachedAppSettings({ userSettings, companySettings, themeSettings });
     window.dispatchEvent(new Event("rentix-theme-change"));
 
     if (passwordSettings.newPassword) {
-      localStorage.setItem("rentix_user_password_updated", "true");
+      setCompanyStorageItem(companyId, "rentix_user_password_updated", "true");
       setPasswordSettings(defaultPasswordSettings);
     }
 
@@ -799,7 +840,11 @@ export default function AppShell({ children }: AppShellProps) {
                   setIsSidebarLocked(isChecked);
                   setIsSidebarExpanded(isChecked);
 
-                  localStorage.setItem("rentix_sidebar_locked", String(isChecked));
+                  setCompanyStorageItem(
+                    companyId,
+                    "rentix_sidebar_locked",
+                    String(isChecked),
+                  );
                 }}
               />
               Fixar
@@ -807,7 +852,7 @@ export default function AppShell({ children }: AppShellProps) {
           </div>
 
           <nav className="flex-1 space-y-2 overflow-y-auto overflow-x-hidden px-2 py-6">
-            {menuItems.map((item) => {
+            {visibleMenuItems.map((item) => {
               const isActive = isActiveRoute(item.href);
 
               return (

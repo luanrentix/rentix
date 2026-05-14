@@ -13,6 +13,7 @@ import { FinanceiroModule } from './financeiro/financeiro.module';
 import { SettingsModule } from './settings/settings.module';
 import { AgendaModule } from './agenda/agenda.module';
 import { PropertyMovementsModule } from './property-movements/property-movements.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { PropertyMovementsModule } from './property-movements/property-movements
     SettingsModule,
     AgendaModule,
     PropertyMovementsModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],

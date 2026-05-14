@@ -17,6 +17,7 @@ import {
   getProperties,
   type Property as ApiProperty,
 } from "@/services/properties.service";
+import { getCompanyStorageItem } from "@/services/company-storage";
 import {
   Bar,
   CartesianGrid,
@@ -212,7 +213,11 @@ export default function DashboardPage() {
   }, [companyId]);
 
   useEffect(() => {
-    const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
+    const storedThemeSettings = getCompanyStorageItem(
+      companyId,
+      "rentix_theme_settings",
+      "rentix_theme_settings",
+    );
 
     if (storedThemeSettings) {
       try {
@@ -222,7 +227,7 @@ export default function DashboardPage() {
         setDashboardTheme("light");
       }
     }
-  }, []);
+  }, [companyId]);
 
   async function loadDashboardData(currentCompanyId: string) {
     try {
