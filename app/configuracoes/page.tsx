@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { changePasswordRequest } from "@/services/auth";
@@ -723,6 +723,7 @@ function getValidationErrorMessages(validationErrors: SettingsValidationErrors) 
 }
 
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function renderPrintTemplatePreview(content: string, documentKey: PrintDocumentKey | null) {
   const previewValues: Record<string, string> = {
     companyName: "Rentix Gestão de Locações LTDA",
@@ -981,16 +982,40 @@ export default function ConfiguracoesPage() {
     ]
   );
 
-  useEffect(() => {
-    if (!companyId) {
-      loadSettingsFromLocalStorage();
-      return;
+  const loadSettingsFromLocalStorage = useCallback(() => {
+    const storedUserSettings = getCompanyStorageItem(
+      companyId,
+      "rentix_user_settings",
+      "rentix_user_settings",
+    );
+    const storedThemeSettings = getCompanyStorageItem(
+      companyId,
+      "rentix_theme_settings",
+      "rentix_theme_settings",
+    );
+
+    if (storedUserSettings) {
+      const parsedUserSettings = {
+        ...defaultUserSettings,
+        ...JSON.parse(storedUserSettings),
+      };
+
+      setUserSettings(parsedUserSettings);
+      setInitialUserSettings(parsedUserSettings);
     }
 
-    loadSettings(companyId);
+    if (storedThemeSettings) {
+      const parsedThemeSettings = {
+        ...defaultThemeSettings,
+        ...JSON.parse(storedThemeSettings),
+      };
+
+      setThemeSettings(parsedThemeSettings);
+      setInitialThemeSettings(parsedThemeSettings);
+    }
   }, [companyId]);
 
-  async function loadSettings(currentCompanyId: string) {
+  const loadSettings = useCallback(async (currentCompanyId: string) => {
     try {
       const settings = await getAppSettings(currentCompanyId);
       setCachedAppSettings(settings);
@@ -1023,40 +1048,16 @@ export default function ConfiguracoesPage() {
       console.warn("Settings API unavailable. Local cached settings were loaded.");
       loadSettingsFromLocalStorage();
     }
-  }
+  }, [loadSettingsFromLocalStorage]);
 
-  function loadSettingsFromLocalStorage() {
-    const storedUserSettings = getCompanyStorageItem(
-      companyId,
-      "rentix_user_settings",
-      "rentix_user_settings",
-    );
-    const storedThemeSettings = getCompanyStorageItem(
-      companyId,
-      "rentix_theme_settings",
-      "rentix_theme_settings",
-    );
-
-    if (storedUserSettings) {
-      const parsedUserSettings = {
-        ...defaultUserSettings,
-        ...JSON.parse(storedUserSettings),
-      };
-
-      setUserSettings(parsedUserSettings);
-      setInitialUserSettings(parsedUserSettings);
+  useEffect(() => {
+    if (!companyId) {
+      loadSettingsFromLocalStorage();
+      return;
     }
 
-    if (storedThemeSettings) {
-      const parsedThemeSettings = {
-        ...defaultThemeSettings,
-        ...JSON.parse(storedThemeSettings),
-      };
-
-      setThemeSettings(parsedThemeSettings);
-      setInitialThemeSettings(parsedThemeSettings);
-    }
-  }
+    loadSettings(companyId);
+  }, [companyId, loadSettings, loadSettingsFromLocalStorage]);
 
   function handleOpenResetModal() {
     setResetOptions(defaultResetOptions);

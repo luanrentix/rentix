@@ -42,10 +42,11 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         name: true,
         email: true,
         role: true,
+        isActive: true,
       },
     });
 
-    if (!user) {
+    if (!user || !user.isActive) {
       throw new UnauthorizedException(
         'Invalid or expired authentication token.',
       );

@@ -35,6 +35,7 @@ type ScheduleFormData = Omit<ScheduleItem, "id">;
 
 const todayInputValue = formatDateToInputValue(new Date());
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const defaultScheduleItems: ScheduleItem[] = [
   {
     id: "sample-1",
@@ -242,6 +243,7 @@ function getTimeValue(item: ScheduleItem) {
   return `${item.date}T${item.time || "00:00"}`;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function normalizeStoredScheduleItem(item: Partial<ScheduleItem>): ScheduleItem {
   return {
     id: typeof item.id === "string" ? item.id : String(Date.now()),
@@ -470,7 +472,6 @@ export default function AgendaPage() {
   const cardClass = isBlackTheme
     ? "border border-slate-700 bg-slate-900 shadow-slate-950/40"
     : "border border-orange-100 bg-white shadow-orange-100/60";
-  const softCardClass = isBlackTheme ? "border border-slate-700 bg-slate-950" : "border border-slate-100 bg-slate-50";
   const mutedTextClass = isBlackTheme ? "text-slate-400" : "text-slate-500";
   const strongTextClass = isBlackTheme ? "text-white" : "text-slate-950";
   const inputClass = isBlackTheme

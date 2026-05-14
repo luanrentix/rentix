@@ -286,10 +286,6 @@ export default function DashboardPage() {
   const finishedContracts = contracts.filter(
     (contract) => contract.status === "Finished",
   ).length;
-  const canceledContracts = contracts.filter(
-    (contract) => contract.status === "Canceled",
-  ).length;
-
   const monthlyRevenue = activeContractsList.reduce(
     (total, contract) => total + getContractValue(contract),
     0,
@@ -1258,7 +1254,6 @@ function getFinancialMovementStatus(dueDateValue: string): FinancialMovement["st
 
 function getFinancialMovementsFromReceivables(
   receivables: FinancialReceivable[],
-  paidIds: string[] = [],
 ) {
   return receivables
     .filter((charge) => charge.status !== "Paid")

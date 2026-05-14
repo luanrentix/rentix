@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/app-shell";
 import {
   createProperty,
@@ -48,16 +48,6 @@ type Property = {
   rentValue: number;
   status: PropertyStatus;
   isActive: boolean;
-};
-
-type ContractRecord = {
-  id?: string | number;
-  propertyId?: string;
-  property_id?: string;
-  property?: string;
-  propertyCode?: string;
-  property_id_fk?: string;
-  status?: string;
 };
 
 type PropertyMovementType =
@@ -131,6 +121,88 @@ const propertyTypes: Array<{ label: string; value: PropertyType }> = [
   { label: "Terreno", value: "Land" },
   { label: "Outro", value: "Other" },
 ];
+
+function buildAddress(
+  propertyStreet: string,
+  propertyNumber: string,
+  propertyNeighborhood: string,
+  propertyCity: string,
+  propertyState: string,
+  propertyZipCode: string,
+) {
+  const addressParts = [
+    propertyStreet,
+    propertyNumber,
+    propertyNeighborhood,
+    propertyCity,
+    propertyState,
+    propertyZipCode,
+  ].filter(Boolean);
+
+  return toUpperText(addressParts.join(", "));
+}
+
+function propertyHasActiveContract(
+  propertyId: string,
+  contractSource: RentalHistoryContract[],
+) {
+  return contractSource.some((contract) => {
+    const contractPropertyId =
+      contract.propertyId ||
+      contract.property_id ||
+      contract.property ||
+      contract.propertyCode ||
+      contract.property_id_fk;
+
+    const isSameProperty = String(contractPropertyId || "") === propertyId;
+    const isActiveContract =
+      !contract.status ||
+      contract.status === "Active" ||
+      contract.status === "Expiring";
+
+    return isSameProperty && isActiveContract;
+  });
+}
+
+function normalizeApiProperty(
+  property: ApiProperty,
+  contractSource: RentalHistoryContract[],
+): Property {
+  const normalizedType = isValidPropertyType(property.type)
+    ? property.type
+    : "Other";
+
+  const propertyStatus: PropertyStatus = propertyHasActiveContract(
+    property.id,
+    contractSource,
+  )
+    ? "Rented"
+    : "Available";
+
+  return {
+    id: property.id,
+    type: normalizedType,
+    name: toUpperText(property.title || ""),
+    zipCode: property.zipCode || "",
+    state: toUpperText(property.state || ""),
+    city: toUpperText(property.city || ""),
+    neighborhood: toUpperText(property.district || ""),
+    street: toUpperText(property.address || ""),
+    number: toUpperText(property.number || ""),
+    complement: toUpperText(property.complement || ""),
+    address: buildAddress(
+      property.address || "",
+      property.number || "",
+      property.district || "",
+      property.city || "",
+      property.state || "",
+      property.zipCode || "",
+    ),
+    rentValue: Number(property.rentalValue || 0),
+    status: propertyStatus,
+    isActive: property.isActive ?? true,
+  };
+}
 
 export default function PropertiesPage() {
   const [properties, setProperties] = useState<Property[]>([]);
@@ -210,12 +282,6 @@ export default function PropertiesPage() {
     };
   }, []);
 
-  useEffect(() => {
-    loadProperties();
-
-    setCompanySettings(getStoredCompanySettings());
-  }, []);
-
   const filteredProperties = useMemo(() => {
     const normalizedSearch = normalizeSearchText(search);
 
@@ -240,18 +306,12 @@ export default function PropertiesPage() {
   const activeProperties = properties.filter((property) => property.isActive).length;
   const inactiveProperties = properties.filter((property) => !property.isActive).length;
   const rentedProperties = properties.filter((property) => property.status === "Rented").length;
-  const availableProperties = properties.filter(
-    (property) => property.status === "Available" && property.isActive
-  ).length;
-
   const totalMonthlyRevenue = properties
     .filter((property) => property.status === "Rented" && property.isActive)
     .reduce((total, property) => total + property.rentValue, 0);
 
   const occupancyRate =
     activeProperties > 0 ? Math.round((rentedProperties / activeProperties) * 100) : 0;
-
-  const selectedTimelineProperty = historyProperty;
 
   const visibleTimelineMovements = propertyMovements.filter((movement) => {
     if (!historyProperty) return false;
@@ -263,9 +323,9 @@ export default function PropertiesPage() {
     if (!historyProperty) return [];
 
     return getRentalHistoryByProperty(historyProperty, contracts);
-  }, [historyProperty, contracts, rentalCharges]);
+  }, [historyProperty, contracts]);
 
-  async function loadProperties() {
+  const loadProperties = useCallback(async () => {
     const companyId = getCurrentCompanyId();
 
     if (!companyId) {
@@ -299,44 +359,13 @@ export default function PropertiesPage() {
     } finally {
       setIsLoadingProperties(false);
     }
-  }
+  }, []);
 
-  function normalizeApiProperty(
-    property: ApiProperty,
-    contractSource = contracts,
-  ): Property {
-    const normalizedType = isValidPropertyType(property.type)
-      ? property.type
-      : "Other";
+  useEffect(() => {
+    loadProperties();
 
-    const propertyStatus: PropertyStatus = propertyHasActiveContract(property.id, contractSource)
-      ? "Rented"
-      : "Available";
-
-    return {
-      id: property.id,
-      type: normalizedType,
-      name: toUpperText(property.title || ""),
-      zipCode: property.zipCode || "",
-      state: toUpperText(property.state || ""),
-      city: toUpperText(property.city || ""),
-      neighborhood: toUpperText(property.district || ""),
-      street: toUpperText(property.address || ""),
-      number: toUpperText(property.number || ""),
-      complement: toUpperText(property.complement || ""),
-      address: buildAddress(
-        property.address || "",
-        property.number || "",
-        property.district || "",
-        property.city || "",
-        property.state || "",
-        property.zipCode || "",
-      ),
-      rentValue: Number(property.rentalValue || 0),
-      status: propertyStatus,
-      isActive: property.isActive ?? true,
-    };
-  }
+    setCompanySettings(getStoredCompanySettings());
+  }, [loadProperties]);
 
   function savePropertyMovements(updatedMovements: PropertyMovement[]) {
     setPropertyMovements(updatedMovements);
@@ -423,19 +452,6 @@ export default function PropertiesPage() {
     }
   }
 
-  function buildAddress(propertyStreet: string, propertyNumber: string, propertyNeighborhood: string, propertyCity: string, propertyState: string, propertyZipCode: string) {
-    const addressParts = [
-      propertyStreet,
-      propertyNumber,
-      propertyNeighborhood,
-      propertyCity,
-      propertyState,
-      propertyZipCode,
-    ].filter(Boolean);
-
-    return toUpperText(addressParts.join(", "));
-  }
-
   function propertyHasLinkedContract(propertyId: string) {
       return contracts.some((contract) => {
         const contractPropertyId =
@@ -449,28 +465,6 @@ export default function PropertiesPage() {
       });
   }
 
-  function propertyHasActiveContract(
-    propertyId: string,
-    contractSource = contracts,
-  ) {
-      return contractSource.some((contract) => {
-        const contractPropertyId =
-          contract.propertyId ||
-          contract.property_id ||
-          contract.property ||
-          contract.propertyCode ||
-          contract.property_id_fk;
-
-        const isSameProperty = String(contractPropertyId || "") === propertyId;
-        const isActiveContract =
-          !contract.status ||
-          contract.status === "Active" ||
-          contract.status === "Expiring";
-
-        return isSameProperty && isActiveContract;
-      });
-  }
-
   function getEditingProperty() {
     if (!editingPropertyId) return null;
 
@@ -480,7 +474,7 @@ export default function PropertiesPage() {
   function isPropertyStatusLockedByActiveContract() {
     if (!editingPropertyId) return false;
 
-    return propertyHasActiveContract(editingPropertyId);
+    return propertyHasActiveContract(editingPropertyId, contracts);
   }
 
   function handleActiveChange(checked: boolean) {
@@ -499,7 +493,7 @@ export default function PropertiesPage() {
 
     if (!property) return;
 
-    if (propertyHasActiveContract(editingPropertyId)) {
+    if (propertyHasActiveContract(editingPropertyId, contracts)) {
       registerPropertyMovement(
         property,
         "InactivationBlocked",
@@ -532,15 +526,6 @@ export default function PropertiesPage() {
     const formattedStreet = toUpperText(street);
     const formattedNumber = toUpperText(number);
     const formattedComplement = toUpperText(complement);
-    const formattedAddress = buildAddress(
-      formattedStreet,
-      formattedNumber,
-      formattedNeighborhood,
-      formattedCity,
-      formattedState,
-      zipCode
-    );
-
     if (
       !type ||
       !formattedName ||
@@ -556,7 +541,7 @@ export default function PropertiesPage() {
       return;
     }
 
-    if (!isActive && editingPropertyId && propertyHasActiveContract(editingPropertyId)) {
+    if (!isActive && editingPropertyId && propertyHasActiveContract(editingPropertyId, contracts)) {
       const property = getEditingProperty();
 
       if (property) {
@@ -599,7 +584,7 @@ export default function PropertiesPage() {
         ? await updateProperty(editingPropertyId, payload)
         : await createProperty(payload);
 
-      const normalizedProperty = normalizeApiProperty(savedProperty);
+      const normalizedProperty = normalizeApiProperty(savedProperty, contracts);
 
       registerPropertyMovement(
         normalizedProperty,
@@ -1467,6 +1452,7 @@ export default function PropertiesPage() {
                   <div className="report-header">
                     <div className="flex items-start gap-4">
                       {companySettings.logo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={companySettings.logo}
                           alt="Logo da empresa"
@@ -1965,6 +1951,7 @@ function StatusBadge({ status }: { status: PropertyStatus }) {
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function RentalStatusBadge({ status }: { status: string }) {
   const normalizedStatus = status || "Inactive";
 
@@ -1986,6 +1973,7 @@ function RentalStatusBadge({ status }: { status: string }) {
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function PaymentStatusBadge({ status }: { status: "Paid" | "Pending" | "NotGenerated" }) {
   const config = {
     Paid: { label: "Pago", className: "bg-emerald-100 text-emerald-700" },
@@ -2328,17 +2316,6 @@ function sanitizeFileName(value: string) {
     .replace(/[^a-zA-Z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
     .toUpperCase();
-}
-
-function safeParseArray<T>(value: string | null): T[] {
-  if (!value) return [];
-
-  try {
-    const parsedValue = JSON.parse(value);
-    return Array.isArray(parsedValue) ? (parsedValue as T[]) : [];
-  } catch {
-    return [];
-  }
 }
 
 function toUpperText(value: string) {

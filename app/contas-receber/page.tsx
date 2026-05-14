@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import AppShell from "@/components/layout/app-shell";
 import { useAuth } from "@/context/AuthContext";
@@ -516,6 +516,71 @@ const initialTenantFormData: TenantFormData = {
   complement: "",
 };
 
+function normalizeAmount(value: unknown) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (typeof value === "string") {
+    const normalizedValue = value
+      .replace("R$", "")
+      .replace(/\./g, "")
+      .replace(",", ".")
+      .trim();
+
+    const parsedValue = Number(normalizedValue);
+
+    return Number.isFinite(parsedValue) ? parsedValue : 0;
+  }
+
+  return 0;
+}
+
+function getLocalDateValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function addDaysToDate(dateValue: string, days: number) {
+  const date = new Date(`${dateValue}T00:00:00`);
+  date.setDate(date.getDate() + days);
+
+  return getLocalDateValue(date);
+}
+
+function formatAmountInput(value: number) {
+  return value.toFixed(2).replace(".", ",");
+}
+
+function getAmountInCents(value: unknown) {
+  return Math.round(normalizeAmount(value) * 100);
+}
+
+function formatCentsAsAmountInput(valueInCents: number) {
+  return formatAmountInput(valueInCents / 100);
+}
+
+function distributeAmountInCents(totalInCents: number, quantity: number) {
+  if (quantity <= 0) return [];
+
+  const normalizedTotalInCents = Math.max(Math.round(totalInCents), 0);
+  const baseAmountInCents = Math.floor(normalizedTotalInCents / quantity);
+  let centsRemainder = normalizedTotalInCents - baseAmountInCents * quantity;
+
+  return Array.from({ length: quantity }, () => {
+    const extraCent = centsRemainder > 0 ? 1 : 0;
+
+    if (centsRemainder > 0) {
+      centsRemainder -= 1;
+    }
+
+    return baseAmountInCents + extraCent;
+  });
+}
+
 export default function AccountsReceivablePage() {
   const { user } = useAuth();
   const companyId = user?.companyId;
@@ -674,7 +739,7 @@ export default function AccountsReceivablePage() {
     };
   }, [companyId]);
 
-  function openChargeFromContractPayload(payload: ReceivableFromContractPayload) {
+  const openChargeFromContractPayload = useCallback((payload: ReceivableFromContractPayload) => {
     const normalizedInstallmentQuantity = Math.max(
       Number(payload.installmentQuantity || 1),
       1,
@@ -704,7 +769,7 @@ export default function AccountsReceivablePage() {
     setSearch("");
     setIsSearchOpen(false);
     setIsCreateOpen(true);
-  }
+  }, []);
 
   useEffect(() => {
     const c = null;
@@ -764,7 +829,7 @@ export default function AccountsReceivablePage() {
         return;
       }
     }
-  }, [companyId]);
+  }, [companyId, openChargeFromContractPayload]);
 
   useEffect(() => {
     setCompanyStorageItem(
@@ -773,22 +838,6 @@ export default function AccountsReceivablePage() {
       statusFilter,
     );
   }, [companyId, statusFilter]);
-
-  useEffect(() => {
-    if (formLaunchType !== "installment") {
-      setInstallmentPreview([]);
-      return;
-    }
-
-    generateInstallmentPreview();
-  }, [
-    formLaunchType,
-    formAmount,
-    formDueDate,
-    formIssueDate,
-    formInstallmentQuantity,
-    formFirstInstallmentAsDownPayment,
-  ]);
 
   function onlyNumbers(value: string) {
     return value.replace(/\D/g, "");
@@ -881,27 +930,7 @@ export default function AccountsReceivablePage() {
     }
   }
 
-  function normalizeAmount(value: unknown) {
-    if (typeof value === "number") {
-      return Number.isFinite(value) ? value : 0;
-    }
-
-    if (typeof value === "string") {
-      const normalizedValue = value
-        .replace("R$", "")
-        .replace(/\./g, "")
-        .replace(",", ".")
-        .trim();
-
-      const parsedValue = Number(normalizedValue);
-
-      return Number.isFinite(parsedValue) ? parsedValue : 0;
-    }
-
-    return 0;
-  }
-
-  function getContractAmount(contract: Contract) {
+  const getContractAmount = useCallback((contract: Contract) => {
     return normalizeAmount(
       contract.value ??
         contract.amount ??
@@ -909,7 +938,7 @@ export default function AccountsReceivablePage() {
         contract.monthlyValue ??
         0,
     );
-  }
+  }, []);
 
   const automaticCharges = useMemo<Charge[]>(() => {
     const today = new Date();
@@ -952,7 +981,7 @@ export default function AccountsReceivablePage() {
           status,
         };
       });
-  }, [contracts, properties, tenants, paid, manualCharges]);
+  }, [contracts, properties, tenants, paid, manualCharges, getContractAmount]);
 
   const manualChargesWithStatus = useMemo<Charge[]>(() => {
     const today = new Date();
@@ -988,33 +1017,15 @@ export default function AccountsReceivablePage() {
     ];
   }, [automaticCharges, manualChargesWithStatus]);
 
-  function convertChargeToReceivableStorage(charge: Charge) {
-    const tenant = tenants.find(
-      (item) => item.name.toLowerCase() === charge.tenant.toLowerCase(),
+  const getChargePayment = useCallback((chargeId: string) => {
+    return paymentRecords.find(
+      (paymentRecord) => String(paymentRecord.chargeId) === String(chargeId),
     );
-    const property = properties.find(
-      (item) => item.name.toLowerCase() === charge.property.toLowerCase(),
-    );
-    const paymentRecord = getChargePayment(charge.id);
+  }, [paymentRecords]);
 
-    return {
-      id: charge.id,
-      contractId: charge.contractId ? String(charge.contractId) : "",
-      installmentNumber: charge.installmentNumber || 1,
-      propertyId: property ? String(property.id) : "",
-      propertyName: charge.property,
-      tenantId: tenant ? String(tenant.id) : "",
-      tenantName: charge.tenant,
-      dueDate: getDateInputValue(charge.dueDate),
-      amount: charge.amount,
-      status: charge.status,
-      paymentDate: paymentRecord?.paidAt ? getDateInputValue(paymentRecord.paidAt) : null,
-      createdAt: charge.issueDate || new Date().toISOString(),
-      canceledAt: null,
-      source: charge.isDownPayment ? "AccountsReceivableDownPayment" : "AccountsReceivable",
-      isDownPayment: Boolean(charge.isDownPayment),
-    };
-  }
+  const getChargePaidAmount = useCallback((charge: Charge) => {
+    return getChargePayment(charge.id)?.amountPaid ?? charge.amount;
+  }, [getChargePayment]);
 
   useEffect(() => {
     window.dispatchEvent(new Event("rentix-receivables-updated"));
@@ -1049,7 +1060,7 @@ export default function AccountsReceivablePage() {
     return filteredCharges
       .filter((charge) => charge.status === "Paid")
       .reduce((total, charge) => total + getChargePaidAmount(charge), 0);
-  }, [filteredCharges, paymentRecords]);
+  }, [filteredCharges, getChargePaidAmount]);
 
   const totalOverdue = useMemo(() => {
     return filteredCharges
@@ -1112,51 +1123,6 @@ export default function AccountsReceivablePage() {
     if (filter === "DateRange") return "Por período";
 
     return "Todos os vencimentos";
-  }
-
-  function getLocalDateValue(date: Date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-
-    return `${year}-${month}-${day}`;
-  }
-
-  function addDaysToDate(dateValue: string, days: number) {
-    const date = new Date(`${dateValue}T00:00:00`);
-    date.setDate(date.getDate() + days);
-
-    return getLocalDateValue(date);
-  }
-
-  function formatAmountInput(value: number) {
-    return value.toFixed(2).replace(".", ",");
-  }
-
-  function getAmountInCents(value: unknown) {
-    return Math.round(normalizeAmount(value) * 100);
-  }
-
-  function formatCentsAsAmountInput(valueInCents: number) {
-    return formatAmountInput(valueInCents / 100);
-  }
-
-  function distributeAmountInCents(totalInCents: number, quantity: number) {
-    if (quantity <= 0) return [];
-
-    const normalizedTotalInCents = Math.max(Math.round(totalInCents), 0);
-    const baseAmountInCents = Math.floor(normalizedTotalInCents / quantity);
-    let centsRemainder = normalizedTotalInCents - baseAmountInCents * quantity;
-
-    return Array.from({ length: quantity }, () => {
-      const extraCent = centsRemainder > 0 ? 1 : 0;
-
-      if (centsRemainder > 0) {
-        centsRemainder -= 1;
-      }
-
-      return baseAmountInCents + extraCent;
-    });
   }
 
   function getInstallmentsTotalInCents(installments: InstallmentPreview[]) {
@@ -1327,23 +1293,6 @@ export default function AccountsReceivablePage() {
     setPaymentDiscount("");
   }
 
-
-  function applyPaymentInterestPercentage(charge: Charge, percentage: number) {
-    updatePaymentInterestInput(charge, formatAmountInput(percentage), "percentage");
-  }
-
-  function applyPaymentDiscountPercentage(charge: Charge, percentage: number) {
-    updatePaymentDiscountInput(charge, formatAmountInput(percentage), "percentage");
-  }
-
-  function clearPaymentInterest(charge: Charge) {
-    updatePaymentInterestInput(charge, "", paymentInterestMode);
-  }
-
-  function clearPaymentDiscount(charge: Charge) {
-    updatePaymentDiscountInput(charge, "", paymentDiscountMode);
-  }
-
   function updatePaymentEntriesFromFinalAmount(finalAmount: string) {
     setPaymentEntries((currentEntries) => {
       if (currentEntries.length !== 1) return currentEntries;
@@ -1474,22 +1423,6 @@ export default function AccountsReceivablePage() {
     return isBlackTheme
       ? "border-emerald-900/60 bg-emerald-950/40 text-emerald-300"
       : "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  function getChargePayment(chargeId: string) {
-    return paymentRecords.find(
-      (paymentRecord) => String(paymentRecord.chargeId) === String(chargeId),
-    );
-  }
-
-  function getChargePaidAmount(charge: Charge) {
-    return getChargePayment(charge.id)?.amountPaid ?? charge.amount;
-  }
-
-  function dispatchFinancialIntegrationEvents() {
-    window.dispatchEvent(new Event("rentix-receivables-updated"));
-    window.dispatchEvent(new Event("rentix-accounts-receivable-updated"));
-    window.dispatchEvent(new Event("rentix-financial-updated"));
   }
 
   function getDateInputValue(dateValue?: string) {
@@ -2696,7 +2629,7 @@ export default function AccountsReceivablePage() {
     }
   }
 
-  function generateInstallmentPreview() {
+  const generateInstallmentPreview = useCallback(() => {
     const totalAmountInCents = getAmountInCents(formAmount);
     const quantity = Number(formInstallmentQuantity);
 
@@ -2736,7 +2669,22 @@ export default function AccountsReceivablePage() {
     );
 
     setInstallmentPreview(generatedInstallments);
-  }
+  }, [
+    formAmount,
+    formDueDate,
+    formIssueDate,
+    formInstallmentQuantity,
+    formFirstInstallmentAsDownPayment,
+  ]);
+
+  useEffect(() => {
+    if (formLaunchType !== "installment") {
+      setInstallmentPreview([]);
+      return;
+    }
+
+    generateInstallmentPreview();
+  }, [formLaunchType, generateInstallmentPreview]);
 
   function updateInstallmentAmount(id: string, amount: string) {
     setChargeFormError("");

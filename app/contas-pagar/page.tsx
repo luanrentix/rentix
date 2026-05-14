@@ -1,8 +1,6 @@
 "use client";
 
-/* eslint-disable react-hooks/purity */
-
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/app-shell";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -198,6 +196,45 @@ const initialTenantFormData: TenantFormData = {
   complement: "",
 };
 
+function normalizeAmount(value: unknown) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (typeof value === "string") {
+    const normalizedValue = value
+      .replace("R$", "")
+      .replace(/\./g, "")
+      .replace(",", ".")
+      .trim();
+
+    const parsedValue = Number(normalizedValue);
+
+    return Number.isFinite(parsedValue) ? parsedValue : 0;
+  }
+
+  return 0;
+}
+
+function formatAmountInput(value: number) {
+  return value.toFixed(2).replace(".", ",");
+}
+
+function getLocalDateValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function addDaysToDate(dateValue: string, days: number) {
+  const date = new Date(`${dateValue}T00:00:00`);
+  date.setDate(date.getDate() + days);
+
+  return getLocalDateValue(date);
+}
+
 export default function AccountsPayablePage() {
   const { user } = useAuth();
   const companyId = user?.companyId;
@@ -383,14 +420,15 @@ export default function AccountsPayablePage() {
     setCompanyStorageItem(companyId, "rentix_payable_status_filter", statusFilter);
   }, [companyId, statusFilter]);
 
-  useEffect(() => {
-    if (formLaunchType !== "installment") {
-      setInstallmentPreview([]);
-      return;
-    }
+  const getExpensePayment = useCallback((expenseId: string) => {
+    return paymentRecords.find(
+      (paymentRecord) => String(paymentRecord.expenseId) === String(expenseId),
+    );
+  }, [paymentRecords]);
 
-    generateInstallmentPreview();
-  }, [formLaunchType, formAmount, formDueDate, formInstallmentQuantity]);
+  const getExpensePaidAmount = useCallback((expense: Expense) => {
+    return getExpensePayment(expense.id)?.amountPaid ?? expense.amount;
+  }, [getExpensePayment]);
 
   const expensesWithStatus = useMemo<Expense[]>(() => {
     const today = getStartOfDay(new Date());
@@ -414,7 +452,7 @@ export default function AccountsPayablePage() {
         status,
       };
     });
-  }, [expenses, paymentRecords]);
+  }, [expenses, getExpensePayment]);
 
   const filteredExpenses = useMemo(() => {
     let result = expensesWithStatus;
@@ -447,7 +485,7 @@ export default function AccountsPayablePage() {
     return filteredExpenses
       .filter((expense) => expense.status === "Paid")
       .reduce((total, expense) => total + getExpensePaidAmount(expense), 0);
-  }, [filteredExpenses, paymentRecords]);
+  }, [filteredExpenses, getExpensePaidAmount]);
 
   const totalOverdue = useMemo(() => {
     return filteredExpenses
@@ -459,26 +497,6 @@ export default function AccountsPayablePage() {
     ? Boolean(getExpensePayment(editingExpenseId))
     : false;
 
-  function normalizeAmount(value: unknown) {
-    if (typeof value === "number") {
-      return Number.isFinite(value) ? value : 0;
-    }
-
-    if (typeof value === "string") {
-      const normalizedValue = value
-        .replace("R$", "")
-        .replace(/\./g, "")
-        .replace(",", ".")
-        .trim();
-
-      const parsedValue = Number(normalizedValue);
-
-      return Number.isFinite(parsedValue) ? parsedValue : 0;
-    }
-
-    return 0;
-  }
-
   function formatCurrency(value: number) {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -488,18 +506,6 @@ export default function AccountsPayablePage() {
 
   function formatDate(date: string) {
     return new Date(date).toLocaleDateString("pt-BR");
-  }
-
-  function formatAmountInput(value: number) {
-    return value.toFixed(2).replace(".", ",");
-  }
-
-  function getLocalDateValue(date: Date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-
-    return `${year}-${month}-${day}`;
   }
 
   function getDateInputValue(dateValue?: string) {
@@ -520,13 +526,6 @@ export default function AccountsPayablePage() {
     normalizedDate.setHours(23, 59, 59, 999);
 
     return normalizedDate;
-  }
-
-  function addDaysToDate(dateValue: string, days: number) {
-    const date = new Date(`${dateValue}T00:00:00`);
-    date.setDate(date.getDate() + days);
-
-    return getLocalDateValue(date);
   }
 
   function onlyNumbers(value: string) {
@@ -898,16 +897,6 @@ export default function AccountsPayablePage() {
     );
   }
 
-  function getExpensePayment(expenseId: string) {
-    return paymentRecords.find(
-      (paymentRecord) => String(paymentRecord.expenseId) === String(expenseId),
-    );
-  }
-
-  function getExpensePaidAmount(expense: Expense) {
-    return getExpensePayment(expense.id)?.amountPaid ?? expense.amount;
-  }
-
   function calculatePaymentAmount(
     expense: Expense,
     interest: number,
@@ -1108,7 +1097,7 @@ export default function AccountsPayablePage() {
     setIsCreateOpen(false);
   }
 
-  function generateInstallmentPreview() {
+  const generateInstallmentPreview = useCallback(() => {
     const totalAmount = normalizeAmount(formAmount);
     const quantity = Number(formInstallmentQuantity);
 
@@ -1131,7 +1120,16 @@ export default function AccountsPayablePage() {
     );
 
     setInstallmentPreview(generatedInstallments);
-  }
+  }, [formAmount, formDueDate, formInstallmentQuantity]);
+
+  useEffect(() => {
+    if (formLaunchType !== "installment") {
+      setInstallmentPreview([]);
+      return;
+    }
+
+    generateInstallmentPreview();
+  }, [formLaunchType, generateInstallmentPreview]);
 
   function updateInstallmentAmount(id: string, amount: string) {
     setInstallmentPreview((currentInstallments) =>

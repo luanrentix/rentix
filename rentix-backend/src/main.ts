@@ -5,6 +5,16 @@ import { NestFactory } from '@nestjs/core';
 
 import { AppModule } from './app.module';
 
+function getAllowedOrigins() {
+  const configuredOrigins = process.env.CORS_ORIGINS?.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  return configuredOrigins?.length
+    ? configuredOrigins
+    : ['http://localhost:3000', 'http://localhost:3001'];
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
@@ -16,12 +26,23 @@ async function bootstrap() {
     }),
   );
 
+  const allowedOrigins = getAllowedOrigins();
+
   app.enableCors({
-    origin: true,
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`Origin ${origin} is not allowed by CORS`), false);
+    },
     credentials: true,
   });
 
-  await app.listen(3001);
+  const port = process.env.PORT ? Number(process.env.PORT) : 3001;
+
+  await app.listen(port);
 
   console.log('🚀 Rentix Backend Running');
 }

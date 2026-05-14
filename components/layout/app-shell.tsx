@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import AuthGuard from "@/components/auth/auth-guard";
 import { useAuth } from "@/context/AuthContext";
@@ -535,16 +536,24 @@ export default function AppShell({ children }: AppShellProps) {
     [user?.role],
   );
 
-  useEffect(() => {
-    if (!companyId) {
-      loadSettingsFromLocalStorage();
-      return;
+  const loadSettingsFromLocalStorage = useCallback(() => {
+    const storedUserSettings = getCompanyStorageItem(
+      companyId,
+      "rentix_user_settings",
+      "rentix_user_settings",
+    );
+
+    if (storedUserSettings) {
+      setUserSettings({
+        ...defaultUserSettings,
+        ...JSON.parse(storedUserSettings),
+      });
     }
 
-    loadSettings(companyId);
+    setThemeSettings(readThemeSettingsFromStorage(companyId));
   }, [companyId]);
 
-  async function loadSettings(currentCompanyId: string) {
+  const loadSettings = useCallback(async (currentCompanyId: string) => {
     try {
       const settings = await getAppSettings(currentCompanyId);
       setCachedAppSettings(settings);
@@ -565,24 +574,16 @@ export default function AppShell({ children }: AppShellProps) {
       console.warn("Settings API unavailable. Local cached settings were loaded.");
       loadSettingsFromLocalStorage();
     }
-  }
+  }, [loadSettingsFromLocalStorage]);
 
-  function loadSettingsFromLocalStorage() {
-    const storedUserSettings = getCompanyStorageItem(
-      companyId,
-      "rentix_user_settings",
-      "rentix_user_settings",
-    );
-
-    if (storedUserSettings) {
-      setUserSettings({
-        ...defaultUserSettings,
-        ...JSON.parse(storedUserSettings),
-      });
+  useEffect(() => {
+    if (!companyId) {
+      loadSettingsFromLocalStorage();
+      return;
     }
 
-    setThemeSettings(readThemeSettingsFromStorage(companyId));
-  }
+    loadSettings(companyId);
+  }, [companyId, loadSettings, loadSettingsFromLocalStorage]);
 
   useEffect(() => {
     const scopedSidebarLock = getCompanyStorageItem(
@@ -639,13 +640,6 @@ export default function AppShell({ children }: AppShellProps) {
 
   function handleCloseMobileSidebar() {
     setIsMobileSidebarOpen(false);
-  }
-
-  function handleOpenSettings() {
-    setIsSettingsOpen(true);
-    setIsUserMenuOpen(false);
-    setSuccessMessage("");
-    setPasswordError("");
   }
 
   function handleCloseSettings() {
@@ -833,9 +827,11 @@ export default function AppShell({ children }: AppShellProps) {
           <Link href="/dashboard" onClick={handleCloseMobileSidebar}>
             <div className="cursor-pointer border-b border-orange-100 px-4 py-5 transition hover:bg-orange-50">
               <div className="flex items-center justify-center">
-                <img
+                <Image
                   src="/logo-rentix.png"
                   alt="Rentix"
+                  width={112}
+                  height={112}
                   className={`object-contain transition-all duration-300 ease-in-out ${isSidebarOpen ? "h-24 w-24 lg:h-28 lg:w-28" : "h-12 w-12 lg:h-12 lg:w-12"}`}
                 />
               </div>
