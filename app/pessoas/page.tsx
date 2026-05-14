@@ -1,61 +1,68 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import AppShell from "@/components/layout/app-shell";
-import { Tenant, initialTenants } from "@/data/tenants";
+import { useAuth } from "@/context/AuthContext";
+import { apiFetch } from "@/services/api";
 
-const STORAGE_KEY = "rentix_tenants";
-const CONTRACTS_STORAGE_KEY = "rentix_contracts";
-const ACCOUNTS_RECEIVABLE_STORAGE_KEY = "rentix_accounts_receivable";
-const ACCOUNTS_PAYABLE_STORAGE_KEY = "rentix_accounts_payable";
+type ApiPersonType = "INDIVIDUAL" | "COMPANY";
+type ApiPersonStatus = "ACTIVE" | "INACTIVE";
 
-type PersonType = "Individual" | "Company";
+type PersonType = "individual" | "company";
+type PersonStatus = "active" | "inactive";
 
-type PersonStatusFilter =
-  | "Active"
-  | "Inactive"
-  | "All"
-  | "Tenant"
-  | "NotTenant";
+type ToastType = "success" | "error" | "info";
 
-type PersonHistoryTab =
-  | "RegistrationInfo"
-  | "RentalHistory"
-  | "LinkedContracts"
-  | "FinancialMovements";
+type ApiPerson = {
+  id: string;
+  companyId: string;
+  type: ApiPersonType;
+  status: ApiPersonStatus;
+  name: string;
+  document: string;
+  stateRegistration?: string | null;
+  identityNumber?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  zipCode?: string | null;
+  city?: string | null;
+  state?: string | null;
+  address?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+};
 
-type RentixTenant = Tenant & {
-  personType?: PersonType;
-  email?: string;
-  cpf?: string;
-  zipCode?: string;
-  state?: string;
-  city?: string;
-  street?: string;
-  number?: string;
-  neighborhood?: string;
-  complement?: string;
-  identityNumber?: string;
-  issuingAuthority?: string;
-  birthDate?: string;
-  maritalStatus?: string;
-  nationality?: string;
-  occupation?: string;
-  tradeName?: string;
-  stateRegistration?: string;
-  municipalRegistration?: string;
-  taxRegime?: string;
-  responsibleName?: string;
-  responsibleCpf?: string;
-  responsibleRg?: string;
-  responsibleRole?: string;
-  secondaryPhone?: string;
-  whatsapp?: string;
-  website?: string;
-  creditLimit?: string;
-  financialNotes?: string;
-  isTenant?: boolean;
-  isActive?: boolean;
+type Person = {
+  id: string;
+  companyId: string;
+  name: string;
+  type: PersonType;
+  document: string;
+  stateRegistration: string;
+  identityNumber: string;
+  email: string;
+  phone: string;
+  zipCode: string;
+  city: string;
+  state: string;
+  address: string;
+  status: PersonStatus;
+  createdAt: string;
+};
+
+type PersonFormData = {
+  name: string;
+  type: PersonType;
+  document: string;
+  stateRegistration: string;
+  identityNumber: string;
+  email: string;
+  phone: string;
+  zipCode: string;
+  city: string;
+  state: string;
+  address: string;
+  status: PersonStatus;
 };
 
 type ViaCepResponse = {
@@ -67,2836 +74,1016 @@ type ViaCepResponse = {
   erro?: boolean;
 };
 
-type BrasilApiCnpjResponse = {
+type CnpjApiResponse = {
   cnpj?: string;
   razao_social?: string;
   nome_fantasia?: string;
-  cep?: string;
-  uf?: string;
-  municipio?: string;
-  logradouro?: string;
-  numero?: string;
-  bairro?: string;
-  complemento?: string;
-  ddd_telefone_1?: string;
+  email?: string | null;
+  ddd_telefone_1?: string | null;
+  ddd_telefone_2?: string | null;
+  cep?: string | null;
+  municipio?: string | null;
+  uf?: string | null;
+  logradouro?: string | null;
+  numero?: string | null;
+  complemento?: string | null;
+  bairro?: string | null;
+  descricao_situacao_cadastral?: string | null;
 };
 
-type PersonHistoryModalData = {
-  person: RentixTenant;
-  contractsCount: number;
-  activeContractsCount: number;
-  accountsReceivableRecords: Array<Record<string, unknown>>;
-  accountsReceivableTotal: number;
+type ToastState = {
+  type: ToastType;
+  message: string;
+} | null;
+
+const emptyFormData: PersonFormData = {
+  name: "",
+  type: "individual",
+  document: "",
+  stateRegistration: "",
+  identityNumber: "",
+  email: "",
+  phone: "",
+  zipCode: "",
+  city: "",
+  state: "",
+  address: "",
+  status: "active",
 };
 
-export default function TenantsPage() {
-  const [tenants, setTenants] = useState<RentixTenant[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [isBlackTheme, setIsBlackTheme] = useState(false);
+function convertApiTypeToPersonType(type: ApiPersonType): PersonType {
+  return type === "COMPANY" ? "company" : "individual";
+}
 
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingTenantId, setEditingTenantId] = useState<number | null>(null);
-  const [tenantToDelete, setTenantToDelete] = useState<RentixTenant | null>(
-    null,
-  );
-  const [blockedInactivePerson, setBlockedInactivePerson] =
-    useState<RentixTenant | null>(null);
-  const [blockedDeletePerson, setBlockedDeletePerson] =
-    useState<RentixTenant | null>(null);
-  const [selectedPersonHistory, setSelectedPersonHistory] =
-    useState<PersonHistoryModalData | null>(null);
-  const [activePersonHistoryTab, setActivePersonHistoryTab] =
-    useState<PersonHistoryTab>("RegistrationInfo");
+function convertPersonTypeToApiType(type: PersonType): ApiPersonType {
+  return type === "company" ? "COMPANY" : "INDIVIDUAL";
+}
 
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] =
-    useState<PersonStatusFilter>("Active");
+function convertApiStatusToPersonStatus(status: ApiPersonStatus): PersonStatus {
+  return status === "INACTIVE" ? "inactive" : "active";
+}
 
-  const [tenantName, setTenantName] = useState("");
-  const [tenantPersonType, setTenantPersonType] =
-    useState<PersonType>("Individual");
-  const [tenantCpf, setTenantCpf] = useState("");
-  const [tenantPhone, setTenantPhone] = useState("");
-  const [tenantEmail, setTenantEmail] = useState("");
-  const [tenantZipCode, setTenantZipCode] = useState("");
-  const [tenantState, setTenantState] = useState("");
-  const [tenantCity, setTenantCity] = useState("");
-  const [tenantStreet, setTenantStreet] = useState("");
-  const [tenantNumber, setTenantNumber] = useState("");
-  const [tenantNeighborhood, setTenantNeighborhood] = useState("");
-  const [tenantComplement, setTenantComplement] = useState("");
-  const [tenantIdentityNumber, setTenantIdentityNumber] = useState("");
-  const [tenantIssuingAuthority, setTenantIssuingAuthority] = useState("");
-  const [tenantBirthDate, setTenantBirthDate] = useState("");
-  const [tenantMaritalStatus, setTenantMaritalStatus] = useState("");
-  const [tenantNationality, setTenantNationality] = useState("BRASILEIRO(A)");
-  const [tenantOccupation, setTenantOccupation] = useState("");
-  const [tenantTradeName, setTenantTradeName] = useState("");
-  const [tenantStateRegistration, setTenantStateRegistration] = useState("");
-  const [tenantMunicipalRegistration, setTenantMunicipalRegistration] = useState("");
-  const [tenantTaxRegime, setTenantTaxRegime] = useState("");
-  const [tenantResponsibleName, setTenantResponsibleName] = useState("");
-  const [tenantResponsibleCpf, setTenantResponsibleCpf] = useState("");
-  const [tenantResponsibleRg, setTenantResponsibleRg] = useState("");
-  const [tenantResponsibleRole, setTenantResponsibleRole] = useState("");
-  const [tenantSecondaryPhone, setTenantSecondaryPhone] = useState("");
-  const [tenantWhatsapp, setTenantWhatsapp] = useState("");
-  const [tenantWebsite, setTenantWebsite] = useState("");
-  const [tenantCreditLimit, setTenantCreditLimit] = useState("");
-  const [tenantFinancialNotes, setTenantFinancialNotes] = useState("");
-  const [tenantIsTenant, setTenantIsTenant] = useState(true);
-  const [tenantIsActive, setTenantIsActive] = useState(true);
-  const [cpfError, setCpfError] = useState("");
-  const [isCnpjLoading, setIsCnpjLoading] = useState(false);
-  const [cnpjSearchError, setCnpjSearchError] = useState("");
+function convertPersonStatusToApiStatus(status: PersonStatus): ApiPersonStatus {
+  return status === "inactive" ? "INACTIVE" : "ACTIVE";
+}
+
+function mapApiPersonToPerson(apiPerson: ApiPerson): Person {
+  return {
+    id: apiPerson.id,
+    companyId: apiPerson.companyId,
+    name: apiPerson.name,
+    type: convertApiTypeToPersonType(apiPerson.type),
+    document: apiPerson.document,
+    stateRegistration: apiPerson.stateRegistration ?? "",
+    identityNumber: apiPerson.identityNumber ?? "",
+    email: apiPerson.email ?? "",
+    phone: apiPerson.phone ?? "",
+    zipCode: apiPerson.zipCode ?? "",
+    city: apiPerson.city ?? "",
+    state: apiPerson.state ?? "",
+    address: apiPerson.address ?? "",
+    status: convertApiStatusToPersonStatus(apiPerson.status),
+    createdAt: apiPerson.createdAt,
+  };
+}
+
+function formatDocument(value: string, type: PersonType) {
+  const digits = value.replace(/\D/g, "").slice(0, type === "individual" ? 11 : 14);
+
+  if (type === "individual") {
+    return digits
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+  }
+
+  return digits
+    .replace(/^(\d{2})(\d)/, "$1.$2")
+    .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/\.(\d{3})(\d)/, ".$1/$2")
+    .replace(/(\d{4})(\d{1,2})$/, "$1-$2");
+}
+
+function formatPhone(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+
+  if (digits.length <= 10) {
+    return digits
+      .replace(/(\d{2})(\d)/, "($1) $2")
+      .replace(/(\d{4})(\d)/, "$1-$2");
+  }
+
+  return digits
+    .replace(/(\d{2})(\d)/, "($1) $2")
+    .replace(/(\d{5})(\d)/, "$1-$2");
+}
+
+function formatZipCode(value: string) {
+  return value
+    .replace(/\D/g, "")
+    .slice(0, 8)
+    .replace(/(\d{5})(\d)/, "$1-$2");
+}
+
+function normalizeText(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function buildCnpjAddress(data: CnpjApiResponse) {
+  const addressParts = [
+    data.logradouro,
+    data.numero ? `Nº ${data.numero}` : "",
+    data.bairro,
+    data.complemento,
+  ].filter(Boolean);
+
+  return addressParts.join(" - ");
+}
+
+export default function PeoplePage() {
+  const { user } = useAuth();
+
+  const [people, setPeople] = useState<Person[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | PersonStatus>("active");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
+  const [formData, setFormData] = useState<PersonFormData>(emptyFormData);
+  const [isLoadingPeople, setIsLoadingPeople] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSearchingZipCode, setIsSearchingZipCode] = useState(false);
+  const [isSearchingCnpj, setIsSearchingCnpj] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [zipCodeError, setZipCodeError] = useState<string | null>(null);
+  const [cnpjError, setCnpjError] = useState<string | null>(null);
+  const [personToDelete, setPersonToDelete] = useState<Person | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [toast, setToast] = useState<ToastState>(null);
+
+  const companyId = user?.companyId;
 
   useEffect(() => {
-    function applyStoredTheme() {
-      const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
-      const legacyTheme = localStorage.getItem("rentix_theme");
-
-      try {
-        const parsedThemeSettings = storedThemeSettings
-          ? (JSON.parse(storedThemeSettings) as { mode?: string })
-          : null;
-
-        const isBlackThemeSelected =
-          parsedThemeSettings?.mode === "black" ||
-          parsedThemeSettings?.mode === "dark" ||
-          legacyTheme === "black" ||
-          legacyTheme === "dark";
-
-        document.documentElement.classList.toggle("dark", isBlackThemeSelected);
-        document.body.classList.toggle("dark", isBlackThemeSelected);
-        setIsBlackTheme(isBlackThemeSelected);
-      } catch {
-        const isLegacyBlackTheme = legacyTheme === "black" || legacyTheme === "dark";
-
-        document.documentElement.classList.toggle("dark", isLegacyBlackTheme);
-        document.body.classList.toggle("dark", isLegacyBlackTheme);
-        setIsBlackTheme(isLegacyBlackTheme);
-      }
+    if (!companyId) {
+      setIsLoadingPeople(false);
+      return;
     }
 
-    applyStoredTheme();
+    loadPeople(companyId);
+  }, [companyId]);
 
-    window.addEventListener("storage", applyStoredTheme);
+  useEffect(() => {
+    if (!toast) return;
 
-    return () => {
-      window.removeEventListener("storage", applyStoredTheme);
-    };
-  }, []);
+    const timeout = window.setTimeout(() => {
+      setToast(null);
+    }, 3500);
 
-  const filteredTenants = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
 
-    return tenants.filter((tenant) => {
-      const document = tenant.cpf || tenant.document || "";
-      const city = tenant.city || "";
-      const phone = tenant.phone || "";
-      const email = tenant.email || "";
+  async function loadPeople(currentCompanyId: string) {
+    try {
+      setIsLoadingPeople(true);
+      setPageError(null);
 
+      const response = await apiFetch<ApiPerson[]>(
+        `/pessoas?companyId=${encodeURIComponent(currentCompanyId)}`
+      );
+
+      setPeople(response.map(mapApiPersonToPerson));
+    } catch (error) {
+      setPageError(
+        error instanceof Error ? error.message : "Não foi possível carregar as pessoas."
+      );
+    } finally {
+      setIsLoadingPeople(false);
+    }
+  }
+
+  const filteredPeople = useMemo(() => {
+    const normalizedSearch = normalizeText(searchTerm);
+
+    return people.filter((person) => {
       const matchesSearch =
-        tenant.name.toLowerCase().includes(normalizedSearch) ||
-        document.toLowerCase().includes(normalizedSearch) ||
-        city.toLowerCase().includes(normalizedSearch) ||
-        phone.toLowerCase().includes(normalizedSearch) ||
-        email.toLowerCase().includes(normalizedSearch);
+        !normalizedSearch ||
+        normalizeText(person.name).includes(normalizedSearch) ||
+        normalizeText(person.document).includes(normalizedSearch) ||
+        normalizeText(person.email).includes(normalizedSearch) ||
+        normalizeText(person.phone).includes(normalizedSearch) ||
+        normalizeText(person.city).includes(normalizedSearch);
 
-      const matchesStatus =
-        statusFilter === "All" ||
-        (statusFilter === "Active" && tenant.isActive !== false) ||
-        (statusFilter === "Inactive" && tenant.isActive === false) ||
-        (statusFilter === "Tenant" && tenant.isTenant !== false) ||
-        (statusFilter === "NotTenant" && tenant.isTenant === false);
+      const matchesStatus = statusFilter === "all" || person.status === statusFilter;
 
       return matchesSearch && matchesStatus;
     });
-  }, [tenants, search, statusFilter]);
+  }, [people, searchTerm, statusFilter]);
 
-  const isEditing = editingTenantId !== null;
+  function openCreateModal() {
+    setEditingPersonId(null);
+    setFormData(emptyFormData);
+    setPageError(null);
+    setZipCodeError(null);
+    setCnpjError(null);
+    setIsModalOpen(true);
+  }
 
-  useEffect(() => {
-    const storedTenants = localStorage.getItem(STORAGE_KEY);
+  function openEditModal(person: Person) {
+    setEditingPersonId(person.id);
+    setFormData({
+      name: person.name,
+      type: person.type,
+      document: person.document,
+      stateRegistration: person.stateRegistration,
+      identityNumber: person.identityNumber,
+      email: person.email,
+      phone: person.phone,
+      zipCode: person.zipCode,
+      city: person.city,
+      state: person.state,
+      address: person.address,
+      status: person.status,
+    });
+    setPageError(null);
+    setZipCodeError(null);
+    setCnpjError(null);
+    setIsModalOpen(true);
+  }
 
-    if (storedTenants) {
-      const parsedTenants = JSON.parse(storedTenants) as RentixTenant[];
+  function closeModal() {
+    if (isSaving) return;
 
-      const normalizedTenants = parsedTenants.map((tenant) => ({
-        ...tenant,
-        personType:
-          tenant.personType ||
-          ((tenant.cpf || tenant.document || "").replace(/\D/g, "").length > 11
-            ? "Company"
-            : "Individual"),
-        name: toUpperCaseValue(tenant.name),
-        email: formatEmailValue(tenant.email || ""),
-        cpf: tenant.cpf || tenant.document || "",
-        document: tenant.document || tenant.cpf || "",
-        zipCode: tenant.zipCode || "",
-        state: toUpperCaseValue(tenant.state || ""),
-        city: toUpperCaseValue(tenant.city || ""),
-        street: toUpperCaseValue(tenant.street || ""),
-        number: toUpperCaseValue(tenant.number || ""),
-        neighborhood: toUpperCaseValue(tenant.neighborhood || ""),
-        complement: toUpperCaseValue(tenant.complement || ""),
-        identityNumber: toUpperCaseValue(tenant.identityNumber || ""),
-        issuingAuthority: toUpperCaseValue(tenant.issuingAuthority || ""),
-        birthDate: tenant.birthDate || "",
-        maritalStatus: toUpperCaseValue(tenant.maritalStatus || ""),
-        nationality: toUpperCaseValue(tenant.nationality || ""),
-        occupation: toUpperCaseValue(tenant.occupation || ""),
-        tradeName: toUpperCaseValue(tenant.tradeName || ""),
-        stateRegistration: toUpperCaseValue(tenant.stateRegistration || ""),
-        municipalRegistration: toUpperCaseValue(tenant.municipalRegistration || ""),
-        taxRegime: toUpperCaseValue(tenant.taxRegime || ""),
-        responsibleName: toUpperCaseValue(tenant.responsibleName || ""),
-        responsibleCpf: tenant.responsibleCpf || "",
-        responsibleRg: toUpperCaseValue(tenant.responsibleRg || ""),
-        responsibleRole: toUpperCaseValue(tenant.responsibleRole || ""),
-        secondaryPhone: tenant.secondaryPhone || "",
-        whatsapp: tenant.whatsapp || "",
-        website: formatWebsiteValue(tenant.website || ""),
-        creditLimit: tenant.creditLimit || "",
-        financialNotes: toUpperCaseValue(tenant.financialNotes || ""),
-        isTenant: tenant.isTenant ?? true,
-        isActive: tenant.isActive ?? true,
-      }));
+    setIsModalOpen(false);
+    setEditingPersonId(null);
+    setFormData(emptyFormData);
+    setZipCodeError(null);
+    setCnpjError(null);
+  }
 
-      setTenants(
-        normalizedTenants.length > 0 ? normalizedTenants : initialTenants,
-      );
-    } else {
-      setTenants(
-        initialTenants.map((tenant) => ({
-          ...tenant,
-          name: toUpperCaseValue(tenant.name),
-          email: formatEmailValue((tenant as RentixTenant).email || ""),
-          website: formatWebsiteValue((tenant as RentixTenant).website || ""),
-          isTenant: true,
-          isActive: true,
-        })),
-      );
+  function updateFormData(field: keyof PersonFormData, value: string) {
+    setFormData((currentFormData) => ({
+      ...currentFormData,
+      [field]: value,
+    }));
+  }
+
+  async function handleSearchZipCode() {
+    const zipCodeDigits = formData.zipCode.replace(/\D/g, "");
+
+    if (zipCodeDigits.length !== 8) {
+      setZipCodeError("Informe um CEP válido com 8 dígitos.");
+      return;
     }
 
-    setIsLoaded(true);
-  }, []);
-
-  useEffect(() => {
-    if (!isLoaded) return;
-
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(tenants));
-  }, [tenants, isLoaded]);
-
-  function resetForm() {
-    setTenantName("");
-    setTenantPersonType("Individual");
-    setTenantCpf("");
-    setTenantPhone("");
-    setTenantEmail("");
-    setTenantZipCode("");
-    setTenantState("");
-    setTenantCity("");
-    setTenantStreet("");
-    setTenantNumber("");
-    setTenantNeighborhood("");
-    setTenantComplement("");
-    setTenantIdentityNumber("");
-    setTenantIssuingAuthority("");
-    setTenantBirthDate("");
-    setTenantMaritalStatus("");
-    setTenantNationality("BRASILEIRO(A)");
-    setTenantOccupation("");
-    setTenantTradeName("");
-    setTenantStateRegistration("");
-    setTenantMunicipalRegistration("");
-    setTenantTaxRegime("");
-    setTenantResponsibleName("");
-    setTenantResponsibleCpf("");
-    setTenantResponsibleRg("");
-    setTenantResponsibleRole("");
-    setTenantSecondaryPhone("");
-    setTenantWhatsapp("");
-    setTenantWebsite("");
-    setTenantCreditLimit("");
-    setTenantFinancialNotes("");
-    setTenantIsTenant(true);
-    setTenantIsActive(true);
-    setCpfError("");
-    setIsCnpjLoading(false);
-    setCnpjSearchError("");
-    setEditingTenantId(null);
-    setIsFormOpen(false);
-  }
-
-  function handleOpenCreateForm() {
-    resetForm();
-    setIsFormOpen(true);
-  }
-
-  function handleCloseForm() {
-    resetForm();
-  }
-
-  async function handleZipCodeBlur() {
-    const cleanZipCode = tenantZipCode.replace(/\D/g, "");
-
-    if (cleanZipCode.length !== 8) return;
-
     try {
-      const response = await fetch(
-        `https://viacep.com.br/ws/${cleanZipCode}/json/`,
-      );
+      setIsSearchingZipCode(true);
+      setZipCodeError(null);
 
+      const response = await fetch(`https://viacep.com.br/ws/${zipCodeDigits}/json/`);
       const data = (await response.json()) as ViaCepResponse;
 
-      if (data.erro) {
-        alert("CEP não encontrado.");
+      if (!response.ok || data.erro) {
+        setZipCodeError("CEP não encontrado.");
         return;
       }
 
-      setTenantZipCode(data.cep || cleanZipCode);
-      setTenantState(toUpperCaseValue(data.uf || ""));
-      setTenantCity(toUpperCaseValue(data.localidade || ""));
-      setTenantStreet(toUpperCaseValue(data.logradouro || ""));
-      setTenantNeighborhood(toUpperCaseValue(data.bairro || ""));
+      const addressParts = [data.logradouro, data.bairro].filter(Boolean);
+
+      setFormData((currentFormData) => ({
+        ...currentFormData,
+        city: data.localidade ?? currentFormData.city,
+        state: data.uf ?? currentFormData.state,
+        address:
+          addressParts.length > 0
+            ? addressParts.join(" - ")
+            : currentFormData.address,
+      }));
     } catch {
-      alert("Não foi possível consultar o CEP no momento.");
+      setZipCodeError("Não foi possível consultar o CEP agora.");
+    } finally {
+      setIsSearchingZipCode(false);
     }
   }
 
-  function handleCpfChange(value: string) {
-    const formattedDocument =
-      tenantPersonType === "Company" ? formatCnpj(value) : formatCpf(value);
+  async function handleSearchCnpj() {
+    const cnpjDigits = formData.document.replace(/\D/g, "");
 
-    setTenantCpf(formattedDocument);
-
-    const documentDigits = formattedDocument.replace(/\D/g, "");
-    const minimumLength = tenantPersonType === "Company" ? 14 : 11;
-
-    if (documentDigits.length < minimumLength) {
-      setCpfError("");
+    if (formData.type !== "company") {
+      setCnpjError("A busca por CNPJ está disponível apenas para Pessoa Jurídica.");
       return;
     }
 
-    if (!isValidDocument(formattedDocument, tenantPersonType)) {
-      setCpfError(
-        tenantPersonType === "Company" ? "CNPJ inválido." : "CPF inválido.",
-      );
-      return;
-    }
-
-    const documentAlreadyExists = tenants.some((tenant) => {
-      const currentTenantDocument = (
-        tenant.cpf ||
-        tenant.document ||
-        ""
-      ).replace(/\D/g, "");
-
-      return (
-        currentTenantDocument === documentDigits &&
-        tenant.id !== editingTenantId
-      );
-    });
-
-    if (documentAlreadyExists) {
-      setCpfError(
-        tenantPersonType === "Company"
-          ? "Já existe uma pessoa cadastrada com este CNPJ."
-          : "Já existe uma pessoa cadastrada com este CPF.",
-      );
-      return;
-    }
-
-    setCpfError("");
-  }
-
-  function handlePersonTypeChange(personType: PersonType) {
-    setTenantPersonType(personType);
-    setTenantCpf("");
-    setCpfError("");
-    setCnpjSearchError("");
-
-    if (personType === "Individual") {
-      setTenantTradeName("");
-      setTenantStateRegistration("");
-      setTenantMunicipalRegistration("");
-      setTenantTaxRegime("");
-      setTenantResponsibleName("");
-      setTenantResponsibleCpf("");
-      setTenantResponsibleRg("");
-      setTenantResponsibleRole("");
-    } else {
-      setTenantIdentityNumber("");
-      setTenantIssuingAuthority("");
-      setTenantBirthDate("");
-      setTenantMaritalStatus("");
-      setTenantNationality("BRASILEIRO(A)");
-      setTenantOccupation("");
-    }
-  }
-
-  async function handleCnpjSearch() {
-    const cleanCnpj = tenantCpf.replace(/\D/g, "");
-
-    if (tenantPersonType !== "Company") return;
-
-    if (cleanCnpj.length !== 14) {
-      setCnpjSearchError(
-        "Informe um CNPJ com 14 números para buscar os dados.",
-      );
-      return;
-    }
-
-    if (!isValidCnpj(cleanCnpj)) {
-      setCnpjSearchError("CNPJ inválido. Verifique o número informado.");
+    if (cnpjDigits.length !== 14) {
+      setCnpjError("Informe um CNPJ válido com 14 dígitos.");
       return;
     }
 
     try {
-      setIsCnpjLoading(true);
-      setCnpjSearchError("");
+      setIsSearchingCnpj(true);
+      setCnpjError(null);
 
-      const response = await fetch(
-        `https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`,
-      );
+      const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjDigits}`);
 
       if (!response.ok) {
-        setCnpjSearchError("Empresa não encontrada para o CNPJ informado.");
+        setCnpjError("CNPJ não encontrado ou indisponível no momento.");
         return;
       }
 
-      const data = (await response.json()) as BrasilApiCnpjResponse;
+      const data = (await response.json()) as CnpjApiResponse;
 
-      const companyName =
-        data.razao_social?.trim() || data.nome_fantasia?.trim() || tenantName;
+      setFormData((currentFormData) => ({
+        ...currentFormData,
+        name:
+          data.razao_social?.trim() ||
+          data.nome_fantasia?.trim() ||
+          currentFormData.name,
+        email: data.email?.trim() || currentFormData.email,
+        phone: data.ddd_telefone_1
+          ? formatPhone(data.ddd_telefone_1)
+          : data.ddd_telefone_2
+            ? formatPhone(data.ddd_telefone_2)
+            : currentFormData.phone,
+        zipCode: data.cep ? formatZipCode(data.cep) : currentFormData.zipCode,
+        city: data.municipio ?? currentFormData.city,
+        state: data.uf ?? currentFormData.state,
+        address: buildCnpjAddress(data) || currentFormData.address,
+        status:
+          data.descricao_situacao_cadastral?.toUpperCase() === "ATIVA"
+            ? "active"
+            : currentFormData.status,
+      }));
 
-      setTenantName(toUpperCaseValue(companyName));
-      setTenantTradeName(toUpperCaseValue(data.nome_fantasia?.trim() || ""));
-      setTenantCpf(formatCnpj(data.cnpj || cleanCnpj));
-
-      if (data.ddd_telefone_1) {
-        setTenantPhone(formatPhone(data.ddd_telefone_1));
-      }
-
-      setTenantZipCode(data.cep ? formatZipCode(data.cep) : tenantZipCode);
-      setTenantState(toUpperCaseValue(data.uf || tenantState));
-      setTenantCity(toUpperCaseValue(data.municipio || tenantCity));
-      setTenantStreet(toUpperCaseValue(data.logradouro || tenantStreet));
-      setTenantNumber(toUpperCaseValue(data.numero || tenantNumber));
-      setTenantNeighborhood(
-        toUpperCaseValue(data.bairro || tenantNeighborhood),
-      );
-      setTenantComplement(
-        toUpperCaseValue(data.complemento || tenantComplement),
-      );
+      setToast({
+        type: "success",
+        message: "Dados do CNPJ preenchidos com sucesso.",
+      });
     } catch {
-      setCnpjSearchError("Não foi possível consultar o CNPJ no momento.");
+      setCnpjError("Não foi possível consultar o CNPJ agora.");
     } finally {
-      setIsCnpjLoading(false);
+      setIsSearchingCnpj(false);
     }
   }
 
-  function handlePhoneChange(value: string) {
-    setTenantPhone(formatPhone(value));
-  }
-
-  function handleSecondaryPhoneChange(value: string) {
-    setTenantSecondaryPhone(formatPhone(value));
-  }
-
-  function handleWhatsappChange(value: string) {
-    setTenantWhatsapp(formatPhone(value));
-  }
-
-  function handleResponsibleCpfChange(value: string) {
-    setTenantResponsibleCpf(formatCpf(value));
-  }
-
-  function handleCreditLimitChange(value: string) {
-    setTenantCreditLimit(formatMoneyInput(value));
-  }
-
-  function getPersonIdFromRecord(record: Record<string, unknown>) {
-    return (
-      record.tenantId ||
-      record.tenant_id ||
-      record.personId ||
-      record.person_id ||
-      record.customerId ||
-      record.customer_id ||
-      record.supplierId ||
-      record.supplier_id ||
-      record.peopleId ||
-      record.people_id ||
-      record.person ||
-      record.tenant ||
-      record.customer ||
-      record.supplier
-    );
-  }
-
-  function personHasAnyContract(personId: number) {
-    const storedContracts = localStorage.getItem(CONTRACTS_STORAGE_KEY);
-
-    if (!storedContracts) return false;
-
-    try {
-      const parsedContracts = JSON.parse(storedContracts) as Array<
-        Record<string, unknown>
-      >;
-
-      return parsedContracts.some((contract) => {
-        const contractPersonId = getPersonIdFromRecord(contract);
-
-        return String(contractPersonId || "") === String(personId);
-      });
-    } catch {
-      return false;
-    }
-  }
-
-  function personHasActiveContract(personId: number) {
-    const storedContracts = localStorage.getItem(CONTRACTS_STORAGE_KEY);
-
-    if (!storedContracts) return false;
-
-    try {
-      const parsedContracts = JSON.parse(storedContracts) as Array<
-        Record<string, unknown>
-      >;
-
-      return parsedContracts.some((contract) => {
-        const contractPersonId = getPersonIdFromRecord(contract);
-        const contractStatus = String(contract.status || "").toLowerCase();
-        const contractEndDate = String(contract.endDate || "");
-
-        const isSamePerson =
-          String(contractPersonId || "") === String(personId);
-        const isDeleted = contractStatus === "deleted";
-        const isCanceled = contractStatus === "canceled";
-        const isFinished = contractStatus === "finished";
-        const isInactive = contractStatus === "inactive";
-
-        if (
-          !isSamePerson ||
-          isDeleted ||
-          isCanceled ||
-          isFinished ||
-          isInactive
-        ) {
-          return false;
-        }
-
-        if (!contractEndDate) {
-          return contractStatus === "active";
-        }
-
-        const today = new Date();
-        const endDate = new Date(`${contractEndDate}T23:59:59`);
-
-        return contractStatus === "active" && endDate >= today;
-      });
-    } catch {
-      return false;
-    }
-  }
-
-  function personHasFinancialHistory(personId: number) {
-    const storageKeys = [
-      ACCOUNTS_RECEIVABLE_STORAGE_KEY,
-      ACCOUNTS_PAYABLE_STORAGE_KEY,
-    ];
-
-    return storageKeys.some((storageKey) => {
-      const storedRecords = localStorage.getItem(storageKey);
-
-      if (!storedRecords) return false;
-
-      try {
-        const parsedRecords = JSON.parse(storedRecords) as Array<
-          Record<string, unknown>
-        >;
-
-        return parsedRecords.some((record) => {
-          const recordPersonId = getPersonIdFromRecord(record);
-
-          return String(recordPersonId || "") === String(personId);
-        });
-      } catch {
-        return false;
-      }
-    });
-  }
-
-  function personHasAnyHistory(personId: number) {
-    return (
-      personHasAnyContract(personId) || personHasFinancialHistory(personId)
-    );
-  }
-
-  function getEditingTenant() {
-    if (!editingTenantId) return null;
-
-    return tenants.find((tenant) => tenant.id === editingTenantId) || null;
-  }
-
-  function handleActiveChange(checked: boolean) {
-    if (
-      !checked &&
-      editingTenantId &&
-      personHasActiveContract(editingTenantId)
-    ) {
-      const tenant = getEditingTenant();
-
-      if (tenant) {
-        setBlockedInactivePerson(tenant);
-      }
-
-      return;
-    }
-
-    setTenantIsActive(checked);
-  }
-
-  function handleSubmitTenant(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const normalizedTenantName = toUpperCaseValue(tenantName);
-    const normalizedTenantEmail = formatEmailValue(tenantEmail);
-    const normalizedTenantState = toUpperCaseValue(tenantState);
-    const normalizedTenantCity = toUpperCaseValue(tenantCity);
-    const normalizedTenantStreet = toUpperCaseValue(tenantStreet);
-    const normalizedTenantNumber = toUpperCaseValue(tenantNumber);
-    const normalizedTenantNeighborhood = toUpperCaseValue(tenantNeighborhood);
-    const normalizedTenantComplement = toUpperCaseValue(tenantComplement);
-    const normalizedTenantIdentityNumber = toUpperCaseValue(tenantIdentityNumber);
-    const normalizedTenantIssuingAuthority = toUpperCaseValue(tenantIssuingAuthority);
-    const normalizedTenantMaritalStatus = toUpperCaseValue(tenantMaritalStatus);
-    const normalizedTenantNationality = toUpperCaseValue(tenantNationality);
-    const normalizedTenantOccupation = toUpperCaseValue(tenantOccupation);
-    const normalizedTenantTradeName = toUpperCaseValue(tenantTradeName);
-    const normalizedTenantStateRegistration = toUpperCaseValue(tenantStateRegistration);
-    const normalizedTenantMunicipalRegistration = toUpperCaseValue(tenantMunicipalRegistration);
-    const normalizedTenantTaxRegime = toUpperCaseValue(tenantTaxRegime);
-    const normalizedTenantResponsibleName = toUpperCaseValue(tenantResponsibleName);
-    const normalizedTenantResponsibleRg = toUpperCaseValue(tenantResponsibleRg);
-    const normalizedTenantResponsibleRole = toUpperCaseValue(tenantResponsibleRole);
-    const normalizedTenantWebsite = formatWebsiteValue(tenantWebsite);
-    const normalizedTenantFinancialNotes = toUpperCaseValue(tenantFinancialNotes);
-
-    if (!isValidDocument(tenantCpf, tenantPersonType)) {
-      setCpfError(
-        tenantPersonType === "Company" ? "CNPJ inválido." : "CPF inválido.",
-      );
+    if (!companyId) {
+      setPageError("Empresa do usuário não encontrada. Faça login novamente.");
       return;
     }
 
-    const normalizedDocument = tenantCpf.replace(/\D/g, "");
-
-    const documentAlreadyExists = tenants.some((tenant) => {
-      const currentTenantDocument = (
-        tenant.cpf ||
-        tenant.document ||
-        ""
-      ).replace(/\D/g, "");
-
-      return (
-        currentTenantDocument === normalizedDocument &&
-        tenant.id !== editingTenantId
-      );
-    });
-
-    if (documentAlreadyExists) {
-      setCpfError(
-        tenantPersonType === "Company"
-          ? "Já existe uma pessoa cadastrada com este CNPJ."
-          : "Já existe uma pessoa cadastrada com este CPF.",
-      );
+    if (!formData.name.trim() || !formData.document.trim()) {
+      setPageError("Informe nome e documento para salvar a pessoa.");
       return;
     }
 
-    if (
-      !tenantIsActive &&
-      editingTenantId &&
-      personHasActiveContract(editingTenantId)
-    ) {
-      const tenant = getEditingTenant();
-
-      if (tenant) {
-        setBlockedInactivePerson(tenant);
-      }
-
-      return;
-    }
-
-    if (isEditing) {
-      setTenants((currentTenants) =>
-        currentTenants.map((tenant) =>
-          tenant.id === editingTenantId
-            ? {
-                ...tenant,
-                name: normalizedTenantName,
-                personType: tenantPersonType,
-                cpf: tenantCpf,
-                document: tenantCpf,
-                phone: tenantPhone,
-                email: normalizedTenantEmail,
-                zipCode: tenantZipCode,
-                state: normalizedTenantState,
-                city: normalizedTenantCity,
-                street: normalizedTenantStreet,
-                number: normalizedTenantNumber,
-                neighborhood: normalizedTenantNeighborhood,
-                complement: normalizedTenantComplement,
-                identityNumber: normalizedTenantIdentityNumber,
-                issuingAuthority: normalizedTenantIssuingAuthority,
-                birthDate: tenantBirthDate,
-                maritalStatus: normalizedTenantMaritalStatus,
-                nationality: normalizedTenantNationality,
-                occupation: normalizedTenantOccupation,
-                tradeName: normalizedTenantTradeName,
-                stateRegistration: normalizedTenantStateRegistration,
-                municipalRegistration: normalizedTenantMunicipalRegistration,
-                taxRegime: normalizedTenantTaxRegime,
-                responsibleName: normalizedTenantResponsibleName,
-                responsibleCpf: tenantResponsibleCpf,
-                responsibleRg: normalizedTenantResponsibleRg,
-                responsibleRole: normalizedTenantResponsibleRole,
-                secondaryPhone: tenantSecondaryPhone,
-                whatsapp: tenantWhatsapp,
-                website: normalizedTenantWebsite,
-                creditLimit: tenantCreditLimit,
-                financialNotes: normalizedTenantFinancialNotes,
-                isTenant: tenantIsTenant,
-                isActive: tenantIsActive,
-              }
-            : tenant,
-        ),
-      );
-
-      resetForm();
-      return;
-    }
-
-    const newTenant: RentixTenant = {
-      id: Date.now(),
-      name: normalizedTenantName,
-      personType: tenantPersonType,
-      cpf: tenantCpf,
-      document: tenantCpf,
-      phone: tenantPhone,
-      email: normalizedTenantEmail,
-      zipCode: tenantZipCode,
-      state: normalizedTenantState,
-      city: normalizedTenantCity,
-      street: normalizedTenantStreet,
-      number: normalizedTenantNumber,
-      neighborhood: normalizedTenantNeighborhood,
-      complement: normalizedTenantComplement,
-      identityNumber: normalizedTenantIdentityNumber,
-      issuingAuthority: normalizedTenantIssuingAuthority,
-      birthDate: tenantBirthDate,
-      maritalStatus: normalizedTenantMaritalStatus,
-      nationality: normalizedTenantNationality,
-      occupation: normalizedTenantOccupation,
-      tradeName: normalizedTenantTradeName,
-      stateRegistration: normalizedTenantStateRegistration,
-      municipalRegistration: normalizedTenantMunicipalRegistration,
-      taxRegime: normalizedTenantTaxRegime,
-      responsibleName: normalizedTenantResponsibleName,
-      responsibleCpf: tenantResponsibleCpf,
-      responsibleRg: normalizedTenantResponsibleRg,
-      responsibleRole: normalizedTenantResponsibleRole,
-      secondaryPhone: tenantSecondaryPhone,
-      whatsapp: tenantWhatsapp,
-      website: normalizedTenantWebsite,
-      creditLimit: tenantCreditLimit,
-      financialNotes: normalizedTenantFinancialNotes,
-      isTenant: tenantIsTenant,
-      isActive: tenantIsActive,
+    const payload = {
+      companyId,
+      type: convertPersonTypeToApiType(formData.type),
+      status: convertPersonStatusToApiStatus(formData.status),
+      name: formData.name.trim(),
+      document: formData.document.trim(),
+      stateRegistration:
+        formData.type === "company"
+          ? formData.stateRegistration.trim() || undefined
+          : undefined,
+      identityNumber:
+        formData.type === "individual"
+          ? formData.identityNumber.trim() || undefined
+          : undefined,
+      email: formData.email.trim() || undefined,
+      phone: formData.phone.trim() || undefined,
+      zipCode: formData.zipCode.trim() || undefined,
+      city: formData.city.trim() || undefined,
+      state: formData.state.trim().toUpperCase() || undefined,
+      address: formData.address.trim() || undefined,
     };
 
-    setTenants((currentTenants) => [newTenant, ...currentTenants]);
-    resetForm();
+    try {
+      setIsSaving(true);
+      setPageError(null);
+
+      if (editingPersonId) {
+        const updatedPerson = await apiFetch<ApiPerson>(`/pessoas/${editingPersonId}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+
+        setPeople((currentPeople) =>
+          currentPeople.map((person) =>
+            person.id === editingPersonId ? mapApiPersonToPerson(updatedPerson) : person
+          )
+        );
+
+        setToast({
+          type: "success",
+          message: "Pessoa atualizada com sucesso.",
+        });
+
+        closeModal();
+        return;
+      }
+
+      const createdPerson = await apiFetch<ApiPerson>("/pessoas", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      setPeople((currentPeople) => [mapApiPersonToPerson(createdPerson), ...currentPeople]);
+
+      setToast({
+        type: "success",
+        message: "Pessoa cadastrada com sucesso.",
+      });
+
+      closeModal();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Não foi possível salvar a pessoa.";
+
+      setPageError(message);
+      setToast({
+        type: "error",
+        message,
+      });
+    } finally {
+      setIsSaving(false);
+    }
   }
 
-  function handleEditTenant(tenant: RentixTenant) {
-    const currentDocument = tenant.cpf || tenant.document || "";
-    const currentPersonType =
-      tenant.personType ||
-      (currentDocument.replace(/\D/g, "").length > 11
-        ? "Company"
-        : "Individual");
-
-    setEditingTenantId(tenant.id);
-    setTenantName(toUpperCaseValue(tenant.name));
-    setTenantPersonType(currentPersonType);
-    setTenantCpf(
-      currentPersonType === "Company"
-        ? formatCnpj(currentDocument)
-        : formatCpf(currentDocument),
-    );
-    setTenantPhone(formatPhone(tenant.phone));
-    setTenantEmail(formatEmailValue(tenant.email || ""));
-    setTenantZipCode(tenant.zipCode || "");
-    setTenantState(toUpperCaseValue(tenant.state || ""));
-    setTenantCity(toUpperCaseValue(tenant.city || ""));
-    setTenantStreet(toUpperCaseValue(tenant.street || ""));
-    setTenantNumber(toUpperCaseValue(tenant.number || ""));
-    setTenantNeighborhood(toUpperCaseValue(tenant.neighborhood || ""));
-    setTenantComplement(toUpperCaseValue(tenant.complement || ""));
-    setTenantIdentityNumber(toUpperCaseValue(tenant.identityNumber || ""));
-    setTenantIssuingAuthority(toUpperCaseValue(tenant.issuingAuthority || ""));
-    setTenantBirthDate(tenant.birthDate || "");
-    setTenantMaritalStatus(toUpperCaseValue(tenant.maritalStatus || ""));
-    setTenantNationality(toUpperCaseValue(tenant.nationality || "BRASILEIRO(A)"));
-    setTenantOccupation(toUpperCaseValue(tenant.occupation || ""));
-    setTenantTradeName(toUpperCaseValue(tenant.tradeName || ""));
-    setTenantStateRegistration(toUpperCaseValue(tenant.stateRegistration || ""));
-    setTenantMunicipalRegistration(toUpperCaseValue(tenant.municipalRegistration || ""));
-    setTenantTaxRegime(toUpperCaseValue(tenant.taxRegime || ""));
-    setTenantResponsibleName(toUpperCaseValue(tenant.responsibleName || ""));
-    setTenantResponsibleCpf(formatCpf(tenant.responsibleCpf || ""));
-    setTenantResponsibleRg(toUpperCaseValue(tenant.responsibleRg || ""));
-    setTenantResponsibleRole(toUpperCaseValue(tenant.responsibleRole || ""));
-    setTenantSecondaryPhone(formatPhone(tenant.secondaryPhone));
-    setTenantWhatsapp(formatPhone(tenant.whatsapp));
-    setTenantWebsite(formatWebsiteValue(tenant.website || ""));
-    setTenantCreditLimit(tenant.creditLimit || "");
-    setTenantFinancialNotes(toUpperCaseValue(tenant.financialNotes || ""));
-    setTenantIsTenant(tenant.isTenant ?? true);
-    setTenantIsActive(tenant.isActive ?? true);
-    setCpfError("");
-    setIsFormOpen(true);
+  function openDeleteModal(person: Person) {
+    setPersonToDelete(person);
   }
 
-  function getPersonRelatedRecords(storageKey: string, personId: number) {
-    const storedRecords = localStorage.getItem(storageKey);
+  function closeDeleteModal() {
+    if (isDeleting) return;
+    setPersonToDelete(null);
+  }
 
-    if (!storedRecords) return [];
+  async function handleDeleteConfirmed() {
+    if (!personToDelete) return;
 
     try {
-      const parsedRecords = JSON.parse(storedRecords) as Array<
-        Record<string, unknown>
-      >;
+      setIsDeleting(true);
+      setPageError(null);
 
-      return parsedRecords.filter((record) => {
-        const recordPersonId = getPersonIdFromRecord(record);
-
-        return String(recordPersonId || "") === String(personId);
+      await apiFetch<ApiPerson>(`/pessoas/${personToDelete.id}`, {
+        method: "DELETE",
       });
-    } catch {
-      return [];
+
+      setPeople((currentPeople) =>
+        currentPeople.filter((person) => person.id !== personToDelete.id)
+      );
+
+      setToast({
+        type: "success",
+        message: "Pessoa excluída com sucesso.",
+      });
+
+      setPersonToDelete(null);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Não foi possível excluir a pessoa.";
+
+      setPageError(message);
+      setToast({
+        type: "error",
+        message,
+      });
+    } finally {
+      setIsDeleting(false);
     }
-  }
-
-  function isActiveContractRecord(contract: Record<string, unknown>) {
-    const contractStatus = String(contract.status || "").toLowerCase();
-    const contractEndDate = String(contract.endDate || "");
-
-    const isDeleted = contractStatus === "deleted";
-    const isCanceled = contractStatus === "canceled";
-    const isFinished = contractStatus === "finished";
-    const isInactive = contractStatus === "inactive";
-
-    if (isDeleted || isCanceled || isFinished || isInactive) {
-      return false;
-    }
-
-    if (!contractEndDate) {
-      return contractStatus === "active";
-    }
-
-    const today = new Date();
-    const endDate = new Date(`${contractEndDate}T23:59:59`);
-
-    return contractStatus === "active" && endDate >= today;
-  }
-
-  function handleOpenPersonHistory(tenant: RentixTenant) {
-    setActivePersonHistoryTab("RegistrationInfo");
-    const contracts = getPersonRelatedRecords(CONTRACTS_STORAGE_KEY, tenant.id);
-    const receivableRecords = getPersonRelatedRecords(
-      ACCOUNTS_RECEIVABLE_STORAGE_KEY,
-      tenant.id,
-    );
-    setSelectedPersonHistory({
-      person: tenant,
-      contractsCount: contracts.length,
-      activeContractsCount: contracts.filter(isActiveContractRecord).length,
-      accountsReceivableRecords: receivableRecords,
-      accountsReceivableTotal: receivableRecords.reduce(
-        (total, record) => total + getFinancialRecordAmount(record),
-        0,
-      ),
-    });
-  }
-
-  function handleClosePersonHistory() {
-    setSelectedPersonHistory(null);
-    setActivePersonHistoryTab("RegistrationInfo");
-  }
-
-  function handleDeleteTenant(tenant: RentixTenant) {
-    if (personHasAnyHistory(tenant.id)) {
-      setBlockedDeletePerson(tenant);
-      return;
-    }
-
-    setTenantToDelete(tenant);
-  }
-
-  function handleConfirmDeleteTenant() {
-    if (!tenantToDelete) return;
-
-    setTenants((currentTenants) =>
-      currentTenants.filter((tenant) => tenant.id !== tenantToDelete.id),
-    );
-
-    setTenantToDelete(null);
-  }
-
-  function handleCancelDeleteTenant() {
-    setTenantToDelete(null);
-  }
-
-  function handleCloseBlockedInactivePerson() {
-    setBlockedInactivePerson(null);
-  }
-
-  function handleCloseBlockedDeletePerson() {
-    setBlockedDeletePerson(null);
   }
 
   return (
     <AppShell>
-      <style jsx global>{`
-        .dark .rentix-people-page {
-          color: #f8fafc;
-        }
-
-        .dark .rentix-people-page .bg-white {
-          background-color: #0f172a !important;
-        }
-
-        .dark .rentix-people-page .bg-slate-50,
-        .dark .rentix-people-page .bg-slate-100 {
-          background-color: #111827 !important;
-        }
-
-        .dark .rentix-people-page .bg-orange-50,
-        .dark .rentix-people-page .bg-orange-100,
-        .dark .rentix-people-page .bg-orange-50\/50,
-        .dark .rentix-people-page .bg-orange-50\/60,
-        .dark .rentix-people-page .bg-orange-50\/40 {
-          background-color: rgba(249, 115, 22, 0.13) !important;
-        }
-
-        .dark .rentix-people-page .bg-red-50,
-        .dark .rentix-people-page .bg-red-100 {
-          background-color: rgba(239, 68, 68, 0.12) !important;
-        }
-
-        .dark .rentix-people-page .bg-emerald-50,
-        .dark .rentix-people-page .bg-emerald-50\/50,
-        .dark .rentix-people-page .bg-emerald-100 {
-          background-color: rgba(16, 185, 129, 0.12) !important;
-        }
-
-        .dark .rentix-people-page .text-slate-950,
-        .dark .rentix-people-page .text-slate-900,
-        .dark .rentix-people-page .text-slate-800,
-        .dark .rentix-people-page .text-slate-700 {
-          color: #f8fafc !important;
-        }
-
-        .dark .rentix-people-page .text-slate-600,
-        .dark .rentix-people-page .text-slate-500,
-        .dark .rentix-people-page .text-slate-400 {
-          color: #cbd5e1 !important;
-        }
-
-        .dark .rentix-people-page .text-orange-600,
-        .dark .rentix-people-page .text-orange-700,
-        .dark .rentix-people-page .text-orange-800 {
-          color: #fb923c !important;
-        }
-
-        .dark .rentix-people-page .border-orange-100,
-        .dark .rentix-people-page .border-orange-200,
-        .dark .rentix-people-page .border-red-100,
-        .dark .rentix-people-page .border-red-200,
-        .dark .rentix-people-page .border-emerald-200,
-        .dark .rentix-people-page .border-slate-100,
-        .dark .rentix-people-page .border-slate-200,
-        .dark .rentix-people-page .border-slate-300 {
-          border-color: #334155 !important;
-        }
-
-        .dark .rentix-people-page input,
-        .dark .rentix-people-page select,
-        .dark .rentix-people-page textarea {
-          background-color: #020617 !important;
-          border-color: #334155 !important;
-          color: #f8fafc !important;
-        }
-
-        .dark .rentix-people-page input::placeholder,
-        .dark .rentix-people-page textarea::placeholder {
-          color: #64748b !important;
-        }
-
-
-        .rentix-people-page .rentix-force-light,
-        .rentix-people-page .rentix-force-light .bg-white,
-        .rentix-people-page .rentix-force-light .bg-slate-50,
-        .rentix-people-page .rentix-force-light .bg-slate-100 {
-          background-color: #ffffff !important;
-          color: #0f172a !important;
-        }
-
-        .rentix-people-page .rentix-force-light .bg-slate-50,
-        .rentix-people-page .rentix-force-light .bg-slate-100 {
-          background-color: #f8fafc !important;
-        }
-
-        .rentix-people-page .rentix-force-light .bg-orange-50,
-        .rentix-people-page .rentix-force-light .bg-orange-100,
-        .rentix-people-page .rentix-force-light .bg-orange-50\/50,
-        .rentix-people-page .rentix-force-light .bg-orange-50\/60,
-        .rentix-people-page .rentix-force-light .bg-orange-50\/40 {
-          background-color: #fff7ed !important;
-        }
-
-        .rentix-people-page .rentix-force-light .bg-red-50,
-        .rentix-people-page .rentix-force-light .bg-red-100 {
-          background-color: #fef2f2 !important;
-        }
-
-        .rentix-people-page .rentix-force-light .bg-emerald-50,
-        .rentix-people-page .rentix-force-light .bg-emerald-50\/50,
-        .rentix-people-page .rentix-force-light .bg-emerald-100 {
-          background-color: #ecfdf5 !important;
-        }
-
-        .rentix-people-page .rentix-force-light .text-white,
-        .rentix-people-page .rentix-force-light .text-slate-950,
-        .rentix-people-page .rentix-force-light .text-slate-900,
-        .rentix-people-page .rentix-force-light .text-slate-800,
-        .rentix-people-page .rentix-force-light .text-slate-700 {
-          color: #0f172a !important;
-        }
-
-        .rentix-people-page .rentix-force-light .text-slate-600,
-        .rentix-people-page .rentix-force-light .text-slate-500,
-        .rentix-people-page .rentix-force-light .text-slate-400 {
-          color: #64748b !important;
-        }
-
-        .rentix-people-page .rentix-force-light .text-orange-600,
-        .rentix-people-page .rentix-force-light .text-orange-700,
-        .rentix-people-page .rentix-force-light .text-orange-800,
-        .rentix-people-page .rentix-force-light .text-orange-500 {
-          color: #ea580c !important;
-        }
-
-        .rentix-people-page .rentix-force-light .text-red-500,
-        .rentix-people-page .rentix-force-light .text-red-600,
-        .rentix-people-page .rentix-force-light .text-red-700 {
-          color: #dc2626 !important;
-        }
-
-        .rentix-people-page .rentix-force-light .text-emerald-700,
-        .rentix-people-page .rentix-force-light .text-emerald-800 {
-          color: #047857 !important;
-        }
-
-        .rentix-people-page .rentix-force-light .border-orange-100,
-        .rentix-people-page .rentix-force-light .border-orange-200 {
-          border-color: #fed7aa !important;
-        }
-
-        .rentix-people-page .rentix-force-light .border-slate-100,
-        .rentix-people-page .rentix-force-light .border-slate-200,
-        .rentix-people-page .rentix-force-light .border-slate-300,
-        .rentix-people-page .rentix-force-light .border-slate-700,
-        .rentix-people-page .rentix-force-light .border-slate-800 {
-          border-color: #e2e8f0 !important;
-        }
-
-        .rentix-people-page .rentix-force-light input,
-        .rentix-people-page .rentix-force-light select,
-        .rentix-people-page .rentix-force-light textarea {
-          background-color: #ffffff !important;
-          border-color: #e2e8f0 !important;
-          color: #334155 !important;
-        }
-
-        .rentix-people-page .rentix-force-light input::placeholder,
-        .rentix-people-page .rentix-force-light textarea::placeholder {
-          color: #94a3b8 !important;
-        }
-
-        .rentix-people-page .rentix-force-light .bg-slate-900,
-        .rentix-people-page .rentix-force-light .bg-slate-950,
-        .rentix-people-page .rentix-force-light .bg-slate-800 {
-          background-color: #f8fafc !important;
-        }
-
-        .rentix-people-page .rentix-force-light button.bg-slate-900,
-        .rentix-people-page .rentix-force-light button.bg-slate-800,
-        .rentix-people-page .rentix-force-light button.bg-slate-700 {
-          background-color: #f1f5f9 !important;
-          color: #475569 !important;
-        }
-      `}</style>
-      <div className="rentix-people-page space-y-8">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <div className="space-y-7">
+        <section className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1
-              className={
-                isBlackTheme
-                  ? "text-4xl font-black tracking-tight text-white"
-                  : "text-4xl font-black tracking-tight text-slate-950"
-              }
-            >
+            <h1 className="text-3xl font-black tracking-tight text-slate-950">
               Pessoas
             </h1>
-            <p
-              className={
-                isBlackTheme ? "mt-2 text-slate-300" : "mt-2 text-slate-500"
-              }
-            >
+            <p className="mt-2 text-sm font-medium text-slate-500">
               Gerencie as pessoas cadastradas
             </p>
           </div>
 
           <button
             type="button"
-            onClick={handleOpenCreateForm}
-            className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 dark:shadow-orange-950/30"
+            onClick={openCreateModal}
+            className="inline-flex items-center justify-center rounded-2xl bg-orange-500 px-6 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
           >
             + Nova pessoa
           </button>
-        </div>
+        </section>
 
-        <div
-          className={
-            isBlackTheme
-              ? "rounded-3xl border border-orange-500/20 bg-slate-900 shadow-sm"
-              : "rounded-3xl border border-orange-100 bg-white shadow-sm"
-          }
-        >
-          <div
-            className={
-              isBlackTheme
-                ? "flex flex-col gap-4 border-b border-slate-800 px-6 py-5 xl:flex-row xl:items-end xl:justify-between"
-                : "flex flex-col gap-4 border-b border-slate-100 px-6 py-5 xl:flex-row xl:items-end xl:justify-between"
-            }
-          >
+        {pageError && !isModalOpen && (
+          <section className="rounded-3xl border border-red-100 bg-red-50 px-5 py-4 text-sm font-bold text-red-700 shadow-sm">
+            {pageError}
+          </section>
+        )}
+
+        <section className="overflow-hidden rounded-[1.65rem] border border-orange-100 bg-white shadow-sm">
+          <div className="grid gap-5 px-5 py-5 lg:grid-cols-[1fr_420px] lg:items-end">
             <div>
-              <h2
-                className={
-                  isBlackTheme
-                    ? "text-2xl font-black text-white"
-                    : "text-2xl font-black text-slate-950"
-                }
-              >
-                Pessoas
-              </h2>
-              <p
-                className={
-                  isBlackTheme
-                    ? "mt-1 text-sm text-slate-400"
-                    : "mt-1 text-sm text-slate-500"
-                }
-              >
-                Exibindo {filteredTenants.length} de {tenants.length} pessoa(s).
+              <h2 className="text-xl font-black text-slate-950">Pessoas</h2>
+              <p className="mt-2 text-xs font-medium text-slate-500">
+                Exibindo {filteredPeople.length} de {people.length} pessoa(s).
               </p>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <FormField label="Buscar">
+            <div className="grid gap-3 sm:grid-cols-[1fr_155px]">
+              <label className="space-y-2">
+                <span className="text-xs font-black text-slate-400">Buscar</span>
                 <input
-                  type="text"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
                   placeholder="Nome, CPF/CNPJ, telefone ou e-mail"
-                  className={
-                    isBlackTheme
-                      ? "w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-4 text-sm font-semibold text-slate-200 outline-none transition placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 md:w-80"
-                      : "w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 md:w-80"
-                  }
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                 />
-              </FormField>
+              </label>
 
-              <FormField label="Status">
+              <label className="space-y-2">
+                <span className="text-xs font-black text-slate-400">Status</span>
                 <select
                   value={statusFilter}
                   onChange={(event) =>
-                    setStatusFilter(event.target.value as PersonStatusFilter)
+                    setStatusFilter(event.target.value as "all" | PersonStatus)
                   }
-                  className={
-                    isBlackTheme
-                      ? "w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-4 text-sm font-semibold text-slate-200 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 md:w-48"
-                      : "w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 md:w-48"
-                  }
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                 >
-                  <option value="Active">Ativos</option>
-                  <option value="Inactive">Inativos</option>
-                  <option value="All">Todos</option>
-                  <option value="Tenant">Inquilinos</option>
-                  <option value="NotTenant">Não inquilinos</option>
+                  <option value="all">Todos</option>
+                  <option value="active">Ativos</option>
+                  <option value="inactive">Inativos</option>
                 </select>
-              </FormField>
+              </label>
             </div>
           </div>
 
-          <div
-            className={
-              isBlackTheme
-                ? "overflow-hidden bg-slate-900"
-                : "overflow-hidden bg-white"
-            }
-          >
-            <table className="w-full text-left">
-              <thead className={isBlackTheme ? "bg-slate-800" : "bg-orange-50"}>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1040px] border-collapse text-left text-sm">
+              <thead className="bg-orange-50/70 text-xs font-black text-slate-950">
                 <tr>
-                  <th
-                    className={
-                      isBlackTheme
-                        ? "px-6 py-4 text-sm font-black text-slate-200"
-                        : "px-6 py-4 text-sm font-black text-slate-700"
-                    }
-                  >
-                    Nome
-                  </th>
-                  <th
-                    className={
-                      isBlackTheme
-                        ? "px-6 py-4 text-sm font-black text-slate-200"
-                        : "px-6 py-4 text-sm font-black text-slate-700"
-                    }
-                  >
-                    Telefone
-                  </th>
-                  <th
-                    className={
-                      isBlackTheme
-                        ? "px-6 py-4 text-sm font-black text-slate-200"
-                        : "px-6 py-4 text-sm font-black text-slate-700"
-                    }
-                  >
-                    CPF/CNPJ
-                  </th>
-                  <th
-                    className={
-                      isBlackTheme
-                        ? "px-6 py-4 text-sm font-black text-slate-200"
-                        : "px-6 py-4 text-sm font-black text-slate-700"
-                    }
-                  >
-                    Tipo
-                  </th>
-                  <th
-                    className={
-                      isBlackTheme
-                        ? "px-6 py-4 text-sm font-black text-slate-200"
-                        : "px-6 py-4 text-sm font-black text-slate-700"
-                    }
-                  >
-                    Situação
-                  </th>
-                  <th
-                    className={
-                      isBlackTheme
-                        ? "px-6 py-4 text-right text-sm font-black text-slate-200"
-                        : "px-6 py-4 text-right text-sm font-black text-slate-700"
-                    }
-                  >
-                    Ações
-                  </th>
+                  <th className="px-5 py-4 font-black">Nome</th>
+                  <th className="px-5 py-4 font-black">Telefone</th>
+                  <th className="px-5 py-4 font-black">CPF/CNPJ</th>
+                  <th className="px-5 py-4 font-black">Tipo</th>
+                  <th className="px-5 py-4 font-black">Situação</th>
+                  <th className="px-5 py-4 text-right font-black">Ações</th>
                 </tr>
               </thead>
 
-              <tbody
-                className={
-                  isBlackTheme
-                    ? "divide-y divide-slate-800"
-                    : "divide-y divide-slate-100"
-                }
-              >
-                {filteredTenants.map((tenant) => (
-                  <tr
-                    key={tenant.id}
-                    className={
-                      isBlackTheme
-                        ? "bg-slate-800 transition hover:bg-slate-700/80"
-                        : "bg-white transition hover:bg-orange-50/40"
-                    }
-                  >
-                    <td
-                      className={
-                        isBlackTheme
-                          ? "px-6 py-4 font-black text-slate-100"
-                          : "px-6 py-4 font-black text-slate-900"
-                      }
-                    >
-                      <button
-                        type="button"
-                        onClick={() => handleOpenPersonHistory(tenant)}
-                        className={
-                          isBlackTheme
-                            ? "text-left font-black text-slate-100 underline-offset-4 transition hover:text-orange-400 hover:underline"
-                            : "text-left font-black text-slate-900 underline-offset-4 transition hover:text-orange-600 hover:underline"
-                        }
-                        title="Abrir histórico da pessoa"
-                      >
-                        {tenant.name}
-                      </button>
-                    </td>
+              <tbody className="divide-y divide-slate-100">
+                {isLoadingPeople && (
+                  <>
+                    {[1, 2, 3].map((item) => (
+                      <tr key={item}>
+                        <td className="px-5 py-5">
+                          <div className="h-4 w-56 animate-pulse rounded-full bg-slate-100" />
+                          <div className="mt-2 h-3 w-36 animate-pulse rounded-full bg-slate-100" />
+                        </td>
+                        <td className="px-5 py-5">
+                          <div className="h-4 w-28 animate-pulse rounded-full bg-slate-100" />
+                        </td>
+                        <td className="px-5 py-5">
+                          <div className="h-4 w-36 animate-pulse rounded-full bg-slate-100" />
+                        </td>
+                        <td className="px-5 py-5">
+                          <div className="h-6 w-28 animate-pulse rounded-full bg-slate-100" />
+                        </td>
+                        <td className="px-5 py-5">
+                          <div className="h-6 w-20 animate-pulse rounded-full bg-slate-100" />
+                        </td>
+                        <td className="px-5 py-5">
+                          <div className="ml-auto h-8 w-32 animate-pulse rounded-xl bg-slate-100" />
+                        </td>
+                      </tr>
+                    ))}
+                  </>
+                )}
 
-                    <td
-                      className={
-                        isBlackTheme
-                          ? "px-6 py-4 text-sm font-semibold text-slate-300"
-                          : "px-6 py-4 text-sm font-semibold text-slate-600"
-                      }
-                    >
-                      {formatPhone(tenant.phone)}
-                    </td>
+                {!isLoadingPeople &&
+                  filteredPeople.map((person) => (
+                    <tr key={person.id} className="transition hover:bg-orange-50/30">
+                      <td className="px-5 py-5">
+                        <div className="max-w-[420px] truncate text-sm font-black uppercase text-slate-950">
+                          {person.name}
+                        </div>
+                        <div className="mt-1 text-xs font-semibold text-slate-400">
+                          {person.email ? person.email : "Nenhum e-mail informado"}
+                        </div>
+                      </td>
 
-                    <td
-                      className={
-                        isBlackTheme
-                          ? "px-6 py-4 text-sm font-semibold text-slate-300"
-                          : "px-6 py-4 text-sm font-semibold text-slate-600"
-                      }
-                    >
-                      {formatDocument(
-                        tenant.cpf || tenant.document,
-                        tenant.personType,
-                      )}
-                    </td>
+                      <td className="px-5 py-5 font-semibold text-slate-700">
+                        {person.phone || "-"}
+                      </td>
 
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${
-                          (tenant.isTenant ?? true)
-                            ? isBlackTheme
-                              ? "bg-emerald-950/40 text-emerald-300"
-                              : "bg-green-50 text-green-700"
-                            : isBlackTheme
-                              ? "bg-slate-700 text-slate-300"
+                      <td className="px-5 py-5">
+                        <div className="font-semibold text-slate-700">
+                          {person.document}
+                        </div>
+                        <div className="mt-1 text-xs font-semibold text-slate-400">
+                          {person.type === "individual"
+                            ? person.identityNumber || "RG não informado"
+                            : person.stateRegistration || "IE não informada"}
+                        </div>
+                      </td>
+
+                      <td className="px-5 py-5">
+                        <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+                          {person.type === "individual"
+                            ? "Pessoa física"
+                            : "Pessoa jurídica"}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-5">
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${
+                            person.status === "active"
+                              ? "bg-emerald-100 text-emerald-700"
                               : "bg-slate-100 text-slate-500"
-                        }`}
-                      >
-                        {(tenant.isTenant ?? true)
-                          ? "Inquilino"
-                          : "Não inquilino"}
-                      </span>
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <ActiveBadge
-                        isActive={tenant.isActive ?? true}
-                        isBlackTheme={isBlackTheme}
-                      />
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleEditTenant(tenant)}
-                          className={
-                            isBlackTheme
-                              ? "rounded-xl bg-slate-700 px-4 py-2 text-sm font-bold text-slate-100 transition hover:bg-slate-600"
-                              : "rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
-                          }
+                          }`}
                         >
-                          Editar
-                        </button>
+                          {person.status === "active" ? "Ativo" : "Inativo"}
+                        </span>
+                      </td>
 
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteTenant(tenant)}
-                          className={
-                            isBlackTheme
-                              ? "rounded-xl bg-red-950/40 px-4 py-2 text-sm font-bold text-red-300 transition hover:bg-red-950/60"
-                              : "rounded-xl bg-red-50 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-100"
-                          }
-                        >
-                          Excluir
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      <td className="px-5 py-5">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(person)}
+                            className="rounded-xl bg-slate-100 px-4 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+                          >
+                            Editar
+                          </button>
 
-                {filteredTenants.length === 0 && (
+                          <button
+                            type="button"
+                            onClick={() => openDeleteModal(person)}
+                            className="rounded-xl bg-red-50 px-4 py-2 text-xs font-black text-red-600 transition hover:bg-red-100"
+                          >
+                            Excluir
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+
+                {!isLoadingPeople && filteredPeople.length === 0 && (
                   <tr>
-                    <td
-                      colSpan={6}
-                      className="px-6 py-10 text-center text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500"
-                    >
-                      Nenhuma pessoa encontrada para os filtros aplicados.
+                    <td colSpan={6} className="px-5 py-14 text-center">
+                      <div className="text-base font-black text-slate-800">
+                        Nenhuma pessoa encontrada
+                      </div>
+                      <p className="mt-1 text-sm font-medium text-slate-500">
+                        Ajuste os filtros ou cadastre uma nova pessoa.
+                      </p>
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
+      </div>
 
-        {selectedPersonHistory && (
-          <div className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
-            <div className={`max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-[2rem] border border-orange-100 dark:border-orange-900/40 bg-white dark:bg-slate-900 shadow-2xl ${isBlackTheme ? "" : "rentix-force-light"}`}>
-              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-8 py-6">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-orange-500">
-                    Histórico da pessoa
-                  </p>
-                  <h2 className="mt-1 text-2xl font-black text-slate-950 dark:text-white">
-                    {selectedPersonHistory.person.name}
-                  </h2>
-                  <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                    Consulte os dados completos do cadastro e o resumo de
-                    movimentações vinculadas.
-                  </p>
-                </div>
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6 backdrop-blur-sm">
+          <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-orange-100 px-8 py-6">
+              <div>
+                <h2 className="text-2xl font-black tracking-tight text-slate-950">
+                  {editingPersonId ? "Editar pessoa" : "Nova pessoa"}
+                </h2>
 
-                <button
-                  type="button"
-                  onClick={handleClosePersonHistory}
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 text-xl font-black text-slate-600 dark:text-slate-300 transition hover:bg-red-50 dark:bg-red-950/30 dark:hover:bg-red-950/30 hover:text-red-600"
-                >
-                  ×
-                </button>
+                <p className="mt-1 text-sm font-medium text-slate-500">
+                  Informe os dados principais para usar nos módulos do Rentix.
+                </p>
               </div>
 
-              <div className="p-8">
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="rounded-3xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 p-5">
-                    <p className="text-xs font-black uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                      Situação
-                    </p>
-                    <div className="mt-3">
-                      <ActiveBadge
-                        isActive={selectedPersonHistory.person.isActive ?? true}
-                        isBlackTheme={isBlackTheme}
+              <button
+                type="button"
+                onClick={closeModal}
+                className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-xl font-black text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-red-500"
+                aria-label="Fechar modal"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="min-h-0 flex-1 overflow-y-auto">
+              <div className="px-8 py-6">
+                <div className="grid grid-cols-1 gap-x-4 gap-y-4 md:grid-cols-2">
+                  <FormField label="Nome / Razão social" required>
+                    <input
+                      value={formData.name}
+                      onChange={(event) => updateFormData("name", event.target.value)}
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    />
+                  </FormField>
+
+                  <FormField label="Tipo de pessoa">
+                    <select
+                      value={formData.type}
+                      onChange={(event) => {
+                        const nextType = event.target.value as PersonType;
+
+                        setFormData((currentFormData) => ({
+                          ...currentFormData,
+                          type: nextType,
+                          document: "",
+                          stateRegistration: "",
+                          identityNumber: "",
+                        }));
+
+                        setCnpjError(null);
+                      }}
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    >
+                      <option value="individual">Pessoa física</option>
+                      <option value="company">Pessoa jurídica</option>
+                    </select>
+                  </FormField>
+
+                  <FormField label={formData.type === "individual" ? "CPF" : "CNPJ"} required>
+                    <div
+                      className={
+                        formData.type === "company"
+                          ? "grid grid-cols-[1fr_auto] gap-3"
+                          : ""
+                      }
+                    >
+                      <input
+                        value={formData.document}
+                        onChange={(event) =>
+                          updateFormData(
+                            "document",
+                            formatDocument(event.target.value, formData.type)
+                          )
+                        }
+                        placeholder={
+                          formData.type === "individual"
+                            ? "000.000.000-00"
+                            : "00.000.000/0000-00"
+                        }
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                       />
-                    </div>
-                  </div>
 
-                  <div className="rounded-3xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 p-5">
-                    <p className="text-xs font-black uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                      Tipo
-                    </p>
-                    <p className="mt-3 text-sm font-black text-slate-900 dark:text-slate-100">
-                      {(selectedPersonHistory.person.isTenant ?? true)
-                        ? "Inquilino"
-                        : "Não inquilino"}
-                    </p>
-                  </div>
-
-                  <div className="rounded-3xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 p-5">
-                    <p className="text-xs font-black uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                      Contratos ativos
-                    </p>
-                    <p className="mt-3 text-2xl font-black text-slate-950 dark:text-white">
-                      {selectedPersonHistory.activeContractsCount}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-6 rounded-[1.7rem] border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/80 p-2">
-                  <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-                    <PersonHistoryTabButton
-                      label="Informações do cadastro"
-                      isActive={activePersonHistoryTab === "RegistrationInfo"}
-                      onClick={() =>
-                        setActivePersonHistoryTab("RegistrationInfo")
-                      }
-                    />
-                    <PersonHistoryTabButton
-                      label="Histórico de aluguéis"
-                      isActive={activePersonHistoryTab === "RentalHistory"}
-                      onClick={() => setActivePersonHistoryTab("RentalHistory")}
-                    />
-                    <PersonHistoryTabButton
-                      label="Contratos vinculados"
-                      isActive={activePersonHistoryTab === "LinkedContracts"}
-                      onClick={() =>
-                        setActivePersonHistoryTab("LinkedContracts")
-                      }
-                    />
-                    <PersonHistoryTabButton
-                      label="Movimentações financeiras"
-                      isActive={activePersonHistoryTab === "FinancialMovements"}
-                      onClick={() =>
-                        setActivePersonHistoryTab("FinancialMovements")
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-6 rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm">
-                  {activePersonHistoryTab === "RegistrationInfo" && (
-                    <div>
-                      <h3 className="text-lg font-black text-slate-950 dark:text-white">
-                        Informações do cadastro
-                      </h3>
-                      <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                        Dados completos cadastrados para esta pessoa.
-                      </p>
-
-                      <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        <PersonDetailItem
-                          label="Nome / Razão social"
-                          value={selectedPersonHistory.person.name}
-                        />
-                        <PersonDetailItem
-                          label="Tipo de pessoa"
-                          value={
-                            selectedPersonHistory.person.personType ===
-                            "Company"
-                              ? "Pessoa jurídica"
-                              : "Pessoa física"
-                          }
-                        />
-                        <PersonDetailItem
-                          label="CPF/CNPJ"
-                          value={formatDocument(
-                            selectedPersonHistory.person.cpf ||
-                              selectedPersonHistory.person.document,
-                            selectedPersonHistory.person.personType,
-                          )}
-                        />
-                        {selectedPersonHistory.person.personType === "Company" ? (
-                          <>
-                            <PersonDetailItem
-                              label="Nome fantasia"
-                              value={selectedPersonHistory.person.tradeName || "Não informado"}
-                            />
-                            <PersonDetailItem
-                              label="Inscrição estadual"
-                              value={selectedPersonHistory.person.stateRegistration || "Não informado"}
-                            />
-                            <PersonDetailItem
-                              label="Responsável"
-                              value={selectedPersonHistory.person.responsibleName || "Não informado"}
-                            />
-                          </>
-                        ) : (
-                          <>
-                            <PersonDetailItem
-                              label="RG / Identidade"
-                              value={selectedPersonHistory.person.identityNumber || "Não informado"}
-                            />
-                            <PersonDetailItem
-                              label="Data de nascimento"
-                              value={formatDateValue(selectedPersonHistory.person.birthDate || "")}
-                            />
-                            <PersonDetailItem
-                              label="Profissão"
-                              value={selectedPersonHistory.person.occupation || "Não informado"}
-                            />
-                          </>
-                        )}
-                        <PersonDetailItem
-                          label="Telefone"
-                          value={formatPhone(
-                            selectedPersonHistory.person.phone,
-                          )}
-                        />
-                        <PersonDetailItem
-                          label="E-mail"
-                          value={
-                            selectedPersonHistory.person.email ||
-                            "Não informado"
-                          }
-                        />
-                        <PersonDetailItem
-                          label="CEP"
-                          value={
-                            selectedPersonHistory.person.zipCode ||
-                            "Não informado"
-                          }
-                        />
-                        <PersonDetailItem
-                          label="Estado"
-                          value={
-                            selectedPersonHistory.person.state ||
-                            "Não informado"
-                          }
-                        />
-                        <PersonDetailItem
-                          label="Cidade"
-                          value={
-                            selectedPersonHistory.person.city || "Não informado"
-                          }
-                        />
-                        <PersonDetailItem
-                          label="Logradouro"
-                          value={
-                            selectedPersonHistory.person.street ||
-                            "Não informado"
-                          }
-                        />
-                        <PersonDetailItem
-                          label="Número"
-                          value={
-                            selectedPersonHistory.person.number ||
-                            "Não informado"
-                          }
-                        />
-                        <PersonDetailItem
-                          label="Bairro"
-                          value={
-                            selectedPersonHistory.person.neighborhood ||
-                            "Não informado"
-                          }
-                        />
-                        <PersonDetailItem
-                          label="Complemento"
-                          value={
-                            selectedPersonHistory.person.complement ||
-                            "Não informado"
-                          }
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {activePersonHistoryTab === "RentalHistory" && (
-                    <div>
-                      <h3 className="text-lg font-black text-slate-950 dark:text-white">
-                        Histórico de aluguéis
-                      </h3>
-                      <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                        Resumo dos vínculos de aluguel relacionados a esta
-                        pessoa.
-                      </p>
-
-                      <div className="mt-5 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 p-5">
-                        <p className="text-sm font-black text-slate-900 dark:text-slate-100">
-                          Contratos de aluguel encontrados
-                        </p>
-                        <p className="mt-2 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                          Total de {selectedPersonHistory.contractsCount}{" "}
-                          contrato(s) vinculado(s), sendo{" "}
-                          {selectedPersonHistory.activeContractsCount}
-                          ativo(s).
-                        </p>
-                      </div>
-
-                      {selectedPersonHistory.contractsCount === 0 && (
-                        <EmptyPersonHistoryState
-                          title="Nenhum aluguel encontrado"
-                          description="Esta pessoa ainda não possui histórico de aluguéis vinculado."
-                        />
-                      )}
-                    </div>
-                  )}
-
-                  {activePersonHistoryTab === "LinkedContracts" && (
-                    <div>
-                      <h3 className="text-lg font-black text-slate-950 dark:text-white">
-                        Contratos vinculados
-                      </h3>
-                      <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                        Consulta resumida dos contratos ligados ao cadastro.
-                      </p>
-
-                      <div className="mt-5 grid gap-4 md:grid-cols-2">
-                        <PersonDetailItem
-                          label="Total de contratos"
-                          value={`${selectedPersonHistory.contractsCount}`}
-                        />
-                        <PersonDetailItem
-                          label="Contratos ativos"
-                          value={`${selectedPersonHistory.activeContractsCount}`}
-                        />
-                      </div>
-
-                      {selectedPersonHistory.contractsCount === 0 && (
-                        <EmptyPersonHistoryState
-                          title="Nenhum contrato vinculado"
-                          description="Esta pessoa ainda não possui contratos vinculados no sistema."
-                        />
-                      )}
-                    </div>
-                  )}
-
-                  {activePersonHistoryTab === "FinancialMovements" && (
-                    <div>
-                      <h3 className="text-lg font-black text-slate-950 dark:text-white">
-                        Movimentações financeiras
-                      </h3>
-                      <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                        Informações buscadas diretamente nas contas a receber
-                        vinculadas a esta pessoa.
-                      </p>
-
-                      <div className="mt-5 grid gap-4 md:grid-cols-2">
-                        <PersonDetailItem
-                          label="Contas a receber"
-                          value={`${selectedPersonHistory.accountsReceivableRecords.length}`}
-                        />
-                        <PersonDetailItem
-                          label="Valor total"
-                          value={formatCurrency(
-                            selectedPersonHistory.accountsReceivableTotal,
-                          )}
-                        />
-                      </div>
-
-                      {selectedPersonHistory.accountsReceivableRecords.length >
-                        0 && (
-                        <div className="mt-5 overflow-hidden rounded-2xl border border-slate-100 dark:border-slate-800">
-                          <table className="w-full text-left">
-                            <thead className="bg-slate-50 dark:bg-slate-800">
-                              <tr>
-                                <th className="px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                                  Descrição
-                                </th>
-                                <th className="px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                                  Vencimento
-                                </th>
-                                <th className="px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                                  Status
-                                </th>
-                                <th className="px-4 py-3 text-right text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                                  Valor
-                                </th>
-                              </tr>
-                            </thead>
-
-                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
-                              {selectedPersonHistory.accountsReceivableRecords.map(
-                                (record, index) => (
-                                  <tr
-                                    key={getFinancialRecordKey(record, index)}
-                                  >
-                                    <td className="px-4 py-4 text-sm font-black text-slate-800 dark:text-slate-100">
-                                      {getFinancialRecordDescription(record)}
-                                    </td>
-                                    <td className="px-4 py-4 text-sm font-semibold text-slate-600 dark:text-slate-300">
-                                      {formatDateValue(
-                                        getFinancialRecordDueDate(record),
-                                      )}
-                                    </td>
-                                    <td className="px-4 py-4">
-                                      <FinancialStatusBadge
-                                        status={getFinancialRecordStatus(
-                                          record,
-                                        )}
-                                      />
-                                    </td>
-                                    <td className="px-4 py-4 text-right text-sm font-black text-slate-900 dark:text-slate-100">
-                                      {formatCurrency(
-                                        getFinancialRecordAmount(record),
-                                      )}
-                                    </td>
-                                  </tr>
-                                ),
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-
-                      {selectedPersonHistory.accountsReceivableRecords
-                        .length === 0 && (
-                        <EmptyPersonHistoryState
-                          title="Nenhuma conta a receber encontrada"
-                          description="Esta pessoa ainda não possui contas a receber vinculadas no sistema."
-                        />
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {isFormOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
-            <div className={`max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 dark:border-orange-900/40 bg-white dark:bg-slate-900 shadow-2xl ${isBlackTheme ? "" : "rentix-force-light"}`}>
-              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-8 py-6">
-                <div>
-                  <h2 className="text-2xl font-black text-slate-950 dark:text-white">
-                    {isEditing ? "Editar pessoa" : "Nova pessoa"}
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                    Preencha os dados pessoais e endereço da pessoa.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleCloseForm}
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 text-xl font-black text-slate-600 dark:text-slate-300 transition hover:bg-red-50 dark:bg-red-950/30 dark:hover:bg-red-950/30 hover:text-red-600"
-                >
-                  ×
-                </button>
-              </div>
-
-              <form onSubmit={handleSubmitTenant}>
-                <div className="p-8">
-                  <div className="mb-8 space-y-6">
-                    <div>
-                      <h3 className="text-sm font-black uppercase tracking-wide text-orange-600">
-                        Dados principais
-                      </h3>
-                      <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                        Identificação principal da pessoa física ou jurídica.
-                      </p>
-                    </div>
-
-                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                      <FormField label={tenantPersonType === "Company" ? "Razão social" : "Nome completo"}>
-                        <input
-                          type="text"
-                          value={tenantName}
-                          onChange={(event) =>
-                            setTenantName(toUpperCaseValue(event.target.value))
-                          }
-                          placeholder={
-                            tenantPersonType === "Company"
-                              ? "Ex: Empresa LTDA"
-                              : "Ex: João Silva"
-                          }
-                          required
-                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        />
-                      </FormField>
-
-                      <FormField label="Tipo de pessoa">
-                        <select
-                          value={tenantPersonType}
-                          onChange={(event) =>
-                            handlePersonTypeChange(
-                              event.target.value as PersonType,
-                            )
-                          }
-                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                      {formData.type === "company" && (
+                        <button
+                          type="button"
+                          onClick={handleSearchCnpj}
+                          disabled={isSearchingCnpj}
+                          className="h-11 rounded-2xl border border-orange-200 bg-white px-4 text-xs font-black text-orange-600 transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-70"
                         >
-                          <option value="Individual">Pessoa física</option>
-                          <option value="Company">Pessoa jurídica</option>
-                        </select>
-                      </FormField>
-
-                      <FormField label={tenantPersonType === "Company" ? "CNPJ" : "CPF"}>
-                        <input
-                          type="text"
-                          value={tenantCpf}
-                          onChange={(event) => handleCpfChange(event.target.value)}
-                          onBlur={() => {
-                            if (tenantPersonType === "Company") {
-                              handleCnpjSearch();
-                            }
-                          }}
-                          placeholder={
-                            tenantPersonType === "Company"
-                              ? "Ex: 12.345.678/0001-90"
-                              : "Ex: 123.456.789-00"
-                          }
-                          maxLength={tenantPersonType === "Company" ? 18 : 14}
-                          required
-                          className={`w-full rounded-2xl border px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:ring-2 ${
-                            cpfError
-                              ? "border-red-300 focus:border-red-500 focus:ring-red-100"
-                              : "border-slate-200 dark:border-slate-700 focus:border-orange-500 focus:ring-orange-100"
-                          }`}
-                        />
-
-                        {tenantPersonType === "Company" && (
-                          <button
-                            type="button"
-                            onClick={handleCnpjSearch}
-                            disabled={isCnpjLoading}
-                            className="mt-3 w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {isCnpjLoading ? "Buscando CNPJ..." : "Buscar dados da empresa"}
-                          </button>
-                        )}
-
-                        {cpfError && (
-                          <p className="mt-2 text-xs font-bold text-red-500">{cpfError}</p>
-                        )}
-
-                        {cnpjSearchError && tenantPersonType === "Company" && (
-                          <p className="mt-2 text-xs font-bold text-red-500">{cnpjSearchError}</p>
-                        )}
-                      </FormField>
+                          {isSearchingCnpj ? "Buscando..." : "Buscar CNPJ"}
+                        </button>
+                      )}
                     </div>
+                  </FormField>
 
-                    {tenantPersonType === "Individual" ? (
-                      <div className="rounded-3xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 p-5">
-                        <h4 className="mb-4 text-sm font-black uppercase tracking-wide text-orange-600">
-                          Documento e dados civis
-                        </h4>
-                        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                          <FormField label="RG / Identidade">
-                            <input
-                              type="text"
-                              value={tenantIdentityNumber}
-                              onChange={(event) => setTenantIdentityNumber(toUpperCaseValue(event.target.value))}
-                              placeholder="Ex: 123456 SSP/RO"
-                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                            />
-                          </FormField>
+                  <FormField
+                    label={
+                      formData.type === "individual"
+                        ? "RG / Identidade"
+                        : "Inscrição estadual"
+                    }
+                  >
+                    <input
+                      value={
+                        formData.type === "individual"
+                          ? formData.identityNumber
+                          : formData.stateRegistration
+                      }
+                      onChange={(event) =>
+                        formData.type === "individual"
+                          ? updateFormData("identityNumber", event.target.value)
+                          : updateFormData("stateRegistration", event.target.value)
+                      }
+                      placeholder={
+                        formData.type === "individual"
+                          ? "RG / Órgão emissor"
+                          : "Inscrição estadual"
+                      }
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    />
+                  </FormField>
 
-                          <FormField label="Órgão emissor">
-                            <input
-                              type="text"
-                              value={tenantIssuingAuthority}
-                              onChange={(event) => setTenantIssuingAuthority(toUpperCaseValue(event.target.value))}
-                              placeholder="Ex: SSP/RO"
-                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                            />
-                          </FormField>
+                  <FormField label="Telefone">
+                    <input
+                      value={formData.phone}
+                      onChange={(event) =>
+                        updateFormData("phone", formatPhone(event.target.value))
+                      }
+                      placeholder="(00) 00000-0000"
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    />
+                  </FormField>
 
-                          <FormField label="Data de nascimento">
-                            <input
-                              type="date"
-                              value={tenantBirthDate}
-                              onChange={(event) => setTenantBirthDate(event.target.value)}
-                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                            />
-                          </FormField>
+                  <FormField label="E-mail">
+                    <input
+                      value={formData.email}
+                      onChange={(event) => updateFormData("email", event.target.value)}
+                      placeholder="email@exemplo.com"
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    />
+                  </FormField>
 
-                          <FormField label="Estado civil">
-                            <select
-                              value={tenantMaritalStatus}
-                              onChange={(event) => setTenantMaritalStatus(toUpperCaseValue(event.target.value))}
-                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                            >
-                              <option value="">Selecione</option>
-                              <option value="SOLTEIRO(A)">Solteiro(a)</option>
-                              <option value="CASADO(A)">Casado(a)</option>
-                              <option value="DIVORCIADO(A)">Divorciado(a)</option>
-                              <option value="VIÚVO(A)">Viúvo(a)</option>
-                              <option value="UNIÃO ESTÁVEL">União estável</option>
-                            </select>
-                          </FormField>
+                  <FormField label="CEP">
+                    <div className="grid grid-cols-[1fr_auto] gap-3">
+                      <input
+                        value={formData.zipCode}
+                        onChange={(event) =>
+                          updateFormData("zipCode", formatZipCode(event.target.value))
+                        }
+                        placeholder="00000-000"
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                      />
 
-                          <FormField label="Nacionalidade">
-                            <input
-                              type="text"
-                              value={tenantNationality}
-                              onChange={(event) => setTenantNationality(toUpperCaseValue(event.target.value))}
-                              placeholder="Ex: Brasileiro(a)"
-                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                            />
-                          </FormField>
-
-                          <FormField label="Profissão">
-                            <input
-                              type="text"
-                              value={tenantOccupation}
-                              onChange={(event) => setTenantOccupation(toUpperCaseValue(event.target.value))}
-                              placeholder="Ex: Empresário"
-                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                            />
-                          </FormField>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-5 rounded-3xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/70 p-5">
-                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                          <div>
-                            <h4 className="text-sm font-black uppercase tracking-wide text-orange-600">
-                              Dados empresariais
-                            </h4>
-                            <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                              Informações fiscais e responsável da pessoa jurídica.
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                          <FormField label="Nome fantasia">
-                            <input
-                              type="text"
-                              value={tenantTradeName}
-                              onChange={(event) => setTenantTradeName(toUpperCaseValue(event.target.value))}
-                              placeholder="Ex: Empresa Comercial"
-                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                            />
-                          </FormField>
-
-                          <FormField label="Inscrição estadual (IE)">
-                            <input
-                              type="text"
-                              value={tenantStateRegistration}
-                              onChange={(event) => setTenantStateRegistration(toUpperCaseValue(event.target.value))}
-                              placeholder="Ex: 0000000000000"
-                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                            />
-                          </FormField>
-
-                          <FormField label="Inscrição municipal (IM)">
-                            <input
-                              type="text"
-                              value={tenantMunicipalRegistration}
-                              onChange={(event) => setTenantMunicipalRegistration(toUpperCaseValue(event.target.value))}
-                              placeholder="Ex: 000000"
-                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                            />
-                          </FormField>
-
-                          <FormField label="Regime tributário">
-                            <select
-                              value={tenantTaxRegime}
-                              onChange={(event) => setTenantTaxRegime(toUpperCaseValue(event.target.value))}
-                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                            >
-                              <option value="">Selecione</option>
-                              <option value="MEI">MEI</option>
-                              <option value="SIMPLES NACIONAL">Simples Nacional</option>
-                              <option value="LUCRO PRESUMIDO">Lucro Presumido</option>
-                              <option value="LUCRO REAL">Lucro Real</option>
-                              <option value="ISENTO">Isento</option>
-                            </select>
-                          </FormField>
-
-                          <FormField label="Nome do responsável">
-                            <input
-                              type="text"
-                              value={tenantResponsibleName}
-                              onChange={(event) => setTenantResponsibleName(toUpperCaseValue(event.target.value))}
-                              placeholder="Ex: João Silva"
-                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                            />
-                          </FormField>
-
-                          <FormField label="CPF do responsável">
-                            <input
-                              type="text"
-                              value={tenantResponsibleCpf}
-                              onChange={(event) => handleResponsibleCpfChange(event.target.value)}
-                              placeholder="Ex: 123.456.789-00"
-                              maxLength={14}
-                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                            />
-                          </FormField>
-
-                          <FormField label="RG do responsável">
-                            <input
-                              type="text"
-                              value={tenantResponsibleRg}
-                              onChange={(event) => setTenantResponsibleRg(toUpperCaseValue(event.target.value))}
-                              placeholder="Ex: 123456 SSP/RO"
-                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                            />
-                          </FormField>
-
-                          <FormField label="Cargo do responsável">
-                            <input
-                              type="text"
-                              value={tenantResponsibleRole}
-                              onChange={(event) => setTenantResponsibleRole(toUpperCaseValue(event.target.value))}
-                              placeholder="Ex: Sócio administrador"
-                              className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                            />
-                          </FormField>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
-                      <h4 className="mb-4 text-sm font-black uppercase tracking-wide text-orange-600">
-                        Contato e controle
-                      </h4>
-
-                      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                        <FormField label="Telefone principal">
-                          <input
-                            type="text"
-                            value={tenantPhone}
-                            onChange={(event) => handlePhoneChange(event.target.value)}
-                            placeholder="Ex: (69) 99999-0000"
-                            maxLength={15}
-                            required
-                            className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                          />
-                        </FormField>
-
-                        <FormField label="Telefone secundário">
-                          <input
-                            type="text"
-                            value={tenantSecondaryPhone}
-                            onChange={(event) => handleSecondaryPhoneChange(event.target.value)}
-                            placeholder="Ex: (69) 99999-0000"
-                            maxLength={15}
-                            className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                          />
-                        </FormField>
-
-                        <FormField label="WhatsApp">
-                          <input
-                            type="text"
-                            value={tenantWhatsapp}
-                            onChange={(event) => handleWhatsappChange(event.target.value)}
-                            placeholder="Ex: (69) 99999-0000"
-                            maxLength={15}
-                            className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                          />
-                        </FormField>
-
-                        <FormField label="E-mail">
-                          <input
-                            type="email"
-                            value={tenantEmail}
-                            onChange={(event) => setTenantEmail(formatEmailValue(event.target.value))}
-                            placeholder="Ex: pessoa@email.com"
-                            className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                          />
-                        </FormField>
-
-                        <FormField label="Site">
-                          <input
-                            type="text"
-                            value={tenantWebsite}
-                            onChange={(event) => setTenantWebsite(formatWebsiteValue(event.target.value))}
-                            placeholder="Ex: empresa.com.br"
-                            className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                          />
-                        </FormField>
-
-                        <FormField label="Limite de crédito">
-                          <input
-                            type="text"
-                            value={tenantCreditLimit}
-                            onChange={(event) => handleCreditLimitChange(event.target.value)}
-                            placeholder="Ex: 5.000,00"
-                            className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                          />
-                        </FormField>
-                      </div>
-
-                      <div className="mt-5">
-                        <FormField label="Observações financeiras">
-                          <textarea
-                            value={tenantFinancialNotes}
-                            onChange={(event) => setTenantFinancialNotes(toUpperCaseValue(event.target.value))}
-                            placeholder="Observações internas sobre análise financeira, crédito ou atendimento."
-                            rows={3}
-                            className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 resize-none"
-                          />
-                        </FormField>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSearchZipCode}
+                        disabled={isSearchingZipCode}
+                        className="h-11 rounded-2xl border border-orange-200 bg-white px-4 text-xs font-black text-orange-600 transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        {isSearchingZipCode ? "Buscando..." : "Buscar CEP"}
+                      </button>
                     </div>
+                  </FormField>
 
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-orange-100 dark:border-orange-900/40 bg-orange-50 dark:bg-orange-950/20 px-5 py-4 transition hover:bg-orange-50 dark:hover:bg-orange-950/30">
-                        <input
-                          type="checkbox"
-                          checked={tenantIsTenant}
-                          onChange={(event) => setTenantIsTenant(event.target.checked)}
-                          className="mt-1 h-5 w-5 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
-                        />
+                  <FormField label="Cidade">
+                    <input
+                      value={formData.city}
+                      onChange={(event) => updateFormData("city", event.target.value)}
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    />
+                  </FormField>
 
-                        <div>
-                          <p className="text-sm font-black text-slate-800 dark:text-slate-100">
-                            É inquilino
-                          </p>
-                          <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                            Permite vincular esta pessoa a contratos de aluguel.
-                          </p>
-                        </div>
-                      </label>
+                  <FormField label="UF">
+                    <input
+                      value={formData.state}
+                      onChange={(event) =>
+                        updateFormData("state", event.target.value.toUpperCase().slice(0, 2))
+                      }
+                      maxLength={2}
+                      placeholder="RO"
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    />
+                  </FormField>
 
-                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-5 py-4 transition hover:border-orange-200 hover:bg-orange-50 dark:hover:bg-orange-950/30">
-                        <input
-                          type="checkbox"
-                          checked={tenantIsActive}
-                          onChange={(event) => handleActiveChange(event.target.checked)}
-                          className="mt-1 h-5 w-5 rounded border-slate-300 accent-orange-500"
-                        />
-
-                        <div>
-                          <p className="text-sm font-black text-slate-800 dark:text-slate-100">
-                            Pessoa ativa
-                          </p>
-                          <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                            Pessoas vinculadas a contratos ativos não podem ser inativadas.
-                          </p>
-                        </div>
-                      </label>
-                    </div>
+                  <div className="md:col-span-2">
+                    <FormField label="Endereço">
+                      <input
+                        value={formData.address}
+                        onChange={(event) => updateFormData("address", event.target.value)}
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                      />
+                    </FormField>
                   </div>
 
-                  <div>
-                    <h3 className="mb-4 text-sm font-black uppercase tracking-wide text-orange-600">
-                      Endereço
-                    </h3>
+                  <FormField label="Status">
+                    <select
+                      value={formData.status}
+                      onChange={(event) =>
+                        updateFormData("status", event.target.value as PersonStatus)
+                      }
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    >
+                      <option value="active">Ativo</option>
+                      <option value="inactive">Inativo</option>
+                    </select>
+                  </FormField>
+                </div>
 
-                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                      <FormField label="CEP">
-                        <input
-                          type="text"
-                          value={tenantZipCode}
-                          onChange={(event) =>
-                            setTenantZipCode(formatZipCode(event.target.value))
-                          }
-                          onBlur={handleZipCodeBlur}
-                          placeholder="Ex: 76940-000"
-                          maxLength={9}
-                          required
-                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        />
-                      </FormField>
-
-                      <FormField label="Estado">
-                        <input
-                          type="text"
-                          value={tenantState}
-                          onChange={(event) =>
-                            setTenantState(toUpperCaseValue(event.target.value))
-                          }
-                          placeholder="UF"
-                          maxLength={2}
-                          required
-                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        />
-                      </FormField>
-
-                      <FormField label="Cidade">
-                        <input
-                          type="text"
-                          value={tenantCity}
-                          onChange={(event) =>
-                            setTenantCity(toUpperCaseValue(event.target.value))
-                          }
-                          placeholder="Cidade"
-                          required
-                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        />
-                      </FormField>
-
-                      <FormField label="Logradouro">
-                        <input
-                          type="text"
-                          value={tenantStreet}
-                          onChange={(event) =>
-                            setTenantStreet(
-                              toUpperCaseValue(event.target.value),
-                            )
-                          }
-                          placeholder="Rua, avenida..."
-                          required
-                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        />
-                      </FormField>
-
-                      <FormField label="Número">
-                        <input
-                          type="text"
-                          value={tenantNumber}
-                          onChange={(event) =>
-                            setTenantNumber(
-                              toUpperCaseValue(event.target.value),
-                            )
-                          }
-                          placeholder="Número da casa"
-                          required
-                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        />
-                      </FormField>
-
-                      <FormField label="Bairro">
-                        <input
-                          type="text"
-                          value={tenantNeighborhood}
-                          onChange={(event) =>
-                            setTenantNeighborhood(
-                              toUpperCaseValue(event.target.value),
-                            )
-                          }
-                          placeholder="Bairro"
-                          required
-                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        />
-                      </FormField>
-
-                      <FormField label="Complemento">
-                        <input
-                          type="text"
-                          value={tenantComplement}
-                          onChange={(event) =>
-                            setTenantComplement(
-                              toUpperCaseValue(event.target.value),
-                            )
-                          }
-                          placeholder="Apartamento, bloco, referência..."
-                          className="w-full rounded-2xl border border-slate-200 dark:border-slate-700 px-4 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-950 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        />
-                      </FormField>
-                    </div>
+                {cnpjError && (
+                  <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
+                    {cnpjError}
                   </div>
-                </div>
+                )}
 
-                <div className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-8 py-6">
-                  <button
-                    type="button"
-                    onClick={handleCloseForm}
-                    className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-4 text-sm font-black text-slate-600 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
-                  >
-                    Cancelar
-                  </button>
+                {zipCodeError && (
+                  <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
+                    {zipCodeError}
+                  </div>
+                )}
 
-                  <button
-                    type="submit"
-                    disabled={Boolean(cpfError)}
-                    className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 dark:shadow-orange-950/30 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isEditing ? "Salvar alterações" : "Cadastrar pessoa"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {blockedInactivePerson && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
-            <div className={`w-full max-w-md rounded-[2rem] border border-orange-100 dark:border-orange-900/40 bg-white dark:bg-slate-900 p-8 shadow-2xl ${isBlackTheme ? "" : "rentix-force-light"}`}>
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 dark:bg-orange-950/30 text-3xl">
-                ⚠️
+                {pageError && (
+                  <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                    {pageError}
+                  </div>
+                )}
               </div>
 
-              <div className="mt-5 text-center">
-                <h3 className="text-2xl font-black text-slate-950 dark:text-white">
-                  Pessoa vinculada a contrato
-                </h3>
-
-                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                  Esta pessoa possui contrato ativo vinculado e não pode ser
-                  inativada. Para alterar a situação do cadastro, encerre ou
-                  remova o contrato ativo primeiro.
-                </p>
-
-                <div className="mt-5 rounded-2xl bg-slate-50 dark:bg-slate-800 px-4 py-3">
-                  <p className="text-sm font-black text-slate-900 dark:text-slate-100">
-                    {blockedInactivePerson.name}
-                  </p>
-                  <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                    {formatDocument(
-                      blockedInactivePerson.cpf ||
-                        blockedInactivePerson.document,
-                      blockedInactivePerson.personType,
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-8">
+              <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-8 py-5">
                 <button
                   type="button"
-                  onClick={handleCloseBlockedInactivePerson}
-                  className="w-full rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 dark:shadow-orange-950/30"
-                >
-                  Entendi
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {blockedDeletePerson && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
-            <div className={`w-full max-w-md rounded-[2rem] border border-orange-100 dark:border-orange-900/40 bg-white dark:bg-slate-900 p-8 shadow-2xl ${isBlackTheme ? "" : "rentix-force-light"}`}>
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 dark:bg-orange-950/30 text-3xl">
-                ⚠️
-              </div>
-
-              <div className="mt-5 text-center">
-                <h3 className="text-2xl font-black text-slate-950 dark:text-white">
-                  Pessoa com histórico
-                </h3>
-
-                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                  Este cadastro possui vínculos com contratos ou financeiro e
-                  não pode ser excluído. Caso necessário, altere a situação para
-                  inativo.
-                </p>
-
-                <div className="mt-5 rounded-2xl bg-slate-50 dark:bg-slate-800 px-4 py-3">
-                  <p className="text-sm font-black text-slate-900 dark:text-slate-100">
-                    {blockedDeletePerson.name}
-                  </p>
-                  <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                    {formatDocument(
-                      blockedDeletePerson.cpf || blockedDeletePerson.document,
-                      blockedDeletePerson.personType,
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-8">
-                <button
-                  type="button"
-                  onClick={handleCloseBlockedDeletePerson}
-                  className="w-full rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 dark:shadow-orange-950/30"
-                >
-                  Entendi
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {tenantToDelete && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
-            <div className={`w-full max-w-md rounded-[2rem] bg-white dark:bg-slate-900 p-8 shadow-2xl ${isBlackTheme ? "" : "rentix-force-light"}`}>
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 dark:bg-red-950/30 text-3xl">
-                🗑️
-              </div>
-
-              <div className="mt-5 text-center">
-                <h3 className="text-2xl font-black text-slate-950 dark:text-white">
-                  Excluir pessoa?
-                </h3>
-
-                <p className="mt-3 text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                  Esta ação removerá a pessoa do sistema.
-                </p>
-
-                <div className="mt-5 rounded-2xl bg-slate-50 dark:bg-slate-800 px-4 py-3">
-                  <p className="text-sm font-black text-slate-900 dark:text-slate-100">
-                    {tenantToDelete.name}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                    {formatDocument(
-                      tenantToDelete.cpf || tenantToDelete.document,
-                      tenantToDelete.personType,
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-8 grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={handleCancelDeleteTenant}
-                  className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-5 py-4 text-sm font-black text-slate-700 dark:text-slate-200 transition hover:bg-slate-200 dark:hover:bg-slate-700"
+                  onClick={closeModal}
+                  className="rounded-2xl bg-slate-100 px-6 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
                 >
                   Cancelar
                 </button>
 
                 <button
-                  type="button"
-                  onClick={handleConfirmDeleteTenant}
-                  className="rounded-2xl bg-red-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600 dark:shadow-red-950/30"
+                  type="submit"
+                  disabled={isSaving}
+                  className="rounded-2xl bg-orange-500 px-7 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  Sim, excluir
+                  {isSaving
+                    ? "Salvando..."
+                    : editingPersonId
+                      ? "Salvar alterações"
+                      : "Salvar pessoa"}
                 </button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {personToDelete && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[2rem] border border-red-100 bg-white p-6 shadow-2xl">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-2xl font-black text-red-600">
+              !
+            </div>
+
+            <div className="mt-5 text-center">
+              <h2 className="text-xl font-black text-slate-950">
+                Excluir pessoa?
+              </h2>
+              <p className="mt-2 text-sm font-medium text-slate-500">
+                Essa ação removerá o cadastro selecionado. Confirme apenas se tiver certeza.
+              </p>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+              <p className="text-sm font-black uppercase text-slate-900">
+                {personToDelete.name}
+              </p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">
+                {personToDelete.document}
+              </p>
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={closeDeleteModal}
+                disabled={isDeleting}
+                className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDeleteConfirmed}
+                disabled={isDeleting}
+                className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isDeleting ? "Excluindo..." : "Excluir"}
+              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-[70]">
+          <div
+            className={`rounded-2xl border px-5 py-4 text-sm font-black shadow-xl ${
+              toast.type === "success"
+                ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                : toast.type === "error"
+                  ? "border-red-100 bg-red-50 text-red-700"
+                  : "border-orange-100 bg-orange-50 text-orange-700"
+            }`}
+          >
+            {toast.message}
+          </div>
+        </div>
+      )}
     </AppShell>
   );
 }
 
-type PersonHistoryTabButtonProps = {
-  label: string;
-  isActive: boolean;
-  onClick: () => void;
-};
-
-type EmptyPersonHistoryStateProps = {
-  title: string;
-  description: string;
-};
-
-function PersonHistoryTabButton({
+function FormField({
   label,
-  isActive,
-  onClick,
-}: PersonHistoryTabButtonProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-2xl px-4 py-3 text-left text-xs font-black uppercase tracking-wide transition ${
-        isActive
-          ? "bg-orange-50 dark:bg-orange-950/300 text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30"
-          : "bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 dark:text-slate-500 hover:bg-orange-50 dark:bg-orange-950/30 dark:hover:bg-orange-950/30 hover:text-orange-600"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function EmptyPersonHistoryState({
-  title,
-  description,
-}: EmptyPersonHistoryStateProps) {
-  return (
-    <div className="mt-5 rounded-2xl border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/30 p-5">
-      <p className="text-sm font-black text-emerald-700">{title}</p>
-      <p className="mt-1 text-xs font-semibold leading-5 text-emerald-700/80">
-        {description}
-      </p>
-    </div>
-  );
-}
-
-type FormFieldProps = {
-  label: string;
-  children: React.ReactNode;
-};
-
-type PersonDetailItemProps = {
-  label: string;
-  value: string;
-};
-
-function PersonDetailItem({ label, value }: PersonDetailItemProps) {
-  return (
-    <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 px-4 py-3">
-      <p className="text-xs font-black uppercase tracking-wide text-slate-400 dark:text-slate-500">
-        {label}
-      </p>
-      <p className="mt-1 break-words text-sm font-black text-slate-800 dark:text-slate-100">
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function FormField({ label, children }: FormFieldProps) {
-  return (
-    <div>
-      <label className="mb-2 block text-sm font-black text-slate-700 dark:text-slate-200">
-        {label}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-function ActiveBadge({
-  isActive,
-  isBlackTheme = false,
+  required,
+  children,
 }: {
-  isActive: boolean;
-  isBlackTheme?: boolean;
+  label: string;
+  required?: boolean;
+  children: ReactNode;
 }) {
-  const activeConfig = isActive
-    ? {
-        label: "Ativo",
-        className: isBlackTheme
-          ? "bg-emerald-950/40 text-emerald-300"
-          : "bg-emerald-100 text-emerald-700",
-      }
-    : {
-        label: "Inativo",
-        className: isBlackTheme
-          ? "bg-slate-700 text-slate-300"
-          : "bg-slate-100 text-slate-600",
-      };
-
   return (
-    <span
-      className={`rounded-full px-3 py-1 text-xs font-black ${activeConfig.className}`}
-    >
-      {activeConfig.label}
-    </span>
-  );
-}
-
-function getRecordStringValue(record: Record<string, unknown>, keys: string[]) {
-  for (const key of keys) {
-    const value = record[key];
-
-    if (value !== undefined && value !== null && String(value).trim() !== "") {
-      return String(value);
-    }
-  }
-
-  return "";
-}
-
-function getFinancialRecordKey(record: Record<string, unknown>, index: number) {
-  return (
-    getRecordStringValue(record, ["id", "receivableId", "accountId"]) ||
-    `financial-record-${index}`
-  );
-}
-
-function getFinancialRecordDescription(record: Record<string, unknown>) {
-  return (
-    getRecordStringValue(record, [
-      "description",
-      "title",
-      "name",
-      "reference",
-      "installment",
-      "category",
-    ]) || "Conta a receber"
-  );
-}
-
-function getFinancialRecordDueDate(record: Record<string, unknown>) {
-  return getRecordStringValue(record, [
-    "dueDate",
-    "due_date",
-    "date",
-    "paymentDate",
-    "payment_date",
-    "competenceDate",
-    "competence_date",
-  ]);
-}
-
-function getFinancialRecordStatus(record: Record<string, unknown>) {
-  return getRecordStringValue(record, [
-    "status",
-    "paymentStatus",
-    "payment_status",
-  ]);
-}
-
-function getFinancialRecordAmount(record: Record<string, unknown>) {
-  const rawValue =
-    record.amount ??
-    record.value ??
-    record.total ??
-    record.totalValue ??
-    record.total_value ??
-    record.price ??
-    record.installmentValue ??
-    record.installment_value ??
-    0;
-
-  if (typeof rawValue === "number") {
-    return Number.isFinite(rawValue) ? rawValue : 0;
-  }
-
-  const normalizedValue = String(rawValue)
-    .replace(/[^0-9,.-]/g, "")
-    .replace(/\.(?=\d{3}(\D|$))/g, "")
-    .replace(",", ".");
-
-  const parsedValue = Number(normalizedValue);
-
-  return Number.isFinite(parsedValue) ? parsedValue : 0;
-}
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value);
-}
-
-function formatDateValue(value: string) {
-  if (!value) return "Não informado";
-
-  const date = new Date(`${value}T00:00:00`);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("pt-BR").format(date);
-}
-
-function FinancialStatusBadge({ status }: { status: string }) {
-  const normalizedStatus = status.toLowerCase();
-
-  const config =
-    normalizedStatus.includes("paid") || normalizedStatus.includes("pago")
-      ? {
-          label: "Pago",
-          className: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700",
-        }
-      : normalizedStatus.includes("overdue") ||
-          normalizedStatus.includes("vencido")
-        ? {
-            label: "Vencido",
-            className: "bg-red-100 dark:bg-red-950/40 text-red-700",
-          }
-        : normalizedStatus.includes("pending") ||
-            normalizedStatus.includes("pendente")
-          ? {
-              label: "Pendente",
-              className: "bg-amber-100 dark:bg-amber-950/40 text-amber-700",
-            }
-          : {
-              label: status || "Não informado",
-              className:
-                "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300",
-            };
-
-  return (
-    <span
-      className={`rounded-full px-3 py-1 text-xs font-black ${config.className}`}
-    >
-      {config.label}
-    </span>
-  );
-}
-
-function formatMoneyInput(value: string) {
-  const digits = String(value ?? "").replace(/\D/g, "");
-
-  if (!digits) return "";
-
-  const numericValue = Number(digits) / 100;
-
-  return numericValue.toLocaleString("pt-BR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
-function formatWebsiteValue(value: string) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase();
-}
-
-function formatEmailValue(value: string) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase();
-}
-
-function toUpperCaseValue(value: string) {
-  return String(value ?? "").toUpperCase();
-}
-
-function formatCpf(value: string) {
-  const digits = String(value ?? "")
-    .replace(/\D/g, "")
-    .slice(0, 11);
-
-  return digits
-    .replace(/^(\d{3})(\d)/, "$1.$2")
-    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
-    .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3-$4");
-}
-
-function formatCnpj(value: string) {
-  const digits = String(value ?? "")
-    .replace(/\D/g, "")
-    .slice(0, 14);
-
-  return digits
-    .replace(/^(\d{2})(\d)/, "$1.$2")
-    .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
-    .replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3/$4")
-    .replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/, "$1.$2.$3/$4-$5");
-}
-
-function formatDocument(value: string, personType?: PersonType) {
-  const digits = String(value ?? "").replace(/\D/g, "");
-
-  if (personType === "Company" || digits.length > 11) {
-    return formatCnpj(value);
-  }
-
-  return formatCpf(value);
-}
-
-function isValidDocument(value: string, personType: PersonType) {
-  if (personType === "Company") {
-    return isValidCnpj(value);
-  }
-
-  return isValidCpf(value);
-}
-
-function formatPhone(value?: string) {
-  const digits = String(value ?? "")
-    .replace(/\D/g, "")
-    .slice(0, 11);
-
-  if (!digits) return "-";
-
-  if (digits.length <= 10) {
-    return digits
-      .replace(/^(\d{2})(\d)/, "($1) $2")
-      .replace(/(\d{4})(\d)/, "$1-$2");
-  }
-
-  return digits
-    .replace(/^(\d{2})(\d)/, "($1) $2")
-    .replace(/(\d{5})(\d)/, "$1-$2");
-}
-
-function formatZipCode(value: string) {
-  const digits = value.replace(/\D/g, "").slice(0, 8);
-
-  return digits.replace(/^(\d{5})(\d)/, "$1-$2");
-}
-
-function isValidCpf(value: string) {
-  const cpf = value.replace(/\D/g, "");
-
-  if (cpf.length !== 11) return false;
-  if (/^(\d)\1{10}$/.test(cpf)) return false;
-
-  let sum = 0;
-
-  for (let index = 0; index < 9; index++) {
-    sum += Number(cpf[index]) * (10 - index);
-  }
-
-  let firstCheckDigit = (sum * 10) % 11;
-  if (firstCheckDigit === 10) firstCheckDigit = 0;
-
-  if (firstCheckDigit !== Number(cpf[9])) return false;
-
-  sum = 0;
-
-  for (let index = 0; index < 10; index++) {
-    sum += Number(cpf[index]) * (11 - index);
-  }
-
-  let secondCheckDigit = (sum * 10) % 11;
-  if (secondCheckDigit === 10) secondCheckDigit = 0;
-
-  return secondCheckDigit === Number(cpf[10]);
-}
-
-function isValidCnpj(value: string) {
-  const cnpj = value.replace(/\D/g, "");
-
-  if (cnpj.length !== 14) return false;
-  if (/^(\d)\1{13}$/.test(cnpj)) return false;
-
-  const calculateDigit = (base: string, weights: number[]) => {
-    const sum = weights.reduce(
-      (total, weight, index) => total + Number(base[index]) * weight,
-      0,
-    );
-
-    const rest = sum % 11;
-
-    return rest < 2 ? 0 : 11 - rest;
-  };
-
-  const firstWeights = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
-  const secondWeights = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
-
-  const firstCheckDigit = calculateDigit(cnpj.slice(0, 12), firstWeights);
-  const secondCheckDigit = calculateDigit(cnpj.slice(0, 13), secondWeights);
-
-  return (
-    firstCheckDigit === Number(cnpj[12]) &&
-    secondCheckDigit === Number(cnpj[13])
+    <label className="block">
+      <span className="mb-2 block text-xs font-black uppercase tracking-wide text-slate-500">
+        {label}
+        {required ? <span className="text-red-500"> *</span> : null}
+      </span>
+      {children}
+    </label>
   );
 }

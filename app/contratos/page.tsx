@@ -2,11 +2,22 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "@/components/layout/app-shell";
-import { Tenant, initialTenants } from "@/data/tenants";
+import { useAuth } from "@/context/AuthContext";
+import { apiFetch } from "@/services/api";
+import {
+  createContract,
+  getContracts,
+  updateContract,
+  type Contract as ApiContract,
+  type ContractRenewalRecord as ApiContractRenewalRecord,
+  type ContractStatus as ApiContractStatus,
+  type ContractStatusReasonType as ApiContractStatusReasonType,
+  type CreateContractDto,
+  type UpdateContractDto,
+} from "@/services/contracts.service";
+import { getProperties, type Property as ApiProperty } from "@/services/properties.service";
 
 const CONTRACTS_STORAGE_KEY = "rentix_contracts";
-const PROPERTIES_STORAGE_KEY = "rentix_properties";
-const TENANTS_STORAGE_KEY = "rentix_tenants";
 const RECEIVABLE_FROM_CONTRACT_STORAGE_KEY = "rentix_new_charge_from_contract";
 const MANUAL_CHARGES_STORAGE_KEY = "rentix_manual_charges";
 const PAID_CHARGES_STORAGE_KEY = "rentix_paid_charges";
@@ -332,7 +343,28 @@ type Property = {
   contractDefaultNotes?: string;
 };
 
-type RentixTenant = Tenant & {
+type ApiPerson = {
+  id: string;
+  companyId: string;
+  type: "INDIVIDUAL" | "COMPANY";
+  status: "ACTIVE" | "INACTIVE";
+  name: string;
+  document: string;
+  stateRegistration?: string | null;
+  identityNumber?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  zipCode?: string | null;
+  city?: string | null;
+  state?: string | null;
+  address?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+};
+
+type RentixTenant = {
+  id: string;
+  name: string;
   isTenant?: boolean;
   isActive?: boolean;
   personType?: "Individual" | "Company";
@@ -394,10 +426,10 @@ type ContractRenewalRecord = {
 };
 
 type Contract = {
-  id: number;
+  id: string;
   propertyId: string;
   propertyName: string;
-  tenantId: number;
+  tenantId: string;
   tenantName: string;
   startDate: string;
   endDate: string;
@@ -456,14 +488,17 @@ type PropertyMovement = {
 };
 
 export default function ContractsPage() {
+  const { user } = useAuth();
+
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [tenants, setTenants] = useState<RentixTenant[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoadingPageData, setIsLoadingPageData] = useState(true);
   const [isBlackTheme, setIsBlackTheme] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formError, setFormError] = useState("");
-  const [editingContractId, setEditingContractId] = useState<number | null>(null);
+  const [editingContractId, setEditingContractId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<ContractFilterStatus>("Active");
   const [searchTerm, setSearchTerm] = useState("");
   const [printableContract, setPrintableContract] = useState<Contract | null>(null);
@@ -494,11 +529,12 @@ export default function ContractsPage() {
   const [finishContract, setFinishContract] = useState<Contract | null>(null);
   const [finishReason, setFinishReason] = useState("");
   const [finishReasonError, setFinishReasonError] = useState("");
-  const [openActionMenuContractId, setOpenActionMenuContractId] = useState<number | null>(null);
+  const [openActionMenuContractId, setOpenActionMenuContractId] = useState<string | null>(null);
   const [selectedContractDetails, setSelectedContractDetails] = useState<Contract | null>(null);
   const [contractDetailsActiveTab, setContractDetailsActiveTab] = useState<ContractDetailsTab>("Data");
 
   const isEditing = editingContractId !== null;
+  const companyId = user?.companyId;
 
   useEffect(() => {
     function applyStoredTheme() {
@@ -534,60 +570,17 @@ export default function ContractsPage() {
   }, []);
 
   useEffect(() => {
-    const storedContracts = localStorage.getItem(CONTRACTS_STORAGE_KEY);
-    const storedProperties = localStorage.getItem(PROPERTIES_STORAGE_KEY);
-    const storedTenants = localStorage.getItem(TENANTS_STORAGE_KEY);
-
-    if (storedContracts) {
-      const parsedContracts = JSON.parse(storedContracts) as Partial<Contract>[];
-
-      const normalizedContracts: Contract[] = parsedContracts.map((contract) => ({
-        id: contract.id || Date.now(),
-        propertyId: contract.propertyId || "",
-        propertyName: toUpperText(contract.propertyName || ""),
-        tenantId: contract.tenantId || 0,
-        tenantName: contract.tenantName || "",
-        startDate: contract.startDate || "",
-        endDate: contract.endDate || "",
-        rentValue: Number(contract.rentValue || 0),
-        status: contract.status || getAutomaticContractStatus(contract.endDate || ""),
-        deletedAt: contract.deletedAt || null,
-        statusReason: contract.statusReason || null,
-        statusReasonType: contract.statusReasonType || null,
-        statusReasonAt: contract.statusReasonAt || null,
-        isTemporaryRental: contract.isTemporaryRental ?? false,
-        checkInTime: contract.checkInTime || "",
-        checkOutTime: contract.checkOutTime || "",
-        renewedAt: contract.renewedAt || null,
-        renewalHistory: Array.isArray(contract.renewalHistory) ? contract.renewalHistory : [],
-        finishedAt: contract.finishedAt || null,
-        finishReason: contract.finishReason || null,
-      }));
-
-      setContracts(normalizedContracts);
+    if (!companyId) {
+      setContracts([]);
+      setProperties([]);
+      setTenants([]);
+      setIsLoaded(true);
+      setIsLoadingPageData(false);
+      return;
     }
 
-    if (storedProperties) {
-      const parsedProperties = JSON.parse(storedProperties) as Property[];
-      setProperties(
-        parsedProperties.map((property) => ({
-          ...property,
-          name: toUpperText(property.name || ""),
-          status: property.status || "Available",
-          isActive: property.isActive ?? true,
-        }))
-      );
-    }
-
-    if (storedTenants) {
-      const parsedTenants = JSON.parse(storedTenants) as RentixTenant[];
-      setTenants(parsedTenants.length > 0 ? parsedTenants : initialTenants);
-    } else {
-      setTenants(initialTenants);
-    }
-
-    setIsLoaded(true);
-  }, []);
+    loadPageData(companyId);
+  }, [companyId]);
 
 
   useEffect(() => {
@@ -622,14 +615,7 @@ export default function ContractsPage() {
     if (!isLoaded) return;
 
     localStorage.setItem(CONTRACTS_STORAGE_KEY, JSON.stringify(contracts));
-
-    setProperties((currentProperties) => {
-      const updatedProperties = syncPropertiesWithContracts(contracts, currentProperties);
-
-      localStorage.setItem(PROPERTIES_STORAGE_KEY, JSON.stringify(updatedProperties));
-
-      return updatedProperties;
-    });
+    setProperties((currentProperties) => syncPropertiesWithContracts(contracts, currentProperties));
   }, [contracts, isLoaded]);
 
   const availableProperties = useMemo(() => {
@@ -685,6 +671,35 @@ export default function ContractsPage() {
   const monthlyRevenue = contracts
     .filter((contract) => ["Active", "Expiring"].includes(getDisplayContractStatus(contract)))
     .reduce((total, contract) => total + Number(contract.rentValue || 0), 0);
+
+  async function loadPageData(currentCompanyId: string) {
+    try {
+      setIsLoadingPageData(true);
+      setFormError("");
+
+      const [apiContracts, apiProperties, apiPeople] = await Promise.all([
+        getContracts(currentCompanyId),
+        getProperties(currentCompanyId),
+        apiFetch<ApiPerson[]>(`/pessoas?companyId=${encodeURIComponent(currentCompanyId)}`),
+      ]);
+
+      const normalizedContracts = apiContracts.map(mapApiContractToContract);
+
+      setContracts(normalizedContracts);
+      setProperties(apiProperties.map((property) => mapApiPropertyToProperty(property, normalizedContracts)));
+      setTenants(apiPeople.map(mapApiPersonToTenant));
+      localStorage.setItem(CONTRACTS_STORAGE_KEY, JSON.stringify(normalizedContracts));
+    } catch (error) {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : "NÃ£o foi possÃ­vel carregar os contratos do backend."
+      );
+    } finally {
+      setIsLoaded(true);
+      setIsLoadingPageData(false);
+    }
+  }
 
   function resetForm() {
     setPropertyId("");
@@ -791,7 +806,7 @@ export default function ContractsPage() {
     localStorage.setItem(PROPERTY_MOVEMENTS_STORAGE_KEY, JSON.stringify([movement, ...currentMovements]));
   }
 
-  function applyEditedContract(updatedContract: Contract, reason?: string) {
+  async function applyEditedContract(updatedContract: Contract, reason?: string) {
     const shouldRemoveReceivables =
       updatedContract.status === "Canceled" || updatedContract.status === "Deleted";
     const cleanReason = reason?.trim() || updatedContract.statusReason || null;
@@ -814,6 +829,19 @@ export default function ContractsPage() {
           ? new Date().toISOString()
           : updatedContract.statusReasonAt || null,
     };
+
+    try {
+      const savedContract = await updateContract(
+        contractToSave.id,
+        buildContractPayload(contractToSave),
+      );
+      Object.assign(contractToSave, mapApiContractToContract(savedContract));
+    } catch (error) {
+      setFormError(
+        error instanceof Error ? error.message : "NÃ£o foi possÃ­vel salvar o contrato."
+      );
+      return;
+    }
 
     if (shouldRemoveReceivables) {
       removeReceivableChargesFromContract(contractToSave);
@@ -841,7 +869,7 @@ export default function ContractsPage() {
     resetForm();
   }
 
-  function handleConfirmStatusReason() {
+  async function handleConfirmStatusReason() {
     const cleanReason = statusReason.trim();
 
     if (!pendingStatusChange) return;
@@ -851,7 +879,7 @@ export default function ContractsPage() {
       return;
     }
 
-    applyEditedContract(pendingStatusChange.contract, cleanReason);
+    await applyEditedContract(pendingStatusChange.contract, cleanReason);
     setPendingStatusChange(null);
     setStatusReason("");
     setStatusReasonError("");
@@ -932,7 +960,7 @@ export default function ContractsPage() {
     window.location.href = "/contas-receber";
   }
 
-  function handleSubmitContract(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmitContract(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError("");
 
@@ -1036,12 +1064,17 @@ export default function ContractsPage() {
         return;
       }
 
-      applyEditedContract(updatedContract);
+      await applyEditedContract(updatedContract);
+      return;
+    }
+
+    if (!companyId) {
+      setFormError("Empresa nÃ£o identificada. FaÃ§a login novamente.");
       return;
     }
 
     const newContract: Contract = {
-      id: Date.now(),
+      id: crypto.randomUUID(),
       propertyId: selectedProperty.id,
       propertyName: toUpperText(selectedProperty.name),
       tenantId: selectedTenant.id,
@@ -1062,6 +1095,18 @@ export default function ContractsPage() {
       finishedAt: null,
       finishReason: null,
     };
+
+    try {
+      const savedContract = await createContract(
+        buildContractPayload(newContract, companyId) as CreateContractDto,
+      );
+      Object.assign(newContract, mapApiContractToContract(savedContract));
+    } catch (error) {
+      setFormError(
+        error instanceof Error ? error.message : "NÃ£o foi possÃ­vel criar o contrato."
+      );
+      return;
+    }
 
     const updatedContracts = [newContract, ...contracts];
 
@@ -1129,7 +1174,7 @@ export default function ContractsPage() {
   }
 
 
-  function handleToggleContractActions(contractId: number) {
+  function handleToggleContractActions(contractId: string) {
     setOpenActionMenuContractId((currentContractId) =>
       currentContractId === contractId ? null : contractId
     );
@@ -1209,7 +1254,7 @@ export default function ContractsPage() {
     setRenewalError("");
   }
 
-  function handleConfirmContractRenewal() {
+  async function handleConfirmContractRenewal() {
     if (!renewalContract) return;
 
     const nextEndDate = renewalEndDate;
@@ -1251,6 +1296,19 @@ export default function ContractsPage() {
       finishReason: null,
     };
 
+    try {
+      const savedContract = await updateContract(
+        renewedContract.id,
+        buildContractPayload(renewedContract),
+      );
+      Object.assign(renewedContract, mapApiContractToContract(savedContract));
+    } catch (error) {
+      setRenewalError(
+        error instanceof Error ? error.message : "NÃ£o foi possÃ­vel renovar o contrato."
+      );
+      return;
+    }
+
     setContracts((currentContracts) =>
       currentContracts.map((contract) =>
         contract.id === renewalContract.id ? renewedContract : contract
@@ -1278,7 +1336,7 @@ export default function ContractsPage() {
     setFinishReasonError("");
   }
 
-  function handleConfirmContractFinish() {
+  async function handleConfirmContractFinish() {
     if (!finishContract) return;
 
     const cleanReason = finishReason.trim();
@@ -1297,6 +1355,19 @@ export default function ContractsPage() {
       statusReasonType: null,
       statusReasonAt: new Date().toISOString(),
     };
+
+    try {
+      const savedContract = await updateContract(
+        finishedContract.id,
+        buildContractPayload(finishedContract),
+      );
+      Object.assign(finishedContract, mapApiContractToContract(savedContract));
+    } catch (error) {
+      setFinishReasonError(
+        error instanceof Error ? error.message : "NÃ£o foi possÃ­vel finalizar o contrato."
+      );
+      return;
+    }
 
     removeFutureReceivableChargesFromContract(finishedContract);
     registerPropertyMovementFromContract(
@@ -1938,7 +2009,15 @@ export default function ContractsPage() {
                   );
                 })}
 
-                {filteredContracts.length === 0 && (
+                {isLoadingPageData && (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-10 text-center text-sm font-semibold text-slate-500">
+                      Carregando contratos do backend...
+                    </td>
+                  </tr>
+                )}
+
+                {!isLoadingPageData && filteredContracts.length === 0 && (
                   <tr>
                     <td colSpan={8} className="px-6 py-10 text-center text-sm font-semibold text-slate-500">
                       Nenhum contrato encontrado para este filtro.
@@ -2911,6 +2990,186 @@ function TimelineItem({
       </div>
     </div>
   );
+}
+
+function mapApiContractToContract(apiContract: ApiContract): Contract {
+  const propertyName =
+    apiContract.propertyName ||
+    apiContract.property?.title ||
+    "IMÃ“VEL NÃƒO INFORMADO";
+  const tenantName =
+    apiContract.tenantName ||
+    apiContract.tenant?.name ||
+    "LOCATÃRIO NÃƒO INFORMADO";
+
+  return {
+    id: apiContract.id,
+    propertyId: apiContract.propertyId,
+    propertyName: toUpperText(propertyName),
+    tenantId: apiContract.tenantId,
+    tenantName,
+    startDate: formatApiDateForInput(apiContract.startDate),
+    endDate: formatApiDateForInput(apiContract.endDate),
+    rentValue: Number(apiContract.rentValue || 0),
+    status: mapApiContractStatus(apiContract.status),
+    deletedAt: apiContract.deletedAt || null,
+    statusReason: apiContract.statusReason || null,
+    statusReasonType: mapApiContractStatusReasonType(apiContract.statusReasonType),
+    statusReasonAt: apiContract.statusReasonAt || null,
+    isTemporaryRental: apiContract.isTemporaryRental ?? false,
+    checkInTime: apiContract.checkInTime || "",
+    checkOutTime: apiContract.checkOutTime || "",
+    renewedAt: apiContract.renewedAt || null,
+    renewalHistory: Array.isArray(apiContract.renewalHistory)
+      ? apiContract.renewalHistory.map(mapApiRenewalRecord)
+      : [],
+    finishedAt: apiContract.finishedAt || null,
+    finishReason: apiContract.finishReason || null,
+  };
+}
+
+function mapApiPropertyToProperty(
+  apiProperty: ApiProperty,
+  contracts: Contract[],
+): Property {
+  const hasActiveContract = contracts.some(
+    (contract) =>
+      String(contract.propertyId) === String(apiProperty.id) &&
+      ["Active", "Expiring"].includes(getDisplayContractStatus(contract)) &&
+      contract.status !== "Deleted",
+  );
+
+  return {
+    id: apiProperty.id,
+    name: toUpperText(apiProperty.title || ""),
+    rentValue: Number(apiProperty.rentalValue || 0),
+    status: hasActiveContract ? "Rented" : "Available",
+    isActive: apiProperty.isActive ?? true,
+    zipCode: apiProperty.zipCode || "",
+    state: toUpperText(apiProperty.state || ""),
+    city: toUpperText(apiProperty.city || ""),
+    street: toUpperText(apiProperty.address || ""),
+    number: toUpperText(apiProperty.number || ""),
+    neighborhood: toUpperText(apiProperty.district || ""),
+    complement: toUpperText(apiProperty.complement || ""),
+  };
+}
+
+function mapApiPersonToTenant(apiPerson: ApiPerson): RentixTenant {
+  return {
+    id: apiPerson.id,
+    name: apiPerson.name,
+    isTenant: true,
+    isActive: apiPerson.status === "ACTIVE",
+    personType: apiPerson.type === "COMPANY" ? "Company" : "Individual",
+    cpf: apiPerson.document,
+    document: apiPerson.document,
+    email: apiPerson.email || "",
+    phone: apiPerson.phone || "",
+    zipCode: apiPerson.zipCode || "",
+    state: apiPerson.state || "",
+    city: apiPerson.city || "",
+    street: apiPerson.address || "",
+  };
+}
+
+function buildContractPayload(
+  contract: Contract,
+  companyId?: string,
+): CreateContractDto | UpdateContractDto {
+  return {
+    ...(companyId ? { companyId } : {}),
+    propertyId: contract.propertyId,
+    tenantId: contract.tenantId,
+    propertyName: contract.propertyName,
+    tenantName: contract.tenantName,
+    startDate: contract.startDate,
+    endDate: contract.endDate,
+    rentValue: Number(contract.rentValue || 0),
+    status: mapContractStatusToApi(contract.status || "Active"),
+    deletedAt: contract.deletedAt || null,
+    statusReason: contract.statusReason || null,
+    statusReasonType: mapContractStatusReasonTypeToApi(contract.statusReasonType),
+    statusReasonAt: contract.statusReasonAt || null,
+    isTemporaryRental: contract.isTemporaryRental ?? false,
+    checkInTime: contract.checkInTime || "",
+    checkOutTime: contract.checkOutTime || "",
+    renewedAt: contract.renewedAt || null,
+    renewalHistory: contract.renewalHistory || [],
+    finishedAt: contract.finishedAt || null,
+    finishReason: contract.finishReason || null,
+  };
+}
+
+function mapApiRenewalRecord(record: ApiContractRenewalRecord): ContractRenewalRecord {
+  return {
+    renewedAt: record.renewedAt,
+    previousEndDate: formatApiDateForInput(record.previousEndDate),
+    newEndDate: formatApiDateForInput(record.newEndDate),
+    previousRentValue: Number(record.previousRentValue || 0),
+    newRentValue: Number(record.newRentValue || 0),
+    notes: record.notes,
+  };
+}
+
+function mapApiContractStatus(status: ApiContractStatus): ContractStatus {
+  const statusMap: Record<ApiContractStatus, ContractStatus> = {
+    ACTIVE: "Active",
+    INACTIVE: "Inactive",
+    CANCELED: "Canceled",
+    FINISHED: "Finished",
+    DELETED: "Deleted",
+  };
+
+  return statusMap[status] || "Inactive";
+}
+
+function mapContractStatusToApi(status: ContractStatus): ApiContractStatus {
+  const statusMap: Record<ContractStatus, ApiContractStatus> = {
+    Active: "ACTIVE",
+    Inactive: "INACTIVE",
+    Canceled: "CANCELED",
+    Finished: "FINISHED",
+    Deleted: "DELETED",
+  };
+
+  return statusMap[status] || "INACTIVE";
+}
+
+function mapApiContractStatusReasonType(
+  value?: ApiContractStatusReasonType | null,
+): Contract["statusReasonType"] {
+  if (value === "CANCELED") return "Canceled";
+  if (value === "DELETED") return "Deleted";
+  return null;
+}
+
+function mapContractStatusReasonTypeToApi(
+  value?: Contract["statusReasonType"],
+): ApiContractStatusReasonType | null {
+  if (value === "Canceled") return "CANCELED";
+  if (value === "Deleted") return "DELETED";
+  return null;
+}
+
+function formatApiDateForInput(value: string) {
+  if (!value) return "";
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function syncPropertiesWithContracts(contracts: Contract[], properties: Property[]): Property[] {

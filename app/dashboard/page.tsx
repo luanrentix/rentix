@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/app-shell";
+import { PrivateRoute } from "@/components/PrivateRoute";
 import {
   Bar,
   CartesianGrid,
@@ -560,51 +561,6 @@ export default function DashboardPage() {
     0,
   );
 
-  const topRevenueProperties = useMemo(() => {
-    return activeContractsList
-      .map((contract) => {
-        const property = properties.find(
-          (propertyItem) =>
-            String(propertyItem.id) === String(contract.propertyId),
-        );
-        const tenant = tenants.find(
-          (tenantItem) => String(tenantItem.id) === String(contract.tenantId),
-        );
-
-        return {
-          id: contract.id,
-          propertyName: property?.name || "Imóvel não encontrado",
-          tenantName: tenant?.name || "Pessoa não encontrada",
-          amount: getContractValue(contract),
-        };
-      })
-      .sort((first, second) => second.amount - first.amount)
-      .slice(0, 5);
-  }, [activeContractsList, properties, tenants]);
-
-  const nextPayments = useMemo(() => {
-    return activeContractsList.slice(0, 5).map((contract, index) => {
-      const property = properties.find(
-        (propertyItem) =>
-          String(propertyItem.id) === String(contract.propertyId),
-      );
-
-      const tenant = tenants.find(
-        (tenantItem) => String(tenantItem.id) === String(contract.tenantId),
-      );
-
-      return {
-        id: contract.id,
-        propertyName: property?.name || "Imóvel não encontrado",
-        tenantName: tenant?.name || "Pessoa não encontrada",
-        dueDate: `${String(5 + index * 5).padStart(2, "0")}/${String(
-          new Date().getMonth() + 1,
-        ).padStart(2, "0")}/${new Date().getFullYear()}`,
-        amount: getContractValue(contract),
-      };
-    });
-  }, [activeContractsList, properties, tenants]);
-
   const dashboardAlerts = useMemo<DashboardAlert[]>(() => {
     const alerts: DashboardAlert[] = [];
     const contractsWithoutValue = activeContractsList.filter(
@@ -695,306 +651,307 @@ export default function DashboardPage() {
   ]);
 
   return (
-    <AppShell>
-      <style>{rentixDashboardThemeStyle}</style>
-      <div data-rentix-theme={dashboardTheme} className="rentix-dashboard-page space-y-8 pt-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-4xl font-black tracking-tight text-slate-950">
-              Dashboard
-            </h1>
-            <p className="mt-2 max-w-2xl text-slate-500">
-              Indicadores estratégicos para acompanhar ocupação, receita,
-              contratos e oportunidades da carteira imobiliária.
-            </p>
+    <PrivateRoute>
+      <AppShell>
+        <style>{rentixDashboardThemeStyle}</style>
+        <div data-rentix-theme={dashboardTheme} className="rentix-dashboard-page space-y-8 pt-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h1 className="text-4xl font-black tracking-tight text-slate-950">
+                Dashboard
+              </h1>
+              <p className="mt-2 max-w-2xl text-slate-500">
+                Indicadores estratégicos para acompanhar ocupação, receita,
+                contratos e oportunidades da carteira imobiliária.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-orange-100 bg-white px-5 py-3 text-sm font-bold text-slate-600 shadow-sm">
+              📅 Hoje, {new Date().toLocaleDateString("pt-BR")}
+            </div>
           </div>
 
-          <div className="rounded-2xl border border-orange-100 bg-white px-5 py-3 text-sm font-bold text-slate-600 shadow-sm">
-            📅 Hoje, {new Date().toLocaleDateString("pt-BR")}
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+            <MetricCard
+              icon="💰"
+              title="Receita mensal ativa"
+              value={formatCurrency(monthlyRevenue)}
+              detail={`${formatCurrency(annualRevenueProjection)} projetado ao ano`}
+              trend={`${revenueEfficiency}% da capacidade`}
+            />
+
+            <MetricCard
+              icon="📈"
+              title="Taxa de ocupação"
+              value={`${occupancyRate}%`}
+              detail={`${rentedProperties} de ${totalProperties} imóveis alugados`}
+              trend={`${vacancyRate}% disponível`}
+            />
+
+            <MetricCard
+              icon="📄"
+              title="Contratos ativos"
+              value={activeContracts}
+              detail={`${finishedContracts} finalizado(s)`}
+              trend={`${formatCurrency(averageTicket)} ticket médio`}
+            />
+
+            <MetricCard
+              icon="🏠"
+              title="Receita em aberto"
+              value={formatCurrency(availablePotentialRevenue)}
+              detail={`${availableProperties} imóvel(is) disponível(is)`}
+              trend="Potencial mensal"
+            />
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-12">
+            <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-8">
+              <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h2 className="text-lg font-black text-slate-950">
+                    Evolução da receita contratada
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {revenueChartDescription}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex rounded-full bg-slate-50 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setRevenueChartView("month")}
+                      className={`rounded-full px-3 py-2 text-xs font-black transition ${
+                        revenueChartView === "month"
+                          ? "bg-orange-500 text-white shadow-sm"
+                          : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                      }`}
+                    >
+                      Mês
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setRevenueChartView("day")}
+                      className={`rounded-full px-3 py-2 text-xs font-black transition ${
+                        revenueChartView === "day"
+                          ? "bg-orange-500 text-white shadow-sm"
+                          : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                      }`}
+                    >
+                      Dia
+                    </button>
+                  </div>
+
+                  <ChartBadge label="Receita" color="bg-orange-500" />
+                  <ChartBadge label="Contratos" color="bg-slate-400" />
+                </div>
+              </div>
+
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={selectedRevenueChartData}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="#e2e8f0"
+                    />
+                    <XAxis dataKey="month" tickLine={false} axisLine={false} />
+                    <YAxis
+                      yAxisId="revenue"
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(value) => compactCurrency(Number(value))}
+                    />
+                    <YAxis
+                      yAxisId="contracts"
+                      orientation="right"
+                      tickLine={false}
+                      axisLine={false}
+                      allowDecimals={false}
+                    />
+                    <Tooltip
+                      formatter={(value, name) => {
+                        if (name === "expected")
+                          return [formatCurrency(Number(value)), "Receita"];
+                        return [Number(value), "Contratos"];
+                      }}
+                      labelFormatter={(label) =>
+                        `${revenueChartView === "month" ? "Mês" : "Dia"}: ${label}`
+                      }
+                    />
+                    <Bar
+                      yAxisId="revenue"
+                      dataKey="expected"
+                      radius={[12, 12, 0, 0]}
+                      fill={chartColors.orange}
+                      barSize={revenueChartView === "month" ? 44 : 18}
+                    />
+                    <Line
+                      yAxisId="contracts"
+                      type="monotone"
+                      dataKey="activeContracts"
+                      stroke={chartColors.slate}
+                      strokeWidth={3}
+                      dot={{ r: 4 }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+
+            <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-4">
+              <h2 className="text-lg font-black text-slate-950">
+                Central de atenção
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Pontos que merecem acompanhamento para melhorar a operação.
+              </p>
+
+              <div className="mt-5 space-y-3">
+                {dashboardAlerts.map((alert) => (
+                  <AlertCard key={alert.id} alert={alert} />
+                ))}
+              </div>
+            </section>
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-12">
+            <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-8">
+              <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h2 className="text-lg font-black text-slate-950">
+                    Evolução de contratos
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {contractChartDescription}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex rounded-full bg-slate-50 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setContractChartView("month")}
+                      className={`rounded-full px-3 py-2 text-xs font-black transition ${
+                        contractChartView === "month"
+                          ? "bg-orange-500 text-white shadow-sm"
+                          : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                      }`}
+                    >
+                      Mês
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setContractChartView("day")}
+                      className={`rounded-full px-3 py-2 text-xs font-black transition ${
+                        contractChartView === "day"
+                          ? "bg-orange-500 text-white shadow-sm"
+                          : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                      }`}
+                    >
+                      Dia
+                    </button>
+                  </div>
+
+                  <ChartBadge label="Criados" color="bg-orange-500" />
+                  <ChartBadge label="Ativos" color="bg-slate-400" />
+                </div>
+              </div>
+
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={selectedContractEvolutionData}>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="#e2e8f0"
+                    />
+                    <XAxis dataKey="month" tickLine={false} axisLine={false} />
+                    <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
+                    <Tooltip
+                      formatter={(value, name) => {
+                        if (name === "createdContracts")
+                          return [Number(value), "Criados"];
+                        return [Number(value), "Ativos"];
+                      }}
+                      labelFormatter={(label) =>
+                        `${contractChartView === "month" ? "Mês" : "Dia"}: ${label}`
+                      }
+                    />
+                    <Bar
+                      dataKey="createdContracts"
+                      radius={[12, 12, 0, 0]}
+                      fill={chartColors.orange}
+                      barSize={contractChartView === "month" ? 44 : 18}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="activeContracts"
+                      stroke={chartColors.slate}
+                      strokeWidth={3}
+                      dot={{ r: 4 }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+
+            <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-4">
+              <h2 className="text-lg font-black text-slate-950">
+                Financeiro do dia
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Movimentos vencendo hoje, atrasados e próximos lançamentos.
+              </p>
+
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <FinancialSummaryCard
+                  title="A receber hoje"
+                  value={formatCurrency(todayReceivableTotal)}
+                  detail={`${todayReceivableMovements.length} item(ns)`}
+                  tone="orange"
+                />
+                <FinancialSummaryCard
+                  title="A pagar hoje"
+                  value={formatCurrency(todayPayableTotal)}
+                  detail={`${todayPayableMovements.length} item(ns)`}
+                  tone="slate"
+                />
+                <FinancialSummaryCard
+                  title="Próx. recebimentos"
+                  value={formatCurrency(upcomingReceivableTotal)}
+                  detail={`${upcomingReceivableMovements.length} item(ns)`}
+                  tone="green"
+                />
+                <FinancialSummaryCard
+                  title="Próx. pagamentos"
+                  value={formatCurrency(upcomingPayableTotal)}
+                  detail={`${upcomingPayableMovements.length} item(ns)`}
+                  tone="red"
+                />
+              </div>
+
+              <div className="mt-5 space-y-3">
+                <FinancialMovementPreview
+                  title="Receber"
+                  emptyMessage="Nenhuma conta a receber próxima."
+                  movements={[...todayReceivableMovements, ...upcomingReceivableMovements].slice(0, 4)}
+                />
+
+                <FinancialMovementPreview
+                  title="Pagar"
+                  emptyMessage="Nenhuma conta a pagar próxima."
+                  movements={[...todayPayableMovements, ...upcomingPayableMovements].slice(0, 4)}
+                />
+              </div>
+            </section>
           </div>
         </div>
-
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-          <MetricCard
-            icon="💰"
-            title="Receita mensal ativa"
-            value={formatCurrency(monthlyRevenue)}
-            detail={`${formatCurrency(annualRevenueProjection)} projetado ao ano`}
-            trend={`${revenueEfficiency}% da capacidade`}
-          />
-
-          <MetricCard
-            icon="📈"
-            title="Taxa de ocupação"
-            value={`${occupancyRate}%`}
-            detail={`${rentedProperties} de ${totalProperties} imóveis alugados`}
-            trend={`${vacancyRate}% disponível`}
-          />
-
-          <MetricCard
-            icon="📄"
-            title="Contratos ativos"
-            value={activeContracts}
-            detail={`${finishedContracts} finalizado(s)`}
-            trend={`${formatCurrency(averageTicket)} ticket médio`}
-          />
-
-          <MetricCard
-            icon="🏠"
-            title="Receita em aberto"
-            value={formatCurrency(availablePotentialRevenue)}
-            detail={`${availableProperties} imóvel(is) disponível(is)`}
-            trend="Potencial mensal"
-          />
-        </div>
-
-        <div className="grid gap-6 xl:grid-cols-12">
-          <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-8">
-            <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div>
-                <h2 className="text-lg font-black text-slate-950">
-                  Evolução da receita contratada
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  {revenueChartDescription}
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex rounded-full bg-slate-50 p-1">
-                  <button
-                    type="button"
-                    onClick={() => setRevenueChartView("month")}
-                    className={`rounded-full px-3 py-2 text-xs font-black transition ${
-                      revenueChartView === "month"
-                        ? "bg-orange-500 text-white shadow-sm"
-                        : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
-                    }`}
-                  >
-                    Mês
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setRevenueChartView("day")}
-                    className={`rounded-full px-3 py-2 text-xs font-black transition ${
-                      revenueChartView === "day"
-                        ? "bg-orange-500 text-white shadow-sm"
-                        : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
-                    }`}
-                  >
-                    Dia
-                  </button>
-                </div>
-
-                <ChartBadge label="Receita" color="bg-orange-500" />
-                <ChartBadge label="Contratos" color="bg-slate-400" />
-              </div>
-            </div>
-
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={selectedRevenueChartData}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    stroke="#e2e8f0"
-                  />
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} />
-                  <YAxis
-                    yAxisId="revenue"
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(value) => compactCurrency(Number(value))}
-                  />
-                  <YAxis
-                    yAxisId="contracts"
-                    orientation="right"
-                    tickLine={false}
-                    axisLine={false}
-                    allowDecimals={false}
-                  />
-                  <Tooltip
-                    formatter={(value, name) => {
-                      if (name === "expected")
-                        return [formatCurrency(Number(value)), "Receita"];
-                      return [Number(value), "Contratos"];
-                    }}
-                    labelFormatter={(label) =>
-                      `${revenueChartView === "month" ? "Mês" : "Dia"}: ${label}`
-                    }
-                  />
-                  <Bar
-                    yAxisId="revenue"
-                    dataKey="expected"
-                    radius={[12, 12, 0, 0]}
-                    fill={chartColors.orange}
-                    barSize={revenueChartView === "month" ? 44 : 18}
-                  />
-                  <Line
-                    yAxisId="contracts"
-                    type="monotone"
-                    dataKey="activeContracts"
-                    stroke={chartColors.slate}
-                    strokeWidth={3}
-                    dot={{ r: 4 }}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-          </section>
-
-          <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-4">
-            <h2 className="text-lg font-black text-slate-950">
-              Central de atenção
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Pontos que merecem acompanhamento para melhorar a operação.
-            </p>
-
-            <div className="mt-5 space-y-3">
-              {dashboardAlerts.map((alert) => (
-                <AlertCard key={alert.id} alert={alert} />
-              ))}
-            </div>
-          </section>
-        </div>
-
-        <div className="grid gap-6 xl:grid-cols-12">
-          <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-8">
-            <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div>
-                <h2 className="text-lg font-black text-slate-950">
-                  Evolução de contratos
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  {contractChartDescription}
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex rounded-full bg-slate-50 p-1">
-                  <button
-                    type="button"
-                    onClick={() => setContractChartView("month")}
-                    className={`rounded-full px-3 py-2 text-xs font-black transition ${
-                      contractChartView === "month"
-                        ? "bg-orange-500 text-white shadow-sm"
-                        : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
-                    }`}
-                  >
-                    Mês
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setContractChartView("day")}
-                    className={`rounded-full px-3 py-2 text-xs font-black transition ${
-                      contractChartView === "day"
-                        ? "bg-orange-500 text-white shadow-sm"
-                        : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
-                    }`}
-                  >
-                    Dia
-                  </button>
-                </div>
-
-                <ChartBadge label="Criados" color="bg-orange-500" />
-                <ChartBadge label="Ativos" color="bg-slate-400" />
-              </div>
-            </div>
-
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={selectedContractEvolutionData}>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    stroke="#e2e8f0"
-                  />
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} />
-                  <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
-                  <Tooltip
-                    formatter={(value, name) => {
-                      if (name === "createdContracts")
-                        return [Number(value), "Criados"];
-                      return [Number(value), "Ativos"];
-                    }}
-                    labelFormatter={(label) =>
-                      `${contractChartView === "month" ? "Mês" : "Dia"}: ${label}`
-                    }
-                  />
-                  <Bar
-                    dataKey="createdContracts"
-                    radius={[12, 12, 0, 0]}
-                    fill={chartColors.orange}
-                    barSize={contractChartView === "month" ? 44 : 18}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="activeContracts"
-                    stroke={chartColors.slate}
-                    strokeWidth={3}
-                    dot={{ r: 4 }}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-          </section>
-
-          <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-4">
-            <h2 className="text-lg font-black text-slate-950">
-              Financeiro do dia
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Movimentos vencendo hoje, atrasados e próximos lançamentos.
-            </p>
-
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              <FinancialSummaryCard
-                title="A receber hoje"
-                value={formatCurrency(todayReceivableTotal)}
-                detail={`${todayReceivableMovements.length} item(ns)`}
-                tone="orange"
-              />
-              <FinancialSummaryCard
-                title="A pagar hoje"
-                value={formatCurrency(todayPayableTotal)}
-                detail={`${todayPayableMovements.length} item(ns)`}
-                tone="slate"
-              />
-              <FinancialSummaryCard
-                title="Próx. recebimentos"
-                value={formatCurrency(upcomingReceivableTotal)}
-                detail={`${upcomingReceivableMovements.length} item(ns)`}
-                tone="green"
-              />
-              <FinancialSummaryCard
-                title="Próx. pagamentos"
-                value={formatCurrency(upcomingPayableTotal)}
-                detail={`${upcomingPayableMovements.length} item(ns)`}
-                tone="red"
-              />
-            </div>
-
-            <div className="mt-5 space-y-3">
-              <FinancialMovementPreview
-                title="Receber"
-                emptyMessage="Nenhuma conta a receber próxima."
-                movements={[...todayReceivableMovements, ...upcomingReceivableMovements].slice(0, 4)}
-              />
-
-              <FinancialMovementPreview
-                title="Pagar"
-                emptyMessage="Nenhuma conta a pagar próxima."
-                movements={[...todayPayableMovements, ...upcomingPayableMovements].slice(0, 4)}
-              />
-            </div>
-          </section>
-        </div>
-
-      </div>
-    </AppShell>
+      </AppShell>
+    </PrivateRoute>
   );
 }
 
@@ -1024,7 +981,6 @@ function MetricCard({ icon, title, value, detail, trend }: MetricCardProps) {
     </div>
   );
 }
-
 
 type AlertCardProps = {
   alert: DashboardAlert;
@@ -1152,44 +1108,6 @@ function FinancialMovementPreview({
   );
 }
 
-type RankingItemProps = {
-  position: number;
-  title: string;
-  subtitle: string;
-  value: string;
-};
-
-function RankingItem({ position, title, subtitle, value }: RankingItemProps) {
-  return (
-    <div className="flex items-center justify-between gap-4 rounded-2xl bg-slate-50 px-4 py-4">
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-sm font-black text-orange-600">
-          {position}
-        </div>
-        <div className="min-w-0">
-          <p className="truncate font-black text-slate-800">{title}</p>
-          <p className="truncate text-sm text-slate-500">{subtitle}</p>
-        </div>
-      </div>
-
-      <p className="shrink-0 font-black text-orange-600">{value}</p>
-    </div>
-  );
-}
-
-
-type EmptyStateProps = {
-  message: string;
-};
-
-function EmptyState({ message }: EmptyStateProps) {
-  return (
-    <div className="mt-5 rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm font-semibold text-slate-500">
-      {message}
-    </div>
-  );
-}
-
 function getContractValue(contract: Contract) {
   return Number(contract.value ?? contract.rentValue ?? 0);
 }
@@ -1246,8 +1164,6 @@ function getLastThirtyDays() {
     );
   });
 }
-
-
 
 function safeParseArray<T>(value: string | null): T[] {
   if (!value) return [];

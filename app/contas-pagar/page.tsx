@@ -1,7 +1,20 @@
 "use client";
 
+/* eslint-disable react-hooks/purity */
+
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/app-shell";
+import { useAuth } from "@/context/AuthContext";
+import {
+  createPayableAccount,
+  deletePayableAccount,
+  getPayableAccounts,
+  payAccount,
+  reversePaidAccount,
+  updatePayableAccount,
+  type PayableAccount,
+  type PaymentMethod as ApiPaymentMethod,
+} from "@/services/financial.service";
 
 type PersonType = "Individual" | "Company";
 
@@ -181,6 +194,9 @@ const initialTenantFormData: TenantFormData = {
 };
 
 export default function AccountsPayablePage() {
+  const { user } = useAuth();
+  const companyId = user?.companyId;
+
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [paymentRecords, setPaymentRecords] = useState<ExpensePayment[]>([]);
@@ -244,6 +260,31 @@ export default function AccountsPayablePage() {
   const [reportFormError, setReportFormError] = useState("");
 
   const [isBlackTheme, setIsBlackTheme] = useState(false);
+
+  useEffect(() => {
+    if (!companyId) return;
+
+    loadPayablesFromBackend(companyId);
+  }, [companyId]);
+
+  async function loadPayablesFromBackend(currentCompanyId: string) {
+    try {
+      const apiExpenses = await getPayableAccounts(currentCompanyId);
+      const nextExpenses = apiExpenses.map(mapApiPayableToExpense);
+      const nextPaymentRecords = apiExpenses.flatMap(mapApiPayableToPayments);
+
+      setExpenses(nextExpenses);
+      setPaymentRecords(nextPaymentRecords);
+      localStorage.setItem("rentix_expenses", JSON.stringify(nextExpenses));
+      localStorage.setItem("rentix_payables", JSON.stringify(nextExpenses));
+      localStorage.setItem(
+        "rentix_expense_payments",
+        JSON.stringify(nextPaymentRecords),
+      );
+    } catch (error) {
+      console.error("NÃ£o foi possÃ­vel carregar contas a pagar.", error);
+    }
+  }
 
   useEffect(() => {
     function applyStoredTheme() {
@@ -1096,7 +1137,7 @@ export default function AccountsPayablePage() {
     );
   }
 
-  function saveExpense() {
+  async function saveExpense() {
     setExpenseFormError("");
 
     const normalizedAmount = normalizeAmount(formAmount);
@@ -1133,13 +1174,39 @@ export default function AccountsPayablePage() {
         note: currentPaymentRecord?.note || "",
       };
 
-      savePaymentRecords([
+      const nextPaymentRecords = [
         ...paymentRecords.filter(
           (paymentRecord) =>
             String(paymentRecord.expenseId) !== String(editingExpenseId),
         ),
         updatedPaymentRecord,
-      ]);
+      ];
+
+      if (companyId) {
+        try {
+          await reversePaidAccount(editingExpenseId);
+          await payAccount(editingExpenseId, {
+            paidAt: updatedPaymentRecord.paidAt,
+            method: mapUiPaymentMethodToApi(updatedPaymentRecord.method),
+            paymentItems: updatedPaymentRecord.paymentItems
+              ? mapUiPaymentItemsToApi(updatedPaymentRecord.paymentItems)
+              : undefined,
+            interest: updatedPaymentRecord.interest,
+            discount: updatedPaymentRecord.discount,
+            amountPaid: updatedPaymentRecord.amountPaid,
+            note: updatedPaymentRecord.note,
+          });
+        } catch (error) {
+          setExpenseFormError(
+            error instanceof Error
+              ? error.message
+              : "NÃ£o foi possÃ­vel atualizar o pagamento no backend.",
+          );
+          return;
+        }
+      }
+
+      savePaymentRecords(nextPaymentRecords);
 
       closeCreateModal();
       return;
@@ -1192,6 +1259,44 @@ export default function AccountsPayablePage() {
         (expense) => String(expense.id) === String(savedExpense.id),
       );
 
+      if (companyId) {
+        try {
+          const apiExpense = alreadyExists
+            ? await updatePayableAccount(savedExpense.id, {
+                personId: selectedTenant.id,
+                personName: selectedTenant.name,
+                description: trimmedDescription,
+                category: trimmedCategory,
+                note: formNote.trim(),
+                dueDate: savedExpense.dueDate || issueDate,
+                issueDate,
+                amount: normalizedAmount,
+                manual: true,
+              })
+            : await createPayableAccount({
+                companyId,
+                personId: selectedTenant.id,
+                personName: selectedTenant.name,
+                description: trimmedDescription,
+                category: trimmedCategory,
+                note: formNote.trim(),
+                dueDate: savedExpense.dueDate || issueDate,
+                issueDate,
+                amount: normalizedAmount,
+                manual: true,
+              });
+
+          savedExpense.id = apiExpense.id;
+        } catch (error) {
+          setExpenseFormError(
+            error instanceof Error
+              ? error.message
+              : "NÃ£o foi possÃ­vel salvar a conta a pagar no backend.",
+          );
+          return;
+        }
+      }
+
       const updatedExpenses = alreadyExists
         ? expenses.map((expense) =>
             String(expense.id) === String(savedExpense.id)
@@ -1239,6 +1344,41 @@ export default function AccountsPayablePage() {
       installmentTotal: installmentPreview.length,
       installmentGroupId,
     }));
+
+    if (companyId) {
+      try {
+        const apiExpenses = await Promise.all(
+          newExpenses.map((expense) =>
+            createPayableAccount({
+              companyId,
+              personId: selectedTenant.id,
+              personName: selectedTenant.name,
+              description: expense.description,
+              category: expense.category,
+              note: expense.note,
+              dueDate: expense.dueDate || issueDate,
+              issueDate,
+              amount: expense.amount,
+              manual: true,
+              installmentNumber: expense.installmentNumber,
+              installmentTotal: expense.installmentTotal,
+              installmentGroupId: expense.installmentGroupId,
+            }),
+          ),
+        );
+
+        apiExpenses.forEach((apiExpense, index) => {
+          newExpenses[index].id = apiExpense.id;
+        });
+      } catch (error) {
+        setExpenseFormError(
+          error instanceof Error
+            ? error.message
+            : "NÃ£o foi possÃ­vel salvar as parcelas no backend.",
+        );
+        return;
+      }
+    }
 
     saveExpenses([...expenses, ...newExpenses]);
     closeCreateModal();
@@ -1316,7 +1456,7 @@ export default function AccountsPayablePage() {
     setIsPaymentConfirmationOpen(true);
   }
 
-  function finishPayExpense() {
+  async function finishPayExpense() {
     if (!expensePendingPaymentReceipt) return;
 
     const interest = normalizeAmount(paymentInterest);
@@ -1347,6 +1487,27 @@ export default function AccountsPayablePage() {
       paymentRecord,
     ];
 
+    if (companyId) {
+      try {
+        await payAccount(expensePendingPaymentReceipt.id, {
+          paidAt: paymentRecord.paidAt,
+          method: mapUiPaymentMethodToApi(paymentRecord.method),
+          paymentItems: mapUiPaymentItemsToApi(paymentRecord.paymentItems || []),
+          interest,
+          discount,
+          amountPaid,
+          note: paymentRecord.note,
+        });
+      } catch (error) {
+        setPaymentFormError(
+          error instanceof Error
+            ? error.message
+            : "NÃ£o foi possÃ­vel registrar o pagamento no backend.",
+        );
+        return;
+      }
+    }
+
     savePaymentRecords(updatedPaymentRecords);
     closePayExpenseModal();
   }
@@ -1370,8 +1531,22 @@ export default function AccountsPayablePage() {
     setExpensePendingDeletion(null);
   }
 
-  function confirmDeleteExpense() {
+  async function confirmDeleteExpense() {
     if (!expensePendingDeletion) return;
+
+    if (companyId) {
+      try {
+        await deletePayableAccount(expensePendingDeletion.id);
+      } catch (error) {
+        setExpenseFormError(
+          error instanceof Error
+            ? error.message
+            : "NÃ£o foi possÃ­vel excluir a conta a pagar no backend.",
+        );
+        setExpensePendingDeletion(null);
+        return;
+      }
+    }
 
     const updatedExpenses = expenses.filter(
       (expense) => String(expense.id) !== String(expensePendingDeletion.id),
@@ -1407,8 +1582,22 @@ export default function AccountsPayablePage() {
     setExpensePendingPaymentReversal(null);
   }
 
-  function confirmPaymentReversal() {
+  async function confirmPaymentReversal() {
     if (!expensePendingPaymentReversal) return;
+
+    if (companyId) {
+      try {
+        await reversePaidAccount(expensePendingPaymentReversal.id);
+      } catch (error) {
+        setExpenseFormError(
+          error instanceof Error
+            ? error.message
+            : "NÃ£o foi possÃ­vel estornar o pagamento no backend.",
+        );
+        setExpensePendingPaymentReversal(null);
+        return;
+      }
+    }
 
     const updatedPaymentRecords = paymentRecords.filter(
       (paymentRecord) =>
@@ -3314,6 +3503,118 @@ export default function AccountsPayablePage() {
       )}
     </AppShell>
   );
+}
+
+function mapApiPayableToExpense(account: PayableAccount): Expense {
+  return {
+    id: account.id,
+    personId: account.personId || undefined,
+    personName: account.personName || "Pessoa nÃ£o informada",
+    description: account.description,
+    category: account.category || "Outros",
+    note: account.note || "",
+    amount: normalizeApiAmount(account.amount),
+    date: account.issueDate || account.dueDate,
+    issueDate: account.issueDate || account.dueDate,
+    dueDate: account.dueDate,
+    status: account.status === "PAID" ? "Paid" : "Pending",
+    manual: account.manual,
+    installmentNumber: account.installmentNumber || undefined,
+    installmentTotal: account.installmentTotal || undefined,
+    installmentGroupId: account.installmentGroupId || undefined,
+  };
+}
+
+function mapApiPayableToPayments(account: PayableAccount): ExpensePayment[] {
+  return (account.payments || []).map((payment) => ({
+    expenseId: account.id,
+    paidAt: payment.paidAt,
+    method: mapApiPaymentMethodToUi(payment.method),
+    paymentItems: mapApiPaymentItemsToUi(payment.paymentItems),
+    interest: normalizeApiAmount(payment.interest),
+    discount: normalizeApiAmount(payment.discount),
+    amountPaid: normalizeApiAmount(payment.amountPaid),
+    note: payment.note || "",
+  }));
+}
+
+function mapUiPaymentMethodToApi(method: PaymentMethod): ApiPaymentMethod {
+  const methodMap: Record<PaymentMethod, ApiPaymentMethod> = {
+    Cash: "CASH",
+    Pix: "PIX",
+    CreditCard: "CREDIT_CARD",
+    DebitCard: "DEBIT_CARD",
+    BankSlip: "BANK_SLIP",
+    BankTransfer: "BANK_TRANSFER",
+    Other: "OTHER",
+  };
+
+  return methodMap[method];
+}
+
+function mapApiPaymentMethodToUi(method: ApiPaymentMethod): PaymentMethod {
+  const methodMap: Record<ApiPaymentMethod, PaymentMethod> = {
+    CASH: "Cash",
+    PIX: "Pix",
+    CREDIT_CARD: "CreditCard",
+    DEBIT_CARD: "DebitCard",
+    BANK_SLIP: "BankSlip",
+    BANK_TRANSFER: "BankTransfer",
+    OTHER: "Other",
+  };
+
+  return methodMap[method];
+}
+
+function mapUiPaymentItemsToApi(items: PaymentAllocation[]) {
+  return items.map((item) => ({
+    ...item,
+    method: mapUiPaymentMethodToApi(item.method),
+  }));
+}
+
+function mapApiPaymentItemsToUi(items: unknown): PaymentAllocation[] | undefined {
+  if (!Array.isArray(items)) {
+    return undefined;
+  }
+
+  return items
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      const record = item as {
+        id?: unknown;
+        method?: unknown;
+        amount?: unknown;
+      };
+
+      if (typeof record.method !== "string") {
+        return null;
+      }
+
+      return {
+        id: typeof record.id === "string" ? record.id : `payment-item-${Date.now()}`,
+        method: mapApiPaymentMethodToUi(record.method as ApiPaymentMethod),
+        amount: normalizeApiAmount(record.amount),
+      };
+    })
+    .filter((item): item is PaymentAllocation => item !== null);
+}
+
+function normalizeApiAmount(value: unknown) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (typeof value === "string") {
+    const parsedValue = Number(value);
+
+    return Number.isFinite(parsedValue) ? parsedValue : 0;
+  }
+
+  return 0;
 }
 
 function isValidCnpj(value: string) {

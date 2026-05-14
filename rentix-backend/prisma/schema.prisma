@@ -1,0 +1,336 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  OWNER   @map("PROPRIETARIO")
+  ADMIN   @map("ADMINISTRADOR")
+  MANAGER @map("GERENTE")
+  USER
+
+  @@map("papel_usuario")
+}
+
+enum PersonType {
+  INDIVIDUAL @map("PESSOA_FISICA")
+  COMPANY    @map("PESSOA_JURIDICA")
+
+  @@map("tipo_pessoa")
+}
+
+enum PersonStatus {
+  ACTIVE   @map("ATIVO")
+  INACTIVE @map("INATIVO")
+
+  @@map("status_pessoa")
+}
+
+model Company {
+  id          String  @id @default(uuid())
+  tradeName   String  @map("nome_fantasia")
+  companyName String? @map("razao_social")
+  document    String? @map("documento")
+  phone       String? @map("telefone")
+  email       String?
+  isActive    Boolean @default(true) @map("ativo")
+
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+
+  users              User[]
+  people             Person[]
+  properties         Property[]
+  contracts          Contract[]
+  receivableAccounts ContaReceber[]
+  payableAccounts    ContaPagar[]
+
+  @@map("empresas")
+}
+
+model User {
+  id           String @id @default(uuid())
+  companyId    String @map("empresa_id")
+  name         String @map("nome")
+  email        String @unique
+  passwordHash String @map("senha_hash")
+
+  role     UserRole @default(USER) @map("papel")
+  isActive Boolean  @default(true) @map("ativo")
+
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@map("usuarios")
+}
+
+model Person {
+  id        String @id @default(uuid())
+  companyId String @map("empresa_id")
+
+  type   PersonType   @map("tipo")
+  status PersonStatus @default(ACTIVE) @map("status")
+
+  name     String @map("nome")
+  document String @map("documento")
+
+  stateRegistration String? @map("inscricao_estadual")
+  identityNumber    String? @map("rg")
+
+  email String?
+  phone String? @map("telefone")
+
+  zipCode String? @map("cep")
+  city    String? @map("cidade")
+  state   String? @map("estado")
+  address String? @map("endereco")
+
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+
+  company            Company        @relation(fields: [companyId], references: [id])
+  properties         Property[]
+  tenantContracts    Contract[]     @relation("ContractTenant")
+  receivableAccounts ContaReceber[]
+  payableAccounts    ContaPagar[]
+
+  @@index([companyId])
+  @@index([document])
+  @@map("pessoas")
+}
+
+model Property {
+  id        String  @id @default(uuid())
+  companyId String  @map("empresa_id")
+  ownerId   String? @map("proprietario_id")
+
+  title       String   @map("titulo")
+  code        String?  @map("codigo")
+  type        String?  @map("tipo")
+  purpose     String?  @map("finalidade")
+  rentalValue Decimal? @map("valor_aluguel") @db.Decimal(10, 2)
+
+  zipCode    String? @map("cep")
+  city       String? @map("cidade")
+  state      String? @map("estado")
+  address    String? @map("endereco")
+  district   String? @map("bairro")
+  number     String? @map("numero")
+  complement String? @map("complemento")
+
+  bedrooms  Int? @map("quartos")
+  bathrooms Int? @map("banheiros")
+  garages   Int? @map("garagens")
+
+  description String? @map("descricao")
+
+  isActive Boolean @default(true) @map("ativo")
+
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+
+  company   Company    @relation(fields: [companyId], references: [id])
+  owner     Person?    @relation(fields: [ownerId], references: [id])
+  contracts Contract[]
+
+  @@index([companyId])
+  @@index([ownerId])
+  @@map("imoveis")
+}
+
+enum ContractStatus {
+  ACTIVE   @map("ATIVO")
+  INACTIVE @map("INATIVO")
+  CANCELED @map("CANCELADO")
+  FINISHED @map("FINALIZADO")
+  DELETED  @map("EXCLUIDO")
+
+  @@map("status_contrato")
+}
+
+enum ContractStatusReasonType {
+  CANCELED @map("CANCELADO")
+  DELETED  @map("EXCLUIDO")
+
+  @@map("tipo_motivo_status_contrato")
+}
+
+model Contract {
+  id         String @id @default(uuid())
+  companyId  String @map("empresa_id")
+  propertyId String @map("imovel_id")
+  tenantId   String @map("inquilino_id")
+
+  propertyName String? @map("nome_imovel")
+  tenantName   String? @map("nome_inquilino")
+
+  startDate DateTime @map("data_inicio")
+  endDate   DateTime @map("data_fim")
+  rentValue Decimal  @map("valor_aluguel") @db.Decimal(10, 2)
+
+  status ContractStatus @default(ACTIVE) @map("status")
+
+  deletedAt        DateTime?                 @map("excluido_em")
+  statusReason     String?                   @map("motivo_status")
+  statusReasonType ContractStatusReasonType? @map("tipo_motivo_status")
+  statusReasonAt   DateTime?                 @map("motivo_status_em")
+
+  isTemporaryRental Boolean @default(false) @map("locacao_temporaria")
+  checkInTime       String? @map("horario_entrada")
+  checkOutTime      String? @map("horario_saida")
+
+  renewedAt      DateTime? @map("renovado_em")
+  renewalHistory Json?     @map("historico_renovacoes")
+
+  finishedAt   DateTime? @map("finalizado_em")
+  finishReason String?   @map("motivo_finalizacao")
+
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+
+  company            Company        @relation(fields: [companyId], references: [id])
+  property           Property       @relation(fields: [propertyId], references: [id])
+  tenant             Person         @relation("ContractTenant", fields: [tenantId], references: [id])
+  receivableAccounts ContaReceber[]
+
+  @@index([companyId])
+  @@index([propertyId])
+  @@index([tenantId])
+  @@index([status])
+  @@map("contratos")
+}
+
+enum FinancialAccountStatus {
+  PENDING @map("PENDENTE")
+  PAID    @map("PAGO")
+
+  @@map("status_conta_financeira")
+}
+
+enum PaymentMethod {
+  CASH          @map("DINHEIRO")
+  PIX           @map("PIX")
+  CREDIT_CARD   @map("CARTAO_CREDITO")
+  DEBIT_CARD    @map("CARTAO_DEBITO")
+  BANK_SLIP     @map("BOLETO")
+  BANK_TRANSFER @map("TRANSFERENCIA")
+  OTHER         @map("OUTRO")
+
+  @@map("forma_pagamento")
+}
+
+model ContaReceber {
+  id         String  @id @default(uuid())
+  companyId  String  @map("empresa_id")
+  contractId String? @map("contrato_id")
+  tenantId   String? @map("inquilino_id")
+
+  propertyName String @map("imovel")
+  tenantName   String @map("inquilino")
+
+  issueDate DateTime?              @map("data_lancamento")
+  dueDate   DateTime               @map("data_vencimento")
+  amount    Decimal                @map("valor") @db.Decimal(10, 2)
+  status    FinancialAccountStatus @default(PENDING) @map("status")
+  manual    Boolean                @default(true) @map("manual")
+
+  installmentNumber  Int?    @map("numero_parcela")
+  installmentTotal   Int?    @map("total_parcelas")
+  installmentGroupId String? @map("grupo_parcelamento_id")
+  isDownPayment      Boolean @default(false) @map("entrada")
+
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+
+  company  Company             @relation(fields: [companyId], references: [id])
+  contract Contract?           @relation(fields: [contractId], references: [id])
+  tenant   Person?             @relation(fields: [tenantId], references: [id])
+  payments PagamentoRecebido[]
+
+  @@index([companyId])
+  @@index([contractId])
+  @@index([tenantId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("contas_receber")
+}
+
+model PagamentoRecebido {
+  id       String @id @default(uuid())
+  chargeId String @map("conta_receber_id")
+
+  paidAt       DateTime      @map("pago_em")
+  method       PaymentMethod @map("forma_pagamento")
+  paymentItems Json?         @map("itens_pagamento")
+  interest     Decimal       @default(0) @map("juros") @db.Decimal(10, 2)
+  discount     Decimal       @default(0) @map("desconto") @db.Decimal(10, 2)
+  amountPaid   Decimal       @map("valor_pago") @db.Decimal(10, 2)
+  note         String?       @map("observacao")
+
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+
+  charge ContaReceber @relation(fields: [chargeId], references: [id])
+
+  @@index([chargeId])
+  @@map("pagamentos_recebidos")
+}
+
+model ContaPagar {
+  id         String  @id @default(uuid())
+  companyId  String  @map("empresa_id")
+  personId   String? @map("pessoa_id")
+  personName String? @map("pessoa")
+
+  description String                 @map("descricao")
+  category    String?                @map("categoria")
+  note        String?                @map("observacao")
+  amount      Decimal                @map("valor") @db.Decimal(10, 2)
+  issueDate   DateTime?              @map("data_lancamento")
+  dueDate     DateTime               @map("data_vencimento")
+  status      FinancialAccountStatus @default(PENDING) @map("status")
+  manual      Boolean                @default(true) @map("manual")
+
+  installmentNumber  Int?    @map("numero_parcela")
+  installmentTotal   Int?    @map("total_parcelas")
+  installmentGroupId String? @map("grupo_parcelamento_id")
+
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+
+  company  Company              @relation(fields: [companyId], references: [id])
+  person   Person?              @relation(fields: [personId], references: [id])
+  payments PagamentoRealizado[]
+
+  @@index([companyId])
+  @@index([personId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("contas_pagar")
+}
+
+model PagamentoRealizado {
+  id        String @id @default(uuid())
+  expenseId String @map("conta_pagar_id")
+
+  paidAt       DateTime      @map("pago_em")
+  method       PaymentMethod @map("forma_pagamento")
+  paymentItems Json?         @map("itens_pagamento")
+  interest     Decimal       @default(0) @map("juros") @db.Decimal(10, 2)
+  discount     Decimal       @default(0) @map("desconto") @db.Decimal(10, 2)
+  amountPaid   Decimal       @map("valor_pago") @db.Decimal(10, 2)
+  note         String?       @map("observacao")
+
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+
+  expense ContaPagar @relation(fields: [expenseId], references: [id])
+
+  @@index([expenseId])
+  @@map("pagamentos_realizados")
+}

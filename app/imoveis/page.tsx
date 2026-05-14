@@ -2,8 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/app-shell";
+import {
+  createProperty,
+  getProperties,
+  updateProperty,
+  type Property as ApiProperty,
+} from "@/services/properties.service";
 
-const PROPERTIES_STORAGE_KEY = "rentix_properties";
+
 const CONTRACTS_STORAGE_KEY = "rentix_contracts";
 const PROPERTY_MOVEMENTS_STORAGE_KEY = "rentix_property_movements";
 const COMPANY_SETTINGS_STORAGE_KEYS = [
@@ -153,6 +159,7 @@ export default function PropertiesPage() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<PropertyFilterStatus>("Active");
+  const [isLoadingProperties, setIsLoadingProperties] = useState(true);
 
   useEffect(() => {
     function applyStoredTheme() {
@@ -189,32 +196,9 @@ export default function PropertiesPage() {
   }, []);
 
   useEffect(() => {
-    const storedProperties = localStorage.getItem(PROPERTIES_STORAGE_KEY);
+    loadProperties();
+
     const storedMovements = localStorage.getItem(PROPERTY_MOVEMENTS_STORAGE_KEY);
-
-    if (storedProperties) {
-      const parsedProperties = JSON.parse(storedProperties) as Partial<Property>[];
-
-      const normalizedProperties: Property[] = parsedProperties.map((property) => ({
-        id: property.id || crypto.randomUUID(),
-        type: property.type || "Other",
-        name: toUpperText(property.name || ""),
-        zipCode: property.zipCode || "",
-        state: toUpperText(property.state || ""),
-        city: toUpperText(property.city || ""),
-        neighborhood: toUpperText(property.neighborhood || ""),
-        street: toUpperText(property.street || ""),
-        number: toUpperText(property.number || ""),
-        complement: toUpperText(property.complement || ""),
-        address: toUpperText(property.address || ""),
-        rentValue: Number(property.rentValue || 0),
-        status: property.status || "Available",
-        isActive: property.isActive ?? true,
-      }));
-
-      setProperties(normalizedProperties);
-      localStorage.setItem(PROPERTIES_STORAGE_KEY, JSON.stringify(normalizedProperties));
-    }
 
     if (storedMovements) {
       setPropertyMovements(safeParseArray<PropertyMovement>(storedMovements));
@@ -272,9 +256,65 @@ export default function PropertiesPage() {
     return getRentalHistoryByProperty(historyProperty);
   }, [historyProperty]);
 
-  function saveProperties(updatedProperties: Property[]) {
-    setProperties(updatedProperties);
-    localStorage.setItem(PROPERTIES_STORAGE_KEY, JSON.stringify(updatedProperties));
+  async function loadProperties() {
+    const companyId = getCurrentCompanyId();
+
+    if (!companyId) {
+      setProperties([]);
+      setIsLoadingProperties(false);
+      return;
+    }
+
+    try {
+      setIsLoadingProperties(true);
+
+      const response = await getProperties(companyId);
+
+      const normalizedProperties = response.map((property) =>
+        normalizeApiProperty(property),
+      );
+
+      setProperties(normalizedProperties);
+    } catch (error) {
+      console.error("Erro ao carregar imóveis:", error);
+      alert("Não foi possível carregar os imóveis.");
+    } finally {
+      setIsLoadingProperties(false);
+    }
+  }
+
+  function normalizeApiProperty(property: ApiProperty): Property {
+    const normalizedType = isValidPropertyType(property.type)
+      ? property.type
+      : "Other";
+
+    const propertyStatus: PropertyStatus = propertyHasActiveContract(property.id)
+      ? "Rented"
+      : "Available";
+
+    return {
+      id: property.id,
+      type: normalizedType,
+      name: toUpperText(property.title || ""),
+      zipCode: property.zipCode || "",
+      state: toUpperText(property.state || ""),
+      city: toUpperText(property.city || ""),
+      neighborhood: toUpperText(property.district || ""),
+      street: toUpperText(property.address || ""),
+      number: toUpperText(property.number || ""),
+      complement: toUpperText(property.complement || ""),
+      address: buildAddress(
+        property.address || "",
+        property.number || "",
+        property.district || "",
+        property.city || "",
+        property.state || "",
+        property.zipCode || "",
+      ),
+      rentValue: Number(property.rentalValue || 0),
+      status: propertyStatus,
+      isActive: property.isActive ?? true,
+    };
   }
 
   function savePropertyMovements(updatedMovements: PropertyMovement[]) {
@@ -467,7 +507,7 @@ export default function PropertiesPage() {
     setPendingInactiveConfirmation(null);
   }
 
-  function handleSaveProperty() {
+  async function handleSaveProperty() {
     const formattedName = toUpperText(name);
     const formattedState = toUpperText(state);
     const formattedCity = toUpperText(city);
@@ -514,39 +554,48 @@ export default function PropertiesPage() {
       return;
     }
 
-    const propertyData: Property = {
-      id: editingPropertyId || crypto.randomUUID(),
+    const companyId = getCurrentCompanyId();
+
+    if (!companyId) {
+      alert("Empresa não identificada. Faça login novamente.");
+      return;
+    }
+
+    const payload = {
+      companyId,
+      title: formattedName,
       type,
-      name: formattedName,
+      purpose: propertyStatus,
+      rentalValue: Number(rentValue),
       zipCode,
       state: formattedState,
       city: formattedCity,
-      neighborhood: formattedNeighborhood,
-      street: formattedStreet,
+      district: formattedNeighborhood,
+      address: formattedStreet,
       number: formattedNumber,
       complement: formattedComplement,
-      address: formattedAddress,
-      rentValue: Number(rentValue),
-      status:
-        editingPropertyId && propertyHasActiveContract(editingPropertyId)
-          ? "Rented"
-          : propertyStatus,
       isActive,
     };
 
-    const updatedProperties = editingPropertyId
-      ? properties.map((property) => (property.id === editingPropertyId ? propertyData : property))
-      : [propertyData, ...properties];
+    try {
+      const savedProperty = editingPropertyId
+        ? await updateProperty(editingPropertyId, payload)
+        : await createProperty(payload);
 
-    saveProperties(updatedProperties);
+      const normalizedProperty = normalizeApiProperty(savedProperty);
 
-    registerPropertyMovement(
-      propertyData,
-      editingPropertyId ? "Updated" : "Created",
-      editingPropertyId ? "Cadastro do imóvel atualizado." : "Novo imóvel cadastrado."
-    );
+      registerPropertyMovement(
+        normalizedProperty,
+        editingPropertyId ? "Updated" : "Created",
+        editingPropertyId ? "Cadastro do imóvel atualizado." : "Novo imóvel cadastrado.",
+      );
 
-    handleCloseForm();
+      await loadProperties();
+      handleCloseForm();
+    } catch (error) {
+      console.error("Erro ao salvar imóvel:", error);
+      alert("Não foi possível salvar o imóvel.");
+    }
   }
 
   function handleEditProperty(propertyId: string) {
@@ -621,7 +670,7 @@ export default function PropertiesPage() {
     setBlockedInactiveProperty(null);
   }
 
-  function handleConfirmInactivateProperty() {
+  async function handleConfirmInactivateProperty() {
     if (!propertyToInactivate) return;
 
     const updatedProperty: Property = {
@@ -630,17 +679,24 @@ export default function PropertiesPage() {
       status: "Available",
     };
 
-    const updatedProperties = properties.map((property) =>
-      property.id === propertyToInactivate.id ? updatedProperty : property
-    );
+    try {
+      await updateProperty(propertyToInactivate.id, {
+        isActive: false,
+        purpose: "Available",
+      });
 
-    saveProperties(updatedProperties);
-    registerPropertyMovement(
-      updatedProperty,
-      "Inactivated",
-      "Imóvel inativado no lugar de exclusão para manter histórico e integridade."
-    );
-    setPropertyToInactivate(null);
+      registerPropertyMovement(
+        updatedProperty,
+        "Inactivated",
+        "Imóvel inativado no lugar de exclusão para manter histórico e integridade.",
+      );
+
+      await loadProperties();
+      setPropertyToInactivate(null);
+    } catch (error) {
+      console.error("Erro ao inativar imóvel:", error);
+      alert("Não foi possível inativar o imóvel.");
+    }
   }
 
   function getPropertyTypeLabel(value: PropertyType) {
@@ -1223,7 +1279,16 @@ export default function PropertiesPage() {
             </div>
           </div>
 
-          {filteredProperties.length === 0 ? (
+          {isLoadingProperties ? (
+            <div className="rounded-2xl border border-dashed border-slate-300 p-10 text-center">
+              <h3 className="text-lg font-black text-slate-800">
+                Carregando imóveis
+              </h3>
+              <p className="mt-2 text-sm text-slate-500">
+                Aguarde enquanto buscamos os dados no servidor.
+              </p>
+            </div>
+          ) : filteredProperties.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-300 p-10 text-center">
               <h3 className="text-lg font-black text-slate-800">
                 Nenhum imóvel encontrado
@@ -1297,6 +1362,12 @@ export default function PropertiesPage() {
                             Editar
                           </button>
 
+                          <button
+                            onClick={() => handleDeleteProperty(property.id)}
+                            className="rounded-xl bg-red-50 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-100"
+                          >
+                            Inativar
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -2218,6 +2289,41 @@ function normalizeSearchText(value: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
+}
+
+
+function getCurrentCompanyId() {
+  if (typeof window === "undefined") return "";
+
+  const possibleCompanyIdKeys = [
+    "rentix_company_id",
+    "rentix_companyId",
+    "companyId",
+  ];
+
+  for (const key of possibleCompanyIdKeys) {
+    const value = localStorage.getItem(key);
+
+    if (value) return value;
+  }
+
+  const storedUser = localStorage.getItem("rentix_user");
+
+  if (storedUser) {
+    try {
+      const parsedUser = JSON.parse(storedUser) as { companyId?: string };
+
+      if (parsedUser.companyId) return parsedUser.companyId;
+    } catch {
+      return "";
+    }
+  }
+
+  return "";
+}
+
+function isValidPropertyType(value: string | null | undefined): value is PropertyType {
+  return propertyTypes.some((propertyType) => propertyType.value === value);
 }
 
 function getMovementTypeLabel(type: PropertyMovementType) {

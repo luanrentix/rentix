@@ -1,0 +1,144 @@
+{
+  "generatedAt": "2026-05-13T23:51:43.586Z",
+  "format": "rentix-postgres-json-backup-v1",
+  "data": {
+    "companies": [
+      {
+        "id": "bab9160e-f3d2-4e10-9fd6-9fa2c64af4e9",
+        "tradeName": "Rentix Imobiliaria",
+        "companyName": "Rentix Imobiliaria LTDA",
+        "document": "12345678000199",
+        "phone": "69999999999",
+        "email": "contato@rentix.com",
+        "isActive": true,
+        "createdAt": "2026-05-10T00:03:38.627Z",
+        "updatedAt": "2026-05-10T00:03:38.627Z"
+      },
+      {
+        "id": "46d54f9c-8c16-4575-b81e-e15e0008ccea",
+        "tradeName": "Rentix Imobiliaria",
+        "companyName": "Rentix Imobiliaria LTDA",
+        "document": "12345678000199",
+        "phone": "69999999999",
+        "email": "contato@rentix.com",
+        "isActive": true,
+        "createdAt": "2026-05-10T00:07:23.032Z",
+        "updatedAt": "2026-05-10T00:07:23.032Z"
+      }
+    ],
+    "users": [
+      {
+        "id": "101d81ca-4e03-429c-9fd7-92554ec9384c",
+        "companyId": "bab9160e-f3d2-4e10-9fd6-9fa2c64af4e9",
+        "name": "Luan Santos",
+        "email": "luan@rentix.com",
+        "passwordHash": "$2b$10$QkM6.ZjaypM9SGzwjhgddu2.uePLGfwURJza0tEyATbAf38BF9.ki",
+        "role": "USER",
+        "isActive": true,
+        "createdAt": "2026-05-10T00:31:09.775Z",
+        "updatedAt": "2026-05-10T00:31:09.775Z"
+      },
+      {
+        "id": "3aaeae13-ca83-402a-b41d-fd4106af425c",
+        "companyId": "bab9160e-f3d2-4e10-9fd6-9fa2c64af4e9",
+        "name": "Luan Novo",
+        "email": "novo@rentix.com",
+        "passwordHash": "$2b$10$R3.5YnLBfmkOrIF5bNvrjOcFXEqm12uIIEHDjjtvAL3NmW8XUroOu",
+        "role": "USER",
+        "isActive": true,
+        "createdAt": "2026-05-12T17:17:20.855Z",
+        "updatedAt": "2026-05-12T17:17:20.855Z"
+      },
+      {
+        "id": "c2414599-3c0a-4ecc-9b95-920f36533b03",
+        "companyId": "bab9160e-f3d2-4e10-9fd6-9fa2c64af4e9",
+        "name": "Administrador",
+        "email": "admin@rentix.com",
+        "passwordHash": "$2b$10$v/szsbNH8CY4IDgvtWDnDOeIVpVjObrMMpQAdAwsCZsBREA8SMW1u",
+        "role": "USER",
+        "isActive": true,
+        "createdAt": "2026-05-12T22:46:03.998Z",
+        "updatedAt": "2026-05-12T22:46:03.998Z"
+      }
+    ],
+    "people": [
+      {
+        "id": "60b6c518-0c77-442e-afc7-667c37846385",
+        "companyId": "bab9160e-f3d2-4e10-9fd6-9fa2c64af4e9",
+        "type": "INDIVIDUAL",
+        "status": "ACTIVE",
+        "name": "LUAN HENRIQUE LEITE SANTOS",
+        "document": "006.455.032-07",
+        "email": "edif.luan@gmail.com",
+        "phone": "(69) 98484-1925",
+        "city": "Rolim de Moura",
+        "state": "RO",
+        "address": "Rua Corumbiara 4031",
+        "createdAt": "2026-05-13T03:24:48.194Z",
+        "updatedAt": "2026-05-13T03:24:48.194Z",
+        "identityNumber": null,
+        "stateRegistration": null,
+        "zipCode": null
+      },
+      {
+        "id": "fa23b806-8fc4-4d5d-a4a6-ce72c101d891",
+        "companyId": "bab9160e-f3d2-4e10-9fd6-9fa2c64af4e9",
+        "type": "COMPANY",
+        "status": "ACTIVE",
+        "name": "CASA DOS PARAFUSOS COMERCIO DE FERRAGENS FERRAMENTAS LTDA",
+        "document": "32.830.059/0002-84",
+        "email": null,
+        "phone": "(69) 3442-2391",
+        "city": "Rolim de Moura",
+        "state": "RO",
+        "address": null,
+        "createdAt": "2026-05-13T03:48:09.703Z",
+        "updatedAt": "2026-05-13T22:40:27.810Z",
+        "identityNumber": null,
+        "stateRegistration": null,
+        "zipCode": null
+      }
+    ],
+    "properties": [
+      {
+        "id": "3fa8c169-45ac-4587-bbc1-cfe35d45e96d",
+        "companyId": "bab9160e-f3d2-4e10-9fd6-9fa2c64af4e9",
+        "ownerId": null,
+        "title": "APARTAMENTO 01",
+        "code": null,
+        "type": "Apartment",
+        "purpose": "Available",
+        "rentalValue": "1250.00",
+        "zipCode": "76940-000",
+        "city": "ROLIM DE MOURA",
+        "state": "RO",
+        "address": "RUA CORUMBIARA",
+        "district": "CENTROQ",
+        "number": "4031",
+        "complement": null,
+        "bedrooms": null,
+        "bathrooms": null,
+        "garages": null,
+        "description": null,
+        "isActive": true,
+        "createdAt": "2026-05-14T00:11:19.454Z",
+        "updatedAt": "2026-05-14T00:13:36.383Z"
+      }
+    ],
+    "contracts": []
+  },
+  "counts": {
+    "companies": 2,
+    "users": 3,
+    "people": 2,
+    "properties": 1,
+    "contracts": 0
+  },
+  "tables": {
+    "companies": "Company",
+    "users": "User",
+    "people": "Person",
+    "properties": "Property",
+    "contracts": null
+  }
+}

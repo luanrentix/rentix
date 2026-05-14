@@ -1,18 +1,22 @@
-import "./globals.css"
+import type { Metadata } from 'next';
+import './globals.css';
+import { AuthProvider } from '@/context/AuthContext';
 
-export const metadata = {
-  title: "Rentix",
-  description: "Sistema de Gestão de Locações",
-}
+export const metadata: Metadata = {
+  title: 'Rentix',
+  description: 'Rentix ERP Imobiliário SaaS',
+};
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode
+  children: React.ReactNode;
 }>) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body>
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
-  )
+  );
 }

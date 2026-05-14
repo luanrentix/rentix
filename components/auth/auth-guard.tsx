@@ -1,28 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { ReactNode } from "react";
+import { PrivateRoute } from "@/components/PrivateRoute";
 
 type AuthGuardProps = {
-  children: React.ReactNode;
+  children: ReactNode;
 };
 
 export default function AuthGuard({ children }: AuthGuardProps) {
-  const router = useRouter();
-  const [isAuthorized, setIsAuthorized] = useState(false);
-
-  useEffect(() => {
-    const isLogged = localStorage.getItem("rentix_logged");
-
-    if (!isLogged) {
-      router.replace("/");
-      return;
-    }
-
-    setIsAuthorized(true);
-  }, [router]);
-
-  if (!isAuthorized) return null;
-
-  return <>{children}</>;
+  return <PrivateRoute>{children}</PrivateRoute>;
 }

@@ -1,0 +1,233 @@
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { FinancialAccountStatus, Prisma } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import {
+  CriarContaReceberDto,
+  ReceberPagamentoDto,
+} from './dto/criar-conta-receber.dto';
+import { AtualizarContaReceberDto } from './dto/atualizar-conta-receber.dto';
+
+@Injectable()
+export class ContasReceberService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async create(data: CriarContaReceberDto) {
+    await this.validateCompany(data.companyId);
+
+    return this.prisma.contaReceber.create({
+      data: this.buildCreateData(data),
+      include: this.defaultInclude,
+    });
+  }
+
+  async findAll(companyId?: string) {
+    if (!companyId) {
+      throw new BadRequestException('O companyId e obrigatorio.');
+    }
+
+    return this.prisma.contaReceber.findMany({
+      where: { companyId },
+      orderBy: { dueDate: 'asc' },
+      include: this.defaultInclude,
+    });
+  }
+
+  async findOne(id: string) {
+    const account = await this.prisma.contaReceber.findUnique({
+      where: { id },
+      include: this.defaultInclude,
+    });
+
+    if (!account) {
+      throw new NotFoundException('Conta a receber nao encontrada.');
+    }
+
+    return account;
+  }
+
+  async update(id: string, data: AtualizarContaReceberDto) {
+    await this.ensureExists(id);
+
+    if (data.companyId) {
+      await this.validateCompany(data.companyId);
+    }
+
+    return this.prisma.contaReceber.update({
+      where: { id },
+      data: this.buildUpdateData(data),
+      include: this.defaultInclude,
+    });
+  }
+
+  async remove(id: string) {
+    await this.ensureExists(id);
+
+    await this.prisma.pagamentoRecebido.deleteMany({
+      where: { chargeId: id },
+    });
+
+    return this.prisma.contaReceber.delete({
+      where: { id },
+    });
+  }
+
+  async receivePayment(id: string, data: ReceberPagamentoDto) {
+    await this.ensureExists(id);
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.pagamentoRecebido.deleteMany({
+        where: { chargeId: id },
+      });
+
+      await tx.pagamentoRecebido.create({
+        data: {
+          charge: { connect: { id } },
+          paidAt: this.parseDate(data.paidAt, 'Data de pagamento invalida.'),
+          method: data.method,
+          paymentItems:
+            data.paymentItems === undefined ? Prisma.JsonNull : data.paymentItems,
+          interest: new Prisma.Decimal(data.interest || 0),
+          discount: new Prisma.Decimal(data.discount || 0),
+          amountPaid: new Prisma.Decimal(data.amountPaid),
+          note: data.note || null,
+        },
+      });
+
+      return tx.contaReceber.update({
+        where: { id },
+        data: { status: FinancialAccountStatus.PAID },
+        include: this.defaultInclude,
+      });
+    });
+  }
+
+  async reversePayment(id: string) {
+    await this.ensureExists(id);
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.pagamentoRecebido.deleteMany({
+        where: { chargeId: id },
+      });
+
+      return tx.contaReceber.update({
+        where: { id },
+        data: { status: FinancialAccountStatus.PENDING },
+        include: this.defaultInclude,
+      });
+    });
+  }
+
+  private get defaultInclude() {
+    return {
+      payments: true,
+      contract: true,
+      tenant: true,
+    };
+  }
+
+  private async ensureExists(id: string) {
+    const account = await this.prisma.contaReceber.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!account) {
+      throw new NotFoundException('Conta a receber nao encontrada.');
+    }
+  }
+
+  private async validateCompany(companyId: string) {
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { id: true },
+    });
+
+    if (!company) {
+      throw new BadRequestException('Empresa nao encontrada.');
+    }
+  }
+
+  private buildCreateData(
+    data: CriarContaReceberDto,
+  ): Prisma.ContaReceberCreateInput {
+    return {
+      company: { connect: { id: data.companyId } },
+      contract: data.contractId ? { connect: { id: data.contractId } } : undefined,
+      tenant: data.tenantId ? { connect: { id: data.tenantId } } : undefined,
+      propertyName: data.property,
+      tenantName: data.tenant,
+      issueDate: this.parseOptionalDate(data.issueDate),
+      dueDate: this.parseDate(data.dueDate, 'Data de vencimento invalida.'),
+      amount: new Prisma.Decimal(data.amount),
+      status: data.status ?? FinancialAccountStatus.PENDING,
+      manual: data.manual ?? true,
+      installmentNumber: data.installmentNumber ?? null,
+      installmentTotal: data.installmentTotal ?? null,
+      installmentGroupId: data.installmentGroupId || null,
+      isDownPayment: data.isDownPayment ?? false,
+    };
+  }
+
+  private buildUpdateData(
+    data: AtualizarContaReceberDto,
+  ): Prisma.ContaReceberUpdateInput {
+    return {
+      company: data.companyId ? { connect: { id: data.companyId } } : undefined,
+      contract:
+        data.contractId !== undefined
+          ? data.contractId
+            ? { connect: { id: data.contractId } }
+            : { disconnect: true }
+          : undefined,
+      tenant:
+        data.tenantId !== undefined
+          ? data.tenantId
+            ? { connect: { id: data.tenantId } }
+            : { disconnect: true }
+          : undefined,
+      propertyName: data.property,
+      tenantName: data.tenant,
+      issueDate:
+        data.issueDate !== undefined
+          ? this.parseOptionalDate(data.issueDate)
+          : undefined,
+      dueDate:
+        data.dueDate !== undefined
+          ? this.parseDate(data.dueDate, 'Data de vencimento invalida.')
+          : undefined,
+      amount:
+        data.amount !== undefined ? new Prisma.Decimal(data.amount) : undefined,
+      status: data.status,
+      manual: data.manual,
+      installmentNumber: data.installmentNumber,
+      installmentTotal: data.installmentTotal,
+      installmentGroupId:
+        data.installmentGroupId !== undefined
+          ? data.installmentGroupId || null
+          : undefined,
+      isDownPayment: data.isDownPayment,
+    };
+  }
+
+  private parseDate(value: string, errorMessage: string) {
+    const parsedDate = value.includes('T')
+      ? new Date(value)
+      : new Date(`${value}T00:00:00`);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      throw new BadRequestException(errorMessage);
+    }
+
+    return parsedDate;
+  }
+
+  private parseOptionalDate(value?: string | null) {
+    if (!value) return null;
+
+    return this.parseDate(value, 'Data invalida.');
+  }
+}
