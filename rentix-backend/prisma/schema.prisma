@@ -47,8 +47,29 @@ model Company {
   contracts          Contract[]
   receivableAccounts ContaReceber[]
   payableAccounts    ContaPagar[]
+  scheduleItems       ScheduleItem[]
+  propertyMovements   PropertyMovement[]
+  settings           AppSettings?
 
   @@map("empresas")
+}
+
+model AppSettings {
+  id        String @id @default(uuid())
+  companyId String @unique @map("empresa_id")
+
+  userSettings    Json? @map("configuracoes_usuario")
+  companySettings Json? @map("configuracoes_empresa")
+  themeSettings   Json? @map("configuracoes_tema")
+  printTemplates  Json? @map("modelos_impressao")
+
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@index([companyId])
+  @@map("configuracoes_app")
 }
 
 model User {
@@ -137,10 +158,32 @@ model Property {
   company   Company    @relation(fields: [companyId], references: [id])
   owner     Person?    @relation(fields: [ownerId], references: [id])
   contracts Contract[]
+  movements PropertyMovement[]
 
   @@index([companyId])
   @@index([ownerId])
   @@map("imoveis")
+}
+
+model PropertyMovement {
+  id        String @id @default(uuid())
+  companyId String @map("empresa_id")
+  propertyId String @map("imovel_id")
+
+  propertyName String @map("nome_imovel")
+  type         String @map("tipo")
+  description  String @map("descricao")
+
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+
+  company  Company  @relation(fields: [companyId], references: [id])
+  property Property @relation(fields: [propertyId], references: [id])
+
+  @@index([companyId])
+  @@index([propertyId])
+  @@index([createdAt])
+  @@map("movimentacoes_imoveis")
 }
 
 enum ContractStatus {
@@ -333,4 +376,30 @@ model PagamentoRealizado {
 
   @@index([expenseId])
   @@map("pagamentos_realizados")
+}
+
+model ScheduleItem {
+  id        String @id @default(uuid())
+  companyId String @map("empresa_id")
+
+  title           String @map("titulo")
+  customerName    String @map("cliente")
+  propertyName    String @map("imovel")
+  date            DateTime @map("data")
+  time            String @map("horario")
+  type            String @map("tipo")
+  status          String @default("scheduled") @map("status")
+  priority        String @default("medium") @map("prioridade")
+  responsibleName String @map("responsavel")
+  reminder        String @map("lembrete")
+  notes           String? @map("observacoes")
+
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@index([companyId])
+  @@index([date])
+  @@map("agenda_itens")
 }

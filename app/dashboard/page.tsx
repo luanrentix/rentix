@@ -3,6 +3,20 @@
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/app-shell";
 import { PrivateRoute } from "@/components/PrivateRoute";
+import { useAuth } from "@/context/AuthContext";
+import {
+  getContracts,
+  type Contract as ApiContract,
+} from "@/services/contracts.service";
+import {
+  getFinancialSummary,
+  type FinancialPayable,
+  type FinancialReceivable,
+} from "@/services/financial-summary.service";
+import {
+  getProperties,
+  type Property as ApiProperty,
+} from "@/services/properties.service";
 import {
   Bar,
   CartesianGrid,
@@ -24,13 +38,6 @@ type Property = {
   status: PropertyStatus;
 };
 
-type Tenant = {
-  id: string;
-  name: string;
-  phone: string;
-  document: string;
-};
-
 type ContractStatus =
   | "Active"
   | "Finished"
@@ -46,32 +53,6 @@ type Contract = {
   value?: number;
   rentValue?: number;
   status: ContractStatus;
-};
-
-type ReceivableCharge = {
-  id: string;
-  property?: string;
-  tenant?: string;
-  dueDate?: string;
-  amount?: number;
-  status?: "Pending" | "Paid" | "Overdue";
-  manual?: boolean;
-  issueDate?: string;
-  installmentNumber?: number;
-  installmentTotal?: number;
-  installmentGroupId?: string;
-};
-
-type PayableCharge = {
-  id: string;
-  supplier?: string;
-  creditor?: string;
-  description?: string;
-  category?: string;
-  dueDate?: string;
-  amount?: number;
-  value?: number;
-  status?: "Pending" | "Paid" | "Overdue";
 };
 
 type DashboardAlert = {
@@ -209,14 +190,14 @@ const rentixDashboardThemeStyle = `
 `;
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  const companyId = user?.companyId;
+
   const [properties, setProperties] = useState<Property[]>([]);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [dashboardTheme, setDashboardTheme] = useState<ThemeMode>("light");
-  const [manualReceivables, setManualReceivables] = useState<ReceivableCharge[]>([]);
-  const [paidReceivableIds, setPaidReceivableIds] = useState<string[]>([]);
-  const [payables, setPayables] = useState<PayableCharge[]>([]);
-  const [paidPayableIds, setPaidPayableIds] = useState<string[]>([]);
+  const [receivables, setReceivables] = useState<FinancialReceivable[]>([]);
+  const [payables, setPayables] = useState<FinancialPayable[]>([]);
   const [revenueChartView, setRevenueChartView] = useState<"month" | "day">(
     "month",
   );
@@ -225,32 +206,14 @@ export default function DashboardPage() {
   );
 
   useEffect(() => {
-    const storedProperties = localStorage.getItem("rentix_properties");
-    const storedTenants = localStorage.getItem("rentix_tenants");
-    const storedContracts = localStorage.getItem("rentix_contracts");
-    const storedManualReceivables = localStorage.getItem("rentix_manual_charges");
-    const storedPaidReceivables = localStorage.getItem("rentix_paid_charges");
-    const storedPayables =
-      localStorage.getItem("rentix_accounts_payable") ||
-      localStorage.getItem("rentix_payables");
-    const storedPaidPayables = localStorage.getItem("rentix_paid_payables");
+    if (!companyId) return;
+
+    loadDashboardData(companyId);
+  }, [companyId]);
+
+  useEffect(() => {
     const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
 
-    if (storedProperties) setProperties(JSON.parse(storedProperties));
-    if (storedTenants) setTenants(JSON.parse(storedTenants));
-    if (storedContracts) setContracts(JSON.parse(storedContracts));
-    if (storedManualReceivables) {
-      setManualReceivables(safeParseArray<ReceivableCharge>(storedManualReceivables));
-    }
-    if (storedPaidReceivables) {
-      setPaidReceivableIds(safeParseArray<string>(storedPaidReceivables));
-    }
-    if (storedPayables) {
-      setPayables(safeParseArray<PayableCharge>(storedPayables));
-    }
-    if (storedPaidPayables) {
-      setPaidPayableIds(safeParseArray<string>(storedPaidPayables));
-    }
     if (storedThemeSettings) {
       try {
         const parsedThemeSettings = JSON.parse(storedThemeSettings) as { mode?: ThemeMode };
@@ -260,6 +223,46 @@ export default function DashboardPage() {
       }
     }
   }, []);
+
+  async function loadDashboardData(currentCompanyId: string) {
+    try {
+      const [apiProperties, apiContracts, financialSummary] = await Promise.all([
+        getProperties(currentCompanyId),
+        getContracts(currentCompanyId),
+        getFinancialSummary(currentCompanyId),
+      ]);
+
+      const normalizedContracts = apiContracts.map(mapApiContractToDashboardContract);
+      const activePropertyIds = new Set(
+        normalizedContracts
+          .filter((contract) => contract.status === "Active")
+          .map((contract) => contract.propertyId),
+      );
+
+      setContracts(normalizedContracts);
+      setProperties(
+        apiProperties.map((property) =>
+          mapApiPropertyToDashboardProperty(property, activePropertyIds),
+        ),
+      );
+      setReceivables(
+        financialSummary.receivables.map((receivable) => ({
+          ...receivable,
+          tenant: receivable.tenantName,
+          property: receivable.propertyName,
+        })),
+      );
+      setPayables(
+        financialSummary.payables.map((payable) => ({
+          ...payable,
+          supplier: payable.personName,
+          value: payable.amount,
+        })),
+      );
+    } catch (error) {
+      console.error("Não foi possível carregar o dashboard.", error);
+    }
+  }
 
   const activeContractsList = useMemo(
     () => contracts.filter((contract) => contract.status === "Active"),
@@ -499,15 +502,12 @@ export default function DashboardPage() {
       : "Contratos criados e ativos nos últimos 30 dias.";
 
   const receivableMovements = useMemo(() => {
-    return getFinancialMovementsFromReceivables(
-      manualReceivables,
-      paidReceivableIds,
-    );
-  }, [manualReceivables, paidReceivableIds]);
+    return getFinancialMovementsFromReceivables(receivables);
+  }, [receivables]);
 
   const payableMovements = useMemo(() => {
-    return getFinancialMovementsFromPayables(payables, paidPayableIds);
-  }, [payables, paidPayableIds]);
+    return getFinancialMovementsFromPayables(payables);
+  }, [payables]);
 
   const todayReceivableMovements = useMemo(
     () =>
@@ -1108,6 +1108,54 @@ function FinancialMovementPreview({
   );
 }
 
+function mapApiPropertyToDashboardProperty(
+  property: ApiProperty,
+  activePropertyIds: Set<string>,
+): Property {
+  const address = [
+    property.address,
+    property.number,
+    property.district,
+    property.city,
+    property.state,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  return {
+    id: property.id,
+    name: property.title || "Imóvel sem nome",
+    address,
+    rentValue: Number(property.rentalValue || 0),
+    status: activePropertyIds.has(property.id) ? "Rented" : "Available",
+  };
+}
+
+function mapApiContractToDashboardContract(contract: ApiContract): Contract {
+  return {
+    id: contract.id,
+    propertyId: contract.propertyId,
+    tenantId: contract.tenantId,
+    startDate: contract.startDate,
+    rentValue: Number(contract.rentValue || 0),
+    status: mapApiContractStatusToDashboardStatus(contract.status),
+  };
+}
+
+function mapApiContractStatusToDashboardStatus(
+  status: ApiContract["status"],
+): ContractStatus {
+  const statusMap: Record<ApiContract["status"], ContractStatus> = {
+    ACTIVE: "Active",
+    INACTIVE: "Inactive",
+    CANCELED: "Canceled",
+    FINISHED: "Finished",
+    DELETED: "Deleted",
+  };
+
+  return statusMap[status] || "Inactive";
+}
+
 function getContractValue(contract: Contract) {
   return Number(contract.value ?? contract.rentValue ?? 0);
 }
@@ -1165,17 +1213,6 @@ function getLastThirtyDays() {
   });
 }
 
-function safeParseArray<T>(value: string | null): T[] {
-  if (!value) return [];
-
-  try {
-    const parsedValue = JSON.parse(value);
-    return Array.isArray(parsedValue) ? (parsedValue as T[]) : [];
-  } catch {
-    return [];
-  }
-}
-
 function getStartOfToday() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -1215,19 +1252,13 @@ function getFinancialMovementStatus(dueDateValue: string): FinancialMovement["st
 }
 
 function getFinancialMovementsFromReceivables(
-  receivables: ReceivableCharge[],
-  paidIds: string[],
+  receivables: FinancialReceivable[],
+  paidIds: string[] = [],
 ) {
   return receivables
-    .filter((charge) => {
-      const isPaid =
-        paidIds.includes(String(charge.id)) ||
-        charge.status === "Paid";
-
-      return !isPaid;
-    })
+    .filter((charge) => charge.status !== "Paid")
     .map((charge): FinancialMovement | null => {
-      const dueDate = charge.dueDate || "";
+      const dueDate = charge.dueDate;
       const status = getFinancialMovementStatus(dueDate);
 
       if (!status) return null;
@@ -1246,8 +1277,8 @@ function getFinancialMovementsFromReceivables(
 }
 
 function getFinancialMovementsFromPayables(
-  payableCharges: PayableCharge[],
-  paidIds: string[],
+  payableCharges: FinancialPayable[],
+  paidIds: string[] = [],
 ) {
   return payableCharges
     .filter((charge) => {

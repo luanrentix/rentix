@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import AuthGuard from "@/components/auth/auth-guard";
+import { useAuth } from "@/context/AuthContext";
+import { getAppSettings, saveAppSettings } from "@/services/settings.service";
+import { setCachedAppSettings } from "@/services/settings-cache";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -89,21 +92,21 @@ const resetModuleOptions: ResetModuleOption[] = [
     label: "Imóveis",
     description: "Remove imóveis cadastrados e seus filtros locais.",
     icon: "🏢",
-    storageKeys: ["rentix_properties"],
+    storageKeys: [],
   },
   {
     key: "people",
     label: "Pessoas",
     description: "Remove pessoas, inquilinos e dados locais relacionados.",
     icon: "👥",
-    storageKeys: ["rentix_tenants", "rentix_people"],
+    storageKeys: [],
   },
   {
     key: "contracts",
     label: "Contratos",
     description: "Remove contratos e pendências de integração com cobranças.",
     icon: "📄",
-    storageKeys: ["rentix_contracts", "rentix_new_charge_from_contract"],
+    storageKeys: [],
   },
   {
     key: "accountsReceivable",
@@ -111,9 +114,6 @@ const resetModuleOptions: ResetModuleOption[] = [
     description: "Remove cobranças, parcelas, pagamentos recebidos e filtros financeiros.",
     icon: "📥",
     storageKeys: [
-      "rentix_manual_charges",
-      "rentix_paid_charges",
-      "rentix_charge_payments",
       "rentix_receivable_status_filter",
     ],
   },
@@ -123,10 +123,7 @@ const resetModuleOptions: ResetModuleOption[] = [
     description: "Remove contas a pagar e pagamentos registrados localmente.",
     icon: "📤",
     storageKeys: [
-      "rentix_accounts_payable",
-      "rentix_payables",
-      "rentix_paid_payables",
-      "rentix_payable_payments",
+      "rentix_payable_status_filter",
     ],
   },
   {
@@ -134,7 +131,7 @@ const resetModuleOptions: ResetModuleOption[] = [
     label: "Agenda",
     description: "Remove compromissos, eventos e agendamentos locais.",
     icon: "📅",
-    storageKeys: ["rentix_schedule", "rentix_agenda", "rentix_calendar_events"],
+    storageKeys: [],
   },
 ];
 
@@ -490,6 +487,8 @@ function readThemeSettingsFromStorage(): ThemeSettings {
 
 export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const companyId = user?.companyId;
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isSidebarLocked, setIsSidebarLocked] = useState(() => {
@@ -516,8 +515,39 @@ export default function AppShell({ children }: AppShellProps) {
   const userInitials = useMemo(() => getInitialLetters(userSettings.name), [userSettings.name]);
 
   useEffect(() => {
+    if (!companyId) {
+      loadSettingsFromLocalStorage();
+      return;
+    }
+
+    loadSettings(companyId);
+  }, [companyId]);
+
+  async function loadSettings(currentCompanyId: string) {
+    try {
+      const settings = await getAppSettings(currentCompanyId);
+      setCachedAppSettings(settings);
+
+      setUserSettings({
+        ...defaultUserSettings,
+        ...(settings.userSettings || {}),
+      } as UserSettings);
+      setCompanySettings({
+        ...defaultCompanySettings,
+        ...(settings.companySettings || {}),
+      } as CompanySettings);
+      setThemeSettings({
+        ...defaultThemeSettings,
+        ...(settings.themeSettings || {}),
+      } as ThemeSettings);
+    } catch {
+      console.warn("Settings API unavailable. Local cached settings were loaded.");
+      loadSettingsFromLocalStorage();
+    }
+  }
+
+  function loadSettingsFromLocalStorage() {
     const storedUserSettings = localStorage.getItem("rentix_user_settings");
-    const storedCompanySettings = localStorage.getItem("rentix_company_settings");
     const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
 
     if (storedUserSettings) {
@@ -527,15 +557,8 @@ export default function AppShell({ children }: AppShellProps) {
       });
     }
 
-    if (storedCompanySettings) {
-      setCompanySettings({
-        ...defaultCompanySettings,
-        ...JSON.parse(storedCompanySettings),
-      });
-    }
-
     setThemeSettings(readThemeSettingsFromStorage());
-  }, []);
+  }
 
   useEffect(() => {
     setIsSidebarExpanded(isSidebarLocked);
@@ -675,7 +698,7 @@ export default function AppShell({ children }: AppShellProps) {
     return true;
   }
 
-  function handleSaveSettings() {
+  async function handleSaveSettings() {
     setPasswordError("");
 
     if (!validatePasswordChange()) {
@@ -683,9 +706,21 @@ export default function AppShell({ children }: AppShellProps) {
       return;
     }
 
+    if (!companyId) {
+      setPasswordError("Empresa do usuário não encontrada. Faça login novamente.");
+      return;
+    }
+
+    await saveAppSettings({
+      companyId,
+      userSettings,
+      companySettings,
+      themeSettings,
+    });
+
     localStorage.setItem("rentix_user_settings", JSON.stringify(userSettings));
-    localStorage.setItem("rentix_company_settings", JSON.stringify(companySettings));
     localStorage.setItem("rentix_theme_settings", JSON.stringify(themeSettings));
+    setCachedAppSettings({ userSettings, companySettings, themeSettings });
     window.dispatchEvent(new Event("rentix-theme-change"));
 
     if (passwordSettings.newPassword) {

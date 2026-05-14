@@ -8,17 +8,16 @@ import {
   updateProperty,
   type Property as ApiProperty,
 } from "@/services/properties.service";
+import { getContracts, type Contract as ApiContract } from "@/services/contracts.service";
+import { getReceivableAccounts, type ReceivableAccount } from "@/services/financial.service";
+import {
+  createPropertyMovement,
+  getPropertyMovements,
+  type PropertyMovement as ApiPropertyMovement,
+} from "@/services/property-movements.service";
+import { getCachedCompanySettings } from "@/services/settings-cache";
 
 
-const CONTRACTS_STORAGE_KEY = "rentix_contracts";
-const PROPERTY_MOVEMENTS_STORAGE_KEY = "rentix_property_movements";
-const COMPANY_SETTINGS_STORAGE_KEYS = [
-  "rentix_company_settings",
-  "rentix_company",
-  "rentix_settings",
-];
-const MANUAL_CHARGES_STORAGE_KEY = "rentix_manual_charges";
-const PAID_CHARGES_STORAGE_KEY = "rentix_paid_charges";
 
 type PropertyStatus = "Available" | "Rented";
 
@@ -79,6 +78,10 @@ type PropertyMovement = {
 type RentalHistoryContract = {
   id: string | number;
   propertyId: string;
+  property_id?: string;
+  property?: string;
+  propertyCode?: string;
+  property_id_fk?: string;
   propertyName?: string;
   tenantId?: string | number;
   tenantName?: string;
@@ -131,6 +134,8 @@ const propertyTypes: Array<{ label: string; value: PropertyType }> = [
 export default function PropertiesPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [propertyMovements, setPropertyMovements] = useState<PropertyMovement[]>([]);
+  const [contracts, setContracts] = useState<RentalHistoryContract[]>([]);
+  const [rentalCharges, setRentalCharges] = useState<RentalCharge[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
   const [propertyToInactivate, setPropertyToInactivate] = useState<Property | null>(null);
@@ -198,12 +203,6 @@ export default function PropertiesPage() {
   useEffect(() => {
     loadProperties();
 
-    const storedMovements = localStorage.getItem(PROPERTY_MOVEMENTS_STORAGE_KEY);
-
-    if (storedMovements) {
-      setPropertyMovements(safeParseArray<PropertyMovement>(storedMovements));
-    }
-
     setCompanySettings(getStoredCompanySettings());
   }, []);
 
@@ -253,8 +252,8 @@ export default function PropertiesPage() {
   const rentalHistoryRecords = useMemo(() => {
     if (!historyProperty) return [];
 
-    return getRentalHistoryByProperty(historyProperty);
-  }, [historyProperty]);
+    return getRentalHistoryByProperty(historyProperty, contracts);
+  }, [historyProperty, contracts, rentalCharges]);
 
   async function loadProperties() {
     const companyId = getCurrentCompanyId();
@@ -268,12 +267,21 @@ export default function PropertiesPage() {
     try {
       setIsLoadingProperties(true);
 
-      const response = await getProperties(companyId);
+      const [response, apiContracts, apiCharges, apiMovements] = await Promise.all([
+        getProperties(companyId),
+        getContracts(companyId),
+        getReceivableAccounts(companyId),
+        getPropertyMovements(companyId),
+      ]);
 
+      const normalizedContracts = apiContracts.map(mapApiContractToRentalHistory);
       const normalizedProperties = response.map((property) =>
-        normalizeApiProperty(property),
+        normalizeApiProperty(property, normalizedContracts),
       );
 
+      setContracts(normalizedContracts);
+      setRentalCharges(apiCharges.map(mapApiChargeToRentalCharge));
+      setPropertyMovements(apiMovements.map(mapApiPropertyMovementToPropertyMovement));
       setProperties(normalizedProperties);
     } catch (error) {
       console.error("Erro ao carregar imóveis:", error);
@@ -283,12 +291,15 @@ export default function PropertiesPage() {
     }
   }
 
-  function normalizeApiProperty(property: ApiProperty): Property {
+  function normalizeApiProperty(
+    property: ApiProperty,
+    contractSource = contracts,
+  ): Property {
     const normalizedType = isValidPropertyType(property.type)
       ? property.type
       : "Other";
 
-    const propertyStatus: PropertyStatus = propertyHasActiveContract(property.id)
+    const propertyStatus: PropertyStatus = propertyHasActiveContract(property.id, contractSource)
       ? "Rented"
       : "Available";
 
@@ -319,7 +330,6 @@ export default function PropertiesPage() {
 
   function savePropertyMovements(updatedMovements: PropertyMovement[]) {
     setPropertyMovements(updatedMovements);
-    localStorage.setItem(PROPERTY_MOVEMENTS_STORAGE_KEY, JSON.stringify(updatedMovements));
   }
 
   function registerPropertyMovement(
@@ -337,6 +347,20 @@ export default function PropertiesPage() {
     };
 
     savePropertyMovements([movement, ...propertyMovements]);
+
+    const companyId = getCurrentCompanyId();
+
+    if (!companyId) return;
+
+    createPropertyMovement({
+      companyId,
+      propertyId: property.id,
+      propertyName: property.name,
+      type: typeValue,
+      description,
+    }).catch((error) => {
+      console.warn("Nao foi possivel registrar movimentacao do imovel no backend.", error);
+    });
   }
 
   function resetForm() {
@@ -403,14 +427,7 @@ export default function PropertiesPage() {
   }
 
   function propertyHasLinkedContract(propertyId: string) {
-    const storedContracts = localStorage.getItem(CONTRACTS_STORAGE_KEY);
-
-    if (!storedContracts) return false;
-
-    try {
-      const parsedContracts = JSON.parse(storedContracts) as ContractRecord[];
-
-      return parsedContracts.some((contract) => {
+      return contracts.some((contract) => {
         const contractPropertyId =
           contract.propertyId ||
           contract.property_id ||
@@ -420,20 +437,13 @@ export default function PropertiesPage() {
 
         return String(contractPropertyId || "") === propertyId;
       });
-    } catch {
-      return false;
-    }
   }
 
-  function propertyHasActiveContract(propertyId: string) {
-    const storedContracts = localStorage.getItem(CONTRACTS_STORAGE_KEY);
-
-    if (!storedContracts) return false;
-
-    try {
-      const parsedContracts = JSON.parse(storedContracts) as ContractRecord[];
-
-      return parsedContracts.some((contract) => {
+  function propertyHasActiveContract(
+    propertyId: string,
+    contractSource = contracts,
+  ) {
+      return contractSource.some((contract) => {
         const contractPropertyId =
           contract.propertyId ||
           contract.property_id ||
@@ -449,9 +459,6 @@ export default function PropertiesPage() {
 
         return isSameProperty && isActiveContract;
       });
-    } catch {
-      return false;
-    }
   }
 
   function getEditingProperty() {
@@ -1572,7 +1579,7 @@ export default function PropertiesPage() {
                               <p className="report-kpi-value">
                                 {
                                   rentalHistoryRecords.filter(
-                                    (record) => getRentalPaymentStatus(record) === "Paid"
+                                    (record) => getRentalPaymentStatus(record, rentalCharges) === "Paid"
                                   ).length
                                 }
                               </p>
@@ -1606,7 +1613,7 @@ export default function PropertiesPage() {
                                     <td className="font-black">{record.tenantName || "Não informado"}</td>
                                     <td className="font-black">{formatCurrency(Number(record.rentValue || 0))}</td>
                                     <td>{getRentalStatusLabel(String(record.status || ""))}</td>
-                                    <td>{getPaymentStatusLabel(getRentalPaymentStatus(record))}</td>
+                                    <td>{getPaymentStatusLabel(getRentalPaymentStatus(record, rentalCharges))}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -2123,10 +2130,10 @@ function getPaymentStatusLabel(status: "Paid" | "Pending" | "NotGenerated") {
   return labels[status];
 }
 
-function getRentalHistoryByProperty(property: Property): RentalHistoryContract[] {
-  const storedContracts = localStorage.getItem(CONTRACTS_STORAGE_KEY);
-  const contracts = safeParseArray<RentalHistoryContract>(storedContracts);
-
+function getRentalHistoryByProperty(
+  property: Property,
+  contracts: RentalHistoryContract[],
+): RentalHistoryContract[] {
   return contracts
     .filter((contract) => String(contract.propertyId || "") === String(property.id))
     .sort((firstContract, secondContract) => {
@@ -2137,13 +2144,10 @@ function getRentalHistoryByProperty(property: Property): RentalHistoryContract[]
     });
 }
 
-function getRentalPaymentStatus(contract: RentalHistoryContract): "Paid" | "Pending" | "NotGenerated" {
-  const storedCharges = localStorage.getItem(MANUAL_CHARGES_STORAGE_KEY);
-  const storedPaidCharges = localStorage.getItem(PAID_CHARGES_STORAGE_KEY);
-
-  const charges = safeParseArray<RentalCharge>(storedCharges);
-  const paidChargeIds = new Set(safeParseArray<string>(storedPaidCharges).map(String));
-
+function getRentalPaymentStatus(
+  contract: RentalHistoryContract,
+  charges: RentalCharge[],
+): "Paid" | "Pending" | "NotGenerated" {
   const linkedCharges = charges.filter((charge) => {
     if (String(charge.contractId || "") === String(contract.id)) return true;
 
@@ -2163,7 +2167,6 @@ function getRentalPaymentStatus(contract: RentalHistoryContract): "Paid" | "Pend
     const chargeStatus = String(charge.status || "").toLowerCase();
 
     return (
-      paidChargeIds.has(String(charge.id)) ||
       charge.paid === true ||
       chargeStatus === "paid" ||
       chargeStatus === "pago"
@@ -2171,6 +2174,64 @@ function getRentalPaymentStatus(contract: RentalHistoryContract): "Paid" | "Pend
   });
 
   return allChargesPaid ? "Paid" : "Pending";
+}
+
+function mapApiContractToRentalHistory(contract: ApiContract): RentalHistoryContract {
+  return {
+    id: contract.id,
+    propertyId: contract.propertyId,
+    propertyName: contract.propertyName || contract.property?.title || "",
+    tenantId: contract.tenantId,
+    tenantName: contract.tenantName || contract.tenant?.name || "",
+    startDate: getDateInputValue(contract.startDate),
+    endDate: getDateInputValue(contract.endDate),
+    rentValue: Number(contract.rentValue || 0),
+    status: mapApiContractStatusToUi(contract.status),
+  };
+}
+
+function mapApiChargeToRentalCharge(account: ReceivableAccount): RentalCharge {
+  return {
+    id: account.id,
+    contractId: account.contractId || null,
+    property: account.propertyName,
+    tenant: account.tenantName,
+    amount: Number(account.amount || 0),
+    dueDate: account.dueDate,
+    paid: account.status === "PAID",
+    status: account.status === "PAID" ? "Paid" : "Pending",
+  };
+}
+
+function mapApiPropertyMovementToPropertyMovement(
+  movement: ApiPropertyMovement,
+): PropertyMovement {
+  return {
+    id: movement.id,
+    propertyId: movement.propertyId,
+    propertyName: movement.propertyName,
+    type: movement.type as PropertyMovementType,
+    description: movement.description,
+    createdAt: movement.createdAt,
+  };
+}
+
+function mapApiContractStatusToUi(status: string) {
+  const statusMap: Record<string, string> = {
+    ACTIVE: "Active",
+    INACTIVE: "Inactive",
+    CANCELED: "Canceled",
+    FINISHED: "Finished",
+    DELETED: "Deleted",
+  };
+
+  return statusMap[status] || status;
+}
+
+function getDateInputValue(value?: string | null) {
+  if (!value) return "";
+
+  return String(value).slice(0, 10);
 }
 
 function formatDate(value: string) {
@@ -2197,58 +2258,49 @@ function getEmptyCompanySettings(): CompanySettings {
 
 function getStoredCompanySettings(): CompanySettings {
   const emptySettings = getEmptyCompanySettings();
+  const cachedCompanySettings = getCachedCompanySettings();
 
-  for (const storageKey of COMPANY_SETTINGS_STORAGE_KEYS) {
-    const storedSettings = localStorage.getItem(storageKey);
-
-    if (!storedSettings) continue;
-
-    try {
-      const parsedSettings = JSON.parse(storedSettings) as Record<string, unknown>;
-
-      return {
-        companyName: String(
-          parsedSettings.companyName ||
-            parsedSettings.name ||
-            parsedSettings.razaoSocial ||
-            parsedSettings.legalName ||
-            ""
-        ),
-        tradeName: String(
-          parsedSettings.tradeName ||
-            parsedSettings.fantasyName ||
-            parsedSettings.nomeFantasia ||
-            ""
-        ),
-        document: String(
-          parsedSettings.document ||
-            parsedSettings.cnpj ||
-            parsedSettings.cpfCnpj ||
-            parsedSettings.taxId ||
-            ""
-        ),
-        phone: String(parsedSettings.phone || parsedSettings.telefone || ""),
-        email: String(parsedSettings.email || ""),
-        address: String(
-          parsedSettings.address ||
-            parsedSettings.endereco ||
-            parsedSettings.fullAddress ||
-            ""
-        ),
-        logo: String(
-          parsedSettings.logo ||
-            parsedSettings.logoUrl ||
-            parsedSettings.logoBase64 ||
-            parsedSettings.companyLogo ||
-            ""
-        ),
-      };
-    } catch {
-      continue;
-    }
+  if (!cachedCompanySettings) {
+    return emptySettings;
   }
 
-  return emptySettings;
+  return {
+    companyName: String(
+      cachedCompanySettings.companyName ||
+        cachedCompanySettings.name ||
+        cachedCompanySettings.razaoSocial ||
+        cachedCompanySettings.legalName ||
+        ""
+    ),
+    tradeName: String(
+      cachedCompanySettings.tradeName ||
+        cachedCompanySettings.fantasyName ||
+        cachedCompanySettings.nomeFantasia ||
+        ""
+    ),
+    document: String(
+      cachedCompanySettings.document ||
+        cachedCompanySettings.cnpj ||
+        cachedCompanySettings.cpfCnpj ||
+        cachedCompanySettings.taxId ||
+        ""
+    ),
+    phone: String(cachedCompanySettings.phone || cachedCompanySettings.telefone || ""),
+    email: String(cachedCompanySettings.email || ""),
+    address: String(
+      cachedCompanySettings.address ||
+        cachedCompanySettings.endereco ||
+        cachedCompanySettings.fullAddress ||
+        ""
+    ),
+    logo: String(
+      cachedCompanySettings.logo ||
+        cachedCompanySettings.logoUrl ||
+        cachedCompanySettings.logoBase64 ||
+        cachedCompanySettings.companyLogo ||
+        ""
+    ),
+  };
 }
 
 function getCompanyDisplayName(companySettings: CompanySettings) {

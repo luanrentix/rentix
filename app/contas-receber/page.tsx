@@ -14,9 +14,14 @@ import {
   type PaymentMethod as ApiPaymentMethod,
   type ReceivableAccount,
 } from "@/services/financial.service";
+import { getContracts, type Contract as ApiContract } from "@/services/contracts.service";
+import { getPeople, createPerson, type Person } from "@/services/people.service";
+import { getProperties, type Property as ApiProperty } from "@/services/properties.service";
+import {
+  getCachedCompanySettings,
+  getCachedPrintTemplates,
+} from "@/services/settings-cache";
 
-const RECEIVABLE_FROM_CONTRACT_STORAGE_KEY = "rentix_new_charge_from_contract";
-const PRINT_TEMPLATES_STORAGE_KEY = "rentix_print_templates";
 const LEGACY_SETTINGS_TEMPORARY_CONTRACT_CONTENT = `CONTRATO TEMPORÁRIO
 
 LOCADOR: {companyName}
@@ -588,7 +593,12 @@ export default function AccountsReceivablePage() {
 
   async function loadReceivablesFromBackend(currentCompanyId: string) {
     try {
-      const apiCharges = await getReceivableAccounts(currentCompanyId);
+      const [apiCharges, apiContracts, apiProperties, apiPeople] = await Promise.all([
+        getReceivableAccounts(currentCompanyId),
+        getContracts(currentCompanyId),
+        getProperties(currentCompanyId),
+        getPeople(currentCompanyId),
+      ]);
       const nextManualCharges = apiCharges.map(mapApiReceivableToCharge);
       const nextPaid = nextManualCharges
         .filter((charge) => charge.status === "Paid")
@@ -598,15 +608,9 @@ export default function AccountsReceivablePage() {
       setManualCharges(nextManualCharges);
       setPaid(nextPaid);
       setPaymentRecords(nextPaymentRecords);
-      localStorage.setItem(
-        "rentix_manual_charges",
-        JSON.stringify(nextManualCharges),
-      );
-      localStorage.setItem("rentix_paid_charges", JSON.stringify(nextPaid));
-      localStorage.setItem(
-        "rentix_charge_payments",
-        JSON.stringify(nextPaymentRecords),
-      );
+      setContracts(apiContracts.map(mapApiContractToReceivableContract));
+      setProperties(apiProperties.map(mapApiPropertyToReceivableProperty));
+      setTenants(apiPeople.map(mapApiPersonToReceivableTenant));
     } catch (error) {
       console.error("NÃ£o foi possÃ­vel carregar contas a receber.", error);
     }
@@ -683,12 +687,12 @@ export default function AccountsReceivablePage() {
   }
 
   useEffect(() => {
-    const c = localStorage.getItem("rentix_contracts");
-    const p = localStorage.getItem("rentix_properties");
-    const t = localStorage.getItem("rentix_tenants");
-    const paidData = localStorage.getItem("rentix_paid_charges");
-    const manualData = localStorage.getItem("rentix_manual_charges");
-    const paymentData = localStorage.getItem("rentix_charge_payments");
+    const c = null;
+    const p = null;
+    const t = null;
+    const paidData = null;
+    const manualData = null;
+    const paymentData = null;
     const savedStatusFilter = localStorage.getItem(
       "rentix_receivable_status_filter",
     );
@@ -722,9 +726,7 @@ export default function AccountsReceivablePage() {
       setIsSearchOpen(true);
     }
 
-    const contractChargeData = localStorage.getItem(
-      RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
-    );
+    const contractChargeData = null;
 
     if (contractChargeData) {
       try {
@@ -733,9 +735,9 @@ export default function AccountsReceivablePage() {
         ) as ReceivableFromContractPayload;
 
         openChargeFromContractPayload(parsedContractChargeData);
-        localStorage.removeItem(RECEIVABLE_FROM_CONTRACT_STORAGE_KEY);
+        return;
       } catch {
-        localStorage.removeItem(RECEIVABLE_FROM_CONTRACT_STORAGE_KEY);
+        return;
       }
     }
   }, []);
@@ -987,15 +989,6 @@ export default function AccountsReceivablePage() {
   }
 
   useEffect(() => {
-    const synchronizedReceivables = charges.map((charge) =>
-      convertChargeToReceivableStorage(charge),
-    );
-
-    localStorage.setItem(
-      "rentix_receivables",
-      JSON.stringify(synchronizedReceivables),
-    );
-
     window.dispatchEvent(new Event("rentix-receivables-updated"));
     window.dispatchEvent(new Event("rentix-accounts-receivable-updated"));
     window.dispatchEvent(new Event("rentix-financial-updated"));
@@ -1588,15 +1581,15 @@ export default function AccountsReceivablePage() {
     };
 
     try {
-      const storedCompanySettings = localStorage.getItem("rentix_company_settings");
+      const cachedCompanySettings = getCachedCompanySettings();
 
-      if (!storedCompanySettings) {
+      if (!cachedCompanySettings) {
         return defaultCompanySettings;
       }
 
       return {
         ...defaultCompanySettings,
-        ...JSON.parse(storedCompanySettings),
+        ...cachedCompanySettings,
       };
     } catch {
       return defaultCompanySettings;
@@ -1611,15 +1604,13 @@ export default function AccountsReceivablePage() {
     ].join("\n");
 
     try {
-      const storedPrintTemplates = localStorage.getItem("rentix_print_templates");
+      const parsedPrintTemplates = getCachedPrintTemplates() as {
+        paymentBooklet?: { content?: string };
+      } | null;
 
-      if (!storedPrintTemplates) {
+      if (!parsedPrintTemplates) {
         return defaultInstructions;
       }
-
-      const parsedPrintTemplates = JSON.parse(storedPrintTemplates) as {
-        paymentBooklet?: { content?: string };
-      };
 
       const templateContent = parsedPrintTemplates.paymentBooklet?.content || "";
 
@@ -2384,12 +2375,6 @@ export default function AccountsReceivablePage() {
 
     setPaid(updatedPaid);
     setPaymentRecords(updatedPaymentRecords);
-    localStorage.setItem("rentix_paid_charges", JSON.stringify(updatedPaid));
-    localStorage.setItem(
-      "rentix_charge_payments",
-      JSON.stringify(updatedPaymentRecords),
-    );
-
     generatePaymentReceipt(chargePendingPaymentReceipt, paymentRecord);
     closeReceivePaymentModal();
   }
@@ -2512,12 +2497,6 @@ export default function AccountsReceivablePage() {
 
     setPaid(updatedPaid);
     setPaymentRecords(updatedPaymentRecords);
-    localStorage.setItem("rentix_paid_charges", JSON.stringify(updatedPaid));
-    localStorage.setItem(
-      "rentix_charge_payments",
-      JSON.stringify(updatedPaymentRecords),
-    );
-
     setChargePendingPaymentReversal(null);
     closeCreateModal();
   }
@@ -2554,16 +2533,6 @@ export default function AccountsReceivablePage() {
     setManualCharges(updatedManualCharges);
     setPaid(updatedPaid);
     setPaymentRecords(updatedPaymentRecords);
-    localStorage.setItem(
-      "rentix_manual_charges",
-      JSON.stringify(updatedManualCharges),
-    );
-    localStorage.setItem("rentix_paid_charges", JSON.stringify(updatedPaid));
-    localStorage.setItem(
-      "rentix_charge_payments",
-      JSON.stringify(updatedPaymentRecords),
-    );
-
     setChargePendingDeletion(null);
     closeCreateModal();
   }
@@ -2659,36 +2628,44 @@ export default function AccountsReceivablePage() {
     }
   }
 
-  function createTenantFromModal() {
+  async function createTenantFromModal() {
     const trimmedTenantName = tenantFormData.name.trim();
 
     if (!trimmedTenantName) return;
 
-    const newTenant: Tenant = {
-      id: `tenant-${Date.now()}`,
-      name: trimmedTenantName,
-      personType: tenantFormData.personType,
-      cpf: tenantFormData.cpf.trim(),
-      phone: tenantFormData.phone.trim(),
-      isTenant: tenantFormData.isTenant,
-      zipCode: tenantFormData.zipCode.trim(),
-      state: tenantFormData.state.trim(),
-      city: tenantFormData.city.trim(),
-      street: tenantFormData.street.trim(),
-      number: tenantFormData.number.trim(),
-      district: tenantFormData.district.trim(),
-      complement: tenantFormData.complement.trim(),
-    };
+    if (!companyId) {
+      setZipCodeError("Empresa do usuario nao encontrada. Faca login novamente.");
+      return;
+    }
 
-    const updatedTenants = [...tenants, newTenant];
+    try {
+      const apiPerson = await createPerson({
+        companyId,
+        type: tenantFormData.personType === "Company" ? "COMPANY" : "INDIVIDUAL",
+        name: trimmedTenantName,
+        document: onlyNumbers(tenantFormData.cpf) || tenantFormData.cpf.trim(),
+        phone: tenantFormData.phone.trim(),
+        city: tenantFormData.city.trim(),
+        state: tenantFormData.state.trim(),
+        address: buildPersonAddressFromTenantForm(tenantFormData),
+        status: "ACTIVE",
+      });
 
-    setTenants(updatedTenants);
-    setFormTenant(newTenant.id);
-    setTenantFormData(initialTenantFormData);
-    setZipCodeError("");
-    setIsTenantCreateOpen(false);
+      const newTenant = mapApiPersonToReceivableTenant(apiPerson);
+      const updatedTenants = [...tenants, newTenant];
 
-    localStorage.setItem("rentix_tenants", JSON.stringify(updatedTenants));
+      setTenants(updatedTenants);
+      setFormTenant(newTenant.id);
+      setTenantFormData(initialTenantFormData);
+      setZipCodeError("");
+      setIsTenantCreateOpen(false);
+    } catch (error) {
+      setZipCodeError(
+        error instanceof Error
+          ? error.message
+          : "Nao foi possivel cadastrar a pessoa no backend.",
+      );
+    }
   }
 
   function generateInstallmentPreview() {
@@ -2889,27 +2866,14 @@ export default function AccountsReceivablePage() {
       contractDefaultNotes: "",
     };
 
-    const possibleStorageKeys = [
-      "rentix_company_settings",
-      "rentix_company_config",
-      "rentix_company_registration",
-      "rentix_company",
-      "rentix_settings",
-      "rentix_system_settings",
-      "rentix_configuration",
-    ];
+    const cachedCompanySettings = getCachedCompanySettings();
 
-    for (const storageKey of possibleStorageKeys) {
+    if (cachedCompanySettings) {
       try {
-        const storedCompanySettings = localStorage.getItem(storageKey);
-
-        if (!storedCompanySettings) continue;
-
-        const parsedSettings = JSON.parse(storedCompanySettings) as Record<string, unknown>;
         const source =
-          typeof parsedSettings.company === "object" && parsedSettings.company !== null
-            ? (parsedSettings.company as Record<string, unknown>)
-            : parsedSettings;
+          typeof cachedCompanySettings.company === "object" && cachedCompanySettings.company !== null
+            ? (cachedCompanySettings.company as Record<string, unknown>)
+            : cachedCompanySettings;
 
         return {
           ...defaultCompanySettings,
@@ -2943,7 +2907,7 @@ export default function AccountsReceivablePage() {
           contractDefaultNotes: String(source.contractDefaultNotes || source.defaultContractNotes || ""),
         };
       } catch {
-        continue;
+        return defaultCompanySettings;
       }
     }
 
@@ -2993,11 +2957,9 @@ export default function AccountsReceivablePage() {
 
   function getConfiguredTemporaryContractTemplateContentForReceivable() {
     try {
-      const storedTemplates = localStorage.getItem(PRINT_TEMPLATES_STORAGE_KEY);
+      const parsedTemplates = getCachedPrintTemplates();
 
-      if (!storedTemplates) return null;
-
-      const parsedTemplates = JSON.parse(storedTemplates) as Record<string, unknown>;
+      if (!parsedTemplates) return null;
       const temporaryContractTemplate = parsedTemplates.temporaryContract;
       const legacyContractTemplate = parsedTemplates.contract;
       let templateContent = "";
@@ -3042,11 +3004,9 @@ export default function AccountsReceivablePage() {
 
   function getConfiguredStandardContractTemplateContentForReceivable() {
     try {
-      const storedTemplates = localStorage.getItem(PRINT_TEMPLATES_STORAGE_KEY);
+      const parsedTemplates = getCachedPrintTemplates();
 
-      if (!storedTemplates) return null;
-
-      const parsedTemplates = JSON.parse(storedTemplates) as Record<string, unknown>;
+      if (!parsedTemplates) return null;
       const standardContractTemplate = parsedTemplates.standardContract;
       let templateContent = "";
 
@@ -3560,10 +3520,6 @@ export default function AccountsReceivablePage() {
       }
 
       setPaymentRecords(updatedPaymentRecords);
-      localStorage.setItem(
-        "rentix_charge_payments",
-        JSON.stringify(updatedPaymentRecords),
-      );
 
       closeCreateModal();
       return;
@@ -3672,10 +3628,6 @@ export default function AccountsReceivablePage() {
         : [...manualCharges, savedCharge];
 
       setManualCharges(updatedManualCharges);
-      localStorage.setItem(
-        "rentix_manual_charges",
-        JSON.stringify(updatedManualCharges),
-      );
 
       generatePaymentCarnet([
         {
@@ -3777,10 +3729,6 @@ export default function AccountsReceivablePage() {
     const updatedManualCharges = [...manualCharges, ...newCharges];
 
     setManualCharges(updatedManualCharges);
-    localStorage.setItem(
-      "rentix_manual_charges",
-      JSON.stringify(updatedManualCharges),
-    );
 
     const downPaymentCharge = newCharges.find((charge) => charge.isDownPayment);
 
@@ -6645,6 +6593,64 @@ function mapApiReceivableToPayments(account: ReceivableAccount): ChargePayment[]
     amountPaid: normalizeApiAmount(payment.amountPaid),
     note: payment.note || "",
   }));
+}
+
+function mapApiContractToReceivableContract(contract: ApiContract): Contract {
+  return {
+    id: contract.id,
+    propertyId: contract.propertyId,
+    propertyName: contract.propertyName || contract.property?.title || "",
+    tenantId: contract.tenantId,
+    tenantName: contract.tenantName || contract.tenant?.name || "",
+    startDate: contract.startDate,
+    endDate: contract.endDate,
+    rentValue: contract.rentValue,
+    status: contract.status,
+    isTemporaryRental: contract.isTemporaryRental,
+    checkInTime: contract.checkInTime || undefined,
+    checkOutTime: contract.checkOutTime || undefined,
+  };
+}
+
+function mapApiPropertyToReceivableProperty(property: ApiProperty): Property {
+  return {
+    id: property.id,
+    name: property.title,
+    zipCode: property.zipCode || "",
+    state: property.state || "",
+    city: property.city || "",
+    street: property.address || "",
+    number: property.number || "",
+    district: property.district || "",
+    neighborhood: property.district || "",
+    complement: property.complement || "",
+  };
+}
+
+function mapApiPersonToReceivableTenant(person: Person): Tenant {
+  return {
+    id: person.id,
+    name: person.name,
+    personType: person.type === "COMPANY" ? "Company" : "Individual",
+    cpf: person.document,
+    document: person.document,
+    phone: person.phone || "",
+    isTenant: true,
+    state: person.state || "",
+    city: person.city || "",
+    street: person.address || "",
+  };
+}
+
+function buildPersonAddressFromTenantForm(formData: TenantFormData) {
+  return [
+    formData.street.trim(),
+    formData.number.trim(),
+    formData.district.trim(),
+    formData.complement.trim(),
+  ]
+    .filter(Boolean)
+    .join(", ");
 }
 
 function mapUiPaymentMethodToApi(method: PaymentMethod): ApiPaymentMethod {

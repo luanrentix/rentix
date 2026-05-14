@@ -2,13 +2,21 @@
 
 import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/layout/app-shell";
+import { useAuth } from "@/context/AuthContext";
+import {
+  createScheduleItem,
+  deleteScheduleItem,
+  getScheduleItems,
+  updateScheduleItem,
+  type ScheduleItem as ApiScheduleItem,
+} from "@/services/schedule.service";
 
 type ScheduleStatus = "scheduled" | "completed" | "canceled";
 type SchedulePriority = "low" | "medium" | "high";
 type CalendarViewMode = "month" | "week" | "day";
 
 type ScheduleItem = {
-  id: number;
+  id: string;
   title: string;
   customerName: string;
   propertyName: string;
@@ -24,13 +32,11 @@ type ScheduleItem = {
 
 type ScheduleFormData = Omit<ScheduleItem, "id">;
 
-const storageKey = "rentix_schedule_items_premium";
-
 const todayInputValue = formatDateToInputValue(new Date());
 
 const defaultScheduleItems: ScheduleItem[] = [
   {
-    id: 1,
+    id: "sample-1",
     title: "Vistoria inicial",
     customerName: "João Almeida",
     propertyName: "Apartamento Centro",
@@ -44,7 +50,7 @@ const defaultScheduleItems: ScheduleItem[] = [
     notes: "Verificar pintura, tomadas, hidráulica e estado geral do imóvel.",
   },
   {
-    id: 2,
+    id: "sample-2",
     title: "Assinatura de contrato",
     customerName: "Maria Oliveira",
     propertyName: "Casa Jardim Tropical",
@@ -58,7 +64,7 @@ const defaultScheduleItems: ScheduleItem[] = [
     notes: "Conferir documentos e condições finais antes da assinatura.",
   },
   {
-    id: 3,
+    id: "sample-3",
     title: "Cobrança em aberto",
     customerName: "Carlos Mendes",
     propertyName: "Sala Comercial 204",
@@ -72,7 +78,7 @@ const defaultScheduleItems: ScheduleItem[] = [
     notes: "Entrar em contato sobre aluguel vencido e registrar retorno.",
   },
   {
-    id: 4,
+    id: "sample-4",
     title: "Entrega de chaves",
     customerName: "Ana Souza",
     propertyName: "Kitnet Universitária",
@@ -86,7 +92,7 @@ const defaultScheduleItems: ScheduleItem[] = [
     notes: "Chaves entregues e termo finalizado.",
   },
   {
-    id: 5,
+    id: "sample-5",
     title: "Renovação de contrato",
     customerName: "Fernanda Lima",
     propertyName: "Casa Bela Vista",
@@ -100,7 +106,7 @@ const defaultScheduleItems: ScheduleItem[] = [
     notes: "Conferir reajuste, prazo de renovação e garantias.",
   },
   {
-    id: 6,
+    id: "sample-6",
     title: "Manutenção hidráulica",
     customerName: "Roberto Alves",
     propertyName: "Apartamento Solar",
@@ -237,7 +243,7 @@ function getTimeValue(item: ScheduleItem) {
 
 function normalizeStoredScheduleItem(item: Partial<ScheduleItem>): ScheduleItem {
   return {
-    id: typeof item.id === "number" ? item.id : Date.now(),
+    id: typeof item.id === "string" ? item.id : String(Date.now()),
     title: item.title || "Agendamento",
     customerName: item.customerName || "Não informado",
     propertyName: item.propertyName || "Não informado",
@@ -248,6 +254,23 @@ function normalizeStoredScheduleItem(item: Partial<ScheduleItem>): ScheduleItem 
     priority: item.priority || "medium",
     responsibleName: item.responsibleName || "Administrativo",
     reminder: item.reminder || "Sem lembrete",
+    notes: item.notes || "",
+  };
+}
+
+function mapApiScheduleItemToScheduleItem(item: ApiScheduleItem): ScheduleItem {
+  return {
+    id: item.id,
+    title: item.title,
+    customerName: item.customerName,
+    propertyName: item.propertyName,
+    date: item.date.slice(0, 10),
+    time: item.time,
+    type: item.type,
+    status: item.status,
+    priority: item.priority,
+    responsibleName: item.responsibleName,
+    reminder: item.reminder,
     notes: item.notes || "",
   };
 }
@@ -301,6 +324,8 @@ function getTypeAccentClass(type: string, isBlackTheme: boolean) {
 }
 
 export default function AgendaPage() {
+  const { user } = useAuth();
+  const companyId = user?.companyId;
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [selectedDate, setSelectedDate] = useState(todayInputValue);
   const [currentCalendarDate, setCurrentCalendarDate] = useState(createDateFromInputValue(todayInputValue));
@@ -312,28 +337,26 @@ export default function AgendaPage() {
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
   const [isBlackTheme, setIsBlackTheme] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
-  const [editingScheduleId, setEditingScheduleId] = useState<number | null>(null);
+  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
   const [formData, setFormData] = useState<ScheduleFormData>(emptyFormData);
   const [formError, setFormError] = useState("");
   const [scheduleToDelete, setScheduleToDelete] = useState<ScheduleItem | null>(null);
 
   useEffect(() => {
-    const storedItems = localStorage.getItem(storageKey);
+    if (!companyId) return;
 
-    if (!storedItems) {
-      setScheduleItems(defaultScheduleItems);
-      localStorage.setItem(storageKey, JSON.stringify(defaultScheduleItems));
-      return;
-    }
+    loadScheduleItems(companyId);
+  }, [companyId]);
 
+  async function loadScheduleItems(currentCompanyId: string) {
     try {
-      const parsedItems = JSON.parse(storedItems) as Partial<ScheduleItem>[];
-      const normalizedItems = Array.isArray(parsedItems) ? parsedItems.map(normalizeStoredScheduleItem) : defaultScheduleItems;
-      setScheduleItems(normalizedItems);
-    } catch {
-      setScheduleItems(defaultScheduleItems);
+      const apiItems = await getScheduleItems(currentCompanyId);
+      setScheduleItems(apiItems.map(mapApiScheduleItemToScheduleItem));
+    } catch (error) {
+      console.error("Nao foi possivel carregar a agenda.", error);
+      setScheduleItems([]);
     }
-  }, []);
+  }
 
   useEffect(() => {
     function applyStoredTheme() {
@@ -363,12 +386,6 @@ export default function AgendaPage() {
       window.removeEventListener("rentix-theme-change", applyStoredTheme);
     };
   }, []);
-
-  useEffect(() => {
-    if (scheduleItems.length > 0) {
-      localStorage.setItem(storageKey, JSON.stringify(scheduleItems));
-    }
-  }, [scheduleItems]);
 
   const calendarDays = useMemo(() => getMonthDays(currentCalendarDate), [currentCalendarDate]);
   const weekDays = useMemo(() => getWeekDays(selectedDate), [selectedDate]);
@@ -456,7 +473,6 @@ export default function AgendaPage() {
 
   function persistScheduleItems(nextItems: ScheduleItem[]) {
     setScheduleItems(nextItems);
-    localStorage.setItem(storageKey, JSON.stringify(nextItems));
   }
 
   function handlePreviousMonth() {
@@ -516,7 +532,7 @@ export default function AgendaPage() {
     setFormError("");
   }
 
-  function handleSaveSchedule() {
+  async function handleSaveSchedule() {
     if (!formData.title.trim()) {
       setFormError("Informe o título do agendamento.");
       return;
@@ -551,14 +567,46 @@ export default function AgendaPage() {
       notes: formData.notes.trim(),
     };
 
+    if (!companyId) {
+      setFormError("Empresa do usuario nao encontrada. Faca login novamente.");
+      return;
+    }
+
     if (editingScheduleId) {
-      const nextItems = scheduleItems.map((item) => (item.id === editingScheduleId ? { ...item, ...normalizedData } : item));
+      let updatedItem: ScheduleItem;
+
+      try {
+        const apiItem = await updateScheduleItem(editingScheduleId, normalizedData);
+        updatedItem = mapApiScheduleItemToScheduleItem(apiItem);
+      } catch (error) {
+        setFormError(
+          error instanceof Error
+            ? error.message
+            : "Nao foi possivel atualizar o agendamento no backend.",
+        );
+        return;
+      }
+
+      const nextItems = scheduleItems.map((item) => (item.id === editingScheduleId ? updatedItem : item));
       persistScheduleItems(nextItems);
     } else {
-      const nextItem: ScheduleItem = {
-        id: Date.now(),
-        ...normalizedData,
-      };
+      let nextItem: ScheduleItem;
+
+      try {
+        const apiItem = await createScheduleItem({
+          companyId,
+          ...normalizedData,
+        });
+        nextItem = mapApiScheduleItemToScheduleItem(apiItem);
+      } catch (error) {
+        setFormError(
+          error instanceof Error
+            ? error.message
+            : "Nao foi possivel criar o agendamento no backend.",
+        );
+        return;
+      }
+
       persistScheduleItems([...scheduleItems, nextItem]);
     }
 
@@ -568,20 +616,64 @@ export default function AgendaPage() {
     handleCloseScheduleModal();
   }
 
-  function handleConfirmDelete() {
+  async function handleConfirmDelete() {
     if (!scheduleToDelete) return;
+    try {
+      await deleteScheduleItem(scheduleToDelete.id);
+    } catch (error) {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : "Nao foi possivel excluir o agendamento no backend.",
+      );
+      return;
+    }
+
     persistScheduleItems(scheduleItems.filter((item) => item.id !== scheduleToDelete.id));
     setScheduleToDelete(null);
   }
 
-  function handleQuickStatusChange(item: ScheduleItem, status: ScheduleStatus) {
-    persistScheduleItems(scheduleItems.map((scheduleItem) => (scheduleItem.id === item.id ? { ...scheduleItem, status } : scheduleItem)));
+  async function handleQuickStatusChange(item: ScheduleItem, status: ScheduleStatus) {
+    try {
+      const apiItem = await updateScheduleItem(item.id, { status });
+      const updatedItem = mapApiScheduleItemToScheduleItem(apiItem);
+      persistScheduleItems(scheduleItems.map((scheduleItem) => (scheduleItem.id === item.id ? updatedItem : scheduleItem)));
+    } catch (error) {
+      console.error("Nao foi possivel atualizar o status da agenda.", error);
+    }
   }
 
-  function handleDuplicateSchedule(item: ScheduleItem) {
+  async function handleDuplicateSchedule(item: ScheduleItem) {
+    if (!companyId) return;
+
+    try {
+      const duplicatedItem = await createScheduleItem({
+        companyId,
+        title: `${item.title} - copia`,
+        customerName: item.customerName,
+        propertyName: item.propertyName,
+        date: selectedDate,
+        time: item.time,
+        type: item.type,
+        status: "scheduled",
+        priority: item.priority,
+        responsibleName: item.responsibleName,
+        reminder: item.reminder,
+        notes: item.notes,
+      });
+
+      persistScheduleItems([
+        ...scheduleItems,
+        mapApiScheduleItemToScheduleItem(duplicatedItem),
+      ]);
+    } catch (error) {
+      console.error("Nao foi possivel duplicar o agendamento.", error);
+    }
+    return;
+
     const duplicatedItem: ScheduleItem = {
       ...item,
-      id: Date.now(),
+      id: String(Date.now()),
       title: `${item.title} - cópia`,
       date: selectedDate,
       status: "scheduled",

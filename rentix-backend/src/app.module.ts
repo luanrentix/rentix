@@ -10,6 +10,9 @@ import { ContratosModule } from './contratos/contratos.module';
 import { ContasReceberModule } from './contas-receber/contas-receber.module';
 import { ContasPagarModule } from './contas-pagar/contas-pagar.module';
 import { FinanceiroModule } from './financeiro/financeiro.module';
+import { SettingsModule } from './settings/settings.module';
+import { AgendaModule } from './agenda/agenda.module';
+import { PropertyMovementsModule } from './property-movements/property-movements.module';
 
 @Module({
   imports: [
@@ -22,6 +25,9 @@ import { FinanceiroModule } from './financeiro/financeiro.module';
     ContasReceberModule,
     ContasPagarModule,
     FinanceiroModule,
+    SettingsModule,
+    AgendaModule,
+    PropertyMovementsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

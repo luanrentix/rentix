@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
+import { getAppSettings, saveAppSettings } from "@/services/settings.service";
+import { setCachedAppSettings } from "@/services/settings-cache";
 
 type UserSettings = {
   name: string;
@@ -104,21 +107,21 @@ const resetModuleOptions: ResetModuleOption[] = [
     label: "Imóveis",
     description: "Remove imóveis cadastrados e seus filtros locais.",
     icon: "🏢",
-    storageKeys: ["rentix_properties"],
+    storageKeys: [],
   },
   {
     key: "people",
     label: "Pessoas",
     description: "Remove pessoas, inquilinos e dados locais relacionados.",
     icon: "👥",
-    storageKeys: ["rentix_tenants", "rentix_people"],
+    storageKeys: [],
   },
   {
     key: "contracts",
     label: "Contratos",
     description: "Remove contratos e pendências de integração com cobranças.",
     icon: "📄",
-    storageKeys: ["rentix_contracts", "rentix_new_charge_from_contract"],
+    storageKeys: [],
   },
   {
     key: "accountsReceivable",
@@ -126,9 +129,6 @@ const resetModuleOptions: ResetModuleOption[] = [
     description: "Remove cobranças, parcelas, pagamentos recebidos e filtros financeiros.",
     icon: "📥",
     storageKeys: [
-      "rentix_manual_charges",
-      "rentix_paid_charges",
-      "rentix_charge_payments",
       "rentix_receivable_status_filter",
     ],
   },
@@ -138,10 +138,7 @@ const resetModuleOptions: ResetModuleOption[] = [
     description: "Remove contas a pagar e pagamentos registrados localmente.",
     icon: "📤",
     storageKeys: [
-      "rentix_accounts_payable",
-      "rentix_payables",
-      "rentix_paid_payables",
-      "rentix_payable_payments",
+      "rentix_payable_status_filter",
     ],
   },
   {
@@ -149,7 +146,7 @@ const resetModuleOptions: ResetModuleOption[] = [
     label: "Agenda",
     description: "Remove compromissos, eventos e agendamentos locais.",
     icon: "📅",
-    storageKeys: ["rentix_schedule", "rentix_agenda", "rentix_calendar_events"],
+    storageKeys: [],
   },
 ];
 
@@ -908,6 +905,8 @@ const rentixThemeStyle = `
 
 export default function ConfiguracoesPage() {
   const router = useRouter();
+  const { user } = useAuth();
+  const companyId = user?.companyId;
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>("company");
   const [userSettings, setUserSettings] = useState<UserSettings>(defaultUserSettings);
   const [companySettings, setCompanySettings] = useState<CompanySettings>(defaultCompanySettings);
@@ -977,9 +976,51 @@ export default function ConfiguracoesPage() {
   );
 
   useEffect(() => {
+    if (!companyId) {
+      loadSettingsFromLocalStorage();
+      return;
+    }
+
+    loadSettings(companyId);
+  }, [companyId]);
+
+  async function loadSettings(currentCompanyId: string) {
+    try {
+      const settings = await getAppSettings(currentCompanyId);
+      setCachedAppSettings(settings);
+
+      const nextUserSettings = {
+        ...defaultUserSettings,
+        ...(settings.userSettings || {}),
+      } as UserSettings;
+      const nextCompanySettings = {
+        ...defaultCompanySettings,
+        ...(settings.companySettings || {}),
+      } as CompanySettings;
+      const nextThemeSettings = {
+        ...defaultThemeSettings,
+        ...(settings.themeSettings || {}),
+      } as ThemeSettings;
+      const nextPrintTemplates = normalizeStoredPrintTemplates(
+        (settings.printTemplates || {}) as Partial<PrintTemplates>,
+      );
+
+      setUserSettings(nextUserSettings);
+      setInitialUserSettings(nextUserSettings);
+      setCompanySettings(nextCompanySettings);
+      setInitialCompanySettings(nextCompanySettings);
+      setThemeSettings(nextThemeSettings);
+      setInitialThemeSettings(nextThemeSettings);
+      setPrintTemplates(nextPrintTemplates);
+      setInitialPrintTemplates(nextPrintTemplates);
+    } catch {
+      console.warn("Settings API unavailable. Local cached settings were loaded.");
+      loadSettingsFromLocalStorage();
+    }
+  }
+
+  function loadSettingsFromLocalStorage() {
     const storedUserSettings = localStorage.getItem("rentix_user_settings");
-    const storedCompanySettings = localStorage.getItem("rentix_company_settings");
-    const storedPrintTemplates = localStorage.getItem("rentix_print_templates");
     const storedThemeSettings = localStorage.getItem("rentix_theme_settings");
 
     if (storedUserSettings) {
@@ -992,23 +1033,6 @@ export default function ConfiguracoesPage() {
       setInitialUserSettings(parsedUserSettings);
     }
 
-    if (storedCompanySettings) {
-      const parsedCompanySettings = {
-        ...defaultCompanySettings,
-        ...JSON.parse(storedCompanySettings),
-      };
-
-      setCompanySettings(parsedCompanySettings);
-      setInitialCompanySettings(parsedCompanySettings);
-    }
-
-    if (storedPrintTemplates) {
-      const parsedPrintTemplates = normalizeStoredPrintTemplates(JSON.parse(storedPrintTemplates));
-
-      setPrintTemplates(parsedPrintTemplates);
-      setInitialPrintTemplates(parsedPrintTemplates);
-    }
-
     if (storedThemeSettings) {
       const parsedThemeSettings = {
         ...defaultThemeSettings,
@@ -1018,7 +1042,7 @@ export default function ConfiguracoesPage() {
       setThemeSettings(parsedThemeSettings);
       setInitialThemeSettings(parsedThemeSettings);
     }
-  }, []);
+  }
 
   function handleOpenResetModal() {
     setResetOptions(defaultResetOptions);
@@ -1263,11 +1287,24 @@ export default function ConfiguracoesPage() {
     setIsSaveConfirmModalOpen(false);
   }
 
-  function handleConfirmSaveSettings() {
+  async function handleConfirmSaveSettings() {
+    if (!companyId) {
+      setPasswordError("Empresa do usuário não encontrada. Faça login novamente.");
+      setIsSaveConfirmModalOpen(false);
+      return;
+    }
+
+    await saveAppSettings({
+      companyId,
+      userSettings,
+      companySettings,
+      printTemplates,
+      themeSettings,
+    });
+
     localStorage.setItem("rentix_user_settings", JSON.stringify(userSettings));
-    localStorage.setItem("rentix_company_settings", JSON.stringify(companySettings));
-    localStorage.setItem("rentix_print_templates", JSON.stringify(printTemplates));
     localStorage.setItem("rentix_theme_settings", JSON.stringify(themeSettings));
+    setCachedAppSettings({ userSettings, companySettings, printTemplates, themeSettings });
 
     if (passwordSettings.newPassword) {
       localStorage.setItem("rentix_user_password_updated", "true");

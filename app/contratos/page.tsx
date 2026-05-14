@@ -15,16 +15,20 @@ import {
   type CreateContractDto,
   type UpdateContractDto,
 } from "@/services/contracts.service";
+import {
+  createReceivableAccount,
+  deleteReceivableAccount,
+  getReceivableAccounts,
+  type ReceivableAccount,
+} from "@/services/financial.service";
 import { getProperties, type Property as ApiProperty } from "@/services/properties.service";
+import { createPropertyMovement } from "@/services/property-movements.service";
+import {
+  getCachedCompanySettings,
+  getCachedPrintTemplates,
+} from "@/services/settings-cache";
 
-const CONTRACTS_STORAGE_KEY = "rentix_contracts";
-const RECEIVABLE_FROM_CONTRACT_STORAGE_KEY = "rentix_new_charge_from_contract";
-const MANUAL_CHARGES_STORAGE_KEY = "rentix_manual_charges";
-const PAID_CHARGES_STORAGE_KEY = "rentix_paid_charges";
-const CHARGE_PAYMENTS_STORAGE_KEY = "rentix_charge_payments";
-const PROPERTY_MOVEMENTS_STORAGE_KEY = "rentix_property_movements";
 const EXPIRING_CONTRACT_DAYS_LIMIT = 30;
-const PRINT_TEMPLATES_STORAGE_KEY = "rentix_print_templates";
 const DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME = "14:00";
 const DEFAULT_TEMPORARY_RENTAL_CHECK_OUT_TIME = "12:00";
 const TEMPORARY_RENTAL_TIME_DEFAULTS_STORAGE_KEY = "rentix_temporary_rental_time_defaults";
@@ -455,16 +459,12 @@ type ReceivableCharge = {
   tenant?: string;
   dueDate?: string;
   amount?: number;
+  status?: "Pending" | "Paid";
   manual?: boolean;
   issueDate?: string;
   installmentNumber?: number;
   installmentTotal?: number;
   installmentGroupId?: string;
-};
-
-type ChargePaymentRecord = {
-  chargeId: string;
-  [key: string]: unknown;
 };
 
 type PendingStatusChange = {
@@ -493,6 +493,7 @@ export default function ContractsPage() {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [tenants, setTenants] = useState<RentixTenant[]>([]);
+  const [receivableAccounts, setReceivableAccounts] = useState<ReceivableAccount[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isLoadingPageData, setIsLoadingPageData] = useState(true);
   const [isBlackTheme, setIsBlackTheme] = useState(false);
@@ -614,7 +615,6 @@ export default function ContractsPage() {
   useEffect(() => {
     if (!isLoaded) return;
 
-    localStorage.setItem(CONTRACTS_STORAGE_KEY, JSON.stringify(contracts));
     setProperties((currentProperties) => syncPropertiesWithContracts(contracts, currentProperties));
   }, [contracts, isLoaded]);
 
@@ -677,10 +677,11 @@ export default function ContractsPage() {
       setIsLoadingPageData(true);
       setFormError("");
 
-      const [apiContracts, apiProperties, apiPeople] = await Promise.all([
+      const [apiContracts, apiProperties, apiPeople, apiReceivableAccounts] = await Promise.all([
         getContracts(currentCompanyId),
         getProperties(currentCompanyId),
         apiFetch<ApiPerson[]>(`/pessoas?companyId=${encodeURIComponent(currentCompanyId)}`),
+        getReceivableAccounts(currentCompanyId),
       ]);
 
       const normalizedContracts = apiContracts.map(mapApiContractToContract);
@@ -688,7 +689,7 @@ export default function ContractsPage() {
       setContracts(normalizedContracts);
       setProperties(apiProperties.map((property) => mapApiPropertyToProperty(property, normalizedContracts)));
       setTenants(apiPeople.map(mapApiPersonToTenant));
-      localStorage.setItem(CONTRACTS_STORAGE_KEY, JSON.stringify(normalizedContracts));
+      setReceivableAccounts(apiReceivableAccounts);
     } catch (error) {
       setFormError(
         error instanceof Error
@@ -769,6 +770,24 @@ export default function ContractsPage() {
     return `${year}-${month}-${day}`;
   }
 
+  function addMonthsToDate(dateValue: string, monthsToAdd: number) {
+    if (!dateValue) return "";
+
+    const nextDate = new Date(`${dateValue}T00:00:00`);
+
+    if (Number.isNaN(nextDate.getTime())) {
+      return "";
+    }
+
+    nextDate.setMonth(nextDate.getMonth() + monthsToAdd);
+
+    const year = nextDate.getFullYear();
+    const month = String(nextDate.getMonth() + 1).padStart(2, "0");
+    const day = String(nextDate.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  }
+
   function getContractInstallmentQuantity(startDateValue: string, endDateValue: string) {
     if (!startDateValue || !endDateValue) return 1;
 
@@ -791,19 +810,19 @@ export default function ContractsPage() {
     type: PropertyMovement["type"],
     description: string
   ) {
-    const storedMovements = localStorage.getItem(PROPERTY_MOVEMENTS_STORAGE_KEY);
-    const currentMovements = safeParseLocalStorageArray<PropertyMovement>(storedMovements);
+    const companyId = user?.companyId;
 
-    const movement: PropertyMovement = {
-      id: crypto.randomUUID(),
+    if (!companyId) return;
+
+    createPropertyMovement({
+      companyId,
       propertyId: String(contract.propertyId),
       propertyName: contract.propertyName,
       type,
       description,
-      createdAt: new Date().toISOString(),
-    };
-
-    localStorage.setItem(PROPERTY_MOVEMENTS_STORAGE_KEY, JSON.stringify([movement, ...currentMovements]));
+    }).catch((error) => {
+      console.warn("Nao foi possivel registrar movimentacao do imovel no backend.", error);
+    });
   }
 
   async function applyEditedContract(updatedContract: Contract, reason?: string) {
@@ -844,7 +863,7 @@ export default function ContractsPage() {
     }
 
     if (shouldRemoveReceivables) {
-      removeReceivableChargesFromContract(contractToSave);
+      await removeReceivableChargesFromContract(contractToSave);
       registerPropertyMovementFromContract(
         contractToSave,
         contractToSave.status === "Deleted" ? "ContractDeleted" : "ContractCanceled",
@@ -891,71 +910,69 @@ export default function ContractsPage() {
     setStatusReasonError("");
   }
 
-  function removeReceivableChargesFromContract(contract: Contract) {
-    const storedManualCharges = localStorage.getItem(MANUAL_CHARGES_STORAGE_KEY);
-    const storedPaidCharges = localStorage.getItem(PAID_CHARGES_STORAGE_KEY);
-    const storedPaymentRecords = localStorage.getItem(CHARGE_PAYMENTS_STORAGE_KEY);
+  async function removeReceivableChargesFromContract(contract: Contract) {
+    const linkedAccounts = receivableAccounts.filter(
+      (account) => String(account.contractId || "") === String(contract.id),
+    );
 
-    const manualCharges = safeParseLocalStorageArray<ReceivableCharge>(storedManualCharges);
-    const paidCharges = safeParseLocalStorageArray<string>(storedPaidCharges);
-    const paymentRecords = safeParseLocalStorageArray<ChargePaymentRecord>(storedPaymentRecords);
-    const removedChargeIds = new Set<string>();
-    const automaticChargePrefix = String(contract.id);
+    await Promise.all(linkedAccounts.map((account) => deleteReceivableAccount(account.id)));
 
-    const updatedManualCharges = manualCharges.filter((charge) => {
-      const isLinked = isReceivableChargeLinkedToContract(charge, contract);
-
-      if (isLinked) {
-        removedChargeIds.add(String(charge.id));
-        return false;
-      }
-
-      return true;
-    });
-
-    const updatedPaidCharges = paidCharges.filter((chargeId) => {
-      const normalizedChargeId = String(chargeId);
-      const isLinked =
-        removedChargeIds.has(normalizedChargeId) ||
-        normalizedChargeId.startsWith(automaticChargePrefix + "-");
-
-      return !isLinked;
-    });
-
-    const updatedPaymentRecords = paymentRecords.filter((paymentRecord) => {
-      const normalizedChargeId = String(paymentRecord.chargeId);
-      const isLinked =
-        removedChargeIds.has(normalizedChargeId) ||
-        normalizedChargeId.startsWith(automaticChargePrefix + "-");
-
-      return !isLinked;
-    });
-
-    localStorage.setItem(MANUAL_CHARGES_STORAGE_KEY, JSON.stringify(updatedManualCharges));
-    localStorage.setItem(PAID_CHARGES_STORAGE_KEY, JSON.stringify(updatedPaidCharges));
-    localStorage.setItem(CHARGE_PAYMENTS_STORAGE_KEY, JSON.stringify(updatedPaymentRecords));
+    setReceivableAccounts((currentAccounts) =>
+      currentAccounts.filter(
+        (account) => String(account.contractId || "") !== String(contract.id),
+      ),
+    );
   }
 
-  function openReceivableChargeFromContract(contract: Contract) {
+  async function openReceivableChargeFromContract(contract: Contract) {
+    const companyId = user?.companyId;
+
+    if (!companyId) {
+      setFormError("Empresa do usuÃ¡rio nÃ£o encontrada. FaÃ§a login novamente.");
+      return;
+    }
+
     const installmentQuantity = getContractInstallmentQuantity(contract.startDate, contract.endDate);
     const monthlyRentAmount = Number(contract.rentValue || 0);
-    const totalContractAmount = monthlyRentAmount * installmentQuantity;
+    const firstDueDate = getFirstDueDateFromStartDate(contract.startDate);
+    const installmentGroupId = `${contract.id}-installments`;
 
-    localStorage.setItem(
-      RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
-      JSON.stringify({
-        contractId: String(contract.id),
-        tenantId: String(contract.tenantId),
-        propertyId: String(contract.propertyId),
-        amount: totalContractAmount,
-        monthlyAmount: monthlyRentAmount,
-        totalAmount: totalContractAmount,
-        issueDate: contract.startDate,
-        dueDate: getFirstDueDateFromStartDate(contract.startDate),
-        endDate: contract.endDate,
-        installmentQuantity,
-      })
+    if (!firstDueDate) {
+      setFormError("Data inicial do contrato invalida para gerar cobrancas.");
+      return;
+    }
+
+    const existingAccounts = receivableAccounts.filter(
+      (account) => String(account.contractId || "") === String(contract.id),
     );
+
+    if (existingAccounts.length === 0) {
+      const createdAccounts = await Promise.all(
+        Array.from({ length: installmentQuantity }, (_, index) =>
+          createReceivableAccount({
+            companyId,
+            contractId: String(contract.id),
+            tenantId: String(contract.tenantId),
+            property: contract.propertyName,
+            tenant: contract.tenantName,
+            issueDate: contract.startDate,
+            dueDate: addMonthsToDate(firstDueDate, index),
+            amount: monthlyRentAmount,
+            status: "PENDING",
+            manual: false,
+            installmentNumber: index + 1,
+            installmentTotal: installmentQuantity,
+            installmentGroupId,
+            isDownPayment: false,
+          }),
+        ),
+      );
+
+      setReceivableAccounts((currentAccounts) => [
+        ...createdAccounts,
+        ...currentAccounts,
+      ]);
+    }
 
     window.location.href = "/contas-receber";
   }
@@ -1111,14 +1128,13 @@ export default function ContractsPage() {
     const updatedContracts = [newContract, ...contracts];
 
     setContracts(updatedContracts);
-    localStorage.setItem(CONTRACTS_STORAGE_KEY, JSON.stringify(updatedContracts));
     registerPropertyMovementFromContract(
       newContract,
       "ContractCreated",
       "Contrato criado e imóvel vinculado à locação."
     );
     resetForm();
-    openReceivableChargeFromContract(newContract);
+    await openReceivableChargeFromContract(newContract);
   }
 
   function handlePropertyChange(selectedPropertyId: string) {
@@ -1196,11 +1212,9 @@ export default function ContractsPage() {
   }
 
   function getContractReceivableCharges(contract: Contract) {
-    const storedManualCharges = localStorage.getItem(MANUAL_CHARGES_STORAGE_KEY);
-    const manualCharges = safeParseLocalStorageArray<ReceivableCharge>(storedManualCharges);
-
-    return manualCharges
-      .filter((charge) => isReceivableChargeLinkedToContract(charge, contract))
+    return receivableAccounts
+      .filter((account) => String(account.contractId || "") === String(contract.id))
+      .map(mapReceivableAccountToCharge)
       .sort((firstCharge, secondCharge) => {
         const firstDate = firstCharge.dueDate ? new Date(firstCharge.dueDate).getTime() : 0;
         const secondDate = secondCharge.dueDate ? new Date(secondCharge.dueDate).getTime() : 0;
@@ -1211,10 +1225,8 @@ export default function ContractsPage() {
 
   function getContractReceivableSummary(contract: Contract) {
     const contractCharges = getContractReceivableCharges(contract);
-    const paidChargeIds = safeParseLocalStorageArray<string>(localStorage.getItem(PAID_CHARGES_STORAGE_KEY));
-    const paidChargeIdSet = new Set(paidChargeIds.map((chargeId) => String(chargeId)));
-    const paidCharges = contractCharges.filter((charge) => paidChargeIdSet.has(String(charge.id)));
-    const pendingCharges = contractCharges.filter((charge) => !paidChargeIdSet.has(String(charge.id)));
+    const paidCharges = contractCharges.filter((charge) => charge.status === "Paid");
+    const pendingCharges = contractCharges.filter((charge) => charge.status !== "Paid");
     const totalAmount = contractCharges.reduce((total, charge) => total + Number(charge.amount || 0), 0);
     const paidAmount = paidCharges.reduce((total, charge) => total + Number(charge.amount || 0), 0);
     const pendingAmount = pendingCharges.reduce((total, charge) => total + Number(charge.amount || 0), 0);
@@ -1369,7 +1381,7 @@ export default function ContractsPage() {
       return;
     }
 
-    removeFutureReceivableChargesFromContract(finishedContract);
+    await removeFutureReceivableChargesFromContract(finishedContract);
     registerPropertyMovementFromContract(
       finishedContract,
       "ContractFinished",
@@ -1385,42 +1397,26 @@ export default function ContractsPage() {
     handleCloseFinishModal();
   }
 
-  function removeFutureReceivableChargesFromContract(contract: Contract) {
-    const storedManualCharges = localStorage.getItem(MANUAL_CHARGES_STORAGE_KEY);
-    const storedPaidCharges = localStorage.getItem(PAID_CHARGES_STORAGE_KEY);
-    const storedPaymentRecords = localStorage.getItem(CHARGE_PAYMENTS_STORAGE_KEY);
-    const manualCharges = safeParseLocalStorageArray<ReceivableCharge>(storedManualCharges);
-    const paidCharges = safeParseLocalStorageArray<string>(storedPaidCharges);
-    const paymentRecords = safeParseLocalStorageArray<ChargePaymentRecord>(storedPaymentRecords);
+  async function removeFutureReceivableChargesFromContract(contract: Contract) {
     const today = new Date();
-    const removedChargeIds = new Set<string>();
 
     today.setHours(0, 0, 0, 0);
 
-    const updatedManualCharges = manualCharges.filter((charge) => {
-      if (!isReceivableChargeLinkedToContract(charge, contract)) {
-        return true;
-      }
+    const futureAccounts = receivableAccounts.filter((account) => {
+      if (String(account.contractId || "") !== String(contract.id)) return false;
 
-      const chargeDueDate = charge.dueDate ? new Date(`${charge.dueDate}T00:00:00`) : null;
-      const isFutureCharge = chargeDueDate && !Number.isNaN(chargeDueDate.getTime()) && chargeDueDate >= today;
+      const dueDate = account.dueDate ? new Date(`${account.dueDate.slice(0, 10)}T00:00:00`) : null;
 
-      if (isFutureCharge) {
-        removedChargeIds.add(String(charge.id));
-        return false;
-      }
-
-      return true;
+      return dueDate && !Number.isNaN(dueDate.getTime()) && dueDate >= today;
     });
 
-    const updatedPaidCharges = paidCharges.filter((chargeId) => !removedChargeIds.has(String(chargeId)));
-    const updatedPaymentRecords = paymentRecords.filter(
-      (paymentRecord) => !removedChargeIds.has(String(paymentRecord.chargeId))
-    );
+    await Promise.all(futureAccounts.map((account) => deleteReceivableAccount(account.id)));
 
-    localStorage.setItem(MANUAL_CHARGES_STORAGE_KEY, JSON.stringify(updatedManualCharges));
-    localStorage.setItem(PAID_CHARGES_STORAGE_KEY, JSON.stringify(updatedPaidCharges));
-    localStorage.setItem(CHARGE_PAYMENTS_STORAGE_KEY, JSON.stringify(updatedPaymentRecords));
+    const futureAccountIds = new Set(futureAccounts.map((account) => account.id));
+
+    setReceivableAccounts((currentAccounts) =>
+      currentAccounts.filter((account) => !futureAccountIds.has(account.id)),
+    );
   }
 
   function handleOpenPrintableContract(contract: Contract) {
@@ -2176,7 +2172,7 @@ export default function ContractsPage() {
                               </thead>
                               <tbody className="divide-y divide-slate-100">
                                 {receivableSummary.charges.map((charge) => {
-                                  const isPaid = safeParseLocalStorageArray<string>(localStorage.getItem(PAID_CHARGES_STORAGE_KEY)).some((chargeId) => String(chargeId) === String(charge.id));
+                                  const isPaid = charge.status === "Paid";
 
                                   return (
                                     <tr key={charge.id}>
@@ -3028,6 +3024,37 @@ function mapApiContractToContract(apiContract: ApiContract): Contract {
   };
 }
 
+function mapReceivableAccountToCharge(account: ReceivableAccount): ReceivableCharge {
+  return {
+    id: account.id,
+    contractId: account.contractId || null,
+    property: account.propertyName,
+    tenant: account.tenantName,
+    dueDate: account.dueDate,
+    amount: normalizeApiAmount(account.amount),
+    status: account.status === "PAID" ? "Paid" : "Pending",
+    manual: account.manual,
+    issueDate: account.issueDate || undefined,
+    installmentNumber: account.installmentNumber || undefined,
+    installmentTotal: account.installmentTotal || undefined,
+    installmentGroupId: account.installmentGroupId || undefined,
+  };
+}
+
+function normalizeApiAmount(value: unknown) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (typeof value === "string") {
+    const parsedValue = Number(value);
+
+    return Number.isFinite(parsedValue) ? parsedValue : 0;
+  }
+
+  return 0;
+}
+
 function mapApiPropertyToProperty(
   apiProperty: ApiProperty,
   contracts: Contract[],
@@ -3236,69 +3263,6 @@ function getDaysUntilDate(value: string) {
   return Math.round((endDate.getTime() - today.getTime()) / millisecondsPerDay);
 }
 
-function safeParseLocalStorageArray<T>(value: string | null): T[] {
-  if (!value) return [];
-
-  try {
-    const parsedValue = JSON.parse(value);
-    return Array.isArray(parsedValue) ? (parsedValue as T[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function isReceivableChargeLinkedToContract(charge: ReceivableCharge, contract: Contract) {
-  if (String(charge.contractId || "") === String(contract.id)) {
-    return true;
-  }
-
-  const chargeTenant = normalizeSearchText(charge.tenant || "");
-  const chargeProperty = normalizeSearchText(charge.property || "");
-  const contractTenant = normalizeSearchText(contract.tenantName || "");
-  const contractProperty = normalizeSearchText(contract.propertyName || "");
-
-  if (!chargeTenant || !contractTenant || chargeTenant !== contractTenant) {
-    return false;
-  }
-
-  if (!chargeProperty || !contractProperty || chargeProperty !== contractProperty) {
-    return false;
-  }
-
-  const chargeAmount = Number(charge.amount || 0);
-  const contractRentValue = Number(contract.rentValue || 0);
-
-  if (Math.abs(chargeAmount - contractRentValue) > 0.01) {
-    return false;
-  }
-
-  if (!charge.dueDate || !contract.startDate || !contract.endDate) {
-    return false;
-  }
-
-  const chargeDueDate = new Date(charge.dueDate);
-  const contractStartDate = new Date(contract.startDate + "T00:00:00");
-  const contractEndDate = new Date(contract.endDate + "T23:59:59");
-
-  if (
-    Number.isNaN(chargeDueDate.getTime()) ||
-    Number.isNaN(contractStartDate.getTime()) ||
-    Number.isNaN(contractEndDate.getTime())
-  ) {
-    return false;
-  }
-
-  const lowerLimit = new Date(contractStartDate);
-  lowerLimit.setDate(lowerLimit.getDate() - 5);
-
-  const upperLimit = new Date(contractEndDate);
-  upperLimit.setDate(upperLimit.getDate() + 45);
-
-  return chargeDueDate >= lowerLimit && chargeDueDate <= upperLimit;
-}
-
-
-
 function buildStandardResidentialContractHtml(
   contract: Contract,
   property?: Property,
@@ -3484,14 +3448,10 @@ function buildTemporaryRentalContractHtml(
 type TemplateData = Record<string, string>;
 
 function getConfiguredTemporaryContractTemplateContent() {
-  if (typeof window === "undefined") return null;
-
   try {
-    const storedTemplates = window.localStorage.getItem(PRINT_TEMPLATES_STORAGE_KEY);
+    const parsedTemplates = getCachedPrintTemplates();
 
-    if (!storedTemplates) return null;
-
-    const parsedTemplates = JSON.parse(storedTemplates) as Record<string, unknown>;
+    if (!parsedTemplates) return null;
     const temporaryContractTemplate = parsedTemplates.temporaryContract;
     const legacyContractTemplate = parsedTemplates.contract;
     let templateContent = "";
@@ -3536,14 +3496,10 @@ function normalizeTemplateContent(value: string) {
 }
 
 function getConfiguredStandardContractTemplateContent() {
-  if (typeof window === "undefined") return null;
-
   try {
-    const storedTemplates = window.localStorage.getItem(PRINT_TEMPLATES_STORAGE_KEY);
+    const parsedTemplates = getCachedPrintTemplates();
 
-    if (!storedTemplates) return null;
-
-    const parsedTemplates = JSON.parse(storedTemplates) as Record<string, unknown>;
+    if (!parsedTemplates) return null;
     const standardContractTemplate = parsedTemplates.standardContract;
     let templateContent = "";
 
@@ -3679,33 +3635,14 @@ function renderTemporaryContractTemplate(templateContent: string, templateData: 
 
 
 function getCompanySettingsForContractPrint(): CompanySettings {
-  if (typeof window === "undefined") return {};
+  const cachedCompanySettings = getCachedCompanySettings();
 
-  const possibleStorageKeys = [
-    "rentix_company_settings",
-    "rentix_company_config",
-    "rentix_company_registration",
-    "rentix_company",
-    "rentix_settings",
-    "rentix_system_settings",
-    "rentix_configuration",
-  ];
+  if (cachedCompanySettings) {
+    const source = getNestedCompanySettingsSource(cachedCompanySettings);
+    const normalizedSettings = normalizeCompanySettingsSource(source);
 
-  for (const storageKey of possibleStorageKeys) {
-    const storedValue = window.localStorage.getItem(storageKey);
-
-    if (!storedValue) continue;
-
-    try {
-      const parsedValue = JSON.parse(storedValue) as Record<string, unknown>;
-      const source = getNestedCompanySettingsSource(parsedValue);
-      const normalizedSettings = normalizeCompanySettingsSource(source);
-
-      if (normalizedSettings.name || normalizedSettings.legalName || normalizedSettings.document) {
-        return normalizedSettings;
-      }
-    } catch {
-      continue;
+    if (normalizedSettings.name || normalizedSettings.legalName || normalizedSettings.document) {
+      return normalizedSettings;
     }
   }
 

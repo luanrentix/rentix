@@ -12,6 +12,8 @@ export type FinancialReceivable = {
   id: string;
   tenantName: string;
   propertyName: string;
+  tenant?: string;
+  property?: string;
   dueDate: string;
   amount: number;
   status: FinancialStatus;
@@ -22,10 +24,13 @@ export type FinancialReceivable = {
 export type FinancialPayable = {
   id: string;
   personName: string;
+  supplier?: string;
+  creditor?: string;
   description: string;
   category: string;
   dueDate: string;
   amount: number;
+  value?: number;
   status: FinancialStatus;
   paymentDate: string | null;
   paidAmount: number;

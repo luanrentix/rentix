@@ -19,10 +19,19 @@ export async function apiFetch<TResponse>(
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (error) {
+    throw new Error(
+      `Unable to connect to backend API at ${API_BASE_URL}. Verify that the backend server is running.`,
+      { cause: error },
+    );
+  }
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => null);

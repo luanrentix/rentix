@@ -15,6 +15,7 @@ import {
   type PayableAccount,
   type PaymentMethod as ApiPaymentMethod,
 } from "@/services/financial.service";
+import { createPerson, getPeople, type Person } from "@/services/people.service";
 
 type PersonType = "Individual" | "Company";
 
@@ -269,18 +270,16 @@ export default function AccountsPayablePage() {
 
   async function loadPayablesFromBackend(currentCompanyId: string) {
     try {
-      const apiExpenses = await getPayableAccounts(currentCompanyId);
+      const [apiExpenses, apiPeople] = await Promise.all([
+        getPayableAccounts(currentCompanyId),
+        getPeople(currentCompanyId),
+      ]);
       const nextExpenses = apiExpenses.map(mapApiPayableToExpense);
       const nextPaymentRecords = apiExpenses.flatMap(mapApiPayableToPayments);
 
       setExpenses(nextExpenses);
       setPaymentRecords(nextPaymentRecords);
-      localStorage.setItem("rentix_expenses", JSON.stringify(nextExpenses));
-      localStorage.setItem("rentix_payables", JSON.stringify(nextExpenses));
-      localStorage.setItem(
-        "rentix_expense_payments",
-        JSON.stringify(nextPaymentRecords),
-      );
+      setTenants(apiPeople.map(mapApiPersonToTenant));
     } catch (error) {
       console.error("NÃ£o foi possÃ­vel carregar contas a pagar.", error);
     }
@@ -326,15 +325,12 @@ export default function AccountsPayablePage() {
 
 
   useEffect(() => {
-    const expenseData = localStorage.getItem("rentix_expenses");
-    const tenantData = localStorage.getItem("rentix_tenants");
-    const paymentData = localStorage.getItem("rentix_expense_payments");
     const savedStatusFilter = localStorage.getItem(
       "rentix_payable_status_filter",
     );
 
-    if (expenseData) {
-      const parsedExpenses = JSON.parse(expenseData) as Expense[];
+    if (false) {
+      const parsedExpenses = [] as Expense[];
 
       setExpenses(
         parsedExpenses.map((expense) => ({
@@ -351,12 +347,12 @@ export default function AccountsPayablePage() {
       );
     }
 
-    if (tenantData) {
-      setTenants(JSON.parse(tenantData));
+    if (false) {
+      setTenants([]);
     }
 
-    if (paymentData) {
-      setPaymentRecords(JSON.parse(paymentData));
+    if (false) {
+      setPaymentRecords([]);
     }
 
     if (
@@ -766,7 +762,7 @@ export default function AccountsPayablePage() {
     setIsTenantCreateOpen(false);
   }
 
-  function createTenantFromModal() {
+  async function createTenantFromModal() {
     const trimmedTenantName = tenantFormData.name.trim();
     const normalizedDocument = onlyNumbers(tenantFormData.cpf);
 
@@ -808,33 +804,41 @@ export default function AccountsPayablePage() {
       return;
     }
 
-    const newTenant: Tenant = {
-      id: `tenant-${Date.now()}`,
-      name: trimmedTenantName,
-      personType: tenantFormData.personType,
-      cpf: tenantFormData.cpf.trim(),
-      phone: tenantFormData.phone.trim(),
-      isTenant: tenantFormData.isTenant,
-      zipCode: tenantFormData.zipCode.trim(),
-      state: tenantFormData.state.trim(),
-      city: tenantFormData.city.trim(),
-      street: tenantFormData.street.trim(),
-      number: tenantFormData.number.trim(),
-      district: tenantFormData.district.trim(),
-      complement: tenantFormData.complement.trim(),
-    };
+    if (!companyId) {
+      setCnpjSearchError("Empresa do usuario nao encontrada. Faca login novamente.");
+      return;
+    }
 
-    const updatedTenants = [...tenants, newTenant];
+    try {
+      const apiPerson = await createPerson({
+        companyId,
+        type: tenantFormData.personType === "Company" ? "COMPANY" : "INDIVIDUAL",
+        name: trimmedTenantName,
+        document: normalizedDocument,
+        phone: tenantFormData.phone.trim(),
+        city: tenantFormData.city.trim(),
+        state: tenantFormData.state.trim(),
+        address: buildPersonAddressFromTenantForm(tenantFormData),
+        status: "ACTIVE",
+      });
 
-    setTenants(updatedTenants);
-    setFormTenant(newTenant.id);
-    setTenantFormData(initialTenantFormData);
-    setZipCodeError("");
-    setCnpjSearchError("");
-    setIsCnpjLoading(false);
-    setIsTenantCreateOpen(false);
+      const newTenant = mapApiPersonToTenant(apiPerson);
+      const updatedTenants = [...tenants, newTenant];
 
-    localStorage.setItem("rentix_tenants", JSON.stringify(updatedTenants));
+      setTenants(updatedTenants);
+      setFormTenant(newTenant.id);
+      setTenantFormData(initialTenantFormData);
+      setZipCodeError("");
+      setCnpjSearchError("");
+      setIsCnpjLoading(false);
+      setIsTenantCreateOpen(false);
+    } catch (error) {
+      setCnpjSearchError(
+        error instanceof Error
+          ? error.message
+          : "Nao foi possivel cadastrar a pessoa no backend.",
+      );
+    }
   }
 
   function getStatusLabel(status?: ExpenseStatus) {
@@ -1006,17 +1010,11 @@ export default function AccountsPayablePage() {
 
   function saveExpenses(updatedExpenses: Expense[]) {
     setExpenses(updatedExpenses);
-    localStorage.setItem("rentix_expenses", JSON.stringify(updatedExpenses));
-    localStorage.setItem("rentix_payables", JSON.stringify(updatedExpenses));
     dispatchAccountsPayableIntegrationEvents();
   }
 
   function savePaymentRecords(updatedPaymentRecords: ExpensePayment[]) {
     setPaymentRecords(updatedPaymentRecords);
-    localStorage.setItem(
-      "rentix_expense_payments",
-      JSON.stringify(updatedPaymentRecords),
-    );
     dispatchAccountsPayableIntegrationEvents();
   }
 
@@ -3536,6 +3534,31 @@ function mapApiPayableToPayments(account: PayableAccount): ExpensePayment[] {
     amountPaid: normalizeApiAmount(payment.amountPaid),
     note: payment.note || "",
   }));
+}
+
+function mapApiPersonToTenant(person: Person): Tenant {
+  return {
+    id: person.id,
+    name: person.name,
+    personType: person.type === "COMPANY" ? "Company" : "Individual",
+    cpf: person.document,
+    phone: person.phone || "",
+    isTenant: true,
+    state: person.state || "",
+    city: person.city || "",
+    street: person.address || "",
+  };
+}
+
+function buildPersonAddressFromTenantForm(formData: TenantFormData) {
+  return [
+    formData.street.trim(),
+    formData.number.trim(),
+    formData.district.trim(),
+    formData.complement.trim(),
+  ]
+    .filter(Boolean)
+    .join(", ");
 }
 
 function mapUiPaymentMethodToApi(method: PaymentMethod): ApiPaymentMethod {
