@@ -31,11 +31,7 @@ type FinancialPayable = {
 export class FinanceiroService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getResumo(companyId?: string) {
-    if (!companyId) {
-      throw new BadRequestException('O companyId e obrigatorio.');
-    }
-
+  async getResumo(companyId: string) {
     await this.validateCompany(companyId);
 
     const [receivables, payables] = await Promise.all([

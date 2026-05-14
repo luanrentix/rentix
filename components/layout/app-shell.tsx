@@ -487,7 +487,7 @@ function readThemeSettingsFromStorage(): ThemeSettings {
 
 export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const companyId = user?.companyId;
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
@@ -599,9 +599,8 @@ export default function AppShell({ children }: AppShellProps) {
   }
 
   function handleLogout() {
-    localStorage.removeItem("rentix_logged");
-    localStorage.removeItem("rentix_user");
-    window.location.href = "/";
+    setIsUserMenuOpen(false);
+    logout();
   }
 
   function handleCloseMobileSidebar() {

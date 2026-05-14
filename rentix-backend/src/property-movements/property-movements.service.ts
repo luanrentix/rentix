@@ -7,12 +7,12 @@ import { CriarPropertyMovementDto } from './dto/criar-property-movement.dto';
 export class PropertyMovementsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(data: CriarPropertyMovementDto) {
-    await this.validateCompanyAndProperty(data.companyId, data.propertyId);
+  async create(data: CriarPropertyMovementDto, companyId: string) {
+    await this.validateCompanyAndProperty(companyId, data.propertyId);
 
     return this.prisma.propertyMovement.create({
       data: {
-        companyId: data.companyId,
+        companyId,
         propertyId: data.propertyId,
         propertyName: data.propertyName,
         type: data.type,

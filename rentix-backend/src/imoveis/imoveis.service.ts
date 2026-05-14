@@ -12,9 +12,9 @@ import { AtualizarImovelDto } from './dto/atualizar-imovel.dto';
 export class ImoveisService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createPropertyDto: CriarImovelDto) {
+  async create(createPropertyDto: CriarImovelDto, companyId: string) {
     const company = await this.prisma.company.findUnique({
-      where: { id: createPropertyDto.companyId },
+      where: { id: companyId },
     });
 
     if (!company) {
@@ -25,7 +25,7 @@ export class ImoveisService {
       const owner = await this.prisma.person.findFirst({
         where: {
           id: createPropertyDto.ownerId,
-          companyId: createPropertyDto.companyId,
+          companyId,
         },
       });
 
@@ -36,7 +36,7 @@ export class ImoveisService {
 
     return this.prisma.property.create({
       data: {
-        companyId: createPropertyDto.companyId,
+        companyId,
         ownerId: createPropertyDto.ownerId || null,
 
         title: createPropertyDto.title,
@@ -85,9 +85,9 @@ export class ImoveisService {
     });
   }
 
-  async findOne(id: string) {
-    const property = await this.prisma.property.findUnique({
-      where: { id },
+  async findOne(id: string, companyId: string) {
+    const property = await this.prisma.property.findFirst({
+      where: { id, companyId },
       include: {
         owner: true,
         company: true,
@@ -101,9 +101,13 @@ export class ImoveisService {
     return property;
   }
 
-  async update(id: string, updatePropertyDto: AtualizarImovelDto) {
-    const property = await this.prisma.property.findUnique({
-      where: { id },
+  async update(
+    id: string,
+    updatePropertyDto: AtualizarImovelDto,
+    companyId: string,
+  ) {
+    const property = await this.prisma.property.findFirst({
+      where: { id, companyId },
     });
 
     if (!property) {
@@ -114,7 +118,7 @@ export class ImoveisService {
       const owner = await this.prisma.person.findFirst({
         where: {
           id: updatePropertyDto.ownerId,
-          companyId: updatePropertyDto.companyId || property.companyId,
+          companyId,
         },
       });
 
@@ -126,7 +130,7 @@ export class ImoveisService {
     return this.prisma.property.update({
       where: { id },
       data: {
-        companyId: updatePropertyDto.companyId ?? property.companyId,
+        companyId,
         ownerId:
           updatePropertyDto.ownerId !== undefined
             ? updatePropertyDto.ownerId || null
@@ -206,9 +210,9 @@ export class ImoveisService {
     });
   }
 
-  async remove(id: string) {
-    const property = await this.prisma.property.findUnique({
-      where: { id },
+  async remove(id: string, companyId: string) {
+    const property = await this.prisma.property.findFirst({
+      where: { id, companyId },
     });
 
     if (!property) {

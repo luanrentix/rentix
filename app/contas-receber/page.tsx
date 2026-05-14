@@ -22,6 +22,14 @@ import {
   getCachedPrintTemplates,
 } from "@/services/settings-cache";
 
+function createLocalId(prefix: string) {
+  const randomId =
+    globalThis.crypto?.randomUUID?.() ||
+    Math.random().toString(36).slice(2, 12);
+
+  return `${prefix}-${randomId}`;
+}
+
 const LEGACY_SETTINGS_TEMPORARY_CONTRACT_CONTENT = `CONTRATO TEMPORÁRIO
 
 LOCADOR: {companyName}
@@ -1332,7 +1340,7 @@ export default function AccountsReceivablePage() {
     setPaymentEntries((currentEntries) => [
       ...currentEntries,
       {
-        id: `payment-entry-${Date.now()}`,
+        id: createLocalId("payment-entry"),
         method: "Pix",
         amount: "",
       },
@@ -2241,7 +2249,7 @@ export default function AccountsReceivablePage() {
     setPaymentMethod("Cash");
     setPaymentEntries([
       {
-        id: `payment-entry-${Date.now()}`,
+        id: createLocalId("payment-entry"),
         method: "Cash",
         amount: formatAmountInput(charge.amount),
       },
@@ -3570,7 +3578,7 @@ export default function AccountsReceivablePage() {
 
     if (formLaunchType === "single") {
       const savedCharge: Charge = {
-        id: editingChargeId || `manual-${Date.now()}`,
+        id: editingChargeId || createLocalId("manual"),
         contractId: formContractId || null,
         property: chargeProperty,
         tenant: tenant.name,
@@ -3673,7 +3681,7 @@ export default function AccountsReceivablePage() {
       return;
     }
 
-    const installmentGroupId = `installment-${Date.now()}`;
+    const installmentGroupId = createLocalId("installment");
 
     const newCharges: Charge[] = installmentPreview.map((installment) => ({
       id: `${installmentGroupId}-${installment.installmentNumber}`,

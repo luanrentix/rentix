@@ -3,13 +3,19 @@
 import {
   createContext,
   ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
   useState,
 } from 'react';
 import { useRouter } from 'next/navigation';
-import { AuthUser, loginRequest } from '@/services/auth';
+import {
+  AuthUser,
+  CreateAccountRequest,
+  createAccountRequest,
+  loginRequest,
+} from '@/services/auth';
 
 type AuthContextData = {
   user: AuthUser | null;
@@ -17,6 +23,7 @@ type AuthContextData = {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  createAccount: (data: CreateAccountRequest) => Promise<void>;
   logout: () => void;
 };
 
@@ -53,7 +60,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsLoading(false);
   }, []);
 
-  async function login(email: string, password: string) {
+  const login = useCallback(async (email: string, password: string) => {
     const response = await loginRequest({
       email,
       password,
@@ -66,9 +73,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setUser(response.user);
 
     router.push('/dashboard');
-  }
+  }, [router]);
 
-  function logout() {
+  const createAccount = useCallback(async (data: CreateAccountRequest) => {
+    const response = await createAccountRequest(data);
+
+    localStorage.setItem(TOKEN_STORAGE_KEY, response.accessToken);
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.user));
+    localStorage.setItem('rentix_onboarding_pending', 'true');
+
+    setToken(response.accessToken);
+    setUser(response.user);
+
+    router.push('/configuracoes?onboarding=1');
+  }, [router]);
+
+  const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     localStorage.removeItem(USER_STORAGE_KEY);
 
@@ -76,7 +96,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setUser(null);
 
     router.push('/');
-  }
+  }, [router]);
 
   const value = useMemo<AuthContextData>(
     () => ({
@@ -85,9 +105,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       isAuthenticated: Boolean(token && user),
       isLoading,
       login,
+      createAccount,
       logout,
     }),
-    [user, token, isLoading],
+    [user, token, isLoading, login, createAccount, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

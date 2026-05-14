@@ -7,11 +7,7 @@ import { UpsertSettingsDto } from './dto/upsert-settings.dto';
 export class SettingsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findByCompany(companyId?: string) {
-    if (!companyId) {
-      throw new BadRequestException('O companyId e obrigatorio.');
-    }
-
+  async findByCompany(companyId: string) {
     await this.validateCompany(companyId);
 
     const settings = await this.prisma.appSettings.findUnique({
@@ -21,17 +17,13 @@ export class SettingsService {
     return settings || this.getEmptySettings(companyId);
   }
 
-  async upsert(data: UpsertSettingsDto) {
-    if (!data.companyId) {
-      throw new BadRequestException('O companyId e obrigatorio.');
-    }
-
-    await this.validateCompany(data.companyId);
+  async upsert(data: UpsertSettingsDto, companyId: string) {
+    await this.validateCompany(companyId);
 
     return this.prisma.appSettings.upsert({
-      where: { companyId: data.companyId },
+      where: { companyId },
       create: {
-        company: { connect: { id: data.companyId } },
+        company: { connect: { id: companyId } },
         userSettings: this.toJsonValue(data.userSettings),
         companySettings: this.toJsonValue(data.companySettings),
         themeSettings: this.toJsonValue(data.themeSettings),

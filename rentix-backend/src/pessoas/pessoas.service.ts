@@ -9,10 +9,10 @@ import { AtualizarPessoaDto } from './dto/atualizar-pessoa.dto';
 export class PessoasService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(data: CriarPessoaDto) {
+  async create(data: CriarPessoaDto, companyId: string) {
     return this.prisma.person.create({
       data: {
-        companyId: data.companyId,
+        companyId,
         type: data.type,
         name: data.name,
         document: data.document,
@@ -26,19 +26,20 @@ export class PessoasService {
     });
   }
 
-  async findAll(companyId?: string) {
+  async findAll(companyId: string) {
     return this.prisma.person.findMany({
-      where: companyId ? { companyId } : undefined,
+      where: { companyId },
       orderBy: {
         createdAt: 'desc',
       },
     });
   }
 
-  async findOne(id: string) {
-    const person = await this.prisma.person.findUnique({
+  async findOne(id: string, companyId: string) {
+    const person = await this.prisma.person.findFirst({
       where: {
         id,
+        companyId,
       },
     });
 
@@ -49,19 +50,22 @@ export class PessoasService {
     return person;
   }
 
-  async update(id: string, data: AtualizarPessoaDto) {
-    await this.findOne(id);
+  async update(id: string, data: AtualizarPessoaDto, companyId: string) {
+    await this.findOne(id, companyId);
 
     return this.prisma.person.update({
       where: {
         id,
       },
-      data,
+      data: {
+        ...data,
+        companyId,
+      },
     });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, companyId: string) {
+    await this.findOne(id, companyId);
 
     return this.prisma.person.delete({
       where: {

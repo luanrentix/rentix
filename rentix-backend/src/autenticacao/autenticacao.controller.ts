@@ -4,6 +4,7 @@ import { AutenticacaoService } from './autenticacao.service';
 
 import { RegisterDto } from './dto/registro.dto';
 import { LoginDto } from './dto/login.dto';
+import { CriarContaDto } from './dto/criar-conta.dto';
 
 @Controller('autenticacao')
 export class AutenticacaoController {
@@ -23,5 +24,12 @@ export class AutenticacaoController {
     @Body() data: LoginDto,
   ) {
     return this.authService.login(data);
+  }
+
+  @Post('criar-conta')
+  async createAccount(
+    @Body() data: CriarContaDto,
+  ) {
+    return this.authService.createAccount(data);
   }
 }

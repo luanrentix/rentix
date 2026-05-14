@@ -15,11 +15,14 @@ import { AtualizarContaReceberDto } from './dto/atualizar-conta-receber.dto';
 export class ContasReceberService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(data: CriarContaReceberDto) {
-    await this.validateCompany(data.companyId);
+  async create(data: CriarContaReceberDto, companyId: string) {
+    await this.validateCompany(companyId);
 
     return this.prisma.contaReceber.create({
-      data: this.buildCreateData(data),
+      data: this.buildCreateData({
+        ...data,
+        companyId,
+      }),
       include: this.defaultInclude,
     });
   }
@@ -36,9 +39,9 @@ export class ContasReceberService {
     });
   }
 
-  async findOne(id: string) {
-    const account = await this.prisma.contaReceber.findUnique({
-      where: { id },
+  async findOne(id: string, companyId: string) {
+    const account = await this.prisma.contaReceber.findFirst({
+      where: { id, companyId },
       include: this.defaultInclude,
     });
 
@@ -49,22 +52,23 @@ export class ContasReceberService {
     return account;
   }
 
-  async update(id: string, data: AtualizarContaReceberDto) {
-    await this.ensureExists(id);
+  async update(id: string, data: AtualizarContaReceberDto, companyId: string) {
+    await this.ensureExists(id, companyId);
 
-    if (data.companyId) {
-      await this.validateCompany(data.companyId);
-    }
+    await this.validateCompany(companyId);
 
     return this.prisma.contaReceber.update({
       where: { id },
-      data: this.buildUpdateData(data),
+      data: this.buildUpdateData({
+        ...data,
+        companyId,
+      }),
       include: this.defaultInclude,
     });
   }
 
-  async remove(id: string) {
-    await this.ensureExists(id);
+  async remove(id: string, companyId: string) {
+    await this.ensureExists(id, companyId);
 
     await this.prisma.pagamentoRecebido.deleteMany({
       where: { chargeId: id },
@@ -75,8 +79,12 @@ export class ContasReceberService {
     });
   }
 
-  async receivePayment(id: string, data: ReceberPagamentoDto) {
-    await this.ensureExists(id);
+  async receivePayment(
+    id: string,
+    data: ReceberPagamentoDto,
+    companyId: string,
+  ) {
+    await this.ensureExists(id, companyId);
 
     return this.prisma.$transaction(async (tx) => {
       await tx.pagamentoRecebido.deleteMany({
@@ -105,8 +113,8 @@ export class ContasReceberService {
     });
   }
 
-  async reversePayment(id: string) {
-    await this.ensureExists(id);
+  async reversePayment(id: string, companyId: string) {
+    await this.ensureExists(id, companyId);
 
     return this.prisma.$transaction(async (tx) => {
       await tx.pagamentoRecebido.deleteMany({
@@ -129,9 +137,9 @@ export class ContasReceberService {
     };
   }
 
-  private async ensureExists(id: string) {
-    const account = await this.prisma.contaReceber.findUnique({
-      where: { id },
+  private async ensureExists(id: string, companyId: string) {
+    const account = await this.prisma.contaReceber.findFirst({
+      where: { id, companyId },
       select: { id: true },
     });
 

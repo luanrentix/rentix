@@ -6,7 +6,7 @@ import {
   Param,
   Patch,
   Post,
-  Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ContasReceberService } from './contas-receber.service';
 import {
@@ -14,49 +14,67 @@ import {
   ReceberPagamentoDto,
 } from './dto/criar-conta-receber.dto';
 import { AtualizarContaReceberDto } from './dto/atualizar-conta-receber.dto';
+import { CurrentUser } from '../autenticacao/decorators/usuario-atual.decorator';
+import { JwtGuardAutenticacao } from '../autenticacao/guards/jwt-autenticacao.guard';
+import type { UsuarioAutenticado } from '../autenticacao/types/usuario-autenticado.type';
 
 @Controller('contas-receber')
+@UseGuards(JwtGuardAutenticacao)
 export class ContasReceberController {
   constructor(private readonly contasReceberService: ContasReceberService) {}
 
   @Post()
-  create(@Body() data: CriarContaReceberDto) {
-    return this.contasReceberService.create(data);
+  create(
+    @Body() data: CriarContaReceberDto,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    return this.contasReceberService.create(data, user.companyId);
   }
 
   @Get()
-  findAll(@Query('companyId') companyId: string) {
-    return this.contasReceberService.findAll(companyId);
+  findAll(@CurrentUser() user: UsuarioAutenticado) {
+    return this.contasReceberService.findAll(user.companyId);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.contasReceberService.findOne(id);
+  findOne(
+    @Param('id') id: string,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    return this.contasReceberService.findOne(id, user.companyId);
   }
 
   @Patch(':id')
   update(
     @Param('id') id: string,
     @Body() data: AtualizarContaReceberDto,
+    @CurrentUser() user: UsuarioAutenticado,
   ) {
-    return this.contasReceberService.update(id, data);
+    return this.contasReceberService.update(id, data, user.companyId);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.contasReceberService.remove(id);
+  remove(
+    @Param('id') id: string,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    return this.contasReceberService.remove(id, user.companyId);
   }
 
   @Post(':id/receber')
   receivePayment(
     @Param('id') id: string,
     @Body() data: ReceberPagamentoDto,
+    @CurrentUser() user: UsuarioAutenticado,
   ) {
-    return this.contasReceberService.receivePayment(id, data);
+    return this.contasReceberService.receivePayment(id, data, user.companyId);
   }
 
   @Post(':id/estornar')
-  reversePayment(@Param('id') id: string) {
-    return this.contasReceberService.reversePayment(id);
+  reversePayment(
+    @Param('id') id: string,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    return this.contasReceberService.reversePayment(id, user.companyId);
   }
 }

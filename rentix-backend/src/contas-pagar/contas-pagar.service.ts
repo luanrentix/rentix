@@ -15,11 +15,14 @@ import { AtualizarContaPagarDto } from './dto/atualizar-conta-pagar.dto';
 export class ContasPagarService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(data: CriarContaPagarDto) {
-    await this.validateCompany(data.companyId);
+  async create(data: CriarContaPagarDto, companyId: string) {
+    await this.validateCompany(companyId);
 
     return this.prisma.contaPagar.create({
-      data: this.buildCreateData(data),
+      data: this.buildCreateData({
+        ...data,
+        companyId,
+      }),
       include: this.defaultInclude,
     });
   }
@@ -36,9 +39,9 @@ export class ContasPagarService {
     });
   }
 
-  async findOne(id: string) {
-    const account = await this.prisma.contaPagar.findUnique({
-      where: { id },
+  async findOne(id: string, companyId: string) {
+    const account = await this.prisma.contaPagar.findFirst({
+      where: { id, companyId },
       include: this.defaultInclude,
     });
 
@@ -49,22 +52,23 @@ export class ContasPagarService {
     return account;
   }
 
-  async update(id: string, data: AtualizarContaPagarDto) {
-    await this.ensureExists(id);
+  async update(id: string, data: AtualizarContaPagarDto, companyId: string) {
+    await this.ensureExists(id, companyId);
 
-    if (data.companyId) {
-      await this.validateCompany(data.companyId);
-    }
+    await this.validateCompany(companyId);
 
     return this.prisma.contaPagar.update({
       where: { id },
-      data: this.buildUpdateData(data),
+      data: this.buildUpdateData({
+        ...data,
+        companyId,
+      }),
       include: this.defaultInclude,
     });
   }
 
-  async remove(id: string) {
-    await this.ensureExists(id);
+  async remove(id: string, companyId: string) {
+    await this.ensureExists(id, companyId);
 
     await this.prisma.pagamentoRealizado.deleteMany({
       where: { expenseId: id },
@@ -75,8 +79,8 @@ export class ContasPagarService {
     });
   }
 
-  async pay(id: string, data: PagarContaDto) {
-    await this.ensureExists(id);
+  async pay(id: string, data: PagarContaDto, companyId: string) {
+    await this.ensureExists(id, companyId);
 
     return this.prisma.$transaction(async (tx) => {
       await tx.pagamentoRealizado.deleteMany({
@@ -105,8 +109,8 @@ export class ContasPagarService {
     });
   }
 
-  async reversePayment(id: string) {
-    await this.ensureExists(id);
+  async reversePayment(id: string, companyId: string) {
+    await this.ensureExists(id, companyId);
 
     return this.prisma.$transaction(async (tx) => {
       await tx.pagamentoRealizado.deleteMany({
@@ -128,9 +132,9 @@ export class ContasPagarService {
     };
   }
 
-  private async ensureExists(id: string) {
-    const account = await this.prisma.contaPagar.findUnique({
-      where: { id },
+  private async ensureExists(id: string, companyId: string) {
+    const account = await this.prisma.contaPagar.findFirst({
+      where: { id, companyId },
       select: { id: true },
     });
 

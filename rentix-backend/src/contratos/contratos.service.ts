@@ -12,20 +12,25 @@ import { AtualizarContratoDto } from './dto/atualizar-contrato.dto';
 export class ContratosService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createContractDto: CriarContratoDto) {
+  async create(createContractDto: CriarContratoDto, companyId: string) {
+    const data = {
+      ...createContractDto,
+      companyId,
+    };
+
     await this.validateContractRelations(
-      createContractDto.companyId,
-      createContractDto.propertyId,
-      createContractDto.tenantId,
+      data.companyId,
+      data.propertyId,
+      data.tenantId,
     );
 
     await this.ensurePropertyHasNoActiveContract(
-      createContractDto.companyId,
-      createContractDto.propertyId,
+      data.companyId,
+      data.propertyId,
     );
 
     return this.prisma.contract.create({
-      data: this.buildCreateData(createContractDto),
+      data: this.buildCreateData(data),
       include: this.defaultInclude,
     });
   }
@@ -42,9 +47,9 @@ export class ContratosService {
     });
   }
 
-  async findOne(id: string) {
-    const contract = await this.prisma.contract.findUnique({
-      where: { id },
+  async findOne(id: string, companyId: string) {
+    const contract = await this.prisma.contract.findFirst({
+      where: { id, companyId },
       include: this.defaultInclude,
     });
 
@@ -55,16 +60,20 @@ export class ContratosService {
     return contract;
   }
 
-  async update(id: string, updateContractDto: AtualizarContratoDto) {
-    const currentContract = await this.prisma.contract.findUnique({
-      where: { id },
+  async update(
+    id: string,
+    updateContractDto: AtualizarContratoDto,
+    companyId: string,
+  ) {
+    const currentContract = await this.prisma.contract.findFirst({
+      where: { id, companyId },
     });
 
     if (!currentContract) {
       throw new NotFoundException('Contrato nao encontrado.');
     }
 
-    const nextCompanyId = updateContractDto.companyId ?? currentContract.companyId;
+    const nextCompanyId = companyId;
     const nextPropertyId =
       updateContractDto.propertyId ?? currentContract.propertyId;
     const nextTenantId = updateContractDto.tenantId ?? currentContract.tenantId;
@@ -88,14 +97,17 @@ export class ContratosService {
 
     return this.prisma.contract.update({
       where: { id },
-      data: this.buildUpdateData(updateContractDto),
+      data: this.buildUpdateData({
+        ...updateContractDto,
+        companyId,
+      }),
       include: this.defaultInclude,
     });
   }
 
-  async remove(id: string) {
-    const contract = await this.prisma.contract.findUnique({
-      where: { id },
+  async remove(id: string, companyId: string) {
+    const contract = await this.prisma.contract.findFirst({
+      where: { id, companyId },
     });
 
     if (!contract) {

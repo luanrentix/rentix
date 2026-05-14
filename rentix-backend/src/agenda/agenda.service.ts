@@ -9,10 +9,10 @@ import { AtualizarAgendaItemDto } from './dto/atualizar-agenda-item.dto';
 export class AgendaService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(data: CriarAgendaItemDto) {
+  create(data: CriarAgendaItemDto, companyId: string) {
     return this.prisma.scheduleItem.create({
       data: {
-        companyId: data.companyId,
+        companyId,
         title: data.title,
         customerName: data.customerName,
         propertyName: data.propertyName,
@@ -28,15 +28,17 @@ export class AgendaService {
     });
   }
 
-  findAll(companyId?: string) {
+  findAll(companyId: string) {
     return this.prisma.scheduleItem.findMany({
-      where: companyId ? { companyId } : undefined,
+      where: { companyId },
       orderBy: [{ date: 'asc' }, { time: 'asc' }],
     });
   }
 
-  async findOne(id: string) {
-    const item = await this.prisma.scheduleItem.findUnique({ where: { id } });
+  async findOne(id: string, companyId: string) {
+    const item = await this.prisma.scheduleItem.findFirst({
+      where: { id, companyId },
+    });
 
     if (!item) {
       throw new NotFoundException('Schedule item not found');
@@ -45,13 +47,17 @@ export class AgendaService {
     return item;
   }
 
-  async update(id: string, data: AtualizarAgendaItemDto) {
-    await this.findOne(id);
+  async update(
+    id: string,
+    data: AtualizarAgendaItemDto,
+    companyId: string,
+  ) {
+    await this.findOne(id, companyId);
 
     return this.prisma.scheduleItem.update({
       where: { id },
       data: {
-        companyId: data.companyId,
+        companyId,
         title: data.title,
         customerName: data.customerName,
         propertyName: data.propertyName,
@@ -67,8 +73,8 @@ export class AgendaService {
     });
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, companyId: string) {
+    await this.findOne(id, companyId);
 
     return this.prisma.scheduleItem.delete({ where: { id } });
   }
