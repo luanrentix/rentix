@@ -1,8 +1,6 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
-
-if (!API_BASE_URL) {
-  throw new Error('NEXT_PUBLIC_API_URL is not configured.');
-}
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.NODE_ENV === 'development' ? 'http://localhost:3001' : '');
 
 type RequestOptions = RequestInit & {
   auth?: boolean;
@@ -12,6 +10,10 @@ export async function apiFetch<TResponse>(
   endpoint: string,
   options: RequestOptions = {},
 ): Promise<TResponse> {
+  if (!API_BASE_URL) {
+    throw new Error('NEXT_PUBLIC_API_URL is not configured.');
+  }
+
   const token =
     typeof window !== 'undefined' ? localStorage.getItem('rentix_token') : null;
 
