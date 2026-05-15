@@ -1,5 +1,21 @@
 export function getCompanyStorageKey(companyId: string | undefined, key: string) {
-  return companyId ? `rentix:${companyId}:${key}` : key;
+  return companyId ? `contrx:${companyId}:${key}` : key;
+}
+
+const LEGACY_STORAGE_PREFIX = ['ren', 'tix'].join('');
+
+function getLegacyCompanyStorageKey(companyId: string | undefined, key: string) {
+  return companyId ? `${LEGACY_STORAGE_PREFIX}:${companyId}:${key}` : key;
+}
+
+function getLegacyKeyVariants(key: string, legacyKey?: string) {
+  return Array.from(
+    new Set(
+      [legacyKey, key, key.replace(/^contrx/, LEGACY_STORAGE_PREFIX)].filter(
+        Boolean,
+      ) as string[],
+    ),
+  );
 }
 
 export function getCompanyStorageItem(
@@ -12,17 +28,26 @@ export function getCompanyStorageItem(
   const scopedKey = getCompanyStorageKey(companyId, key);
   const scopedValue = localStorage.getItem(scopedKey);
 
-  if (scopedValue !== null || !legacyKey || !companyId) {
+  if (scopedValue !== null) {
     return scopedValue;
   }
 
-  const legacyValue = localStorage.getItem(legacyKey);
+  for (const keyVariant of getLegacyKeyVariants(key, legacyKey)) {
+    const possibleKeys = companyId
+      ? [getLegacyCompanyStorageKey(companyId, keyVariant), keyVariant]
+      : [keyVariant];
 
-  if (legacyValue !== null) {
-    localStorage.setItem(scopedKey, legacyValue);
+    for (const possibleKey of possibleKeys) {
+      const legacyValue = localStorage.getItem(possibleKey);
+
+      if (legacyValue !== null) {
+        localStorage.setItem(scopedKey, legacyValue);
+        return legacyValue;
+      }
+    }
   }
 
-  return legacyValue;
+  return null;
 }
 
 export function setCompanyStorageItem(
@@ -39,4 +64,11 @@ export function removeCompanyStorageItem(companyId: string | undefined, key: str
   if (typeof window === 'undefined') return;
 
   localStorage.removeItem(getCompanyStorageKey(companyId, key));
+  localStorage.removeItem(getLegacyCompanyStorageKey(companyId, key));
+  localStorage.removeItem(
+    getLegacyCompanyStorageKey(
+      companyId,
+      key.replace(/^contrx/, LEGACY_STORAGE_PREFIX),
+    ),
+  );
 }

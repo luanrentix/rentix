@@ -95,80 +95,80 @@ const chartColors = {
   red: "#dc2626",
 };
 
-const rentixDashboardThemeStyle = `
-  .rentix-dashboard-page[data-rentix-theme="black"] {
+const contrxDashboardThemeStyle = `
+  .contrx-dashboard-page[data-contrx-theme="black"] {
     color: #f8fafc;
   }
 
-  .rentix-dashboard-page[data-rentix-theme="black"] .bg-white,
-  .rentix-dashboard-page[data-rentix-theme="black"] .bg-slate-50,
-  .rentix-dashboard-page[data-rentix-theme="black"] .bg-slate-100 {
+  .contrx-dashboard-page[data-contrx-theme="black"] .bg-white,
+  .contrx-dashboard-page[data-contrx-theme="black"] .bg-slate-50,
+  .contrx-dashboard-page[data-contrx-theme="black"] .bg-slate-100 {
     background-color: #0f172a !important;
   }
 
-  .rentix-dashboard-page[data-rentix-theme="black"] section.bg-white,
-  .rentix-dashboard-page[data-rentix-theme="black"] div.bg-white {
+  .contrx-dashboard-page[data-contrx-theme="black"] section.bg-white,
+  .contrx-dashboard-page[data-contrx-theme="black"] div.bg-white {
     background: linear-gradient(145deg, #0f172a 0%, #111827 100%) !important;
   }
 
-  .rentix-dashboard-page[data-rentix-theme="black"] .bg-orange-50,
-  .rentix-dashboard-page[data-rentix-theme="black"] .bg-orange-100 {
+  .contrx-dashboard-page[data-contrx-theme="black"] .bg-orange-50,
+  .contrx-dashboard-page[data-contrx-theme="black"] .bg-orange-100 {
     background-color: rgba(249, 115, 22, 0.12) !important;
   }
 
-  .rentix-dashboard-page[data-rentix-theme="black"] .bg-red-50 {
+  .contrx-dashboard-page[data-contrx-theme="black"] .bg-red-50 {
     background-color: rgba(220, 38, 38, 0.12) !important;
   }
 
-  .rentix-dashboard-page[data-rentix-theme="black"] .bg-emerald-50 {
+  .contrx-dashboard-page[data-contrx-theme="black"] .bg-emerald-50 {
     background-color: rgba(16, 185, 129, 0.12) !important;
   }
 
-  .rentix-dashboard-page[data-rentix-theme="black"] .bg-sky-50 {
+  .contrx-dashboard-page[data-contrx-theme="black"] .bg-sky-50 {
     background-color: rgba(14, 165, 233, 0.12) !important;
   }
 
-  .rentix-dashboard-page[data-rentix-theme="black"] .text-slate-950,
-  .rentix-dashboard-page[data-rentix-theme="black"] .text-slate-900,
-  .rentix-dashboard-page[data-rentix-theme="black"] .text-slate-800,
-  .rentix-dashboard-page[data-rentix-theme="black"] .text-slate-700,
-  .rentix-dashboard-page[data-rentix-theme="black"] .text-slate-600 {
+  .contrx-dashboard-page[data-contrx-theme="black"] .text-slate-950,
+  .contrx-dashboard-page[data-contrx-theme="black"] .text-slate-900,
+  .contrx-dashboard-page[data-contrx-theme="black"] .text-slate-800,
+  .contrx-dashboard-page[data-contrx-theme="black"] .text-slate-700,
+  .contrx-dashboard-page[data-contrx-theme="black"] .text-slate-600 {
     color: #f8fafc !important;
   }
 
-  .rentix-dashboard-page[data-rentix-theme="black"] .text-slate-500,
-  .rentix-dashboard-page[data-rentix-theme="black"] .text-slate-400 {
+  .contrx-dashboard-page[data-contrx-theme="black"] .text-slate-500,
+  .contrx-dashboard-page[data-contrx-theme="black"] .text-slate-400 {
     color: #cbd5e1 !important;
   }
 
-  .rentix-dashboard-page[data-rentix-theme="black"] .border-orange-100,
-  .rentix-dashboard-page[data-rentix-theme="black"] .border-slate-100,
-  .rentix-dashboard-page[data-rentix-theme="black"] .border-slate-200,
-  .rentix-dashboard-page[data-rentix-theme="black"] .border-slate-300,
-  .rentix-dashboard-page[data-rentix-theme="black"] .border-red-100,
-  .rentix-dashboard-page[data-rentix-theme="black"] .border-emerald-100,
-  .rentix-dashboard-page[data-rentix-theme="black"] .border-sky-100 {
+  .contrx-dashboard-page[data-contrx-theme="black"] .border-orange-100,
+  .contrx-dashboard-page[data-contrx-theme="black"] .border-slate-100,
+  .contrx-dashboard-page[data-contrx-theme="black"] .border-slate-200,
+  .contrx-dashboard-page[data-contrx-theme="black"] .border-slate-300,
+  .contrx-dashboard-page[data-contrx-theme="black"] .border-red-100,
+  .contrx-dashboard-page[data-contrx-theme="black"] .border-emerald-100,
+  .contrx-dashboard-page[data-contrx-theme="black"] .border-sky-100 {
     border-color: #1e293b !important;
   }
 
-  .rentix-dashboard-page[data-rentix-theme="black"] .shadow-sm,
-  .rentix-dashboard-page[data-rentix-theme="black"] .shadow-md,
-  .rentix-dashboard-page[data-rentix-theme="black"] .shadow-lg,
-  .rentix-dashboard-page[data-rentix-theme="black"] .shadow-xl,
-  .rentix-dashboard-page[data-rentix-theme="black"] .shadow-2xl {
+  .contrx-dashboard-page[data-contrx-theme="black"] .shadow-sm,
+  .contrx-dashboard-page[data-contrx-theme="black"] .shadow-md,
+  .contrx-dashboard-page[data-contrx-theme="black"] .shadow-lg,
+  .contrx-dashboard-page[data-contrx-theme="black"] .shadow-xl,
+  .contrx-dashboard-page[data-contrx-theme="black"] .shadow-2xl {
     box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38) !important;
   }
 
-  .rentix-dashboard-page[data-rentix-theme="black"] .recharts-cartesian-grid line {
+  .contrx-dashboard-page[data-contrx-theme="black"] .recharts-cartesian-grid line {
     stroke: #334155 !important;
   }
 
-  .rentix-dashboard-page[data-rentix-theme="black"] .recharts-text,
-  .rentix-dashboard-page[data-rentix-theme="black"] .recharts-cartesian-axis-tick-value {
+  .contrx-dashboard-page[data-contrx-theme="black"] .recharts-text,
+  .contrx-dashboard-page[data-contrx-theme="black"] .recharts-cartesian-axis-tick-value {
     fill: #cbd5e1 !important;
   }
 
-  .rentix-dashboard-page[data-rentix-theme="black"] .recharts-tooltip-wrapper .recharts-default-tooltip {
+  .contrx-dashboard-page[data-contrx-theme="black"] .recharts-tooltip-wrapper .recharts-default-tooltip {
     background-color: #020617 !important;
     border-color: #334155 !important;
     color: #f8fafc !important;
@@ -176,16 +176,16 @@ const rentixDashboardThemeStyle = `
     box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45) !important;
   }
 
-  .rentix-dashboard-page[data-rentix-theme="black"] .recharts-tooltip-wrapper .recharts-tooltip-label,
-  .rentix-dashboard-page[data-rentix-theme="black"] .recharts-tooltip-wrapper .recharts-tooltip-item {
+  .contrx-dashboard-page[data-contrx-theme="black"] .recharts-tooltip-wrapper .recharts-tooltip-label,
+  .contrx-dashboard-page[data-contrx-theme="black"] .recharts-tooltip-wrapper .recharts-tooltip-item {
     color: #f8fafc !important;
   }
 
-  .rentix-dashboard-page[data-rentix-theme="black"] .hover\\:bg-orange-50:hover {
+  .contrx-dashboard-page[data-contrx-theme="black"] .hover\\:bg-orange-50:hover {
     background-color: rgba(249, 115, 22, 0.16) !important;
   }
 
-  .rentix-dashboard-page[data-rentix-theme="black"] .hover\\:bg-slate-200:hover {
+  .contrx-dashboard-page[data-contrx-theme="black"] .hover\\:bg-slate-200:hover {
     background-color: #1e293b !important;
   }
 `;
@@ -215,8 +215,8 @@ export default function DashboardPage() {
   useEffect(() => {
     const storedThemeSettings = getCompanyStorageItem(
       companyId,
-      "rentix_theme_settings",
-      "rentix_theme_settings",
+      "contrx_theme_settings",
+      "contrx_theme_settings",
     );
 
     if (storedThemeSettings) {
@@ -654,8 +654,8 @@ export default function DashboardPage() {
   return (
     <PrivateRoute>
       <AppShell>
-        <style>{rentixDashboardThemeStyle}</style>
-        <div data-rentix-theme={dashboardTheme} className="rentix-dashboard-page space-y-8 pt-6">
+        <style>{contrxDashboardThemeStyle}</style>
+        <div data-contrx-theme={dashboardTheme} className="contrx-dashboard-page space-y-8 pt-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <h1 className="text-4xl font-black tracking-tight text-slate-950">
@@ -750,8 +750,13 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-80 min-h-[320px] min-w-0">
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                  minWidth={0}
+                  minHeight={320}
+                >
                   <ComposedChart data={selectedRevenueChartData}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -862,8 +867,13 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-72 min-h-[288px] min-w-0">
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                  minWidth={0}
+                  minHeight={288}
+                >
                   <ComposedChart data={selectedContractEvolutionData}>
                     <CartesianGrid
                       strokeDasharray="3 3"

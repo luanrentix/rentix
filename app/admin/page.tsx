@@ -78,7 +78,7 @@ export default function AdminPage() {
             <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <h1 className="text-3xl font-black text-slate-950">
-                  Contas criadas no Rentix
+                  Contas criadas no Contrx
                 </h1>
                 <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-slate-500">
                   Visão global de empresas e usuários cadastrados. Esta área é

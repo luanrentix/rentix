@@ -125,7 +125,7 @@ const resetModuleOptions: ResetModuleOption[] = [
     description: "Remove cobranças, parcelas, pagamentos recebidos e filtros financeiros.",
     icon: "📥",
     storageKeys: [
-      "rentix_receivable_status_filter",
+      "contrx_receivable_status_filter",
     ],
   },
   {
@@ -134,7 +134,7 @@ const resetModuleOptions: ResetModuleOption[] = [
     description: "Remove contas a pagar e pagamentos registrados localmente.",
     icon: "📤",
     storageKeys: [
-      "rentix_payable_status_filter",
+      "contrx_payable_status_filter",
     ],
   },
   {
@@ -157,7 +157,7 @@ const defaultResetOptions: ResetOptions = {
 
 const defaultUserSettings: UserSettings = {
   name: "Luan",
-  email: "luan@Rentix.com",
+  email: "luan@contrx.com.br",
 };
 
 const defaultPasswordSettings: PasswordSettings = {
@@ -267,193 +267,193 @@ function getPixKeyPlaceholder(pixKeyType: PixKeyType) {
 }
 
 
-const rentixThemeStyle = `
-  [data-rentix-theme="light"] {
+const contrxThemeStyle = `
+  [data-contrx-theme="light"] {
     color-scheme: light;
     background-color: #f8fafc !important;
     color: #0f172a !important;
   }
 
-  [data-rentix-theme="black"] {
+  [data-contrx-theme="black"] {
     color-scheme: dark;
     background-color: #020617 !important;
     color: #f8fafc !important;
   }
 
-  [data-rentix-theme="black"] main,
-  [data-rentix-theme="black"] header,
-  [data-rentix-theme="black"] aside,
-  [data-rentix-theme="black"] .min-h-screen,
-  [data-rentix-theme="black"] .flex-1 {
+  [data-contrx-theme="black"] main,
+  [data-contrx-theme="black"] header,
+  [data-contrx-theme="black"] aside,
+  [data-contrx-theme="black"] .min-h-screen,
+  [data-contrx-theme="black"] .flex-1 {
     background-color: #020617 !important;
   }
 
-  [data-rentix-theme="black"] [class*="bg-white"],
-  [data-rentix-theme="black"] [class*="bg-slate-50"],
-  [data-rentix-theme="black"] [class*="bg-slate-100"],
-  [data-rentix-theme="black"] [class*="bg-[#f8fafc]"],
-  [data-rentix-theme="black"] [class*="bg-\[\#f8fafc\]"],
-  [data-rentix-theme="black"] .bg-white,
-  [data-rentix-theme="black"] .bg-white\/90,
-  [data-rentix-theme="black"] .bg-slate-50,
-  [data-rentix-theme="black"] .bg-slate-100 {
+  [data-contrx-theme="black"] [class*="bg-white"],
+  [data-contrx-theme="black"] [class*="bg-slate-50"],
+  [data-contrx-theme="black"] [class*="bg-slate-100"],
+  [data-contrx-theme="black"] [class*="bg-[#f8fafc]"],
+  [data-contrx-theme="black"] [class*="bg-\[\#f8fafc\]"],
+  [data-contrx-theme="black"] .bg-white,
+  [data-contrx-theme="black"] .bg-white\/90,
+  [data-contrx-theme="black"] .bg-slate-50,
+  [data-contrx-theme="black"] .bg-slate-100 {
     background-color: #0f172a !important;
   }
 
-  [data-rentix-theme="black"] [class*="from-orange-50"],
-  [data-rentix-theme="black"] [class*="via-white"],
-  [data-rentix-theme="black"] [class*="to-white"] {
+  [data-contrx-theme="black"] [class*="from-orange-50"],
+  [data-contrx-theme="black"] [class*="via-white"],
+  [data-contrx-theme="black"] [class*="to-white"] {
     --tw-gradient-from: #0f172a var(--tw-gradient-from-position) !important;
     --tw-gradient-to: #0f172a var(--tw-gradient-to-position) !important;
     --tw-gradient-stops: #0f172a, #0f172a, #0f172a !important;
   }
 
-  [data-rentix-theme="black"] [class*="bg-orange-50"],
-  [data-rentix-theme="black"] [class*="bg-orange-100"],
-  [data-rentix-theme="black"] [class*="bg-amber-50"] {
+  [data-contrx-theme="black"] [class*="bg-orange-50"],
+  [data-contrx-theme="black"] [class*="bg-orange-100"],
+  [data-contrx-theme="black"] [class*="bg-amber-50"] {
     background-color: rgba(249, 115, 22, 0.14) !important;
   }
 
-  [data-rentix-theme="black"] [class*="bg-red-50"],
-  [data-rentix-theme="black"] [class*="bg-red-100"] {
+  [data-contrx-theme="black"] [class*="bg-red-50"],
+  [data-contrx-theme="black"] [class*="bg-red-100"] {
     background-color: rgba(239, 68, 68, 0.14) !important;
   }
 
-  [data-rentix-theme="black"] [class*="bg-emerald-50"],
-  [data-rentix-theme="black"] [class*="bg-emerald-100"] {
+  [data-contrx-theme="black"] [class*="bg-emerald-50"],
+  [data-contrx-theme="black"] [class*="bg-emerald-100"] {
     background-color: rgba(16, 185, 129, 0.14) !important;
   }
 
-  [data-rentix-theme="black"] [class*="bg-blue-50"],
-  [data-rentix-theme="black"] [class*="bg-blue-100"],
-  [data-rentix-theme="black"] [class*="bg-sky-50"],
-  [data-rentix-theme="black"] [class*="bg-sky-100"] {
+  [data-contrx-theme="black"] [class*="bg-blue-50"],
+  [data-contrx-theme="black"] [class*="bg-blue-100"],
+  [data-contrx-theme="black"] [class*="bg-sky-50"],
+  [data-contrx-theme="black"] [class*="bg-sky-100"] {
     background-color: rgba(14, 165, 233, 0.14) !important;
   }
 
-  [data-rentix-theme="black"] [class*="text-slate-950"],
-  [data-rentix-theme="black"] [class*="text-slate-900"],
-  [data-rentix-theme="black"] [class*="text-slate-800"],
-  [data-rentix-theme="black"] [class*="text-slate-700"],
-  [data-rentix-theme="black"] .text-slate-950,
-  [data-rentix-theme="black"] .text-slate-900,
-  [data-rentix-theme="black"] .text-slate-800,
-  [data-rentix-theme="black"] .text-slate-700 {
+  [data-contrx-theme="black"] [class*="text-slate-950"],
+  [data-contrx-theme="black"] [class*="text-slate-900"],
+  [data-contrx-theme="black"] [class*="text-slate-800"],
+  [data-contrx-theme="black"] [class*="text-slate-700"],
+  [data-contrx-theme="black"] .text-slate-950,
+  [data-contrx-theme="black"] .text-slate-900,
+  [data-contrx-theme="black"] .text-slate-800,
+  [data-contrx-theme="black"] .text-slate-700 {
     color: #f8fafc !important;
   }
 
-  [data-rentix-theme="black"] [class*="text-slate-600"],
-  [data-rentix-theme="black"] [class*="text-slate-500"],
-  [data-rentix-theme="black"] [class*="text-slate-400"],
-  [data-rentix-theme="black"] [class*="text-slate-300"],
-  [data-rentix-theme="black"] .text-slate-600,
-  [data-rentix-theme="black"] .text-slate-500,
-  [data-rentix-theme="black"] .text-slate-400,
-  [data-rentix-theme="black"] .text-slate-300 {
+  [data-contrx-theme="black"] [class*="text-slate-600"],
+  [data-contrx-theme="black"] [class*="text-slate-500"],
+  [data-contrx-theme="black"] [class*="text-slate-400"],
+  [data-contrx-theme="black"] [class*="text-slate-300"],
+  [data-contrx-theme="black"] .text-slate-600,
+  [data-contrx-theme="black"] .text-slate-500,
+  [data-contrx-theme="black"] .text-slate-400,
+  [data-contrx-theme="black"] .text-slate-300 {
     color: #cbd5e1 !important;
   }
 
-  [data-rentix-theme="black"] [class*="text-orange-"],
-  [data-rentix-theme="black"] .text-orange-500,
-  [data-rentix-theme="black"] .text-orange-600,
-  [data-rentix-theme="black"] .text-orange-700,
-  [data-rentix-theme="black"] .text-orange-800 {
+  [data-contrx-theme="black"] [class*="text-orange-"],
+  [data-contrx-theme="black"] .text-orange-500,
+  [data-contrx-theme="black"] .text-orange-600,
+  [data-contrx-theme="black"] .text-orange-700,
+  [data-contrx-theme="black"] .text-orange-800 {
     color: #fb923c !important;
   }
 
-  [data-rentix-theme="black"] [class*="text-red-"] {
+  [data-contrx-theme="black"] [class*="text-red-"] {
     color: #fca5a5 !important;
   }
 
-  [data-rentix-theme="black"] [class*="text-emerald-"] {
+  [data-contrx-theme="black"] [class*="text-emerald-"] {
     color: #6ee7b7 !important;
   }
 
-  [data-rentix-theme="black"] [class*="text-blue-"],
-  [data-rentix-theme="black"] [class*="text-sky-"] {
+  [data-contrx-theme="black"] [class*="text-blue-"],
+  [data-contrx-theme="black"] [class*="text-sky-"] {
     color: #7dd3fc !important;
   }
 
-  [data-rentix-theme="black"] [class*="border-slate-"],
-  [data-rentix-theme="black"] [class*="border-orange-"],
-  [data-rentix-theme="black"] [class*="border-amber-"],
-  [data-rentix-theme="black"] [class*="border-red-"],
-  [data-rentix-theme="black"] [class*="border-emerald-"],
-  [data-rentix-theme="black"] [class*="border-blue-"],
-  [data-rentix-theme="black"] [class*="border-sky-"] {
+  [data-contrx-theme="black"] [class*="border-slate-"],
+  [data-contrx-theme="black"] [class*="border-orange-"],
+  [data-contrx-theme="black"] [class*="border-amber-"],
+  [data-contrx-theme="black"] [class*="border-red-"],
+  [data-contrx-theme="black"] [class*="border-emerald-"],
+  [data-contrx-theme="black"] [class*="border-blue-"],
+  [data-contrx-theme="black"] [class*="border-sky-"] {
     border-color: #1e293b !important;
   }
 
-  [data-rentix-theme="black"] input,
-  [data-rentix-theme="black"] select,
-  [data-rentix-theme="black"] textarea {
+  [data-contrx-theme="black"] input,
+  [data-contrx-theme="black"] select,
+  [data-contrx-theme="black"] textarea {
     background-color: #020617 !important;
     border-color: #334155 !important;
     color: #f8fafc !important;
   }
 
-  [data-rentix-theme="black"] input::placeholder,
-  [data-rentix-theme="black"] textarea::placeholder {
+  [data-contrx-theme="black"] input::placeholder,
+  [data-contrx-theme="black"] textarea::placeholder {
     color: #64748b !important;
   }
 
-  [data-rentix-theme="black"] option {
+  [data-contrx-theme="black"] option {
     background-color: #020617 !important;
     color: #f8fafc !important;
   }
 
-  [data-rentix-theme="black"] table {
+  [data-contrx-theme="black"] table {
     background-color: #0f172a !important;
     color: #f8fafc !important;
   }
 
-  [data-rentix-theme="black"] thead,
-  [data-rentix-theme="black"] table thead,
-  [data-rentix-theme="black"] [class*="bg-orange-50"] table thead {
+  [data-contrx-theme="black"] thead,
+  [data-contrx-theme="black"] table thead,
+  [data-contrx-theme="black"] [class*="bg-orange-50"] table thead {
     background-color: rgba(249, 115, 22, 0.16) !important;
   }
 
-  [data-rentix-theme="black"] tbody tr,
-  [data-rentix-theme="black"] tr {
+  [data-contrx-theme="black"] tbody tr,
+  [data-contrx-theme="black"] tr {
     background-color: #0f172a !important;
     border-color: #1e293b !important;
   }
 
-  [data-rentix-theme="black"] tbody tr:hover,
-  [data-rentix-theme="black"] [class*="hover:bg-slate-50"]:hover,
-  [data-rentix-theme="black"] [class*="hover:bg-slate-100"]:hover {
+  [data-contrx-theme="black"] tbody tr:hover,
+  [data-contrx-theme="black"] [class*="hover:bg-slate-50"]:hover,
+  [data-contrx-theme="black"] [class*="hover:bg-slate-100"]:hover {
     background-color: #111c31 !important;
   }
 
-  [data-rentix-theme="black"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
-  [data-rentix-theme="black"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  [data-contrx-theme="black"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+  [data-contrx-theme="black"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
     border-color: #1e293b !important;
   }
 
-  [data-rentix-theme="black"] [class*="shadow-sm"],
-  [data-rentix-theme="black"] [class*="shadow-md"],
-  [data-rentix-theme="black"] [class*="shadow-lg"],
-  [data-rentix-theme="black"] [class*="shadow-xl"],
-  [data-rentix-theme="black"] [class*="shadow-2xl"] {
+  [data-contrx-theme="black"] [class*="shadow-sm"],
+  [data-contrx-theme="black"] [class*="shadow-md"],
+  [data-contrx-theme="black"] [class*="shadow-lg"],
+  [data-contrx-theme="black"] [class*="shadow-xl"],
+  [data-contrx-theme="black"] [class*="shadow-2xl"] {
     box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42) !important;
   }
 
-  [data-rentix-theme="black"] .recharts-cartesian-grid line {
+  [data-contrx-theme="black"] .recharts-cartesian-grid line {
     stroke: #334155 !important;
   }
 
-  [data-rentix-theme="black"] .recharts-text {
+  [data-contrx-theme="black"] .recharts-text {
     fill: #cbd5e1 !important;
   }
 
-  [data-rentix-theme="black"] .recharts-tooltip-wrapper .recharts-default-tooltip {
+  [data-contrx-theme="black"] .recharts-tooltip-wrapper .recharts-default-tooltip {
     background-color: #0f172a !important;
     border-color: #334155 !important;
     color: #f8fafc !important;
   }
 
-  [data-rentix-theme="black"] .recharts-tooltip-label,
-  [data-rentix-theme="black"] .recharts-tooltip-item {
+  [data-contrx-theme="black"] .recharts-tooltip-label,
+  [data-contrx-theme="black"] .recharts-tooltip-item {
     color: #f8fafc !important;
   }
 `;
@@ -466,9 +466,9 @@ function readThemeSettingsFromStorage(companyId?: string): ThemeSettings {
   if (typeof window === "undefined") return defaultThemeSettings;
 
   const storageKeys = [
-    "rentix_theme_settings",
-    "rentix_theme",
-    "rentix_current_theme",
+    "contrx_theme_settings",
+    "contrx_theme",
+    "contrx_current_theme",
     "theme",
   ];
 
@@ -535,12 +535,13 @@ export default function AppShell({ children }: AppShellProps) {
         : menuItems,
     [user?.role],
   );
+  const isSystemOwner = user?.role === "SYSTEM_OWNER";
 
   const loadSettingsFromLocalStorage = useCallback(() => {
     const storedUserSettings = getCompanyStorageItem(
       companyId,
-      "rentix_user_settings",
-      "rentix_user_settings",
+      "contrx_user_settings",
+      "contrx_user_settings",
     );
 
     if (storedUserSettings) {
@@ -588,8 +589,8 @@ export default function AppShell({ children }: AppShellProps) {
   useEffect(() => {
     const scopedSidebarLock = getCompanyStorageItem(
       companyId,
-      "rentix_sidebar_locked",
-      "rentix_sidebar_locked",
+      "contrx_sidebar_locked",
+      "contrx_sidebar_locked",
     );
 
     setIsSidebarLocked(scopedSidebarLock === "true");
@@ -604,8 +605,8 @@ export default function AppShell({ children }: AppShellProps) {
 
     document.documentElement.classList.toggle("dark", isBlackMode);
     document.body.classList.toggle("dark", isBlackMode);
-    document.documentElement.dataset.rentixTheme = themeSettings.mode;
-    document.body.dataset.rentixTheme = themeSettings.mode;
+    document.documentElement.dataset.contrxTheme = themeSettings.mode;
+    document.body.dataset.contrxTheme = themeSettings.mode;
   }, [themeSettings.mode]);
 
   useEffect(() => {
@@ -618,13 +619,13 @@ export default function AppShell({ children }: AppShellProps) {
     }
 
     window.addEventListener("storage", syncThemeFromStorage);
-    window.addEventListener("rentix-theme-change", syncThemeFromStorage);
+    window.addEventListener("contrx-theme-change", syncThemeFromStorage);
 
     const syncInterval = window.setInterval(syncThemeFromStorage, 500);
 
     return () => {
       window.removeEventListener("storage", syncThemeFromStorage);
-      window.removeEventListener("rentix-theme-change", syncThemeFromStorage);
+      window.removeEventListener("contrx-theme-change", syncThemeFromStorage);
       window.clearInterval(syncInterval);
     };
   }, [companyId]);
@@ -651,6 +652,10 @@ export default function AppShell({ children }: AppShellProps) {
   }
 
   function handleOpenResetModal() {
+    if (!isSystemOwner) {
+      return;
+    }
+
     setResetOptions(defaultResetOptions);
     setResetConfirmationText("");
     setResetError("");
@@ -673,6 +678,11 @@ export default function AppShell({ children }: AppShellProps) {
   }
 
   function handleConfirmResetData() {
+    if (!isSystemOwner) {
+      setResetError("Acesso restrito ao dono do sistema.");
+      return;
+    }
+
     const selectedModules = resetModuleOptions.filter(
       (option) => resetOptions[option.key]
     );
@@ -764,19 +774,19 @@ export default function AppShell({ children }: AppShellProps) {
 
     setCompanyStorageItem(
       companyId,
-      "rentix_user_settings",
+      "contrx_user_settings",
       JSON.stringify(userSettings),
     );
     setCompanyStorageItem(
       companyId,
-      "rentix_theme_settings",
+      "contrx_theme_settings",
       JSON.stringify(themeSettings),
     );
     setCachedAppSettings({ userSettings, companySettings, themeSettings });
-    window.dispatchEvent(new Event("rentix-theme-change"));
+    window.dispatchEvent(new Event("contrx-theme-change"));
 
     if (passwordSettings.newPassword) {
-      setCompanyStorageItem(companyId, "rentix_user_password_updated", "true");
+      setCompanyStorageItem(companyId, "contrx_user_password_updated", "true");
       setPasswordSettings(defaultPasswordSettings);
     }
 
@@ -792,14 +802,14 @@ export default function AppShell({ children }: AppShellProps) {
   return (
     <AuthGuard>
       <div
-        data-rentix-theme={themeSettings.mode}
+        data-contrx-theme={themeSettings.mode}
         className={`min-h-screen lg:flex ${
           themeSettings.mode === "black"
             ? "dark bg-slate-950 text-slate-100"
             : "bg-[#f8fafc] text-slate-900"
         }`}
       >
-        <style>{rentixThemeStyle}</style>
+        <style>{contrxThemeStyle}</style>
         {isMobileSidebarOpen && (
           <button
             type="button"
@@ -828,11 +838,11 @@ export default function AppShell({ children }: AppShellProps) {
             <div className="cursor-pointer border-b border-orange-100 px-4 py-5 transition hover:bg-orange-50">
               <div className="flex items-center justify-center">
                 <Image
-                  src="/logo-rentix.png"
-                  alt="Rentix"
-                  width={112}
-                  height={112}
-                  className={`object-contain transition-all duration-300 ease-in-out ${isSidebarOpen ? "h-24 w-24 lg:h-28 lg:w-28" : "h-12 w-12 lg:h-12 lg:w-12"}`}
+                  src="/logo-contrx.png"
+                  alt="Contrx"
+                  width={1536}
+                  height={1024}
+                  className={`object-contain transition-all duration-300 ease-in-out ${isSidebarOpen ? "h-24 w-56 lg:h-28 lg:w-60" : "h-12 w-14 lg:h-12 lg:w-14"}`}
                 />
               </div>
 
@@ -856,7 +866,7 @@ export default function AppShell({ children }: AppShellProps) {
 
                   setCompanyStorageItem(
                     companyId,
-                    "rentix_sidebar_locked",
+                    "contrx_sidebar_locked",
                     String(isChecked),
                   );
                 }}
@@ -925,7 +935,7 @@ export default function AppShell({ children }: AppShellProps) {
                   Bem-vindo
                 </p>
                 <h2 className="truncate text-base font-black text-slate-950 sm:text-xl lg:text-2xl">
-                  {companySettings.tradeName || companySettings.companyName || "Rentix"}
+                  {companySettings.tradeName || companySettings.companyName || "Contrx"}
                 </h2>
               </div>
             </div>
@@ -1018,7 +1028,7 @@ export default function AppShell({ children }: AppShellProps) {
                       ⚙️ Central de configuração
                     </div>
                     <h2 className="text-2xl font-black text-slate-950">
-                      Configurações do Rentix
+                      Configurações do Contrx
                     </h2>
                     <p className="mt-1 text-sm font-medium text-slate-500">
                       Gerencie os dados do usuário, empresa, contato, endereço e segurança do sistema.
@@ -1087,13 +1097,15 @@ export default function AppShell({ children }: AppShellProps) {
                     </button>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handleOpenResetModal}
-                    className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600"
-                  >
-                    🗑?Resetar dados de teste
-                  </button>
+                  {isSystemOwner && (
+                    <button
+                      type="button"
+                      onClick={handleOpenResetModal}
+                      className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600"
+                    >
+                      🗑?Resetar dados de teste
+                    </button>
+                  )}
                 </aside>
 
                 <section className="min-h-0 overflow-y-auto p-5 lg:p-8">
@@ -1110,7 +1122,7 @@ export default function AppShell({ children }: AppShellProps) {
                           Cadastro da empresa
                         </h3>
                         <p className="mt-1 text-sm font-medium text-slate-500">
-                          Essas informações serão usadas em contratos, recibos, cobranças e documentos do Rentix.
+                          Essas informações serão usadas em contratos, recibos, cobranças e documentos do Contrx.
                         </p>
                       </div>
 
@@ -1128,7 +1140,7 @@ export default function AppShell({ children }: AppShellProps) {
                                 companyName: event.target.value,
                               })
                             }
-                            placeholder="Ex: Rentix Gestão de Locações LTDA"
+                            placeholder="Ex: Contrx Gestão de Locações LTDA"
                             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                           />
                         </label>
@@ -1146,7 +1158,7 @@ export default function AppShell({ children }: AppShellProps) {
                                 tradeName: event.target.value,
                               })
                             }
-                            placeholder="Ex: Rentix"
+                            placeholder="Ex: Contrx"
                             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                           />
                         </label>
@@ -1236,7 +1248,7 @@ export default function AppShell({ children }: AppShellProps) {
                                 email: event.target.value,
                               })
                             }
-                            placeholder="empresa@rentix.com"
+                            placeholder="empresa@contrx.com.br"
                             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                           />
                         </label>
@@ -1465,7 +1477,7 @@ export default function AppShell({ children }: AppShellProps) {
                                 email: event.target.value,
                               })
                             }
-                            placeholder="usuario@rentix.com"
+                            placeholder="usuario@contrx.com.br"
                             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                           />
                         </label>
@@ -1581,7 +1593,7 @@ export default function AppShell({ children }: AppShellProps) {
           </div>
         )}
 
-        {isResetModalOpen && (
+        {isResetModalOpen && isSystemOwner && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
             <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-[2rem] border border-red-100 bg-white shadow-2xl">
               <div className="border-b border-red-100 bg-gradient-to-r from-red-50 via-white to-white px-6 py-5">

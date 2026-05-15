@@ -109,7 +109,7 @@ export async function updateProperty(
 }
 
 export async function deleteProperty(id: string) {
-  return apiFetch<{ message: string }>(`/imoveis/${id}`, {
+  return apiFetch<Property>(`/imoveis/${id}`, {
     method: 'DELETE',
   });
 }

@@ -28,7 +28,7 @@ VENCIMENTO: {dueDate}
 export function getPrintTemplates(): PrintTemplates {
   if (typeof window === "undefined") return DEFAULT_TEMPLATES;
 
-  const data = localStorage.getItem("rentix_print_templates");
+  const data = localStorage.getItem("contrx_print_templates");
 
   if (!data) return DEFAULT_TEMPLATES;
 
@@ -40,7 +40,7 @@ export function getPrintTemplates(): PrintTemplates {
 }
 
 export function savePrintTemplates(templates: PrintTemplates) {
-  localStorage.setItem("rentix_print_templates", JSON.stringify(templates));
+  localStorage.setItem("contrx_print_templates", JSON.stringify(templates));
 }
 
 export function parseTemplate(template: string, data: Record<string, string>) {

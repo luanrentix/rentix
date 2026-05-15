@@ -1,8 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  AlertCircle,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  Banknote,
+  CalendarDays,
+  CreditCard,
+  RefreshCw,
+  TrendingDown,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
 import AppShell from "@/components/layout/app-shell";
 import { useAuth } from "@/context/AuthContext";
+import { getCompanyStorageItem } from "@/services/company-storage";
 import {
   getFinancialSummary,
   type FinancialPayable,
@@ -26,6 +39,193 @@ type BalanceSummary = {
   paidCount: number;
 };
 
+type StatementItem = {
+  id: string;
+  title: string;
+  subtitle: string;
+  date: string;
+  amount: number;
+  status: FinancialStatus;
+  negative: boolean;
+};
+
+type ThemeMode = "light" | "black";
+
+const contrxFinancialThemeStyle = `
+  .contrx-financial-page {
+    color: #0f172a;
+  }
+
+  .contrx-financial-page-light,
+  .contrx-financial-page-light * {
+    color-scheme: light;
+  }
+
+  .contrx-financial-page-light .bg-white {
+    background-color: #ffffff !important;
+  }
+
+  .contrx-financial-page-light .bg-slate-50 {
+    background-color: #f8fafc !important;
+  }
+
+  .contrx-financial-page-light .bg-slate-100 {
+    background-color: #f1f5f9 !important;
+  }
+
+  .contrx-financial-page-light .bg-orange-50,
+  .contrx-financial-page-light .bg-orange-100 {
+    background-color: #fff7ed !important;
+  }
+
+  .contrx-financial-page-light .bg-red-50,
+  .contrx-financial-page-light .bg-red-100 {
+    background-color: #fef2f2 !important;
+  }
+
+  .contrx-financial-page-light .bg-emerald-50,
+  .contrx-financial-page-light .bg-emerald-100 {
+    background-color: #ecfdf5 !important;
+  }
+
+  .contrx-financial-page-light .text-slate-950,
+  .contrx-financial-page-light .text-slate-900,
+  .contrx-financial-page-light .text-slate-800,
+  .contrx-financial-page-light .text-slate-700 {
+    color: #0f172a !important;
+  }
+
+  .contrx-financial-page-light .text-slate-600 {
+    color: #475569 !important;
+  }
+
+  .contrx-financial-page-light .text-slate-500 {
+    color: #64748b !important;
+  }
+
+  .contrx-financial-page-light .text-slate-400 {
+    color: #94a3b8 !important;
+  }
+
+  .contrx-financial-page-light .text-orange-600,
+  .contrx-financial-page-light .text-orange-700 {
+    color: #ea580c !important;
+  }
+
+  .contrx-financial-page-light .text-red-600,
+  .contrx-financial-page-light .text-red-700 {
+    color: #dc2626 !important;
+  }
+
+  .contrx-financial-page-light .text-emerald-600,
+  .contrx-financial-page-light .text-emerald-700 {
+    color: #059669 !important;
+  }
+
+  .contrx-financial-page-light .border-orange-100,
+  .contrx-financial-page-light .border-slate-100,
+  .contrx-financial-page-light .border-slate-200,
+  .contrx-financial-page-light .border-red-100 {
+    border-color: #fed7aa !important;
+  }
+
+  .contrx-financial-page-light input,
+  .contrx-financial-page-light select {
+    background-color: #ffffff !important;
+    border-color: #e2e8f0 !important;
+    color: #0f172a !important;
+  }
+
+  .contrx-financial-page-black {
+    color: #f8fafc;
+  }
+
+  .contrx-financial-page-black .bg-white {
+    background: linear-gradient(145deg, #0f172a 0%, #111827 100%) !important;
+  }
+
+  .contrx-financial-page-black .bg-slate-50,
+  .contrx-financial-page-black .bg-slate-100 {
+    background-color: #111827 !important;
+  }
+
+  .contrx-financial-page-black .bg-orange-50,
+  .contrx-financial-page-black .bg-orange-100 {
+    background-color: rgba(249, 115, 22, 0.14) !important;
+  }
+
+  .contrx-financial-page-black .bg-red-50,
+  .contrx-financial-page-black .bg-red-100 {
+    background-color: rgba(239, 68, 68, 0.14) !important;
+  }
+
+  .contrx-financial-page-black .bg-emerald-50,
+  .contrx-financial-page-black .bg-emerald-100 {
+    background-color: rgba(16, 185, 129, 0.14) !important;
+  }
+
+  .contrx-financial-page-black .text-slate-950,
+  .contrx-financial-page-black .text-slate-900,
+  .contrx-financial-page-black .text-slate-800,
+  .contrx-financial-page-black .text-slate-700 {
+    color: #f8fafc !important;
+  }
+
+  .contrx-financial-page-black .text-slate-600,
+  .contrx-financial-page-black .text-slate-500,
+  .contrx-financial-page-black .text-slate-400 {
+    color: #cbd5e1 !important;
+  }
+
+  .contrx-financial-page-black .text-orange-600,
+  .contrx-financial-page-black .text-orange-700 {
+    color: #fb923c !important;
+  }
+
+  .contrx-financial-page-black .text-red-600,
+  .contrx-financial-page-black .text-red-700 {
+    color: #f87171 !important;
+  }
+
+  .contrx-financial-page-black .text-emerald-600,
+  .contrx-financial-page-black .text-emerald-700 {
+    color: #34d399 !important;
+  }
+
+  .contrx-financial-page-black .border-orange-100,
+  .contrx-financial-page-black .border-orange-500\\/30,
+  .contrx-financial-page-black .border-red-100,
+  .contrx-financial-page-black .border-red-500\\/30,
+  .contrx-financial-page-black .border-slate-100,
+  .contrx-financial-page-black .border-slate-200,
+  .contrx-financial-page-black .border-slate-700 {
+    border-color: #334155 !important;
+  }
+
+  .contrx-financial-page-black input,
+  .contrx-financial-page-black select {
+    background-color: #020617 !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+  }
+
+  .contrx-financial-page-black option {
+    background-color: #020617 !important;
+    color: #f8fafc !important;
+  }
+
+  .contrx-financial-page-black .shadow-sm,
+  .contrx-financial-page-black .shadow-md {
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38) !important;
+  }
+
+  .contrx-financial-page-black .hover\\:bg-slate-50:hover,
+  .contrx-financial-page-black .hover\\:bg-slate-100:hover,
+  .contrx-financial-page-black .hover\\:bg-slate-200:hover {
+    background-color: #1e293b !important;
+  }
+`;
+
 export default function FinancialPage() {
   const { user } = useAuth();
   const companyId = user?.companyId;
@@ -38,25 +238,22 @@ export default function FinancialPage() {
   const [endDate, setEndDate] = useState(getEndOfCurrentMonth());
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
+  const [financialTheme, setFinancialTheme] = useState<ThemeMode>("light");
 
-  useEffect(() => {
-    if (!companyId) {
-      setIsLoading(false);
-      return;
-    }
-
-    loadFinancialSummary(companyId);
-  }, [companyId]);
-
-  async function loadFinancialSummary(currentCompanyId: string) {
+  const loadFinancialSummary = useCallback(async (currentCompanyId: string) => {
     try {
       setIsLoading(true);
       setErrorMessage("");
 
-      const summary = await getFinancialSummary(currentCompanyId);
+      const summary = await getFinancialSummary(currentCompanyId, {
+        startDate,
+        endDate,
+      });
 
       setReceivables(summary.receivables);
       setPayables(summary.payables);
+      setLastUpdatedAt(new Date().toISOString());
     } catch (error) {
       setErrorMessage(
         error instanceof Error
@@ -66,7 +263,81 @@ export default function FinancialPage() {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [endDate, startDate]);
+
+  useEffect(() => {
+    if (!companyId) {
+      setReceivables([]);
+      setPayables([]);
+      setIsLoading(false);
+      return;
+    }
+
+    loadFinancialSummary(companyId);
+  }, [companyId, loadFinancialSummary]);
+
+  useEffect(() => {
+    function applyStoredTheme() {
+      const storedThemeSettings = getCompanyStorageItem(
+        companyId,
+        "contrx_theme_settings",
+        "contrx_theme_settings",
+      );
+      const legacyTheme = getCompanyStorageItem(
+        companyId,
+        "contrx_theme",
+        "contrx_theme",
+      );
+
+      try {
+        const parsedThemeSettings = storedThemeSettings
+          ? (JSON.parse(storedThemeSettings) as { mode?: string })
+          : null;
+
+        const nextTheme =
+          parsedThemeSettings?.mode === "black" ||
+          parsedThemeSettings?.mode === "dark" ||
+          legacyTheme === "black" ||
+          legacyTheme === "dark"
+            ? "black"
+            : "light";
+
+        setFinancialTheme(nextTheme);
+      } catch {
+        setFinancialTheme(
+          legacyTheme === "black" || legacyTheme === "dark" ? "black" : "light",
+        );
+      }
+    }
+
+    applyStoredTheme();
+
+    window.addEventListener("storage", applyStoredTheme);
+    window.addEventListener("contrx-theme-change", applyStoredTheme);
+
+    return () => {
+      window.removeEventListener("storage", applyStoredTheme);
+      window.removeEventListener("contrx-theme-change", applyStoredTheme);
+    };
+  }, [companyId]);
+
+  useEffect(() => {
+    if (!companyId) return;
+
+    function handleFinancialUpdate() {
+      loadFinancialSummary(companyId as string);
+    }
+
+    window.addEventListener("contrx-financial-updated", handleFinancialUpdate);
+    window.addEventListener("contrx-receivables-updated", handleFinancialUpdate);
+    window.addEventListener("contrx-payables-updated", handleFinancialUpdate);
+
+    return () => {
+      window.removeEventListener("contrx-financial-updated", handleFinancialUpdate);
+      window.removeEventListener("contrx-receivables-updated", handleFinancialUpdate);
+      window.removeEventListener("contrx-payables-updated", handleFinancialUpdate);
+    };
+  }, [companyId, loadFinancialSummary]);
 
   function updatePeriodShortcut(nextShortcut: PeriodShortcut) {
     setPeriodShortcut(nextShortcut);
@@ -128,17 +399,17 @@ export default function FinancialPage() {
       );
     });
 
-    const totalToReceive = sumAmounts(openReceivables, "amount");
+    const totalToReceive = sumAmounts(openReceivables, "remainingAmount");
     const totalReceived = sumAmounts(receivedReceivables, "paidAmount");
-    const totalToPay = sumAmounts(openPayables, "amount");
+    const totalToPay = sumAmounts(openPayables, "remainingAmount");
     const totalPaid = sumAmounts(paidPayables, "paidAmount");
     const overdueReceivable = sumAmounts(
       openReceivables.filter((item) => item.status === "Overdue"),
-      "amount",
+      "remainingAmount",
     );
     const overduePayable = sumAmounts(
       openPayables.filter((item) => item.status === "Overdue"),
-      "amount",
+      "remainingAmount",
     );
 
     return {
@@ -158,91 +429,133 @@ export default function FinancialPage() {
     };
   }, [receivables, payables, startDate, endDate]);
 
-  const nextReceivables = useMemo(() => {
+  const receivableAttentionItems = useMemo(() => {
     return receivables
       .filter((receivable) => receivable.status !== "Paid")
-      .filter((receivable) =>
-        isDateInsideRange(receivable.dueDate, startDate, endDate),
-      )
-      .sort(sortByDueDate)
-      .slice(0, 6);
+      .filter((receivable) => isDateInsideRange(receivable.dueDate, startDate, endDate))
+      .sort(sortUrgentFirst)
+      .slice(0, 7)
+      .map(mapReceivableToStatementItem);
   }, [receivables, startDate, endDate]);
 
-  const nextPayables = useMemo(() => {
+  const payableAttentionItems = useMemo(() => {
     return payables
       .filter((payable) => payable.status !== "Paid")
       .filter((payable) => isDateInsideRange(payable.dueDate, startDate, endDate))
-      .sort(sortByDueDate)
-      .slice(0, 6);
+      .sort(sortUrgentFirst)
+      .slice(0, 7)
+      .map(mapPayableToStatementItem);
   }, [payables, startDate, endDate]);
 
   const periodLabel = getPeriodLabel(periodShortcut, startDate, endDate);
+  const totalOverdue = balance.overdueReceivable + balance.overduePayable;
+  const isResultPositive = balance.operationalResult >= 0;
+  const isProjectedPositive = balance.projectedBalance >= 0;
 
   return (
     <AppShell>
-      <div className="space-y-6">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+      <style>{contrxFinancialThemeStyle}</style>
+      <div
+        data-contrx-theme={financialTheme}
+        className={`contrx-financial-page space-y-6 ${
+          financialTheme === "black"
+            ? "contrx-financial-page-black"
+            : "contrx-financial-page-light"
+        }`}
+      >
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
-            <h1 className="mt-1 text-4xl font-black tracking-tight text-slate-950 dark:text-white">
+            <h1 className="text-4xl font-black tracking-tight text-slate-950 dark:text-white">
               Financeiro
             </h1>
             <p className="mt-2 max-w-4xl text-sm font-semibold text-slate-500 dark:text-slate-400">
-              Resultado direto das contas a receber, contas a pagar e baixas
-              registradas no backend.
+              Acompanhe o realizado, o projetado e os vencimentos ligados às contas a receber e a pagar.
             </p>
+            {lastUpdatedAt && (
+              <p className="mt-2 text-xs font-bold text-slate-400 dark:text-slate-500">
+                Atualizado em {new Date(lastUpdatedAt).toLocaleString("pt-BR")}
+              </p>
+            )}
           </div>
 
-          <div className="rounded-3xl border border-orange-100 bg-white p-4 shadow-sm dark:border-orange-500/30 dark:bg-slate-900">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <label>
-                <span className="mb-2 block text-xs font-black uppercase text-slate-500 dark:text-slate-400">
-                  Atalho
-                </span>
-                <select
-                  value={periodShortcut}
-                  onChange={(event) =>
-                    updatePeriodShortcut(event.target.value as PeriodShortcut)
-                  }
-                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                >
-                  <option value="CurrentMonth">Mês atual</option>
-                  <option value="CurrentQuarter">Trimestre atual</option>
-                  <option value="CurrentYear">Ano atual</option>
-                  <option value="All">Todo o período</option>
-                  <option value="Custom">Personalizado</option>
-                </select>
-              </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => (window.location.href = "/contas-receber")}
+              className="inline-flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-xs font-black text-emerald-700 ring-1 ring-emerald-100 transition hover:bg-emerald-100"
+            >
+              <ArrowUpCircle className="h-4 w-4" />
+              Contas a receber
+            </button>
+            <button
+              type="button"
+              onClick={() => (window.location.href = "/contas-pagar")}
+              className="inline-flex items-center gap-2 rounded-2xl bg-red-50 px-4 py-3 text-xs font-black text-red-700 ring-1 ring-red-100 transition hover:bg-red-100"
+            >
+              <ArrowDownCircle className="h-4 w-4" />
+              Contas a pagar
+            </button>
+            <button
+              type="button"
+              onClick={() => companyId && loadFinancialSummary(companyId)}
+              className="inline-flex items-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-100"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+              Atualizar
+            </button>
+          </div>
+        </div>
 
-              <label>
-                <span className="mb-2 block text-xs font-black uppercase text-slate-500 dark:text-slate-400">
-                  Início
-                </span>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(event) => {
-                    setStartDate(event.target.value);
-                    setPeriodShortcut("Custom");
-                  }}
-                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                />
-              </label>
+        <div className="rounded-2xl border border-orange-100 bg-white p-4 shadow-sm dark:border-orange-500/30 dark:bg-slate-900">
+          <div className="grid gap-3 md:grid-cols-[220px_1fr_1fr]">
+            <label>
+              <span className="mb-2 block text-xs font-black uppercase text-slate-500 dark:text-slate-400">
+                Período
+              </span>
+              <select
+                value={periodShortcut}
+                onChange={(event) =>
+                  updatePeriodShortcut(event.target.value as PeriodShortcut)
+                }
+                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+              >
+                <option value="CurrentMonth">Mês atual</option>
+                <option value="CurrentQuarter">Trimestre atual</option>
+                <option value="CurrentYear">Ano atual</option>
+                <option value="All">Todo o período</option>
+                <option value="Custom">Personalizado</option>
+              </select>
+            </label>
 
-              <label>
-                <span className="mb-2 block text-xs font-black uppercase text-slate-500 dark:text-slate-400">
-                  Fim
-                </span>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(event) => {
-                    setEndDate(event.target.value);
-                    setPeriodShortcut("Custom");
-                  }}
-                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                />
-              </label>
-            </div>
+            <label>
+              <span className="mb-2 block text-xs font-black uppercase text-slate-500 dark:text-slate-400">
+                Início
+              </span>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(event) => {
+                  setStartDate(event.target.value);
+                  setPeriodShortcut("Custom");
+                }}
+                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+              />
+            </label>
+
+            <label>
+              <span className="mb-2 block text-xs font-black uppercase text-slate-500 dark:text-slate-400">
+                Fim
+              </span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(event) => {
+                  setEndDate(event.target.value);
+                  setPeriodShortcut("Custom");
+                }}
+                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+              />
+            </label>
           </div>
         </div>
 
@@ -252,118 +565,135 @@ export default function FinancialPage() {
           </div>
         )}
 
-        <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm dark:border-orange-500/30 dark:bg-slate-900">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-sm font-black uppercase tracking-wide text-orange-600">
-                Resultado {periodLabel}
-              </p>
-              <h2
-                className={`mt-2 text-5xl font-black ${
-                  balance.operationalResult >= 0
-                    ? "text-emerald-600"
-                    : "text-red-600"
-                }`}
-              >
-                {isLoading ? "..." : formatCurrency(balance.operationalResult)}
-              </h2>
-              <p className="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
-                Total recebido menos total pago, usando a data real de baixa.
-              </p>
-            </div>
+        <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+          <section className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm dark:border-orange-500/30 dark:bg-slate-900">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-orange-600">
+                  Resultado realizado {periodLabel}
+                </p>
+                <h2
+                  className={`mt-2 text-4xl font-black ${
+                    isResultPositive ? "text-emerald-600" : "text-red-600"
+                  }`}
+                >
+                  {isLoading ? "..." : formatCurrency(balance.operationalResult)}
+                </h2>
+                <p className="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                  Recebido menos pago, usando a data real da baixa.
+                </p>
+              </div>
 
-            <div className="rounded-2xl bg-orange-50 px-6 py-5 text-left dark:bg-orange-500/10 lg:text-right">
-              <p className="text-xs font-black uppercase tracking-wide text-orange-600">
-                Saldo projetado
-              </p>
-              <p
-                className={`mt-1 text-3xl font-black ${
-                  balance.projectedBalance >= 0
-                    ? "text-slate-950 dark:text-white"
-                    : "text-red-600"
-                }`}
-              >
-                {isLoading ? "..." : formatCurrency(balance.projectedBalance)}
-              </p>
-              <p className="mt-1 text-xs font-bold text-slate-500 dark:text-slate-400">
-                Recebido + a receber - pago - a pagar
-              </p>
+              <div className="rounded-2xl bg-slate-50 px-4 py-3 dark:bg-slate-950">
+                <p className="text-xs font-black uppercase text-slate-500 dark:text-slate-400">
+                  Saldo projetado
+                </p>
+                <p
+                  className={`mt-1 text-2xl font-black ${
+                    isProjectedPositive
+                      ? "text-slate-950 dark:text-white"
+                      : "text-red-600"
+                  }`}
+                >
+                  {isLoading ? "..." : formatCurrency(balance.projectedBalance)}
+                </p>
+                <p className="mt-1 text-xs font-bold text-slate-500 dark:text-slate-400">
+                  Realizado + aberto no período
+                </p>
+              </div>
             </div>
-          </div>
+          </section>
+
+          <section className="rounded-2xl border border-red-100 bg-white p-5 shadow-sm dark:border-red-500/30 dark:bg-slate-900">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600 dark:bg-red-500/10">
+                <AlertCircle className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-red-600">
+                  Atenção financeira
+                </p>
+                <h3 className="mt-2 text-2xl font-black text-slate-950 dark:text-white">
+                  {formatCurrency(totalOverdue)}
+                </h3>
+                <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                  Soma de recebimentos e pagamentos vencidos no filtro atual.
+                </p>
+              </div>
+            </div>
+          </section>
         </div>
 
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-          <BalanceCard
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
+            icon={<ArrowUpCircle className="h-5 w-5" />}
             title="A receber"
             value={formatCurrency(balance.totalToReceive)}
-            detail={`${balance.openReceivableCount} conta(s) em aberto`}
+            detail={`${balance.openReceivableCount} em aberto`}
+            tone="emerald"
           />
-          <BalanceCard
+          <MetricCard
+            icon={<Banknote className="h-5 w-5" />}
             title="Recebido"
             value={formatCurrency(balance.totalReceived)}
-            detail={`${balance.receivedCount} recebimento(s) baixado(s)`}
+            detail={`${balance.receivedCount} baixado(s)`}
+            tone="slate"
           />
-          <BalanceCard
+          <MetricCard
+            icon={<ArrowDownCircle className="h-5 w-5" />}
             title="A pagar"
             value={formatCurrency(balance.totalToPay)}
-            detail={`${balance.openPayableCount} conta(s) em aberto`}
-            danger
+            detail={`${balance.openPayableCount} em aberto`}
+            tone="red"
           />
-          <BalanceCard
+          <MetricCard
+            icon={<CreditCard className="h-5 w-5" />}
             title="Pago"
             value={formatCurrency(balance.totalPaid)}
-            detail={`${balance.paidCount} despesa(s) paga(s)`}
+            detail={`${balance.paidCount} despesa(s)`}
+            tone="slate"
           />
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-3">
-          <SimpleSummaryCard
+        <div className="grid gap-4 lg:grid-cols-3">
+          <InsightCard
+            icon={<TrendingUp className="h-5 w-5" />}
             title="Vencidos a receber"
             value={formatCurrency(balance.overdueReceivable)}
             description="Valores vencidos que ainda não foram recebidos."
             danger={balance.overdueReceivable > 0}
           />
-          <SimpleSummaryCard
+          <InsightCard
+            icon={<TrendingDown className="h-5 w-5" />}
             title="Vencidos a pagar"
             value={formatCurrency(balance.overduePayable)}
             description="Despesas vencidas que ainda não foram pagas."
             danger={balance.overduePayable > 0}
           />
-          <SimpleSummaryCard
+          <InsightCard
+            icon={<Wallet className="h-5 w-5" />}
             title="Leitura do período"
-            value={balance.projectedBalance >= 0 ? "Positiva" : "Negativa"}
+            value={isProjectedPositive ? "Positiva" : "Negativa"}
             description="Resultado considerando entradas e saídas abertas."
-            danger={balance.projectedBalance < 0}
+            danger={!isProjectedPositive}
           />
         </div>
 
         <div className="grid gap-5 xl:grid-cols-2">
           <StatementList
-            title="Próximos recebimentos"
+            title="Recebimentos para atenção"
             emptyMessage="Nenhuma conta a receber em aberto no período."
-            items={nextReceivables.map((receivable) => ({
-              id: receivable.id,
-              title: receivable.tenantName,
-              subtitle: receivable.propertyName,
-              date: receivable.dueDate,
-              amount: receivable.amount,
-              status: receivable.status,
-              negative: false,
-            }))}
+            items={receivableAttentionItems}
+            actionLabel="Abrir contas a receber"
+            onAction={() => (window.location.href = "/contas-receber")}
           />
 
           <StatementList
-            title="Próximos pagamentos"
+            title="Pagamentos para atenção"
             emptyMessage="Nenhuma conta a pagar em aberto no período."
-            items={nextPayables.map((payable) => ({
-              id: payable.id,
-              title: payable.description,
-              subtitle: payable.personName || payable.category || "Geral",
-              date: payable.dueDate,
-              amount: payable.amount,
-              status: payable.status,
-              negative: true,
-            }))}
+            items={payableAttentionItems}
+            actionLabel="Abrir contas a pagar"
+            onAction={() => (window.location.href = "/contas-pagar")}
           />
         </div>
       </div>
@@ -371,58 +701,76 @@ export default function FinancialPage() {
   );
 }
 
-function BalanceCard({
+function MetricCard({
+  icon,
   title,
   value,
   detail,
-  danger = false,
+  tone,
 }: {
+  icon: React.ReactNode;
   title: string;
   value: string;
   detail: string;
-  danger?: boolean;
+  tone: "emerald" | "red" | "slate";
 }) {
+  const toneClass = {
+    emerald: "bg-emerald-50 text-emerald-700",
+    red: "bg-red-50 text-red-700",
+    slate: "bg-orange-50 text-orange-700",
+  }[tone];
+
   return (
-    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm dark:border-orange-500/30 dark:bg-slate-900">
-      <p className="text-sm font-black text-slate-500 dark:text-slate-400">
+    <div className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-orange-500/30 dark:bg-slate-900">
+      <div className={`mb-4 flex h-10 w-10 items-center justify-center rounded-xl ${toneClass}`}>
+        {icon}
+      </div>
+      <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
         {title}
       </p>
-      <h3
-        className={`mt-3 text-3xl font-black ${
-          danger ? "text-red-600" : "text-slate-950 dark:text-white"
-        }`}
-      >
+      <h3 className="mt-2 text-2xl font-black text-slate-950 dark:text-white">
         {value}
       </h3>
-      <p className="mt-3 text-sm font-bold text-orange-600">{detail}</p>
+      <p className="mt-2 text-xs font-bold text-orange-600">{detail}</p>
     </div>
   );
 }
 
-function SimpleSummaryCard({
+function InsightCard({
+  icon,
   title,
   value,
   description,
   danger = false,
 }: {
+  icon: React.ReactNode;
   title: string;
   value: string;
   description: string;
   danger?: boolean;
 }) {
   return (
-    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm dark:border-orange-500/30 dark:bg-slate-900">
-      <p className="text-sm font-black text-slate-500 dark:text-slate-400">
-        {title}
-      </p>
+    <div className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm dark:border-orange-500/30 dark:bg-slate-900">
+      <div className="mb-4 flex items-center gap-3">
+        <span
+          className={`flex h-9 w-9 items-center justify-center rounded-xl ${
+            danger ? "bg-red-50 text-red-600" : "bg-orange-50 text-orange-600"
+          }`}
+        >
+          {icon}
+        </span>
+        <p className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          {title}
+        </p>
+      </div>
       <h3
-        className={`mt-3 text-3xl font-black ${
+        className={`text-2xl font-black ${
           danger ? "text-red-600" : "text-slate-950 dark:text-white"
         }`}
       >
         {value}
       </h3>
-      <p className="mt-3 text-sm font-semibold text-slate-500 dark:text-slate-400">
+      <p className="mt-2 text-sm font-semibold leading-6 text-slate-500 dark:text-slate-400">
         {description}
       </p>
     </div>
@@ -433,50 +781,64 @@ function StatementList({
   title,
   items,
   emptyMessage,
+  actionLabel,
+  onAction,
 }: {
   title: string;
   emptyMessage: string;
-  items: Array<{
-    id: string;
-    title: string;
-    subtitle: string;
-    date: string;
-    amount: number;
-    status: FinancialStatus;
-    negative: boolean;
-  }>;
+  items: StatementItem[];
+  actionLabel: string;
+  onAction: () => void;
 }) {
   return (
-    <div className="rounded-3xl border border-orange-100 bg-white shadow-sm dark:border-orange-500/30 dark:bg-slate-900">
-      <div className="border-b border-slate-200 px-6 py-5 dark:border-slate-700">
-        <h2 className="text-xl font-black text-slate-950 dark:text-white">
-          {title}
-        </h2>
+    <div className="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm dark:border-orange-500/30 dark:bg-slate-900">
+      <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-lg font-black text-slate-950 dark:text-white">
+            {title}
+          </h2>
+          <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+            Ordenado por vencidos e próximas datas.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onAction}
+          className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-100"
+        >
+          {actionLabel}
+        </button>
       </div>
 
       <div className="divide-y divide-slate-100 dark:divide-slate-700">
         {items.length === 0 ? (
-          <div className="px-6 py-8 text-sm font-semibold text-slate-500 dark:text-slate-400">
+          <div className="px-5 py-8 text-sm font-semibold text-slate-500 dark:text-slate-400">
             {emptyMessage}
           </div>
         ) : (
           items.map((item) => (
-            <div
+            <button
               key={item.id}
-              className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between"
+              type="button"
+              onClick={onAction}
+              className="flex w-full flex-col gap-3 px-5 py-4 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800/70 sm:flex-row sm:items-center sm:justify-between"
             >
-              <div>
-                <p className="font-black text-slate-900 dark:text-slate-100">
+              <div className="min-w-0">
+                <p className="truncate font-black text-slate-900 dark:text-slate-100">
                   {item.title}
                 </p>
-                <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
-                  {item.subtitle} · Vencimento {formatDate(item.date)}
+                <p className="mt-1 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                  <span className="truncate">{item.subtitle}</span>
+                  <span className="inline-flex items-center gap-1">
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    {formatDate(item.date)}
+                  </span>
                 </p>
               </div>
 
-              <div className="text-left sm:text-right">
+              <div className="shrink-0 text-left sm:text-right">
                 <p
-                  className={`text-lg font-black ${
+                  className={`text-base font-black ${
                     item.negative ? "text-red-600" : "text-emerald-600"
                   }`}
                 >
@@ -485,7 +847,7 @@ function StatementList({
                 </p>
                 <FinancialStatusBadge status={item.status} />
               </div>
-            </div>
+            </button>
           ))
         )}
       </div>
@@ -498,18 +860,42 @@ function FinancialStatusBadge({ status }: { status: FinancialStatus }) {
     FinancialStatus,
     { label: string; className: string }
   > = {
-    Pending: { label: "Pendente", className: "bg-yellow-100 text-yellow-700" },
+    Pending: { label: "Pendente", className: "bg-amber-100 text-amber-700" },
     Paid: { label: "Pago", className: "bg-emerald-100 text-emerald-700" },
     Overdue: { label: "Vencido", className: "bg-red-100 text-red-700" },
   };
 
   return (
     <span
-      className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${statusConfig[status].className}`}
+      className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-black ${statusConfig[status].className}`}
     >
       {statusConfig[status].label}
     </span>
   );
+}
+
+function mapReceivableToStatementItem(receivable: FinancialReceivable): StatementItem {
+  return {
+    id: receivable.id,
+    title: receivable.tenantName || "Pessoa não informada",
+    subtitle: receivable.propertyName || "Sem imóvel vinculado",
+    date: receivable.dueDate,
+    amount: receivable.remainingAmount,
+    status: receivable.status,
+    negative: false,
+  };
+}
+
+function mapPayableToStatementItem(payable: FinancialPayable): StatementItem {
+  return {
+    id: payable.id,
+    title: payable.description || "Conta a pagar",
+    subtitle: payable.personName || payable.category || "Geral",
+    date: payable.dueDate,
+    amount: payable.remainingAmount,
+    status: payable.status,
+    negative: true,
+  };
 }
 
 function isDateInsideRange(date: string | null, startDate: string, endDate: string) {
@@ -536,7 +922,13 @@ function normalizeDate(value: unknown) {
   return parsedDate.toISOString().slice(0, 10);
 }
 
-function sortByDueDate<T extends { dueDate: string }>(firstItem: T, secondItem: T) {
+function sortUrgentFirst<T extends { dueDate: string; status: FinancialStatus }>(
+  firstItem: T,
+  secondItem: T,
+) {
+  if (firstItem.status === "Overdue" && secondItem.status !== "Overdue") return -1;
+  if (firstItem.status !== "Overdue" && secondItem.status === "Overdue") return 1;
+
   return firstItem.dueDate.localeCompare(secondItem.dueDate);
 }
 

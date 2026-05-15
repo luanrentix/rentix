@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { LoaderCircle, Maximize2, Minimize2, Search, X } from "lucide-react";
 import AppShell from "@/components/layout/app-shell";
 import {
   createProperty,
@@ -22,7 +23,9 @@ import { getCachedCompanySettings } from "@/services/settings-cache";
 
 type PropertyStatus = "Available" | "Rented";
 
-type PropertyFilterStatus = "All" | PropertyStatus | "Active" | "Inactive";
+type PropertyRegistrationFilterStatus = "All" | "Active" | "Inactive";
+
+type PropertyRentalFilterStatus = "All" | PropertyStatus;
 
 type PropertyType =
   | "Apartment"
@@ -35,6 +38,7 @@ type PropertyType =
 
 type Property = {
   id: string;
+  code: string;
   type: PropertyType;
   name: string;
   zipCode: string;
@@ -46,6 +50,10 @@ type Property = {
   complement: string;
   address: string;
   rentValue: number;
+  bedrooms: number;
+  bathrooms: number;
+  garages: number;
+  description: string;
   status: PropertyStatus;
   isActive: boolean;
 };
@@ -122,6 +130,8 @@ const propertyTypes: Array<{ label: string; value: PropertyType }> = [
   { label: "Outro", value: "Other" },
 ];
 
+const activeRentalStatuses = ["Active", "Expiring"];
+
 function buildAddress(
   propertyStreet: string,
   propertyNumber: string,
@@ -157,8 +167,7 @@ function propertyHasActiveContract(
     const isSameProperty = String(contractPropertyId || "") === propertyId;
     const isActiveContract =
       !contract.status ||
-      contract.status === "Active" ||
-      contract.status === "Expiring";
+      activeRentalStatuses.includes(contract.status);
 
     return isSameProperty && isActiveContract;
   });
@@ -181,6 +190,7 @@ function normalizeApiProperty(
 
   return {
     id: property.id,
+    code: toUpperText(property.code || ""),
     type: normalizedType,
     name: toUpperText(property.title || ""),
     zipCode: property.zipCode || "",
@@ -199,6 +209,10 @@ function normalizeApiProperty(
       property.zipCode || "",
     ),
     rentValue: Number(property.rentalValue || 0),
+    bedrooms: Number(property.bedrooms || 0),
+    bathrooms: Number(property.bathrooms || 0),
+    garages: Number(property.garages || 0),
+    description: property.description || "",
     status: propertyStatus,
     isActive: property.isActive ?? true,
   };
@@ -210,9 +224,9 @@ export default function PropertiesPage() {
   const [contracts, setContracts] = useState<RentalHistoryContract[]>([]);
   const [rentalCharges, setRentalCharges] = useState<RentalCharge[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isFormMinimized, setIsFormMinimized] = useState(false);
   const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
   const [propertyToInactivate, setPropertyToInactivate] = useState<Property | null>(null);
-  const [blockedPropertyToDelete, setBlockedPropertyToDelete] = useState<Property | null>(null);
   const [blockedInactiveProperty, setBlockedInactiveProperty] = useState<Property | null>(null);
   const [pendingInactiveConfirmation, setPendingInactiveConfirmation] =
     useState<Property | null>(null);
@@ -222,6 +236,7 @@ export default function PropertiesPage() {
   );
   const [reportMode, setReportMode] = useState<"General" | "Rental">("General");
 
+  const [code, setCode] = useState("");
   const [type, setType] = useState<PropertyType>("Apartment");
   const [name, setName] = useState("");
   const [zipCode, setZipCode] = useState("");
@@ -232,11 +247,19 @@ export default function PropertiesPage() {
   const [number, setNumber] = useState("");
   const [complement, setComplement] = useState("");
   const [rentValue, setRentValue] = useState("");
-  const [propertyStatus, setPropertyStatus] = useState<PropertyStatus>("Available");
+  const [bedrooms, setBedrooms] = useState("");
+  const [bathrooms, setBathrooms] = useState("");
+  const [garages, setGarages] = useState("");
+  const [description, setDescription] = useState("");
   const [isActive, setIsActive] = useState(true);
+  const [isSavingProperty, setIsSavingProperty] = useState(false);
+  const [isZipCodeLoading, setIsZipCodeLoading] = useState(false);
+  const [zipCodeFeedback, setZipCodeFeedback] = useState("");
 
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<PropertyFilterStatus>("Active");
+  const [registrationFilter, setRegistrationFilter] =
+    useState<PropertyRegistrationFilterStatus>("Active");
+  const [rentalFilter, setRentalFilter] = useState<PropertyRentalFilterStatus>("All");
   const [isLoadingProperties, setIsLoadingProperties] = useState(true);
 
   useEffect(() => {
@@ -244,13 +267,13 @@ export default function PropertiesPage() {
       const currentCompanyId = getCurrentCompanyId();
       const storedThemeSettings = getCompanyStorageItem(
         currentCompanyId,
-        "rentix_theme_settings",
-        "rentix_theme_settings",
+        "contrx_theme_settings",
+        "contrx_theme_settings",
       );
       const legacyTheme = getCompanyStorageItem(
         currentCompanyId,
-        "rentix_theme",
-        "rentix_theme",
+        "contrx_theme",
+        "contrx_theme",
       );
 
       try {
@@ -288,24 +311,29 @@ export default function PropertiesPage() {
     return properties.filter((property) => {
       const matchesSearch =
         !normalizedSearch ||
+        normalizeSearchText(property.code).includes(normalizedSearch) ||
         normalizeSearchText(property.name).includes(normalizedSearch) ||
         normalizeSearchText(property.address).includes(normalizedSearch) ||
         normalizeSearchText(property.city).includes(normalizedSearch) ||
         normalizeSearchText(property.neighborhood).includes(normalizedSearch);
 
-      const matchesStatus =
-        statusFilter === "All" ||
-        property.status === statusFilter ||
-        (statusFilter === "Active" && property.isActive) ||
-        (statusFilter === "Inactive" && !property.isActive);
+      const matchesRegistration =
+        registrationFilter === "All" ||
+        (registrationFilter === "Active" && property.isActive) ||
+        (registrationFilter === "Inactive" && !property.isActive);
 
-      return matchesSearch && matchesStatus;
+      const matchesRental =
+        rentalFilter === "All" || property.status === rentalFilter;
+
+      return matchesSearch && matchesRegistration && matchesRental;
     });
-  }, [properties, search, statusFilter]);
+  }, [properties, registrationFilter, rentalFilter, search]);
 
   const activeProperties = properties.filter((property) => property.isActive).length;
   const inactiveProperties = properties.filter((property) => !property.isActive).length;
-  const rentedProperties = properties.filter((property) => property.status === "Rented").length;
+  const rentedProperties = properties.filter(
+    (property) => property.status === "Rented" && property.isActive,
+  ).length;
   const totalMonthlyRevenue = properties
     .filter((property) => property.status === "Rented" && property.isActive)
     .reduce((total, property) => total + property.rentValue, 0);
@@ -398,11 +426,12 @@ export default function PropertiesPage() {
       type: typeValue,
       description,
     }).catch((error) => {
-      console.warn("Nao foi possivel registrar movimentacao do imovel no backend.", error);
+      console.warn("Não foi possível registrar movimentação do imóvel no backend.", error);
     });
   }
 
   function resetForm() {
+    setCode("");
     setType("Apartment");
     setName("");
     setZipCode("");
@@ -413,68 +442,70 @@ export default function PropertiesPage() {
     setNumber("");
     setComplement("");
     setRentValue("");
-    setPropertyStatus("Available");
+    setBedrooms("");
+    setBathrooms("");
+    setGarages("");
+    setDescription("");
     setIsActive(true);
+    setZipCodeFeedback("");
     setEditingPropertyId(null);
   }
 
   function handleOpenCreateForm() {
     resetForm();
+    setIsFormMinimized(false);
     setIsFormOpen(true);
   }
 
   function handleCloseForm() {
     resetForm();
+    setIsFormMinimized(false);
     setIsFormOpen(false);
   }
 
+  function handleZipCodeChange(value: string) {
+    setZipCode(formatZipCode(value));
+    setZipCodeFeedback("");
+  }
+
   async function handleZipCodeBlur() {
+    await handleZipCodeLookup();
+  }
+
+  async function handleZipCodeLookup() {
     const cleanZipCode = zipCode.replace(/\D/g, "");
 
-    if (cleanZipCode.length !== 8) return;
+    if (cleanZipCode.length !== 8 || isZipCodeLoading) return;
 
     try {
+      setIsZipCodeLoading(true);
+      setZipCodeFeedback("Consultando CEP...");
+
       const response = await fetch(`https://viacep.com.br/ws/${cleanZipCode}/json/`);
       const data = (await response.json()) as ViaCepResponse;
 
       if (data.erro) {
-        alert("CEP não encontrado.");
+        setZipCodeFeedback("CEP não encontrado.");
         return;
       }
 
-      setZipCode(data.cep || cleanZipCode);
+      setZipCode(formatZipCode(data.cep || cleanZipCode));
       setState(toUpperText(data.uf || ""));
       setCity(toUpperText(data.localidade || ""));
       setNeighborhood(toUpperText(data.bairro || ""));
       setStreet(toUpperText(data.logradouro || ""));
+      setZipCodeFeedback("Endereço preenchido pelo CEP.");
     } catch {
-      alert("Não foi possível consultar o CEP no momento.");
+      setZipCodeFeedback("Não foi possível consultar o CEP no momento.");
+    } finally {
+      setIsZipCodeLoading(false);
     }
-  }
-
-  function propertyHasLinkedContract(propertyId: string) {
-      return contracts.some((contract) => {
-        const contractPropertyId =
-          contract.propertyId ||
-          contract.property_id ||
-          contract.property ||
-          contract.propertyCode ||
-          contract.property_id_fk;
-
-        return String(contractPropertyId || "") === propertyId;
-      });
   }
 
   function getEditingProperty() {
     if (!editingPropertyId) return null;
 
     return properties.find((property) => property.id === editingPropertyId) || null;
-  }
-
-  function isPropertyStatusLockedByActiveContract() {
-    if (!editingPropertyId) return false;
-
-    return propertyHasActiveContract(editingPropertyId, contracts);
   }
 
   function handleActiveChange(checked: boolean) {
@@ -519,13 +550,20 @@ export default function PropertiesPage() {
   }
 
   async function handleSaveProperty() {
+    if (isSavingProperty) return;
+
     const formattedName = toUpperText(name);
+    const formattedCode = toUpperText(code);
     const formattedState = toUpperText(state);
     const formattedCity = toUpperText(city);
     const formattedNeighborhood = toUpperText(neighborhood);
     const formattedStreet = toUpperText(street);
     const formattedNumber = toUpperText(number);
     const formattedComplement = toUpperText(complement);
+    const parsedRentValue = parseCurrencyValue(rentValue);
+    const parsedBedrooms = parsePositiveInteger(bedrooms);
+    const parsedBathrooms = parsePositiveInteger(bathrooms);
+    const parsedGarages = parsePositiveInteger(garages);
     if (
       !type ||
       !formattedName ||
@@ -535,7 +573,7 @@ export default function PropertiesPage() {
       !formattedNeighborhood ||
       !formattedStreet ||
       !formattedNumber ||
-      !rentValue
+      parsedRentValue <= 0
     ) {
       alert("Preencha todos os campos obrigatórios.");
       return;
@@ -566,9 +604,9 @@ export default function PropertiesPage() {
     const payload = {
       companyId,
       title: formattedName,
+      code: formattedCode,
       type,
-      purpose: propertyStatus,
-      rentalValue: Number(rentValue),
+      rentalValue: parsedRentValue,
       zipCode,
       state: formattedState,
       city: formattedCity,
@@ -576,15 +614,29 @@ export default function PropertiesPage() {
       address: formattedStreet,
       number: formattedNumber,
       complement: formattedComplement,
+      bedrooms: parsedBedrooms,
+      bathrooms: parsedBathrooms,
+      garages: parsedGarages,
+      description: description.trim(),
       isActive,
     };
 
     try {
+      setIsSavingProperty(true);
+
       const savedProperty = editingPropertyId
         ? await updateProperty(editingPropertyId, payload)
         : await createProperty(payload);
 
       const normalizedProperty = normalizeApiProperty(savedProperty, contracts);
+
+      setProperties((currentProperties) =>
+        editingPropertyId
+          ? currentProperties.map((property) =>
+              property.id === normalizedProperty.id ? normalizedProperty : property
+            )
+          : [normalizedProperty, ...currentProperties]
+      );
 
       registerPropertyMovement(
         normalizedProperty,
@@ -592,11 +644,13 @@ export default function PropertiesPage() {
         editingPropertyId ? "Cadastro do imóvel atualizado." : "Novo imóvel cadastrado.",
       );
 
-      await loadProperties();
       handleCloseForm();
+      void loadProperties();
     } catch (error) {
       console.error("Erro ao salvar imóvel:", error);
       alert("Não foi possível salvar o imóvel.");
+    } finally {
+      setIsSavingProperty(false);
     }
   }
 
@@ -606,6 +660,7 @@ export default function PropertiesPage() {
     if (!property) return;
 
     setEditingPropertyId(property.id);
+    setCode(property.code);
     setType(property.type);
     setName(property.name);
     setZipCode(property.zipCode);
@@ -615,14 +670,19 @@ export default function PropertiesPage() {
     setStreet(property.street);
     setNumber(property.number);
     setComplement(property.complement);
-    setRentValue(String(property.rentValue));
-    setPropertyStatus(property.status);
+    setRentValue(formatCurrency(property.rentValue));
+    setBedrooms(property.bedrooms ? String(property.bedrooms) : "");
+    setBathrooms(property.bathrooms ? String(property.bathrooms) : "");
+    setGarages(property.garages ? String(property.garages) : "");
+    setDescription(property.description);
     setIsActive(property.isActive);
+    setIsFormMinimized(false);
     setIsFormOpen(true);
   }
 
   function handleOpenPropertyHistory(property: Property) {
     setHistoryProperty(property);
+    setReportMode("General");
       }
 
   function handleClosePropertyHistory() {
@@ -642,18 +702,20 @@ export default function PropertiesPage() {
     }, 100);
   }
 
-  function handleDeleteProperty(propertyId: string) {
+  function handleRequestInactivateProperty(propertyId: string) {
     const property = properties.find((item) => item.id === propertyId);
 
     if (!property) return;
 
-    if (propertyHasLinkedContract(property.id)) {
+    if (!property.isActive) return;
+
+    if (propertyHasActiveContract(property.id, contracts)) {
       registerPropertyMovement(
         property,
-        "DeletionBlocked",
-        "Tentativa de exclusão bloqueada porque o imóvel possui histórico no sistema."
+        "InactivationBlocked",
+        "Tentativa de inativação bloqueada porque o imóvel possui contrato ativo."
       );
-      setBlockedPropertyToDelete(property);
+      setBlockedInactiveProperty(property);
       return;
     }
 
@@ -662,10 +724,6 @@ export default function PropertiesPage() {
 
   function handleCancelInactivateProperty() {
     setPropertyToInactivate(null);
-  }
-
-  function handleCloseBlockedDeleteProperty() {
-    setBlockedPropertyToDelete(null);
   }
 
   function handleCloseBlockedInactiveProperty() {
@@ -684,7 +742,6 @@ export default function PropertiesPage() {
     try {
       await updateProperty(propertyToInactivate.id, {
         isActive: false,
-        purpose: "Available",
       });
 
       registerPropertyMovement(
@@ -708,155 +765,155 @@ export default function PropertiesPage() {
   return (
     <AppShell>
       <style jsx global>{`
-        .dark .rentix-properties-page {
+        .dark .contrx-properties-page {
           color: #f8fafc;
         }
 
-        .dark .rentix-properties-page .bg-white {
+        .dark .contrx-properties-page .bg-white {
           background-color: #0f172a !important;
         }
 
-        .dark .rentix-properties-page .bg-slate-50,
-        .dark .rentix-properties-page .bg-slate-100 {
+        .dark .contrx-properties-page .bg-slate-50,
+        .dark .contrx-properties-page .bg-slate-100 {
           background-color: #111827 !important;
         }
 
-        .dark .rentix-properties-page .bg-orange-50,
-        .dark .rentix-properties-page .bg-orange-100,
-        .dark .rentix-properties-page .bg-orange-50\/50,
-        .dark .rentix-properties-page .bg-orange-50\/60,
-        .dark .rentix-properties-page .bg-orange-50\/40 {
+        .dark .contrx-properties-page .bg-orange-50,
+        .dark .contrx-properties-page .bg-orange-100,
+        .dark .contrx-properties-page .bg-orange-50\/50,
+        .dark .contrx-properties-page .bg-orange-50\/60,
+        .dark .contrx-properties-page .bg-orange-50\/40 {
           background-color: rgba(249, 115, 22, 0.13) !important;
         }
 
-        .dark .rentix-properties-page .bg-red-50,
-        .dark .rentix-properties-page .bg-red-100 {
+        .dark .contrx-properties-page .bg-red-50,
+        .dark .contrx-properties-page .bg-red-100 {
           background-color: rgba(239, 68, 68, 0.12) !important;
         }
 
-        .dark .rentix-properties-page .bg-emerald-50,
-        .dark .rentix-properties-page .bg-emerald-50\/50,
-        .dark .rentix-properties-page .bg-emerald-100 {
+        .dark .contrx-properties-page .bg-emerald-50,
+        .dark .contrx-properties-page .bg-emerald-50\/50,
+        .dark .contrx-properties-page .bg-emerald-100 {
           background-color: rgba(16, 185, 129, 0.12) !important;
         }
 
-        .dark .rentix-properties-page .bg-amber-100 {
+        .dark .contrx-properties-page .bg-amber-100 {
           background-color: rgba(245, 158, 11, 0.14) !important;
         }
 
-        .dark .rentix-properties-page .bg-blue-100 {
+        .dark .contrx-properties-page .bg-blue-100 {
           background-color: rgba(59, 130, 246, 0.14) !important;
         }
 
-        .dark .rentix-properties-page .bg-zinc-200 {
+        .dark .contrx-properties-page .bg-zinc-200 {
           background-color: #334155 !important;
         }
 
-        .dark .rentix-properties-page .text-slate-950,
-        .dark .rentix-properties-page .text-slate-900,
-        .dark .rentix-properties-page .text-slate-800,
-        .dark .rentix-properties-page .text-slate-700 {
+        .dark .contrx-properties-page .text-slate-950,
+        .dark .contrx-properties-page .text-slate-900,
+        .dark .contrx-properties-page .text-slate-800,
+        .dark .contrx-properties-page .text-slate-700 {
           color: #f8fafc !important;
         }
 
-        .dark .rentix-properties-page .text-slate-600,
-        .dark .rentix-properties-page .text-slate-500,
-        .dark .rentix-properties-page .text-slate-400 {
+        .dark .contrx-properties-page .text-slate-600,
+        .dark .contrx-properties-page .text-slate-500,
+        .dark .contrx-properties-page .text-slate-400 {
           color: #cbd5e1 !important;
         }
 
-        .dark .rentix-properties-page .text-orange-600,
-        .dark .rentix-properties-page .text-orange-700,
-        .dark .rentix-properties-page .text-orange-800 {
+        .dark .contrx-properties-page .text-orange-600,
+        .dark .contrx-properties-page .text-orange-700,
+        .dark .contrx-properties-page .text-orange-800 {
           color: #fb923c !important;
         }
 
-        .dark .rentix-properties-page .text-red-600,
-        .dark .rentix-properties-page .text-red-700 {
+        .dark .contrx-properties-page .text-red-600,
+        .dark .contrx-properties-page .text-red-700 {
           color: #fca5a5 !important;
         }
 
-        .dark .rentix-properties-page .text-emerald-700,
-        .dark .rentix-properties-page .text-emerald-800 {
+        .dark .contrx-properties-page .text-emerald-700,
+        .dark .contrx-properties-page .text-emerald-800 {
           color: #6ee7b7 !important;
         }
 
-        .dark .rentix-properties-page .text-amber-700 {
+        .dark .contrx-properties-page .text-amber-700 {
           color: #fcd34d !important;
         }
 
-        .dark .rentix-properties-page .border-orange-100,
-        .dark .rentix-properties-page .border-orange-200,
-        .dark .rentix-properties-page .border-red-100,
-        .dark .rentix-properties-page .border-red-200,
-        .dark .rentix-properties-page .border-emerald-200,
-        .dark .rentix-properties-page .border-slate-100,
-        .dark .rentix-properties-page .border-slate-200,
-        .dark .rentix-properties-page .border-slate-300 {
+        .dark .contrx-properties-page .border-orange-100,
+        .dark .contrx-properties-page .border-orange-200,
+        .dark .contrx-properties-page .border-red-100,
+        .dark .contrx-properties-page .border-red-200,
+        .dark .contrx-properties-page .border-emerald-200,
+        .dark .contrx-properties-page .border-slate-100,
+        .dark .contrx-properties-page .border-slate-200,
+        .dark .contrx-properties-page .border-slate-300 {
           border-color: #334155 !important;
         }
 
-        .dark .rentix-properties-page input,
-        .dark .rentix-properties-page select,
-        .dark .rentix-properties-page textarea {
+        .dark .contrx-properties-page input,
+        .dark .contrx-properties-page select,
+        .dark .contrx-properties-page textarea {
           background-color: #020617 !important;
           border-color: #334155 !important;
           color: #f8fafc !important;
         }
 
-        .dark .rentix-properties-page input::placeholder,
-        .dark .rentix-properties-page textarea::placeholder {
+        .dark .contrx-properties-page input::placeholder,
+        .dark .contrx-properties-page textarea::placeholder {
           color: #64748b !important;
         }
 
-        .dark .rentix-properties-page table,
-        .dark .rentix-properties-page tbody,
-        .dark .rentix-properties-page tr {
+        .dark .contrx-properties-page table,
+        .dark .contrx-properties-page tbody,
+        .dark .contrx-properties-page tr {
           background-color: #0f172a !important;
         }
 
-        .dark .rentix-properties-page thead,
-        .dark .rentix-properties-page .bg-orange-50 thead {
+        .dark .contrx-properties-page thead,
+        .dark .contrx-properties-page .bg-orange-50 thead {
           background-color: rgba(249, 115, 22, 0.15) !important;
         }
 
-        .dark .rentix-properties-page tbody tr:hover {
+        .dark .contrx-properties-page tbody tr:hover {
           background-color: #1e293b !important;
         }
 
-        .dark .rentix-properties-page .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+        .dark .contrx-properties-page .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
           border-color: #1e293b !important;
         }
 
-        .dark .rentix-properties-page .shadow-sm,
-        .dark .rentix-properties-page .shadow-md,
-        .dark .rentix-properties-page .shadow-2xl {
+        .dark .contrx-properties-page .shadow-sm,
+        .dark .contrx-properties-page .shadow-md,
+        .dark .contrx-properties-page .shadow-2xl {
           box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35) !important;
         }
 
-        .dark .rentix-properties-page .disabled\:cursor-not-allowed:disabled {
+        .dark .contrx-properties-page .disabled\:cursor-not-allowed:disabled {
           opacity: 0.9;
         }
 
-        .dark .rentix-properties-page #property-history-report,
-        .dark .rentix-properties-page #property-history-report .report-page {
+        .dark .contrx-properties-page #property-history-report,
+        .dark .contrx-properties-page #property-history-report .report-page {
           background: #ffffff !important;
           color: #111827 !important;
         }
 
-        .dark .rentix-properties-page #property-history-report .report-section,
-        .dark .rentix-properties-page #property-history-report .report-field,
-        .dark .rentix-properties-page #property-history-report .report-kpi {
+        .dark .contrx-properties-page #property-history-report .report-section,
+        .dark .contrx-properties-page #property-history-report .report-field,
+        .dark .contrx-properties-page #property-history-report .report-kpi {
           background: #ffffff !important;
         }
 
-        .dark .rentix-properties-page #property-history-report .report-title,
-        .dark .rentix-properties-page #property-history-report .report-value {
+        .dark .contrx-properties-page #property-history-report .report-title,
+        .dark .contrx-properties-page #property-history-report .report-value {
           color: #0f172a !important;
         }
 
-        .dark .rentix-properties-page #property-history-report .report-small,
-        .dark .rentix-properties-page #property-history-report .report-label {
+        .dark .contrx-properties-page #property-history-report .report-small,
+        .dark .contrx-properties-page #property-history-report .report-label {
           color: #475569 !important;
         }
 
@@ -1216,7 +1273,7 @@ export default function PropertiesPage() {
         }
       `}</style>
 
-      <div className="rentix-properties-page space-y-8 print:space-y-0">
+      <div className="contrx-properties-page space-y-8 print:space-y-0">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h1 className="text-4xl font-black tracking-tight text-slate-950">
@@ -1254,26 +1311,40 @@ export default function PropertiesPage() {
               </p>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid w-full gap-3 md:grid-cols-[minmax(260px,1fr)_180px_190px] xl:max-w-4xl">
               <FormField label="Buscar">
                 <input
                   type="text"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Nome, endereço, cidade ou bairro"
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 md:w-80"
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                 />
               </FormField>
 
-              <FormField label="Status">
+              <FormField label="Cadastro">
                 <select
-                  value={statusFilter}
-                  onChange={(event) => setStatusFilter(event.target.value as PropertyFilterStatus)}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 md:w-48"
+                  value={registrationFilter}
+                  onChange={(event) =>
+                    setRegistrationFilter(event.target.value as PropertyRegistrationFilterStatus)
+                  }
+                  className="w-full appearance-auto rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                 >
                   <option value="Active">Ativos</option>
                   <option value="Inactive">Inativos</option>
                   <option value="All">Todos</option>
+                </select>
+              </FormField>
+
+              <FormField label="Locação">
+                <select
+                  value={rentalFilter}
+                  onChange={(event) =>
+                    setRentalFilter(event.target.value as PropertyRentalFilterStatus)
+                  }
+                  className="w-full appearance-auto rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                >
+                  <option value="All">Todas</option>
                   <option value="Available">Disponíveis</option>
                   <option value="Rented">Alugados</option>
                 </select>
@@ -1282,13 +1353,27 @@ export default function PropertiesPage() {
           </div>
 
           {isLoadingProperties ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 p-10 text-center">
-              <h3 className="text-lg font-black text-slate-800">
-                Carregando imóveis
-              </h3>
-              <p className="mt-2 text-sm text-slate-500">
-                Aguarde enquanto buscamos os dados no servidor.
-              </p>
+            <div className="overflow-hidden rounded-2xl border border-slate-200">
+              <div className="grid grid-cols-[2fr_1fr_2fr_1fr_1fr_1fr_120px] gap-4 bg-orange-50 px-5 py-4">
+                {Array.from({ length: 7 }).map((_, index) => (
+                  <div key={`property-loading-head-${index}`} className="h-4 rounded-full bg-orange-100" />
+                ))}
+              </div>
+              <div className="divide-y divide-slate-100 bg-white">
+                {Array.from({ length: 5 }).map((_, rowIndex) => (
+                  <div
+                    key={`property-loading-row-${rowIndex}`}
+                    className="grid grid-cols-[2fr_1fr_2fr_1fr_1fr_1fr_120px] gap-4 px-5 py-5"
+                  >
+                    {Array.from({ length: 7 }).map((__, columnIndex) => (
+                      <div
+                        key={`property-loading-cell-${rowIndex}-${columnIndex}`}
+                        className="h-4 rounded-full bg-slate-100"
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
           ) : filteredProperties.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-300 p-10 text-center">
@@ -1315,7 +1400,10 @@ export default function PropertiesPage() {
                 </thead>
 
                 <tbody className="divide-y divide-slate-100">
-                  {filteredProperties.map((property) => (
+                  {filteredProperties.map((property) => {
+                    const currentRentalContract = getCurrentRentalContract(property, contracts);
+
+                    return (
                     <tr
                       key={property.id}
                       className={`transition hover:bg-slate-50 ${!property.isActive ? "bg-slate-50 opacity-75" : ""}`}
@@ -1329,6 +1417,11 @@ export default function PropertiesPage() {
                         >
                           {property.name}
                         </button>
+                        {property.code && (
+                          <p className="text-xs font-black text-orange-600">
+                            Código: {property.code}
+                          </p>
+                        )}
                         <p className="text-xs font-semibold text-slate-500">
                           CEP: {property.zipCode || "Não informado"}
                         </p>
@@ -1353,42 +1446,43 @@ export default function PropertiesPage() {
 
                       <td className="px-5 py-4">
                         <StatusBadge status={property.status} />
+                        {currentRentalContract && (
+                          <p className="mt-2 max-w-[230px] text-xs font-semibold leading-5 text-slate-500">
+                            {currentRentalContract.tenantName || "Locatário não informado"}
+                            {currentRentalContract.endDate
+                              ? ` até ${formatDate(currentRentalContract.endDate)}`
+                              : ""}
+                          </p>
+                        )}
                       </td>
 
                       <td className="px-5 py-4">
                         <div className="flex justify-end gap-2">
                           <button
+                            type="button"
                             onClick={() => handleEditProperty(property.id)}
-                            className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-200"
+                            className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-orange-50 hover:text-orange-700"
                           >
                             Editar
                           </button>
-
-                          <button
-                            onClick={() => handleDeleteProperty(property.id)}
-                            className="rounded-xl bg-red-50 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-100"
-                          >
-                            Inativar
-                          </button>
+                          {property.isActive && (
+                            <button
+                              type="button"
+                              onClick={() => handleRequestInactivateProperty(property.id)}
+                              className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600 transition hover:bg-red-100"
+                            >
+                              Inativar
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
-        </div>
-
-        <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm">
-          <div>
-            <h2 className="text-2xl font-black text-slate-950">
-              Histórico por imóvel
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Clique sobre o nome do imóvel na tabela para abrir somente o histórico dele.
-            </p>
-          </div>
         </div>
 
         {historyProperty && (
@@ -1440,7 +1534,7 @@ export default function PropertiesPage() {
                   <button
                     type="button"
                     onClick={handleClosePropertyHistory}
-                    className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-600 transition hover:bg-red-50 hover:text-red-600"
+                    className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-600 transition hover:bg-orange-50 hover:text-orange-600"
                   >
                     ×
                   </button>
@@ -1466,7 +1560,7 @@ export default function PropertiesPage() {
 
                       <div>
                         <p className="report-subtitle font-black uppercase tracking-[0.18em] text-orange-600">
-                          Rentix • Relatório
+                          Contrx • Relatório
                         </p>
                         <h1 className="report-title">
                           {reportMode === "Rental"
@@ -1499,13 +1593,19 @@ export default function PropertiesPage() {
                     <h2 className="report-section-title">Dados do imóvel</h2>
                     <div className="report-grid">
                       <ReportInfo label="Imóvel" value={historyProperty.name} wide />
+                      <ReportInfo label="Código" value={historyProperty.code || "Não informado"} />
                       <ReportInfo label="Valor mensal" value={formatCurrency(historyProperty.rentValue)} />
                       <ReportInfo label="Cadastro" value={historyProperty.isActive ? "Ativo" : "Inativo"} />
                       <ReportInfo label="Locação" value={historyProperty.status === "Rented" ? "Alugado" : "Disponível"} />
+                      <ReportInfo
+                        label="Características"
+                        value={`${historyProperty.bedrooms || 0} quarto(s), ${historyProperty.bathrooms || 0} banheiro(s), ${historyProperty.garages || 0} vaga(s)`}
+                      />
                       <ReportInfo label="CEP" value={historyProperty.zipCode || "Não informado"} />
                       <ReportInfo label="Cidade/UF" value={`${historyProperty.city || "-"} / ${historyProperty.state || "-"}`} />
                       <ReportInfo label="Bairro" value={historyProperty.neighborhood || "Não informado"} />
                       <ReportInfo label="Endereço" value={historyProperty.address || "Não informado"} wide />
+                      <ReportInfo label="Descrição" value={historyProperty.description || "Não informado"} wide />
                     </div>
                   </div>
 
@@ -1634,7 +1734,53 @@ export default function PropertiesPage() {
           </div>
         )}
 
-        {isFormOpen && (
+        {isFormOpen && isFormMinimized && (
+          <div className="contrx-minimized-modal fixed bottom-6 right-6 z-50 w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border-2 border-orange-300 bg-white shadow-2xl">
+            <div className="h-2 bg-orange-500" />
+            <div className="p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="rounded-full bg-orange-100 px-3 py-1 text-[0.68rem] font-black uppercase tracking-wide text-orange-700">
+                      Minimizado
+                    </span>
+                    <span className="h-2 w-2 rounded-full bg-orange-500 shadow-[0_0_0_4px_rgb(249_115_22/0.16)]" />
+                  </div>
+                  <p className="truncate text-base font-black text-slate-950">
+                    {editingPropertyId ? "Editar imóvel" : "Novo imóvel"}
+                  </p>
+                  <p className="truncate text-sm font-semibold text-slate-500">
+                    {name || "Cadastro em andamento"}
+                  </p>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsFormMinimized(false)}
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-200 transition hover:bg-orange-600"
+                    title="Restaurar modal"
+                    aria-label="Restaurar modal"
+                  >
+                    <Maximize2 className="h-5 w-5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCloseForm}
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-slate-200"
+                    title="Fechar modal"
+                    aria-label="Fechar modal"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isFormOpen && !isFormMinimized && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
             <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-8 py-6">
@@ -1647,16 +1793,41 @@ export default function PropertiesPage() {
                   </p>
                 </div>
 
-                <button
-                  onClick={handleCloseForm}
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-600 transition hover:bg-red-50 hover:text-red-600"
-                >
-                  ×
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsFormMinimized(true)}
+                    className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-orange-50 hover:text-orange-600"
+                    title="Minimizar modal"
+                    aria-label="Minimizar modal"
+                  >
+                    <Minimize2 className="h-5 w-5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCloseForm}
+                    className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-orange-50 hover:text-orange-600"
+                    title="Fechar modal"
+                    aria-label="Fechar modal"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
 
               <div className="p-8">
                 <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                  <FormField label="Código">
+                    <input
+                      type="text"
+                      value={code}
+                      onChange={(event) => setCode(toUpperText(event.target.value))}
+                      placeholder="Ex: IMV-001"
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                    />
+                  </FormField>
+
                   <FormField label="Tipo de imóvel">
                     <select
                       value={type}
@@ -1671,30 +1842,24 @@ export default function PropertiesPage() {
                     </select>
                   </FormField>
 
-                  <FormField label="Status do imóvel">
-                    <div className="space-y-2">
-                      <select
-                        value={propertyStatus}
-                        onChange={(event) =>
-                          setPropertyStatus(event.target.value as PropertyStatus)
-                        }
-                        disabled={isPropertyStatusLockedByActiveContract()}
-                        className={`w-full rounded-2xl border px-4 py-4 text-sm font-semibold outline-none transition ${
-                          isPropertyStatusLockedByActiveContract()
-                            ? "cursor-not-allowed border-orange-200 bg-orange-50 text-orange-700"
-                            : "border-slate-200 bg-white text-slate-700 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        }`}
-                      >
-                        <option value="Available">Disponível</option>
-                        <option value="Rented">Alugado</option>
-                      </select>
-
-                      {isPropertyStatusLockedByActiveContract() && (
-                        <div className="rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3 text-xs font-bold leading-5 text-orange-700">
-                          Status bloqueado: este imóvel está alugado por contrato ativo.
-                          Para mudar para disponível, finalize, cancele ou exclua o contrato vinculado.
-                        </div>
-                      )}
+                  <FormField label="Disponibilidade">
+                    <div className="min-h-[58px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-black text-slate-700">
+                          Status automático
+                        </span>
+                        <StatusBadge
+                          status={
+                            editingPropertyId &&
+                            propertyHasActiveContract(editingPropertyId, contracts)
+                              ? "Rented"
+                              : "Available"
+                          }
+                        />
+                      </div>
+                      <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
+                        O imóvel muda para alugado quando existe contrato ativo.
+                      </p>
                     </div>
                   </FormField>
 
@@ -1736,14 +1901,39 @@ export default function PropertiesPage() {
                   </FormField>
 
                   <FormField label="CEP">
-                    <input
-                      type="text"
-                      value={zipCode}
-                      onChange={(event) => setZipCode(event.target.value)}
-                      onBlur={handleZipCodeBlur}
-                      placeholder="Ex: 76940-000"
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                    />
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={zipCode}
+                          onChange={(event) => handleZipCodeChange(event.target.value)}
+                          onBlur={handleZipCodeBlur}
+                          placeholder="Ex: 76940-000"
+                          inputMode="numeric"
+                          maxLength={9}
+                          className="min-w-0 flex-1 rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={handleZipCodeLookup}
+                          disabled={isZipCodeLoading || zipCode.replace(/\D/g, "").length !== 8}
+                          className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
+                          title="Buscar CEP"
+                          aria-label="Buscar CEP"
+                        >
+                          {isZipCodeLoading ? (
+                            <LoaderCircle className="h-5 w-5 animate-spin" />
+                          ) : (
+                            <Search className="h-5 w-5" />
+                          )}
+                        </button>
+                      </div>
+
+                      {zipCodeFeedback && (
+                        <p className="text-xs font-bold text-slate-500">{zipCodeFeedback}</p>
+                      )}
+                    </div>
                   </FormField>
 
                   <FormField label="Estado">
@@ -1808,27 +1998,80 @@ export default function PropertiesPage() {
 
                   <FormField label="Valor da locação mensal">
                     <input
-                      type="number"
+                      type="text"
                       value={rentValue}
-                      onChange={(event) => setRentValue(event.target.value)}
-                      placeholder="Ex: 1500"
+                      onChange={(event) => setRentValue(formatCurrencyInput(event.target.value))}
+                      placeholder="R$ 0,00"
+                      inputMode="numeric"
                       className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                     />
                   </FormField>
+
+                  <FormField label="Quartos">
+                    <input
+                      type="number"
+                      min="0"
+                      value={bedrooms}
+                      onChange={(event) => setBedrooms(event.target.value)}
+                      placeholder="0"
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                    />
+                  </FormField>
+
+                  <FormField label="Banheiros">
+                    <input
+                      type="number"
+                      min="0"
+                      value={bathrooms}
+                      onChange={(event) => setBathrooms(event.target.value)}
+                      placeholder="0"
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                    />
+                  </FormField>
+
+                  <FormField label="Vagas">
+                    <input
+                      type="number"
+                      min="0"
+                      value={garages}
+                      onChange={(event) => setGarages(event.target.value)}
+                      placeholder="0"
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                    />
+                  </FormField>
+
+                  <div className="md:col-span-2 xl:col-span-4">
+                    <FormField label="Descrição">
+                      <textarea
+                        value={description}
+                        onChange={(event) => setDescription(event.target.value)}
+                        placeholder="Observações internas, características ou referências do imóvel"
+                        rows={3}
+                        className="w-full resize-none rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                      />
+                    </FormField>
+                  </div>
                 </div>
               </div>
 
-              <div className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-100 bg-white px-8 py-6">
+              <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-slate-100 bg-white px-8 py-6">
+                {isSavingProperty && (
+                  <p className="mr-auto text-sm font-black text-orange-600">
+                    Salvando alterações...
+                  </p>
+                )}
                 <button
                   onClick={handleCloseForm}
-                  className="rounded-2xl bg-slate-100 px-6 py-4 text-sm font-black text-slate-600 transition hover:bg-slate-200"
+                  disabled={isSavingProperty}
+                  className="rounded-2xl bg-slate-100 px-6 py-4 text-sm font-black text-slate-600 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Cancelar
                 </button>
 
                 <button
                   onClick={handleSaveProperty}
-                  className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                  disabled={isSavingProperty}
+                  className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {editingPropertyId ? "Salvar alterações" : "Cadastrar imóvel"}
                 </button>
@@ -1860,17 +2103,6 @@ export default function PropertiesPage() {
             confirmLabel="Confirmar inativação"
             onCancel={handleCancelInactiveConfirmation}
             onConfirm={handleConfirmInactiveFromForm}
-          />
-        )}
-
-        {blockedPropertyToDelete && (
-          <AlertModal
-            icon="⚠️"
-            title="Imóvel com histórico"
-            description="Este imóvel já possui movimentação no sistema e não pode ser excluído. Para manter a integridade dos dados, utilize a inativação do cadastro."
-            itemTitle={blockedPropertyToDelete.name}
-            itemDetail={blockedPropertyToDelete.address || "Endereço não informado"}
-            onClose={handleCloseBlockedDeleteProperty}
           />
         )}
 
@@ -2128,6 +2360,27 @@ function getPaymentStatusLabel(status: "Paid" | "Pending" | "NotGenerated") {
   return labels[status];
 }
 
+function getCurrentRentalContract(
+  property: Property,
+  contracts: RentalHistoryContract[]
+) {
+  return contracts
+    .filter((contract) => {
+      const isSameProperty = String(contract.propertyId || "") === String(property.id);
+      const isActiveRental =
+        !contract.status ||
+        activeRentalStatuses.includes(contract.status);
+
+      return isSameProperty && isActiveRental;
+    })
+    .sort((firstContract, secondContract) => {
+      const firstDate = new Date(firstContract.endDate || "").getTime();
+      const secondDate = new Date(secondContract.endDate || "").getTime();
+
+      return secondDate - firstDate;
+    })[0];
+}
+
 function getRentalHistoryByProperty(
   property: Property,
   contracts: RentalHistoryContract[],
@@ -2305,7 +2558,7 @@ function getCompanyDisplayName(companySettings: CompanySettings) {
   return (
     companySettings.tradeName ||
     companySettings.companyName ||
-    "Rentix"
+    "Contrx"
   );
 }
 
@@ -2335,8 +2588,8 @@ function getCurrentCompanyId() {
   if (typeof window === "undefined") return "";
 
   const possibleCompanyIdKeys = [
-    "rentix_company_id",
-    "rentix_companyId",
+    "contrx_company_id",
+    "contrx_companyId",
     "companyId",
   ];
 
@@ -2346,7 +2599,7 @@ function getCurrentCompanyId() {
     if (value) return value;
   }
 
-  const storedUser = localStorage.getItem("rentix_user");
+  const storedUser = localStorage.getItem("contrx_user");
 
   if (storedUser) {
     try {
@@ -2375,6 +2628,33 @@ function getMovementTypeLabel(type: PropertyMovementType) {
   };
 
   return movementLabels[type] || "Movimentação";
+}
+
+function formatZipCode(value: string) {
+  return value
+    .replace(/\D/g, "")
+    .slice(0, 8)
+    .replace(/(\d{5})(\d)/, "$1-$2");
+}
+
+function parseCurrencyValue(value: string) {
+  const onlyDigits = value.replace(/\D/g, "");
+
+  if (!onlyDigits) return 0;
+
+  return Number(onlyDigits) / 100;
+}
+
+function parsePositiveInteger(value: string) {
+  const parsedValue = Number(value);
+
+  if (!Number.isFinite(parsedValue) || parsedValue < 0) return 0;
+
+  return Math.floor(parsedValue);
+}
+
+function formatCurrencyInput(value: string) {
+  return formatCurrency(parseCurrencyValue(value));
 }
 
 function formatCurrency(value: number) {

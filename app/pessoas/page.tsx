@@ -1,9 +1,31 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import {
+  Children,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import { LoaderCircle, Maximize2, Minimize2, Search, X } from "lucide-react";
 import AppShell from "@/components/layout/app-shell";
 import { useAuth } from "@/context/AuthContext";
-import { apiFetch } from "@/services/api";
+import {
+  createPerson,
+  deletePerson,
+  getPeople,
+  updatePerson,
+  type Person as ApiPerson,
+} from "@/services/people.service";
+import { getProperties, type Property as ApiProperty } from "@/services/properties.service";
+import { getContracts, type Contract as ApiContract } from "@/services/contracts.service";
+import {
+  getPayableAccounts,
+  getReceivableAccounts,
+  type PayableAccount,
+  type ReceivableAccount,
+} from "@/services/financial.service";
 
 type ApiPersonType = "INDIVIDUAL" | "COMPANY";
 type ApiPersonStatus = "ACTIVE" | "INACTIVE";
@@ -11,26 +33,9 @@ type ApiPersonStatus = "ACTIVE" | "INACTIVE";
 type PersonType = "individual" | "company";
 type PersonStatus = "active" | "inactive";
 
-type ToastType = "success" | "error" | "info";
+type PersonTypeFilter = "all" | PersonType;
 
-type ApiPerson = {
-  id: string;
-  companyId: string;
-  type: ApiPersonType;
-  status: ApiPersonStatus;
-  name: string;
-  document: string;
-  stateRegistration?: string | null;
-  identityNumber?: string | null;
-  email?: string | null;
-  phone?: string | null;
-  zipCode?: string | null;
-  city?: string | null;
-  state?: string | null;
-  address?: string | null;
-  createdAt: string;
-  updatedAt?: string;
-};
+type ToastType = "success" | "error" | "info";
 
 type Person = {
   id: string;
@@ -62,6 +67,9 @@ type PersonFormData = {
   city: string;
   state: string;
   address: string;
+  addressNumber: string;
+  district: string;
+  reference: string;
   status: PersonStatus;
 };
 
@@ -108,6 +116,9 @@ const emptyFormData: PersonFormData = {
   city: "",
   state: "",
   address: "",
+  addressNumber: "",
+  district: "",
+  reference: "",
   status: "active",
 };
 
@@ -131,17 +142,17 @@ function mapApiPersonToPerson(apiPerson: ApiPerson): Person {
   return {
     id: apiPerson.id,
     companyId: apiPerson.companyId,
-    name: apiPerson.name,
+    name: toUpperText(apiPerson.name),
     type: convertApiTypeToPersonType(apiPerson.type),
-    document: apiPerson.document,
-    stateRegistration: apiPerson.stateRegistration ?? "",
-    identityNumber: apiPerson.identityNumber ?? "",
-    email: apiPerson.email ?? "",
+    document: formatDocument(apiPerson.document, convertApiTypeToPersonType(apiPerson.type)),
+    stateRegistration: toUpperText(apiPerson.stateRegistration ?? ""),
+    identityNumber: toUpperText(apiPerson.identityNumber ?? ""),
+    email: toUpperText(apiPerson.email ?? ""),
     phone: apiPerson.phone ?? "",
     zipCode: apiPerson.zipCode ?? "",
-    city: apiPerson.city ?? "",
-    state: apiPerson.state ?? "",
-    address: apiPerson.address ?? "",
+    city: toUpperText(apiPerson.city ?? ""),
+    state: toUpperText(apiPerson.state ?? ""),
+    address: toUpperText(apiPerson.address ?? ""),
     status: convertApiStatusToPersonStatus(apiPerson.status),
     createdAt: apiPerson.createdAt,
   };
@@ -189,15 +200,83 @@ function normalizeText(value: string) {
   return value.trim().toLowerCase();
 }
 
-function buildCnpjAddress(data: CnpjApiResponse) {
-  const addressParts = [
-    data.logradouro,
-    data.numero ? `Nº ${data.numero}` : "",
-    data.bairro,
-    data.complemento,
+function toUpperText(value: string) {
+  return value.toLocaleUpperCase("pt-BR").trimStart();
+}
+
+function formatPersonFormValue(field: keyof PersonFormData, value: string) {
+  if (
+    field === "name" ||
+    field === "stateRegistration" ||
+    field === "identityNumber" ||
+    field === "email" ||
+    field === "city" ||
+    field === "address" ||
+    field === "addressNumber" ||
+    field === "district" ||
+    field === "reference"
+  ) {
+    return toUpperText(value);
+  }
+
+  if (field === "state") return toUpperText(value).slice(0, 2);
+
+  return value;
+}
+
+function buildPersonAddress(data: Pick<PersonFormData, "address" | "addressNumber" | "district" | "reference">) {
+  const address = toUpperText(data.address).trim();
+  const number = toUpperText(data.addressNumber).trim();
+  const district = toUpperText(data.district).trim();
+  const reference = toUpperText(data.reference).trim();
+
+  const mainAddress = [address, number ? `Nº ${number}` : ""]
+    .filter(Boolean)
+    .join(", ");
+  const details = [
+    district ? `BAIRRO: ${district}` : "",
+    reference ? `REFERÊNCIA: ${reference}` : "",
   ].filter(Boolean);
 
-  return addressParts.join(" - ");
+  return [mainAddress, ...details].filter(Boolean).join(" - ");
+}
+
+function parsePersonAddress(address: string) {
+  let remainingAddress = toUpperText(address).trim();
+  let reference = "";
+  let district = "";
+  let addressNumber = "";
+
+  const referenceMatch = remainingAddress.match(/\s-\sREFER[ÊE]NCIA:\s(.+)$/i);
+  if (referenceMatch?.[1]) {
+    reference = referenceMatch[1].trim();
+    remainingAddress = remainingAddress.slice(0, referenceMatch.index).trim();
+  }
+
+  const districtMatch = remainingAddress.match(/\s-\sBAIRRO:\s(.+)$/i);
+  if (districtMatch?.[1]) {
+    district = districtMatch[1].trim();
+    remainingAddress = remainingAddress.slice(0, districtMatch.index).trim();
+  }
+
+  const numberMatch = remainingAddress.match(/,\s*N[ºO]\s*([^,]+)$/i);
+  if (numberMatch?.[1]) {
+    addressNumber = numberMatch[1].trim();
+    remainingAddress = remainingAddress.slice(0, numberMatch.index).trim();
+  }
+
+  if (!district && remainingAddress.includes(" - ")) {
+    const [legacyAddress, ...legacyDistrictParts] = remainingAddress.split(" - ");
+    remainingAddress = legacyAddress.trim();
+    district = legacyDistrictParts.join(" - ").trim();
+  }
+
+  return {
+    address: remainingAddress,
+    addressNumber,
+    district,
+    reference,
+  };
 }
 
 export default function PeoplePage() {
@@ -206,7 +285,9 @@ export default function PeoplePage() {
   const [people, setPeople] = useState<Person[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | PersonStatus>("active");
+  const [typeFilter, setTypeFilter] = useState<PersonTypeFilter>("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalMinimized, setIsModalMinimized] = useState(false);
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [formData, setFormData] = useState<PersonFormData>(emptyFormData);
   const [isLoadingPeople, setIsLoadingPeople] = useState(true);
@@ -216,8 +297,15 @@ export default function PeoplePage() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [zipCodeError, setZipCodeError] = useState<string | null>(null);
   const [cnpjError, setCnpjError] = useState<string | null>(null);
+  const [personToInactivate, setPersonToInactivate] = useState<Person | null>(null);
+  const [isInactivating, setIsInactivating] = useState(false);
   const [personToDelete, setPersonToDelete] = useState<Person | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [historyPerson, setHistoryPerson] = useState<Person | null>(null);
+  const [properties, setProperties] = useState<ApiProperty[]>([]);
+  const [contracts, setContracts] = useState<ApiContract[]>([]);
+  const [receivableAccounts, setReceivableAccounts] = useState<ReceivableAccount[]>([]);
+  const [payableAccounts, setPayableAccounts] = useState<PayableAccount[]>([]);
   const [toast, setToast] = useState<ToastState>(null);
 
   const companyId = user?.companyId;
@@ -246,11 +334,25 @@ export default function PeoplePage() {
       setIsLoadingPeople(true);
       setPageError(null);
 
-      const response = await apiFetch<ApiPerson[]>(
-        `/pessoas?companyId=${encodeURIComponent(currentCompanyId)}`
-      );
+      const [
+        peopleResponse,
+        propertiesResponse,
+        contractsResponse,
+        receivablesResponse,
+        payablesResponse,
+      ] = await Promise.all([
+        getPeople(currentCompanyId),
+        getProperties(currentCompanyId),
+        getContracts(currentCompanyId),
+        getReceivableAccounts(currentCompanyId),
+        getPayableAccounts(currentCompanyId),
+      ]);
 
-      setPeople(response.map(mapApiPersonToPerson));
+      setPeople(peopleResponse.map(mapApiPersonToPerson));
+      setProperties(propertiesResponse);
+      setContracts(contractsResponse);
+      setReceivableAccounts(receivablesResponse);
+      setPayableAccounts(payablesResponse);
     } catch (error) {
       setPageError(
         error instanceof Error ? error.message : "Não foi possível carregar as pessoas."
@@ -268,15 +370,51 @@ export default function PeoplePage() {
         !normalizedSearch ||
         normalizeText(person.name).includes(normalizedSearch) ||
         normalizeText(person.document).includes(normalizedSearch) ||
+        normalizeText(person.identityNumber).includes(normalizedSearch) ||
+        normalizeText(person.stateRegistration).includes(normalizedSearch) ||
         normalizeText(person.email).includes(normalizedSearch) ||
         normalizeText(person.phone).includes(normalizedSearch) ||
-        normalizeText(person.city).includes(normalizedSearch);
+        normalizeText(person.city).includes(normalizedSearch) ||
+        normalizeText(person.address).includes(normalizedSearch);
 
       const matchesStatus = statusFilter === "all" || person.status === statusFilter;
+      const matchesType = typeFilter === "all" || person.type === typeFilter;
 
-      return matchesSearch && matchesStatus;
+      return matchesSearch && matchesStatus && matchesType;
     });
-  }, [people, searchTerm, statusFilter]);
+  }, [people, searchTerm, statusFilter, typeFilter]);
+
+  const historyData = useMemo(() => {
+    if (!historyPerson) {
+      return {
+        ownedProperties: [] as ApiProperty[],
+        tenantContracts: [] as ApiContract[],
+        receivables: [] as ReceivableAccount[],
+        payables: [] as PayableAccount[],
+      };
+    }
+
+    return {
+      ownedProperties: properties.filter(
+        (property) => String(property.ownerId || "") === String(historyPerson.id)
+      ),
+      tenantContracts: contracts.filter(
+        (contract) => String(contract.tenantId || "") === String(historyPerson.id)
+      ),
+      receivables: receivableAccounts.filter(
+        (account) => String(account.tenantId || "") === String(historyPerson.id)
+      ),
+      payables: payableAccounts.filter(
+        (account) => String(account.personId || "") === String(historyPerson.id)
+      ),
+    };
+  }, [contracts, historyPerson, payableAccounts, properties, receivableAccounts]);
+
+  const historyMovementCount =
+    historyData.ownedProperties.length +
+    historyData.tenantContracts.length +
+    historyData.receivables.length +
+    historyData.payables.length;
 
   function openCreateModal() {
     setEditingPersonId(null);
@@ -284,10 +422,13 @@ export default function PeoplePage() {
     setPageError(null);
     setZipCodeError(null);
     setCnpjError(null);
+    setIsModalMinimized(false);
     setIsModalOpen(true);
   }
 
   function openEditModal(person: Person) {
+    const addressData = parsePersonAddress(person.address);
+
     setEditingPersonId(person.id);
     setFormData({
       name: person.name,
@@ -300,19 +441,32 @@ export default function PeoplePage() {
       zipCode: person.zipCode,
       city: person.city,
       state: person.state,
-      address: person.address,
+      address: addressData.address,
+      addressNumber: addressData.addressNumber,
+      district: addressData.district,
+      reference: addressData.reference,
       status: person.status,
     });
     setPageError(null);
     setZipCodeError(null);
     setCnpjError(null);
+    setIsModalMinimized(false);
     setIsModalOpen(true);
+  }
+
+  function openPersonHistory(person: Person) {
+    setHistoryPerson(person);
+  }
+
+  function closePersonHistory() {
+    setHistoryPerson(null);
   }
 
   function closeModal() {
     if (isSaving) return;
 
     setIsModalOpen(false);
+    setIsModalMinimized(false);
     setEditingPersonId(null);
     setFormData(emptyFormData);
     setZipCodeError(null);
@@ -322,7 +476,7 @@ export default function PeoplePage() {
   function updateFormData(field: keyof PersonFormData, value: string) {
     setFormData((currentFormData) => ({
       ...currentFormData,
-      [field]: value,
+      [field]: formatPersonFormValue(field, value),
     }));
   }
 
@@ -346,16 +500,12 @@ export default function PeoplePage() {
         return;
       }
 
-      const addressParts = [data.logradouro, data.bairro].filter(Boolean);
-
       setFormData((currentFormData) => ({
         ...currentFormData,
-        city: data.localidade ?? currentFormData.city,
-        state: data.uf ?? currentFormData.state,
-        address:
-          addressParts.length > 0
-            ? addressParts.join(" - ")
-            : currentFormData.address,
+        city: toUpperText(data.localidade ?? currentFormData.city),
+        state: toUpperText(data.uf ?? currentFormData.state).slice(0, 2),
+        address: toUpperText(data.logradouro ?? currentFormData.address),
+        district: toUpperText(data.bairro ?? currentFormData.district),
       }));
     } catch {
       setZipCodeError("Não foi possível consultar o CEP agora.");
@@ -393,19 +543,22 @@ export default function PeoplePage() {
       setFormData((currentFormData) => ({
         ...currentFormData,
         name:
-          data.razao_social?.trim() ||
-          data.nome_fantasia?.trim() ||
+          toUpperText(data.razao_social?.trim() || "") ||
+          toUpperText(data.nome_fantasia?.trim() || "") ||
           currentFormData.name,
-        email: data.email?.trim() || currentFormData.email,
+        email: toUpperText(data.email?.trim() || "") || currentFormData.email,
         phone: data.ddd_telefone_1
           ? formatPhone(data.ddd_telefone_1)
           : data.ddd_telefone_2
             ? formatPhone(data.ddd_telefone_2)
             : currentFormData.phone,
         zipCode: data.cep ? formatZipCode(data.cep) : currentFormData.zipCode,
-        city: data.municipio ?? currentFormData.city,
-        state: data.uf ?? currentFormData.state,
-        address: buildCnpjAddress(data) || currentFormData.address,
+        city: toUpperText(data.municipio ?? currentFormData.city),
+        state: toUpperText(data.uf ?? currentFormData.state).slice(0, 2),
+        address: toUpperText(data.logradouro ?? currentFormData.address),
+        addressNumber: toUpperText(data.numero ?? currentFormData.addressNumber),
+        district: toUpperText(data.bairro ?? currentFormData.district),
+        reference: toUpperText(data.complemento ?? currentFormData.reference),
         status:
           data.descricao_situacao_cadastral?.toUpperCase() === "ATIVA"
             ? "active"
@@ -436,26 +589,46 @@ export default function PeoplePage() {
       return;
     }
 
-    const payload = {
-      companyId,
+    if (!isValidDocument(formData.document, formData.type)) {
+      setPageError(
+        formData.type === "company"
+          ? "Informe um CNPJ válido para salvar a pessoa."
+          : "Informe um CPF válido para salvar a pessoa."
+      );
+      return;
+    }
+
+    const normalizedDocument = onlyDigits(formData.document);
+    const documentAlreadyExists = people.some(
+      (person) =>
+        person.id !== editingPersonId &&
+        onlyDigits(person.document) === normalizedDocument,
+    );
+
+    if (documentAlreadyExists) {
+      setPageError("Já existe uma pessoa cadastrada com este documento.");
+      return;
+    }
+
+    const personData = {
       type: convertPersonTypeToApiType(formData.type),
       status: convertPersonStatusToApiStatus(formData.status),
-      name: formData.name.trim(),
-      document: formData.document.trim(),
+      name: toUpperText(formData.name).trim(),
+      document: normalizedDocument,
       stateRegistration:
         formData.type === "company"
-          ? formData.stateRegistration.trim() || undefined
+          ? toUpperText(formData.stateRegistration).trim() || undefined
           : undefined,
       identityNumber:
         formData.type === "individual"
-          ? formData.identityNumber.trim() || undefined
+          ? toUpperText(formData.identityNumber).trim() || undefined
           : undefined,
-      email: formData.email.trim() || undefined,
+      email: toUpperText(formData.email).trim() || undefined,
       phone: formData.phone.trim() || undefined,
       zipCode: formData.zipCode.trim() || undefined,
-      city: formData.city.trim() || undefined,
-      state: formData.state.trim().toUpperCase() || undefined,
-      address: formData.address.trim() || undefined,
+      city: toUpperText(formData.city).trim() || undefined,
+      state: toUpperText(formData.state).trim() || undefined,
+      address: buildPersonAddress(formData) || undefined,
     };
 
     try {
@@ -463,10 +636,7 @@ export default function PeoplePage() {
       setPageError(null);
 
       if (editingPersonId) {
-        const updatedPerson = await apiFetch<ApiPerson>(`/pessoas/${editingPersonId}`, {
-          method: "PATCH",
-          body: JSON.stringify(payload),
-        });
+        const updatedPerson = await updatePerson(editingPersonId, personData);
 
         setPeople((currentPeople) =>
           currentPeople.map((person) =>
@@ -483,9 +653,9 @@ export default function PeoplePage() {
         return;
       }
 
-      const createdPerson = await apiFetch<ApiPerson>("/pessoas", {
-        method: "POST",
-        body: JSON.stringify(payload),
+      const createdPerson = await createPerson({
+        companyId,
+        ...personData,
       });
 
       setPeople((currentPeople) => [mapApiPersonToPerson(createdPerson), ...currentPeople]);
@@ -510,8 +680,58 @@ export default function PeoplePage() {
     }
   }
 
-  function openDeleteModal(person: Person) {
-    setPersonToDelete(person);
+  function openInactivateModal(person: Person) {
+    setPersonToInactivate(person);
+  }
+
+  function closeInactivateModal() {
+    if (isInactivating) return;
+    setPersonToInactivate(null);
+  }
+
+  async function handleInactivateConfirmed() {
+    if (!personToInactivate) return;
+
+    try {
+      setIsInactivating(true);
+      setPageError(null);
+
+      const updatedPerson = await updatePerson(personToInactivate.id, {
+        status: "INACTIVE",
+      });
+
+      setPeople((currentPeople) =>
+        currentPeople.map((person) =>
+          person.id === personToInactivate.id ? mapApiPersonToPerson(updatedPerson) : person
+        )
+      );
+
+      setToast({
+        type: "success",
+        message: "Pessoa inativada com sucesso.",
+      });
+
+      setPersonToInactivate(null);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Não foi possível inativar a pessoa.";
+
+      setPageError(message);
+      setToast({
+        type: "error",
+        message,
+      });
+    } finally {
+      setIsInactivating(false);
+    }
+  }
+
+  function openDeleteModal() {
+    const selectedPerson = people.find((person) => person.id === editingPersonId);
+
+    if (!selectedPerson) return;
+
+    setPersonToDelete(selectedPerson);
   }
 
   function closeDeleteModal() {
@@ -526,9 +746,7 @@ export default function PeoplePage() {
       setIsDeleting(true);
       setPageError(null);
 
-      await apiFetch<ApiPerson>(`/pessoas/${personToDelete.id}`, {
-        method: "DELETE",
-      });
+      await deletePerson(personToDelete.id);
 
       setPeople((currentPeople) =>
         currentPeople.filter((person) => person.id !== personToDelete.id)
@@ -540,6 +758,7 @@ export default function PeoplePage() {
       });
 
       setPersonToDelete(null);
+      closeModal();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Não foi possível excluir a pessoa.";
@@ -583,7 +802,7 @@ export default function PeoplePage() {
         )}
 
         <section className="overflow-x-auto rounded-[1.65rem] border border-orange-100 bg-white shadow-sm">
-          <div className="grid gap-5 px-5 py-5 lg:grid-cols-[1fr_420px] lg:items-end">
+          <div className="grid gap-5 px-5 py-5 lg:grid-cols-[1fr_620px] lg:items-end">
             <div>
               <h2 className="text-xl font-black text-slate-950">Pessoas</h2>
               <p className="mt-2 text-xs font-medium text-slate-500">
@@ -591,13 +810,13 @@ export default function PeoplePage() {
               </p>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-[1fr_155px]">
+            <div className="grid gap-3 sm:grid-cols-[1fr_150px_170px]">
               <label className="space-y-2">
                 <span className="text-xs font-black text-slate-400">Buscar</span>
                 <input
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Nome, CPF/CNPJ, telefone ou e-mail"
+                  placeholder="Nome, CPF/CNPJ, RG/IE, cidade ou e-mail"
                   className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                 />
               </label>
@@ -614,6 +833,19 @@ export default function PeoplePage() {
                   <option value="all">Todos</option>
                   <option value="active">Ativos</option>
                   <option value="inactive">Inativos</option>
+                </select>
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-xs font-black text-slate-400">Tipo</span>
+                <select
+                  value={typeFilter}
+                  onChange={(event) => setTypeFilter(event.target.value as PersonTypeFilter)}
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                >
+                  <option value="all">Todos</option>
+                  <option value="individual">Pessoa física</option>
+                  <option value="company">Pessoa jurídica</option>
                 </select>
               </label>
             </div>
@@ -665,9 +897,14 @@ export default function PeoplePage() {
                   filteredPeople.map((person) => (
                     <tr key={person.id} className="transition hover:bg-orange-50/30">
                       <td className="px-5 py-5">
-                        <div className="max-w-[420px] truncate text-sm font-black uppercase text-slate-950">
+                        <button
+                          type="button"
+                          onClick={() => openPersonHistory(person)}
+                          className="block max-w-[420px] truncate text-left text-sm font-black uppercase text-slate-950 transition hover:text-orange-600 hover:underline"
+                          title="Clique para ver o histórico desta pessoa"
+                        >
                           {person.name}
-                        </div>
+                        </button>
                         <div className="mt-1 text-xs font-semibold text-slate-400">
                           {person.email ? person.email : "Nenhum e-mail informado"}
                         </div>
@@ -718,13 +955,15 @@ export default function PeoplePage() {
                             Editar
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={() => openDeleteModal(person)}
-                            className="rounded-xl bg-red-50 px-4 py-2 text-xs font-black text-red-600 transition hover:bg-red-100"
-                          >
-                            Excluir
-                          </button>
+                          {person.status === "active" && (
+                            <button
+                              type="button"
+                              onClick={() => openInactivateModal(person)}
+                              className="rounded-xl bg-red-50 px-4 py-2 text-xs font-black text-red-600 transition hover:bg-red-100"
+                            >
+                              Inativar
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -748,7 +987,150 @@ export default function PeoplePage() {
         </section>
       </div>
 
-      {isModalOpen && (
+      {historyPerson && (
+        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
+          <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-orange-100 bg-white px-8 py-6">
+              <div>
+                <h2 className="text-2xl font-black tracking-tight text-slate-950">
+                  Histórico da pessoa
+                </h2>
+                <p className="mt-1 text-sm font-semibold text-slate-500">
+                  {historyPerson.name}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closePersonHistory}
+                className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-orange-50 hover:text-orange-600"
+                title="Fechar histórico"
+                aria-label="Fechar histórico"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-6 p-8">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <HistoryInfo label="Tipo" value={getPersonTypeLabel(historyPerson.type)} />
+                <HistoryInfo label="Documento" value={historyPerson.document} />
+                <HistoryInfo label="Status" value={historyPerson.status === "active" ? "Ativo" : "Inativo"} />
+                <HistoryInfo label="Movimentações" value={String(historyMovementCount)} />
+                <HistoryInfo label="Telefone" value={historyPerson.phone || "Não informado"} />
+                <HistoryInfo label="E-mail" value={historyPerson.email || "Não informado"} />
+                <HistoryInfo label="Cidade/UF" value={`${historyPerson.city || "-"} / ${historyPerson.state || "-"}`} />
+                <HistoryInfo label="CEP" value={historyPerson.zipCode || "Não informado"} />
+                <HistoryInfo label="Endereço" value={historyPerson.address || "Não informado"} wide />
+              </div>
+
+              <HistorySection
+                title="Imóveis como proprietário"
+                emptyMessage="Nenhum imóvel vinculado como proprietário."
+              >
+                {historyData.ownedProperties.map((property) => (
+                  <HistoryRow
+                    key={property.id}
+                    title={property.title}
+                    detail={`${property.city || "-"} / ${property.state || "-"} · ${formatCurrency(Number(property.rentalValue || 0))}`}
+                    meta={property.isActive ? "Ativo" : "Inativo"}
+                  />
+                ))}
+              </HistorySection>
+
+              <HistorySection
+                title="Contratos como inquilino"
+                emptyMessage="Nenhum contrato vinculado como inquilino."
+              >
+                {historyData.tenantContracts.map((contract) => (
+                  <HistoryRow
+                    key={contract.id}
+                    title={contract.propertyName || contract.property?.title || "Imóvel não informado"}
+                    detail={`${formatDate(contract.startDate)} até ${formatDate(contract.endDate)} · ${formatCurrency(Number(contract.rentValue || 0))}`}
+                    meta={getContractStatusLabel(contract.status)}
+                  />
+                ))}
+              </HistorySection>
+
+              <HistorySection
+                title="Contas a receber"
+                emptyMessage="Nenhuma conta a receber vinculada."
+              >
+                {historyData.receivables.map((account) => (
+                  <HistoryRow
+                    key={account.id}
+                    title={account.propertyName || "Imóvel não informado"}
+                    detail={`${formatDate(account.dueDate)} · ${formatCurrency(Number(account.amount || 0))}`}
+                    meta={getFinancialStatusLabel(account.status)}
+                  />
+                ))}
+              </HistorySection>
+
+              <HistorySection
+                title="Contas a pagar"
+                emptyMessage="Nenhuma conta a pagar vinculada."
+              >
+                {historyData.payables.map((account) => (
+                  <HistoryRow
+                    key={account.id}
+                    title={account.description || account.category || "Conta sem descrição"}
+                    detail={`${formatDate(account.dueDate)} · ${formatCurrency(Number(account.amount || 0))}`}
+                    meta={getFinancialStatusLabel(account.status)}
+                  />
+                ))}
+              </HistorySection>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isModalOpen && isModalMinimized && (
+        <div className="contrx-minimized-modal fixed bottom-6 right-6 z-50 w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border-2 border-orange-300 bg-white shadow-2xl">
+          <div className="h-2 bg-orange-500" />
+          <div className="p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="rounded-full bg-orange-100 px-3 py-1 text-[0.68rem] font-black uppercase tracking-wide text-orange-700">
+                    Minimizado
+                  </span>
+                  <span className="h-2 w-2 rounded-full bg-orange-500 shadow-[0_0_0_4px_rgb(249_115_22/0.16)]" />
+                </div>
+                <p className="truncate text-base font-black text-slate-950">
+                  {editingPersonId ? "Editar pessoa" : "Nova pessoa"}
+                </p>
+                <p className="truncate text-sm font-semibold text-slate-500">
+                  {formData.name || "Cadastro em andamento"}
+                </p>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsModalMinimized(false)}
+                  className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-200 transition hover:bg-orange-600"
+                  title="Restaurar modal"
+                  aria-label="Restaurar modal"
+                >
+                  <Maximize2 className="h-5 w-5" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-slate-200"
+                  title="Fechar modal"
+                  aria-label="Fechar modal"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isModalOpen && !isModalMinimized && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6 backdrop-blur-sm">
           <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
             <div className="flex items-start justify-between border-b border-orange-100 px-8 py-6">
@@ -758,18 +1140,31 @@ export default function PeoplePage() {
                 </h2>
 
                 <p className="mt-1 text-sm font-medium text-slate-500">
-                  Informe os dados principais para usar nos módulos do Rentix.
+                  Informe os dados principais para usar nos módulos do Contrx.
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={closeModal}
-                className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-xl font-black text-slate-500 shadow-sm transition hover:bg-slate-50 hover:text-red-500"
-                aria-label="Fechar modal"
-              >
-                ×
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsModalMinimized(true)}
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:bg-orange-50 hover:text-orange-600"
+                  title="Minimizar modal"
+                  aria-label="Minimizar modal"
+                >
+                  <Minimize2 className="h-5 w-5" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:bg-orange-50 hover:text-orange-600"
+                  title="Fechar modal"
+                  aria-label="Fechar modal"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
             <form onSubmit={handleSubmit} className="min-h-0 flex-1 overflow-y-auto">
@@ -779,7 +1174,7 @@ export default function PeoplePage() {
                     <input
                       value={formData.name}
                       onChange={(event) => updateFormData("name", event.target.value)}
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                     />
                   </FormField>
 
@@ -835,8 +1230,13 @@ export default function PeoplePage() {
                           type="button"
                           onClick={handleSearchCnpj}
                           disabled={isSearchingCnpj}
-                          className="h-11 rounded-2xl border border-orange-200 bg-white px-4 text-xs font-black text-orange-600 transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-70"
+                          className="flex h-11 items-center gap-2 rounded-2xl border border-orange-200 bg-white px-4 text-xs font-black text-orange-600 transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-70"
                         >
+                          {isSearchingCnpj ? (
+                            <LoaderCircle className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Search className="h-4 w-4" />
+                          )}
                           {isSearchingCnpj ? "Buscando..." : "Buscar CNPJ"}
                         </button>
                       )}
@@ -866,7 +1266,7 @@ export default function PeoplePage() {
                           ? "RG / Órgão emissor"
                           : "Inscrição estadual"
                       }
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                     />
                   </FormField>
 
@@ -886,7 +1286,7 @@ export default function PeoplePage() {
                       value={formData.email}
                       onChange={(event) => updateFormData("email", event.target.value)}
                       placeholder="email@exemplo.com"
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                     />
                   </FormField>
 
@@ -905,8 +1305,13 @@ export default function PeoplePage() {
                         type="button"
                         onClick={handleSearchZipCode}
                         disabled={isSearchingZipCode}
-                        className="h-11 rounded-2xl border border-orange-200 bg-white px-4 text-xs font-black text-orange-600 transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-70"
+                        className="flex h-11 items-center gap-2 rounded-2xl border border-orange-200 bg-white px-4 text-xs font-black text-orange-600 transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-70"
                       >
+                        {isSearchingZipCode ? (
+                          <LoaderCircle className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Search className="h-4 w-4" />
+                        )}
                         {isSearchingZipCode ? "Buscando..." : "Buscar CEP"}
                       </button>
                     </div>
@@ -916,7 +1321,7 @@ export default function PeoplePage() {
                     <input
                       value={formData.city}
                       onChange={(event) => updateFormData("city", event.target.value)}
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                     />
                   </FormField>
 
@@ -924,7 +1329,7 @@ export default function PeoplePage() {
                     <input
                       value={formData.state}
                       onChange={(event) =>
-                        updateFormData("state", event.target.value.toUpperCase().slice(0, 2))
+                        updateFormData("state", event.target.value)
                       }
                       maxLength={2}
                       placeholder="RO"
@@ -932,15 +1337,42 @@ export default function PeoplePage() {
                     />
                   </FormField>
 
-                  <div className="md:col-span-2">
-                    <FormField label="Endereço">
-                      <input
-                        value={formData.address}
-                        onChange={(event) => updateFormData("address", event.target.value)}
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                      />
-                    </FormField>
-                  </div>
+                  <FormField label="Endereço">
+                    <input
+                      value={formData.address}
+                      onChange={(event) => updateFormData("address", event.target.value)}
+                      placeholder="Rua, avenida, travessa..."
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    />
+                  </FormField>
+
+                  <FormField label="Número">
+                    <input
+                      value={formData.addressNumber}
+                      onChange={(event) =>
+                        updateFormData("addressNumber", event.target.value)
+                      }
+                      placeholder="Nº"
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    />
+                  </FormField>
+
+                  <FormField label="Bairro">
+                    <input
+                      value={formData.district}
+                      onChange={(event) => updateFormData("district", event.target.value)}
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    />
+                  </FormField>
+
+                  <FormField label="Referência">
+                    <input
+                      value={formData.reference}
+                      onChange={(event) => updateFormData("reference", event.target.value)}
+                      placeholder="Ponto de referência"
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    />
+                  </FormField>
 
                   <FormField label="Status">
                     <select
@@ -975,33 +1407,48 @@ export default function PeoplePage() {
                 )}
               </div>
 
-              <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-8 py-5">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="rounded-2xl bg-slate-100 px-6 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
-                >
-                  Cancelar
-                </button>
+              <div className="flex flex-col gap-3 border-t border-slate-100 px-8 py-5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  {editingPersonId && (
+                    <button
+                      type="button"
+                      onClick={openDeleteModal}
+                      disabled={isSaving}
+                      className="rounded-2xl bg-red-50 px-5 py-3 text-sm font-black text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      Excluir cadastro
+                    </button>
+                  )}
+                </div>
 
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="rounded-2xl bg-orange-500 px-7 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {isSaving
-                    ? "Salvando..."
-                    : editingPersonId
-                      ? "Salvar alterações"
-                      : "Salvar pessoa"}
-                </button>
+                <div className="flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="rounded-2xl bg-slate-100 px-6 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="rounded-2xl bg-orange-500 px-7 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {isSaving
+                      ? "Salvando..."
+                      : editingPersonId
+                        ? "Salvar alterações"
+                        : "Salvar pessoa"}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {personToDelete && (
+      {personToInactivate && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-[2rem] border border-red-100 bg-white p-6 shadow-2xl">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-2xl font-black text-red-600">
@@ -1010,10 +1457,58 @@ export default function PeoplePage() {
 
             <div className="mt-5 text-center">
               <h2 className="text-xl font-black text-slate-950">
-                Excluir pessoa?
+                Inativar pessoa?
               </h2>
               <p className="mt-2 text-sm font-medium text-slate-500">
-                Essa ação removerá o cadastro selecionado. Confirme apenas se tiver certeza.
+                Essa ação mantém o histórico e impede o uso da pessoa em novos lançamentos operacionais.
+              </p>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+              <p className="text-sm font-black uppercase text-slate-900">
+                {personToInactivate.name}
+              </p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">
+                {personToInactivate.document}
+              </p>
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={closeInactivateModal}
+                disabled={isInactivating}
+                className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={handleInactivateConfirmed}
+                disabled={isInactivating}
+                className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isInactivating ? "Inativando..." : "Inativar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {personToDelete && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[2rem] border border-red-100 bg-white p-6 shadow-2xl">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-50 text-2xl font-black text-red-600">
+              !
+            </div>
+
+            <div className="mt-5 text-center">
+              <h2 className="text-xl font-black text-slate-950">
+                Excluir cadastro?
+              </h2>
+              <p className="mt-2 text-sm font-medium text-slate-500">
+                A exclusão só será permitida se esta pessoa não tiver nenhuma movimentação no sistema.
               </p>
             </div>
 
@@ -1086,4 +1581,158 @@ function FormField({
       {children}
     </label>
   );
+}
+
+function HistoryInfo({
+  label,
+  value,
+  wide = false,
+}: {
+  label: string;
+  value: string;
+  wide?: boolean;
+}) {
+  return (
+    <div className={`rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 ${wide ? "md:col-span-2 xl:col-span-4" : ""}`}>
+      <p className="text-xs font-black uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-1 text-sm font-black text-slate-800">{value}</p>
+    </div>
+  );
+}
+
+function HistorySection({
+  title,
+  emptyMessage,
+  children,
+}: {
+  title: string;
+  emptyMessage: string;
+  children: ReactNode;
+}) {
+  const hasChildren = Children.count(children) > 0;
+
+  return (
+    <section className="rounded-3xl border border-orange-100 bg-white p-5 shadow-sm">
+      <h3 className="text-lg font-black text-slate-950">{title}</h3>
+      <div className="mt-4 space-y-3">
+        {hasChildren ? (
+          children
+        ) : (
+          <div className="rounded-2xl border border-dashed border-slate-200 p-5 text-center text-sm font-semibold text-slate-500">
+            {emptyMessage}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function HistoryRow({
+  title,
+  detail,
+  meta,
+}: {
+  title: string;
+  detail: string;
+  meta: string;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <p className="truncate text-sm font-black text-slate-900">{title}</p>
+        <p className="mt-1 text-xs font-semibold text-slate-500">{detail}</p>
+      </div>
+      <span className="shrink-0 rounded-full bg-orange-100 px-3 py-1 text-xs font-black text-orange-700">
+        {meta}
+      </span>
+    </div>
+  );
+}
+
+function getPersonTypeLabel(type: PersonType) {
+  return type === "company" ? "Pessoa jurídica" : "Pessoa física";
+}
+
+function getContractStatusLabel(status: ApiContract["status"]) {
+  const labels: Record<string, string> = {
+    ACTIVE: "Ativo",
+    INACTIVE: "Inativo",
+    CANCELED: "Cancelado",
+    FINISHED: "Finalizado",
+    DELETED: "Excluído",
+  };
+
+  return labels[status] || String(status || "Não informado");
+}
+
+function getFinancialStatusLabel(status: ReceivableAccount["status"] | PayableAccount["status"]) {
+  return status === "PAID" ? "Pago" : "Pendente";
+}
+
+function formatCurrency(value: number) {
+  return value.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "Data não informada";
+
+  const [datePart] = String(value).split("T");
+  const [year, month, day] = datePart.split("-");
+
+  if (!year || !month || !day) return "Data não informada";
+
+  return `${day}/${month}/${year}`;
+}
+
+function onlyDigits(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+function isValidCpf(value: string) {
+  const cpf = onlyDigits(value);
+
+  if (cpf.length !== 11 || /^(\d)\1+$/.test(cpf)) return false;
+
+  const calculateDigit = (base: string, factor: number) => {
+    const total = base
+      .split("")
+      .reduce((sum, digit) => sum + Number(digit) * factor--, 0);
+    const rest = (total * 10) % 11;
+
+    return rest === 10 ? 0 : rest;
+  };
+
+  return (
+    calculateDigit(cpf.slice(0, 9), 10) === Number(cpf[9]) &&
+    calculateDigit(cpf.slice(0, 10), 11) === Number(cpf[10])
+  );
+}
+
+function isValidCnpj(value: string) {
+  const cnpj = onlyDigits(value);
+
+  if (cnpj.length !== 14 || /^(\d)\1+$/.test(cnpj)) return false;
+
+  const calculateDigit = (base: string, weights: number[]) => {
+    const total = base
+      .split("")
+      .reduce((sum, digit, index) => sum + Number(digit) * weights[index], 0);
+    const rest = total % 11;
+
+    return rest < 2 ? 0 : 11 - rest;
+  };
+
+  return (
+    calculateDigit(cnpj.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]) ===
+      Number(cnpj[12]) &&
+    calculateDigit(cnpj.slice(0, 13), [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]) ===
+      Number(cnpj[13])
+  );
+}
+
+function isValidDocument(value: string, type: PersonType) {
+  return type === "company" ? isValidCnpj(value) : isValidCpf(value);
 }

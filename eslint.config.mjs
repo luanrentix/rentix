@@ -19,7 +19,7 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     // Backend and generated artifacts are linted by their own project.
-    "rentix-backend/**",
+    "contrx-backend/**",
   ]),
 ]);
 

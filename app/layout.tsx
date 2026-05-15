@@ -3,8 +3,8 @@ import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
 
 export const metadata: Metadata = {
-  title: 'Rentix',
-  description: 'Rentix ERP Imobiliário SaaS',
+  title: 'Contrx',
+  description: 'Contrx ERP Imobiliário SaaS',
 };
 
 export default function RootLayout({

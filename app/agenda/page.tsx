@@ -365,13 +365,13 @@ export default function AgendaPage() {
     function applyStoredTheme() {
       const storedThemeSettings = getCompanyStorageItem(
         companyId,
-        "rentix_theme_settings",
-        "rentix_theme_settings",
+        "contrx_theme_settings",
+        "contrx_theme_settings",
       );
       const legacyTheme = getCompanyStorageItem(
         companyId,
-        "rentix_theme",
-        "rentix_theme",
+        "contrx_theme",
+        "contrx_theme",
       );
 
       try {
@@ -390,11 +390,11 @@ export default function AgendaPage() {
 
     applyStoredTheme();
     window.addEventListener("storage", applyStoredTheme);
-    window.addEventListener("rentix-theme-change", applyStoredTheme);
+    window.addEventListener("contrx-theme-change", applyStoredTheme);
 
     return () => {
       window.removeEventListener("storage", applyStoredTheme);
-      window.removeEventListener("rentix-theme-change", applyStoredTheme);
+      window.removeEventListener("contrx-theme-change", applyStoredTheme);
     };
   }, [companyId]);
 
@@ -771,7 +771,7 @@ export default function AgendaPage() {
             <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <div className={`flex flex-wrap items-center gap-2 text-xs font-black uppercase tracking-[0.22em] ${mutedTextClass}`}>
-                  <span>Rentix</span>
+                  <span>Contrx</span>
                   <span className="h-1 w-1 rounded-full bg-orange-500" />
                   <span>Agenda</span>
                   <span className="h-1 w-1 rounded-full bg-orange-500" />

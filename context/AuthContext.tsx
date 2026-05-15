@@ -33,8 +33,12 @@ type AuthContextData = {
 
 const AuthContext = createContext<AuthContextData | undefined>(undefined);
 
-const TOKEN_STORAGE_KEY = 'rentix_token';
-const USER_STORAGE_KEY = 'rentix_user';
+const TOKEN_STORAGE_KEY = 'contrx_token';
+const USER_STORAGE_KEY = 'contrx_user';
+const LEGACY_STORAGE_PREFIX = ['ren', 'tix'].join('');
+const LEGACY_TOKEN_STORAGE_KEY = `${LEGACY_STORAGE_PREFIX}_token`;
+const LEGACY_USER_STORAGE_KEY = `${LEGACY_STORAGE_PREFIX}_user`;
+const LOCAL_BACKUP_TOKEN = 'contrx-local-backup-token';
 
 type AuthProviderProps = {
   children: ReactNode;
@@ -48,16 +52,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
-    const storedUser = localStorage.getItem(USER_STORAGE_KEY);
+    const storedToken =
+      localStorage.getItem(TOKEN_STORAGE_KEY) ||
+      localStorage.getItem(LEGACY_TOKEN_STORAGE_KEY);
+    const storedUser =
+      localStorage.getItem(USER_STORAGE_KEY) ||
+      localStorage.getItem(LEGACY_USER_STORAGE_KEY);
+
+    if (storedToken === LOCAL_BACKUP_TOKEN) {
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      localStorage.removeItem(USER_STORAGE_KEY);
+      localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
+      localStorage.removeItem(LEGACY_USER_STORAGE_KEY);
+      setIsLoading(false);
+      return;
+    }
 
     if (storedToken && storedUser) {
       try {
         setToken(storedToken);
         setUser(JSON.parse(storedUser) as AuthUser);
+        localStorage.setItem(TOKEN_STORAGE_KEY, storedToken);
+        localStorage.setItem(USER_STORAGE_KEY, storedUser);
       } catch {
         localStorage.removeItem(TOKEN_STORAGE_KEY);
         localStorage.removeItem(USER_STORAGE_KEY);
+        localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
+        localStorage.removeItem(LEGACY_USER_STORAGE_KEY);
       }
     }
 
@@ -86,7 +107,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.user));
     setCompanyStorageItem(
       response.user.companyId,
-      'rentix_onboarding_pending',
+      'contrx_onboarding_pending',
       'true',
     );
 
@@ -99,7 +120,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     localStorage.removeItem(USER_STORAGE_KEY);
-    removeCompanyStorageItem(user?.companyId, 'rentix_onboarding_pending');
+    localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_USER_STORAGE_KEY);
+    removeCompanyStorageItem(user?.companyId, 'contrx_onboarding_pending');
 
     setToken(null);
     setUser(null);

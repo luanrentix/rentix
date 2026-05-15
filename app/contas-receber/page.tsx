@@ -390,6 +390,8 @@ type Charge = {
   dueDate: string;
   amount: number;
   status: "Pending" | "Paid" | "Overdue";
+  paidAmount?: number;
+  remainingAmount?: number;
   manual?: boolean;
   issueDate?: string;
   installmentNumber?: number;
@@ -447,6 +449,7 @@ type PaymentEntry = {
 };
 
 type ChargePayment = {
+  id?: string;
   chargeId: string;
   paidAt: string;
   method: PaymentMethod;
@@ -697,13 +700,13 @@ export default function AccountsReceivablePage() {
     function applyStoredTheme() {
       const storedThemeSettings = getCompanyStorageItem(
         companyId,
-        "rentix_theme_settings",
-        "rentix_theme_settings",
+        "contrx_theme_settings",
+        "contrx_theme_settings",
       );
       const legacyTheme = getCompanyStorageItem(
         companyId,
-        "rentix_theme",
-        "rentix_theme",
+        "contrx_theme",
+        "contrx_theme",
       );
 
       try {
@@ -780,13 +783,13 @@ export default function AccountsReceivablePage() {
     const paymentData = null;
     const savedStatusFilter = getCompanyStorageItem(
       companyId,
-      "rentix_receivable_status_filter",
-      "rentix_receivable_status_filter",
+      "contrx_receivable_status_filter",
+      "contrx_receivable_status_filter",
     );
     const savedAutoOpenSearch = getCompanyStorageItem(
       companyId,
-      "rentix_auto_open_search",
-      "rentix_auto_open_search",
+      "contrx_auto_open_search",
+      "contrx_auto_open_search",
     );
 
     if (c) setContracts(JSON.parse(c));
@@ -834,7 +837,7 @@ export default function AccountsReceivablePage() {
   useEffect(() => {
     setCompanyStorageItem(
       companyId,
-      "rentix_receivable_status_filter",
+      "contrx_receivable_status_filter",
       statusFilter,
     );
   }, [companyId, statusFilter]);
@@ -1017,20 +1020,45 @@ export default function AccountsReceivablePage() {
     ];
   }, [automaticCharges, manualChargesWithStatus]);
 
-  const getChargePayment = useCallback((chargeId: string) => {
-    return paymentRecords.find(
-      (paymentRecord) => String(paymentRecord.chargeId) === String(chargeId),
-    );
+  const getChargePayments = useCallback((chargeId: string) => {
+    return paymentRecords
+      .filter(
+        (paymentRecord) => String(paymentRecord.chargeId) === String(chargeId),
+      )
+      .sort(
+        (firstPayment, secondPayment) =>
+          new Date(secondPayment.paidAt).getTime() -
+          new Date(firstPayment.paidAt).getTime(),
+      );
   }, [paymentRecords]);
 
+  const getChargePayment = useCallback((chargeId: string) => {
+    return getChargePayments(chargeId)[0];
+  }, [getChargePayments]);
+
   const getChargePaidAmount = useCallback((charge: Charge) => {
-    return getChargePayment(charge.id)?.amountPaid ?? charge.amount;
-  }, [getChargePayment]);
+    const backendPaidAmount = Number(charge.paidAmount || 0);
+
+    if (backendPaidAmount > 0) return backendPaidAmount;
+
+    return getChargePayments(charge.id).reduce(
+      (total, paymentRecord) => total + paymentRecord.amountPaid,
+      0,
+    );
+  }, [getChargePayments]);
+
+  const getChargeRemainingAmount = useCallback((charge: Charge) => {
+    if (typeof charge.remainingAmount === "number") {
+      return Math.max(charge.remainingAmount, 0);
+    }
+
+    return Math.max(charge.amount - getChargePaidAmount(charge), 0);
+  }, [getChargePaidAmount]);
 
   useEffect(() => {
-    window.dispatchEvent(new Event("rentix-receivables-updated"));
-    window.dispatchEvent(new Event("rentix-accounts-receivable-updated"));
-    window.dispatchEvent(new Event("rentix-financial-updated"));
+    window.dispatchEvent(new Event("contrx-receivables-updated"));
+    window.dispatchEvent(new Event("contrx-accounts-receivable-updated"));
+    window.dispatchEvent(new Event("contrx-financial-updated"));
   }, [charges, paymentRecords]);
 
   const filteredCharges = useMemo(() => {
@@ -1053,8 +1081,8 @@ export default function AccountsReceivablePage() {
   const totalReceivable = useMemo(() => {
     return filteredCharges
       .filter((charge) => charge.status !== "Paid")
-      .reduce((total, charge) => total + charge.amount, 0);
-  }, [filteredCharges]);
+      .reduce((total, charge) => total + getChargeRemainingAmount(charge), 0);
+  }, [filteredCharges, getChargeRemainingAmount]);
 
   const totalPaid = useMemo(() => {
     return filteredCharges
@@ -1065,8 +1093,8 @@ export default function AccountsReceivablePage() {
   const totalOverdue = useMemo(() => {
     return filteredCharges
       .filter((charge) => charge.status === "Overdue")
-      .reduce((total, charge) => total + charge.amount, 0);
-  }, [filteredCharges]);
+      .reduce((total, charge) => total + getChargeRemainingAmount(charge), 0);
+  }, [filteredCharges, getChargeRemainingAmount]);
 
   const filteredTenants = useMemo(() => {
     return tenants.filter((tenant) =>
@@ -1096,6 +1124,16 @@ export default function AccountsReceivablePage() {
     return "Pendente";
   }
 
+  function hasPartialPayment(charge: Charge) {
+    return charge.status !== "Paid" && getChargePaidAmount(charge) > 0;
+  }
+
+  function getChargeStatusLabel(charge: Charge) {
+    if (hasPartialPayment(charge)) return "Parcial";
+
+    return getStatusLabel(charge.status);
+  }
+
   function getStatusClassName(status: Charge["status"]) {
     if (status === "Paid") {
       return "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 ring-1 ring-emerald-200 dark:ring-emerald-900/60";
@@ -1106,6 +1144,14 @@ export default function AccountsReceivablePage() {
     }
 
     return "bg-amber-50 dark:bg-amber-950/30 text-amber-700 ring-1 ring-amber-200";
+  }
+
+  function getChargeStatusClassName(charge: Charge) {
+    if (hasPartialPayment(charge)) {
+      return "bg-sky-50 dark:bg-sky-950/30 text-sky-700 ring-1 ring-sky-200 dark:ring-sky-900/60";
+    }
+
+    return getStatusClassName(charge.status);
   }
 
   function getStatusFilterLabel(status: StatusFilter) {
@@ -1144,7 +1190,7 @@ export default function AccountsReceivablePage() {
     interest: number,
     discount: number,
   ) {
-    return Math.max(charge.amount + interest - discount, 0);
+    return Math.max(getChargeRemainingAmount(charge) + interest - discount, 0);
   }
 
   function getPaymentAdjustmentAmountInput(
@@ -1157,7 +1203,9 @@ export default function AccountsReceivablePage() {
     if (normalizedValue <= 0) return "";
 
     if (mode === "percentage") {
-      return formatAmountInput(charge.amount * (normalizedValue / 100));
+      return formatAmountInput(
+        getChargeRemainingAmount(charge) * (normalizedValue / 100),
+      );
     }
 
     return value;
@@ -1255,7 +1303,7 @@ export default function AccountsReceivablePage() {
     finalAmountValue: string,
   ) {
     const finalAmount = normalizeAmount(finalAmountValue);
-    const difference = finalAmount - charge.amount;
+    const difference = finalAmount - getChargeRemainingAmount(charge);
 
     if (!Number.isFinite(finalAmount) || finalAmount <= 0) {
       setPaymentInterest("");
@@ -1514,7 +1562,9 @@ export default function AccountsReceivablePage() {
     return reportCharges.reduce(
       (total, charge) =>
         total +
-        (charge.status === "Paid" ? getChargePaidAmount(charge) : charge.amount),
+        (charge.status === "Paid"
+          ? getChargePaidAmount(charge)
+          : getChargeRemainingAmount(charge)),
       0,
     );
   }
@@ -1531,8 +1581,8 @@ export default function AccountsReceivablePage() {
 
   function getCompanySettingsForCarnet() {
     const defaultCompanySettings = {
-      companyName: "Rentix",
-      tradeName: "Rentix",
+      companyName: "Contrx",
+      tradeName: "Contrx",
       document: "",
       phone: "",
       email: "",
@@ -1672,7 +1722,7 @@ export default function AccountsReceivablePage() {
 
     const additionalDataField = formatEmvField(
       "05",
-      sanitizePixText(params.txId || "RENTIX", 25),
+      sanitizePixText(params.txId || "CONTRX", 25),
     );
 
     const amount = Number(params.amount || 0).toFixed(2);
@@ -1683,7 +1733,7 @@ export default function AccountsReceivablePage() {
       formatEmvField("53", "986") +
       formatEmvField("54", amount) +
       formatEmvField("58", "BR") +
-      formatEmvField("59", sanitizePixText(params.merchantName || "RENTIX", 25)) +
+      formatEmvField("59", sanitizePixText(params.merchantName || "CONTRX", 25)) +
       formatEmvField("60", sanitizePixText(params.merchantCity || "BRASIL", 15)) +
       formatEmvField("62", additionalDataField) +
       "6304";
@@ -1715,7 +1765,7 @@ export default function AccountsReceivablePage() {
 
     const companySettings = getCompanySettingsForCarnet();
     const companyName =
-      companySettings.tradeName || companySettings.companyName || "Rentix";
+      companySettings.tradeName || companySettings.companyName || "Contrx";
     const companyDocument = companySettings.document || "Não informado";
     const companyPhone = companySettings.phone || "Não informado";
     const companyEmail = companySettings.email || "Não informado";
@@ -1968,13 +2018,13 @@ export default function AccountsReceivablePage() {
     );
     const pendingTotal = reportCharges
       .filter((charge) => charge.status === "Pending")
-      .reduce((total, charge) => total + charge.amount, 0);
+      .reduce((total, charge) => total + getChargeRemainingAmount(charge), 0);
     const paidTotal = reportCharges
       .filter((charge) => charge.status === "Paid")
       .reduce((total, charge) => total + getChargePaidAmount(charge), 0);
     const overdueTotal = reportCharges
       .filter((charge) => charge.status === "Overdue")
-      .reduce((total, charge) => total + charge.amount, 0);
+      .reduce((total, charge) => total + getChargeRemainingAmount(charge), 0);
     const grandTotal = getReportTotalAmount(reportCharges);
 
     const filterSummary = [
@@ -1995,7 +2045,9 @@ export default function AccountsReceivablePage() {
       .map((charge) => {
         const payment = getChargePayment(charge.id);
         const amount =
-          charge.status === "Paid" ? getChargePaidAmount(charge) : charge.amount;
+          charge.status === "Paid"
+            ? getChargePaidAmount(charge)
+            : getChargeRemainingAmount(charge);
         const paymentMethods = payment?.paymentItems?.length
           ? payment.paymentItems
               .map(
@@ -2076,7 +2128,7 @@ export default function AccountsReceivablePage() {
           <main class="report-page">
           <div class="header">
             <div>
-              <div class="brand">Rentix · Financeiro</div>
+              <div class="brand">Contrx · Financeiro</div>
               <h1>Relatório de Contas a Receber</h1>
               <div class="meta">${escapeHtml(filterSummary)}</div>
             </div>
@@ -2115,7 +2167,7 @@ export default function AccountsReceivablePage() {
             <tbody>${rows}</tbody>
           </table>
 
-          <div class="footer">Relatório gerado pelo módulo Contas a Receber do Rentix.</div>
+          <div class="footer">Relatório gerado pelo módulo Contas a Receber do Contrx.</div>
           </main>
           ${
             shouldPrint
@@ -2191,6 +2243,8 @@ export default function AccountsReceivablePage() {
   }
 
   function openReceivePaymentModal(charge: Charge) {
+    const remainingAmount = getChargeRemainingAmount(charge);
+
     setChargePendingPaymentReceipt(charge);
     setPaymentInterest("");
     setPaymentDiscount("");
@@ -2198,13 +2252,13 @@ export default function AccountsReceivablePage() {
     setPaymentDiscountInput("");
     setPaymentInterestMode("amount");
     setPaymentDiscountMode("amount");
-    setPaymentFinalAmount(formatAmountInput(charge.amount));
+    setPaymentFinalAmount(formatAmountInput(remainingAmount));
     setPaymentMethod("Cash");
     setPaymentEntries([
       {
         id: createLocalId("payment-entry"),
         method: "Cash",
-        amount: formatAmountInput(charge.amount),
+        amount: formatAmountInput(remainingAmount),
       },
     ]);
     setPaymentNote("");
@@ -2263,9 +2317,13 @@ export default function AccountsReceivablePage() {
       return;
     }
 
-    if (paymentEntriesTotal + 0.01 < amountPaid) {
+    if (Math.abs(paymentEntriesTotal - amountPaid) > 0.01) {
+      const difference = Math.abs(amountPaid - paymentEntriesTotal);
+
       setPaymentFormError(
-        `Falta informar ${formatCurrency(amountPaid - paymentEntriesTotal)} nas formas de pagamento.`,
+        paymentEntriesTotal < amountPaid
+          ? `Falta informar ${formatCurrency(difference)} nas formas de pagamento.`
+          : `As formas de pagamento excedem o valor recebido em ${formatCurrency(difference)}.`,
       );
       return;
     }
@@ -2284,14 +2342,13 @@ export default function AccountsReceivablePage() {
     const interest = normalizeAmount(paymentInterest);
     const discount = normalizeAmount(paymentDiscount);
     const amountPaid = normalizeAmount(paymentFinalAmount);
-
-    const updatedPaid = paid.includes(chargePendingPaymentReceipt.id)
-      ? paid
-      : [...paid, chargePendingPaymentReceipt.id];
+    const paidAt = formPaymentDate
+      ? new Date(`${formPaymentDate}T00:00:00`).toISOString()
+      : new Date().toISOString();
 
     const paymentRecord: ChargePayment = {
       chargeId: chargePendingPaymentReceipt.id,
-      paidAt: new Date().toISOString(),
+      paidAt,
       method: paymentEntries[0]?.method || paymentMethod,
       paymentItems: paymentEntries.map((entry) => ({
         id: entry.id,
@@ -2304,18 +2361,11 @@ export default function AccountsReceivablePage() {
       note: paymentNote.trim(),
     };
 
-    const updatedPaymentRecords = [
-      ...paymentRecords.filter(
-        (currentPaymentRecord) =>
-          String(currentPaymentRecord.chargeId) !==
-          String(chargePendingPaymentReceipt.id),
-      ),
-      paymentRecord,
-    ];
+    let receivedAccount: ReceivableAccount | null = null;
 
     if (companyId) {
       try {
-        await receiveAccount(chargePendingPaymentReceipt.id, {
+        receivedAccount = await receiveAccount(chargePendingPaymentReceipt.id, {
           paidAt: paymentRecord.paidAt,
           method: mapUiPaymentMethodToApi(paymentRecord.method),
           paymentItems: mapUiPaymentItemsToApi(paymentRecord.paymentItems || []),
@@ -2334,8 +2384,61 @@ export default function AccountsReceivablePage() {
       }
     }
 
-    setPaid(updatedPaid);
-    setPaymentRecords(updatedPaymentRecords);
+    if (receivedAccount) {
+      const receivedCharge = mapApiReceivableToCharge(receivedAccount);
+      const receivedPaymentRecords = mapApiReceivableToPayments(receivedAccount);
+
+      setManualCharges((currentCharges) => {
+        const chargeExists = currentCharges.some(
+          (charge) => String(charge.id) === String(receivedCharge.id),
+        );
+
+        return chargeExists
+          ? currentCharges.map((charge) =>
+              String(charge.id) === String(receivedCharge.id)
+                ? receivedCharge
+                : charge,
+            )
+          : [...currentCharges, receivedCharge];
+      });
+      setPaid((currentPaid) => {
+        const nextPaid = currentPaid.filter(
+          (paidChargeId) =>
+            String(paidChargeId) !== String(receivedCharge.id),
+        );
+
+        return receivedCharge.status === "Paid"
+          ? [...nextPaid, receivedCharge.id]
+          : nextPaid;
+      });
+      setPaymentRecords((currentPaymentRecords) => [
+        ...currentPaymentRecords.filter(
+          (currentPaymentRecord) =>
+            String(currentPaymentRecord.chargeId) !== String(receivedCharge.id),
+        ),
+        ...receivedPaymentRecords,
+      ]);
+    } else {
+      const nextPaidAmount =
+        getChargePaidAmount(chargePendingPaymentReceipt) + amountPaid;
+      const shouldMarkAsPaid = nextPaidAmount >= chargePendingPaymentReceipt.amount;
+
+      setPaid((currentPaid) => {
+        const nextPaid = currentPaid.filter(
+          (paidChargeId) =>
+            String(paidChargeId) !== String(chargePendingPaymentReceipt.id),
+        );
+
+        return shouldMarkAsPaid
+          ? [...nextPaid, chargePendingPaymentReceipt.id]
+          : nextPaid;
+      });
+      setPaymentRecords((currentPaymentRecords) => [
+        ...currentPaymentRecords,
+        paymentRecord,
+      ]);
+    }
+
     generatePaymentReceipt(chargePendingPaymentReceipt, paymentRecord);
     closeReceivePaymentModal();
   }
@@ -2407,14 +2510,14 @@ export default function AccountsReceivablePage() {
     setChargePendingDeletion(null);
   }
 
-  function openPaymentReversalConfirmation() {
-    if (!editingChargeId) return;
+  function openPaymentReversalConfirmation(selectedCharge?: Charge) {
+    if (!selectedCharge && !editingChargeId) return;
 
-    const charge = charges.find(
-      (item) => String(item.id) === String(editingChargeId),
-    );
+    const charge =
+      selectedCharge ||
+      charges.find((item) => String(item.id) === String(editingChargeId));
 
-    if (!charge || !paid.includes(charge.id)) {
+    if (!charge || !getChargePayment(charge.id)) {
       setChargeFormError(
         "Esta cobrança não está marcada como paga para voltar para pagamento.",
       );
@@ -2431,9 +2534,13 @@ export default function AccountsReceivablePage() {
   async function confirmPaymentReversal() {
     if (!chargePendingPaymentReversal) return;
 
+    let reversedAccount: ReceivableAccount | null = null;
+
     if (companyId) {
       try {
-        await reverseReceivedAccount(chargePendingPaymentReversal.id);
+        reversedAccount = await reverseReceivedAccount(
+          chargePendingPaymentReversal.id,
+        );
       } catch (error) {
         setChargeFormError(
           error instanceof Error
@@ -2445,19 +2552,59 @@ export default function AccountsReceivablePage() {
       }
     }
 
-    const updatedPaid = paid.filter(
-      (paidChargeId) =>
-        String(paidChargeId) !== String(chargePendingPaymentReversal.id),
-    );
+    if (reversedAccount) {
+      const reversedCharge = mapApiReceivableToCharge(reversedAccount);
+      const reversedPaymentRecords = mapApiReceivableToPayments(reversedAccount);
 
-    const updatedPaymentRecords = paymentRecords.filter(
-      (paymentRecord) =>
-        String(paymentRecord.chargeId) !==
-        String(chargePendingPaymentReversal.id),
-    );
+      setManualCharges((currentCharges) =>
+        currentCharges.map((charge) =>
+          String(charge.id) === String(reversedCharge.id)
+            ? reversedCharge
+            : charge,
+        ),
+      );
+      setPaid((currentPaid) => {
+        const nextPaid = currentPaid.filter(
+          (paidChargeId) =>
+            String(paidChargeId) !== String(reversedCharge.id),
+        );
 
-    setPaid(updatedPaid);
-    setPaymentRecords(updatedPaymentRecords);
+        return reversedCharge.status === "Paid"
+          ? [...nextPaid, reversedCharge.id]
+          : nextPaid;
+      });
+      setPaymentRecords((currentPaymentRecords) => [
+        ...currentPaymentRecords.filter(
+          (paymentRecord) =>
+            String(paymentRecord.chargeId) !== String(reversedCharge.id),
+        ),
+        ...reversedPaymentRecords,
+      ]);
+    } else {
+      const updatedPaid = paid.filter(
+        (paidChargeId) =>
+          String(paidChargeId) !== String(chargePendingPaymentReversal.id),
+      );
+      const updatedPaymentRecords = paymentRecords.filter(
+        (paymentRecord) =>
+          String(paymentRecord.chargeId) !==
+          String(chargePendingPaymentReversal.id),
+      );
+      const updatedManualCharges = manualCharges.map((charge) =>
+        String(charge.id) === String(chargePendingPaymentReversal.id)
+          ? {
+              ...charge,
+              status: "Pending" as const,
+              paidAmount: 0,
+              remainingAmount: charge.amount,
+            }
+          : charge,
+      );
+
+      setManualCharges(updatedManualCharges);
+      setPaid(updatedPaid);
+      setPaymentRecords(updatedPaymentRecords);
+    }
     setChargePendingPaymentReversal(null);
     closeCreateModal();
   }
@@ -2824,8 +2971,8 @@ export default function AccountsReceivablePage() {
 
   function getContractPrintCompanySettings() {
     const defaultCompanySettings = {
-      companyName: "Rentix",
-      tradeName: "Rentix",
+      companyName: "Contrx",
+      tradeName: "Contrx",
       legalName: "",
       document: "",
       phone: "",
@@ -3249,7 +3396,7 @@ export default function AccountsReceivablePage() {
 
     const companySettings = getCompanySettingsForCarnet();
     const companyName =
-      companySettings.tradeName || companySettings.companyName || "Rentix";
+      companySettings.tradeName || companySettings.companyName || "Contrx";
     const companyDocument = companySettings.document || "Não informado";
     const companyPhone = companySettings.phone || "Não informado";
     const companyEmail = companySettings.email || "Não informado";
@@ -3342,7 +3489,7 @@ export default function AccountsReceivablePage() {
                   <div class="subtitle">Comprovante de recebimento</div>
                 </div>
                 <div class="number">
-                  Nº <strong>${escapeHtml(receiptNumber || "RENTIX")}</strong><br />
+                  Nº <strong>${escapeHtml(receiptNumber || "CONTRX")}</strong><br />
                   Emitido em: <strong>${escapeHtml(receiptDateTime)}</strong>
                 </div>
               </header>
@@ -3728,407 +3875,407 @@ export default function AccountsReceivablePage() {
   return (
     <AppShell>
       <style jsx global>{`
-        .rentix-accounts-receivable-page-light {
+        .contrx-accounts-receivable-page-light {
           color: #0f172a;
         }
 
-        .rentix-accounts-receivable-page-light .bg-white,
-        .rentix-accounts-receivable-page-light [class*="dark:bg-slate"],
-        .rentix-accounts-receivable-page-light [class*="dark:from-slate"],
-        .rentix-accounts-receivable-page-light [class*="dark:to-slate"] {
+        .contrx-accounts-receivable-page-light .bg-white,
+        .contrx-accounts-receivable-page-light [class*="dark:bg-slate"],
+        .contrx-accounts-receivable-page-light [class*="dark:from-slate"],
+        .contrx-accounts-receivable-page-light [class*="dark:to-slate"] {
           background-color: #ffffff !important;
           background-image: none !important;
         }
 
-        .rentix-accounts-receivable-page-light .bg-slate-50,
-        .rentix-accounts-receivable-page-light .bg-slate-100 {
+        .contrx-accounts-receivable-page-light .bg-slate-50,
+        .contrx-accounts-receivable-page-light .bg-slate-100 {
           background-color: #f8fafc !important;
         }
 
-        .rentix-accounts-receivable-page-light .bg-orange-50,
-        .rentix-accounts-receivable-page-light .bg-orange-100 {
+        .contrx-accounts-receivable-page-light .bg-orange-50,
+        .contrx-accounts-receivable-page-light .bg-orange-100 {
           background-color: #fff7ed !important;
         }
 
-        .rentix-accounts-receivable-page-light .bg-red-50,
-        .rentix-accounts-receivable-page-light .bg-red-100 {
+        .contrx-accounts-receivable-page-light .bg-red-50,
+        .contrx-accounts-receivable-page-light .bg-red-100 {
           background-color: #fef2f2 !important;
         }
 
-        .rentix-accounts-receivable-page-light .bg-emerald-50,
-        .rentix-accounts-receivable-page-light .bg-emerald-100 {
+        .contrx-accounts-receivable-page-light .bg-emerald-50,
+        .contrx-accounts-receivable-page-light .bg-emerald-100 {
           background-color: #ecfdf5 !important;
         }
 
-        .rentix-accounts-receivable-page-light .bg-amber-50,
-        .rentix-accounts-receivable-page-light .bg-amber-100 {
+        .contrx-accounts-receivable-page-light .bg-amber-50,
+        .contrx-accounts-receivable-page-light .bg-amber-100 {
           background-color: #fffbeb !important;
         }
 
-        .rentix-accounts-receivable-page-light .text-slate-950,
-        .rentix-accounts-receivable-page-light .text-slate-900,
-        .rentix-accounts-receivable-page-light .text-slate-800,
-        .rentix-accounts-receivable-page-light .text-slate-700,
-        .rentix-accounts-receivable-page-light [class*="dark:text-slate-100"],
-        .rentix-accounts-receivable-page-light [class*="dark:text-white"] {
+        .contrx-accounts-receivable-page-light .text-slate-950,
+        .contrx-accounts-receivable-page-light .text-slate-900,
+        .contrx-accounts-receivable-page-light .text-slate-800,
+        .contrx-accounts-receivable-page-light .text-slate-700,
+        .contrx-accounts-receivable-page-light [class*="dark:text-slate-100"],
+        .contrx-accounts-receivable-page-light [class*="dark:text-white"] {
           color: #0f172a !important;
         }
 
-        .rentix-accounts-receivable-page-light .text-slate-600,
-        .rentix-accounts-receivable-page-light .text-slate-500,
-        .rentix-accounts-receivable-page-light .text-slate-400,
-        .rentix-accounts-receivable-page-light [class*="dark:text-slate-300"],
-        .rentix-accounts-receivable-page-light [class*="dark:text-slate-400"],
-        .rentix-accounts-receivable-page-light [class*="dark:text-slate-500"] {
+        .contrx-accounts-receivable-page-light .text-slate-600,
+        .contrx-accounts-receivable-page-light .text-slate-500,
+        .contrx-accounts-receivable-page-light .text-slate-400,
+        .contrx-accounts-receivable-page-light [class*="dark:text-slate-300"],
+        .contrx-accounts-receivable-page-light [class*="dark:text-slate-400"],
+        .contrx-accounts-receivable-page-light [class*="dark:text-slate-500"] {
           color: #475569 !important;
         }
 
-        .rentix-accounts-receivable-page-light .text-orange-600,
-        .rentix-accounts-receivable-page-light .text-orange-700 {
+        .contrx-accounts-receivable-page-light .text-orange-600,
+        .contrx-accounts-receivable-page-light .text-orange-700 {
           color: #ea580c !important;
         }
 
-        .rentix-accounts-receivable-page-light .text-red-600,
-        .rentix-accounts-receivable-page-light .text-red-700 {
+        .contrx-accounts-receivable-page-light .text-red-600,
+        .contrx-accounts-receivable-page-light .text-red-700 {
           color: #dc2626 !important;
         }
 
-        .rentix-accounts-receivable-page-light .text-emerald-600,
-        .rentix-accounts-receivable-page-light .text-emerald-700 {
+        .contrx-accounts-receivable-page-light .text-emerald-600,
+        .contrx-accounts-receivable-page-light .text-emerald-700 {
           color: #047857 !important;
         }
 
-        .rentix-accounts-receivable-page-light .border-slate-100,
-        .rentix-accounts-receivable-page-light .border-slate-200,
-        .rentix-accounts-receivable-page-light .border-slate-300,
-        .rentix-accounts-receivable-page-light [class*="dark:border-slate"] {
+        .contrx-accounts-receivable-page-light .border-slate-100,
+        .contrx-accounts-receivable-page-light .border-slate-200,
+        .contrx-accounts-receivable-page-light .border-slate-300,
+        .contrx-accounts-receivable-page-light [class*="dark:border-slate"] {
           border-color: #e2e8f0 !important;
         }
 
-        .rentix-accounts-receivable-page-light .border-orange-100,
-        .rentix-accounts-receivable-page-light .border-orange-200,
-        .rentix-accounts-receivable-page-light [class*="dark:border-orange"] {
+        .contrx-accounts-receivable-page-light .border-orange-100,
+        .contrx-accounts-receivable-page-light .border-orange-200,
+        .contrx-accounts-receivable-page-light [class*="dark:border-orange"] {
           border-color: #fed7aa !important;
         }
 
-        .rentix-accounts-receivable-page-light input,
-        .rentix-accounts-receivable-page-light select,
-        .rentix-accounts-receivable-page-light textarea {
+        .contrx-accounts-receivable-page-light input,
+        .contrx-accounts-receivable-page-light select,
+        .contrx-accounts-receivable-page-light textarea {
           background-color: #ffffff !important;
           border-color: #cbd5e1 !important;
           color: #0f172a !important;
           color-scheme: light !important;
         }
 
-        .rentix-accounts-receivable-page-light input::placeholder,
-        .rentix-accounts-receivable-page-light textarea::placeholder {
+        .contrx-accounts-receivable-page-light input::placeholder,
+        .contrx-accounts-receivable-page-light textarea::placeholder {
           color: #94a3b8 !important;
         }
 
-        .rentix-accounts-receivable-page-light table,
-        .rentix-accounts-receivable-page-light tbody,
-        .rentix-accounts-receivable-page-light tbody tr {
+        .contrx-accounts-receivable-page-light table,
+        .contrx-accounts-receivable-page-light tbody,
+        .contrx-accounts-receivable-page-light tbody tr {
           background-color: #ffffff !important;
         }
 
-        .rentix-accounts-receivable-page-light thead {
+        .contrx-accounts-receivable-page-light thead {
           background-color: #fff7ed !important;
         }
 
-        .rentix-accounts-receivable-page-light tbody tr:hover {
+        .contrx-accounts-receivable-page-light tbody tr:hover {
           background-color: #f8fafc !important;
         }
 
-        .rentix-accounts-receivable-page-light .shadow-sm,
-        .rentix-accounts-receivable-page-light .shadow-md,
-        .rentix-accounts-receivable-page-light .shadow-2xl {
+        .contrx-accounts-receivable-page-light .shadow-sm,
+        .contrx-accounts-receivable-page-light .shadow-md,
+        .contrx-accounts-receivable-page-light .shadow-2xl {
           box-shadow: 0 18px 45px rgba(15, 23, 42, 0.10) !important;
         }
 
-        .dark .rentix-accounts-receivable-page-black {
+        .dark .contrx-accounts-receivable-page-black {
           color: #f8fafc;
         }
 
-        .dark .rentix-accounts-receivable-page-black .bg-white {
+        .dark .contrx-accounts-receivable-page-black .bg-white {
           background-color: #0f172a !important;
         }
 
-        .dark .rentix-accounts-receivable-page-black .bg-slate-50,
-        .dark .rentix-accounts-receivable-page-black .bg-slate-100 {
+        .dark .contrx-accounts-receivable-page-black .bg-slate-50,
+        .dark .contrx-accounts-receivable-page-black .bg-slate-100 {
           background-color: #111827 !important;
         }
 
-        .dark .rentix-accounts-receivable-page-black .bg-orange-50,
-        .dark .rentix-accounts-receivable-page-black .bg-orange-100 {
+        .dark .contrx-accounts-receivable-page-black .bg-orange-50,
+        .dark .contrx-accounts-receivable-page-black .bg-orange-100 {
           background-color: rgba(249, 115, 22, 0.13) !important;
         }
 
-        .dark .rentix-accounts-receivable-page-black .bg-red-50,
-        .dark .rentix-accounts-receivable-page-black .bg-red-100 {
+        .dark .contrx-accounts-receivable-page-black .bg-red-50,
+        .dark .contrx-accounts-receivable-page-black .bg-red-100 {
           background-color: rgba(239, 68, 68, 0.12) !important;
         }
 
-        .dark .rentix-accounts-receivable-page-black .bg-emerald-50,
-        .dark .rentix-accounts-receivable-page-black .bg-emerald-100 {
+        .dark .contrx-accounts-receivable-page-black .bg-emerald-50,
+        .dark .contrx-accounts-receivable-page-black .bg-emerald-100 {
           background-color: rgba(16, 185, 129, 0.12) !important;
         }
 
-        .dark .rentix-accounts-receivable-page-black .bg-amber-50,
-        .dark .rentix-accounts-receivable-page-black .bg-amber-100 {
+        .dark .contrx-accounts-receivable-page-black .bg-amber-50,
+        .dark .contrx-accounts-receivable-page-black .bg-amber-100 {
           background-color: rgba(245, 158, 11, 0.14) !important;
         }
 
-        .dark .rentix-accounts-receivable-page-black .text-slate-950,
-        .dark .rentix-accounts-receivable-page-black .text-slate-900,
-        .dark .rentix-accounts-receivable-page-black .text-slate-800,
-        .dark .rentix-accounts-receivable-page-black .text-slate-700 {
+        .dark .contrx-accounts-receivable-page-black .text-slate-950,
+        .dark .contrx-accounts-receivable-page-black .text-slate-900,
+        .dark .contrx-accounts-receivable-page-black .text-slate-800,
+        .dark .contrx-accounts-receivable-page-black .text-slate-700 {
           color: #f8fafc !important;
         }
 
-        .dark .rentix-accounts-receivable-page-black .text-slate-600,
-        .dark .rentix-accounts-receivable-page-black .text-slate-500,
-        .dark .rentix-accounts-receivable-page-black .text-slate-400 {
+        .dark .contrx-accounts-receivable-page-black .text-slate-600,
+        .dark .contrx-accounts-receivable-page-black .text-slate-500,
+        .dark .contrx-accounts-receivable-page-black .text-slate-400 {
           color: #cbd5e1 !important;
         }
 
-        .dark .rentix-accounts-receivable-page-black .border-orange-100,
-        .dark .rentix-accounts-receivable-page-black .border-orange-200,
-        .dark .rentix-accounts-receivable-page-black .border-red-100,
-        .dark .rentix-accounts-receivable-page-black .border-red-200,
-        .dark .rentix-accounts-receivable-page-black .border-emerald-200,
-        .dark .rentix-accounts-receivable-page-black .border-slate-100,
-        .dark .rentix-accounts-receivable-page-black .border-slate-200,
-        .dark .rentix-accounts-receivable-page-black .border-slate-300 {
+        .dark .contrx-accounts-receivable-page-black .border-orange-100,
+        .dark .contrx-accounts-receivable-page-black .border-orange-200,
+        .dark .contrx-accounts-receivable-page-black .border-red-100,
+        .dark .contrx-accounts-receivable-page-black .border-red-200,
+        .dark .contrx-accounts-receivable-page-black .border-emerald-200,
+        .dark .contrx-accounts-receivable-page-black .border-slate-100,
+        .dark .contrx-accounts-receivable-page-black .border-slate-200,
+        .dark .contrx-accounts-receivable-page-black .border-slate-300 {
           border-color: #334155 !important;
         }
 
-        .dark .rentix-accounts-receivable-page-black input,
-        .dark .rentix-accounts-receivable-page-black select,
-        .dark .rentix-accounts-receivable-page-black textarea {
+        .dark .contrx-accounts-receivable-page-black input,
+        .dark .contrx-accounts-receivable-page-black select,
+        .dark .contrx-accounts-receivable-page-black textarea {
           background-color: #020617 !important;
           border-color: #334155 !important;
           color: #f8fafc !important;
           color-scheme: dark !important;
         }
 
-        .dark .rentix-accounts-receivable-page-black input::placeholder,
-        .dark .rentix-accounts-receivable-page-black textarea::placeholder {
+        .dark .contrx-accounts-receivable-page-black input::placeholder,
+        .dark .contrx-accounts-receivable-page-black textarea::placeholder {
           color: #64748b !important;
         }
 
-        .dark .rentix-accounts-receivable-page-black table,
-        .dark .rentix-accounts-receivable-page-black tbody,
-        .dark .rentix-accounts-receivable-page-black tbody tr {
+        .dark .contrx-accounts-receivable-page-black table,
+        .dark .contrx-accounts-receivable-page-black tbody,
+        .dark .contrx-accounts-receivable-page-black tbody tr {
           background-color: #0f172a !important;
         }
 
-        .dark .rentix-accounts-receivable-page-black thead {
+        .dark .contrx-accounts-receivable-page-black thead {
           background-color: rgba(249, 115, 22, 0.15) !important;
         }
 
-        .dark .rentix-accounts-receivable-page-black tbody tr:hover {
+        .dark .contrx-accounts-receivable-page-black tbody tr:hover {
           background-color: #1e293b !important;
         }
 
 
-        /* Rentix explicit theme override - Accounts Receivable
+        /* Contrx explicit theme override - Accounts Receivable
            Keeps this screen independent from a stale global .dark class. */
-        .rentix-accounts-receivable-page-light,
-        .rentix-accounts-receivable-page-light * {
+        .contrx-accounts-receivable-page-light,
+        .contrx-accounts-receivable-page-light * {
           color-scheme: light !important;
         }
 
-        .rentix-accounts-receivable-page-light .bg-white,
-        .rentix-accounts-receivable-page-light .dark\:bg-white {
+        .contrx-accounts-receivable-page-light .bg-white,
+        .contrx-accounts-receivable-page-light .dark\:bg-white {
           background-color: #ffffff !important;
         }
 
-        .rentix-accounts-receivable-page-light .bg-slate-50,
-        .rentix-accounts-receivable-page-light .dark\:bg-slate-50 {
+        .contrx-accounts-receivable-page-light .bg-slate-50,
+        .contrx-accounts-receivable-page-light .dark\:bg-slate-50 {
           background-color: #f8fafc !important;
         }
 
-        .rentix-accounts-receivable-page-light .bg-slate-100,
-        .rentix-accounts-receivable-page-light .dark\:bg-slate-100 {
+        .contrx-accounts-receivable-page-light .bg-slate-100,
+        .contrx-accounts-receivable-page-light .dark\:bg-slate-100 {
           background-color: #f1f5f9 !important;
         }
 
-        .rentix-accounts-receivable-page-light .bg-slate-800,
-        .rentix-accounts-receivable-page-light .bg-slate-900,
-        .rentix-accounts-receivable-page-light .bg-slate-950,
-        .rentix-accounts-receivable-page-light .dark\:bg-slate-700,
-        .rentix-accounts-receivable-page-light .dark\:bg-slate-800,
-        .rentix-accounts-receivable-page-light .dark\:bg-slate-900,
-        .rentix-accounts-receivable-page-light .dark\:bg-slate-950 {
+        .contrx-accounts-receivable-page-light .bg-slate-800,
+        .contrx-accounts-receivable-page-light .bg-slate-900,
+        .contrx-accounts-receivable-page-light .bg-slate-950,
+        .contrx-accounts-receivable-page-light .dark\:bg-slate-700,
+        .contrx-accounts-receivable-page-light .dark\:bg-slate-800,
+        .contrx-accounts-receivable-page-light .dark\:bg-slate-900,
+        .contrx-accounts-receivable-page-light .dark\:bg-slate-950 {
           background-color: #ffffff !important;
         }
 
-        .rentix-accounts-receivable-page-light .bg-gradient-to-r {
+        .contrx-accounts-receivable-page-light .bg-gradient-to-r {
           background-image: linear-gradient(to right, #ecfdf5, #ffffff) !important;
         }
 
-        .rentix-accounts-receivable-page-light .bg-orange-50,
-        .rentix-accounts-receivable-page-light .dark\:bg-orange-950\/30,
-        .rentix-accounts-receivable-page-light .dark\:bg-orange-900\/40 {
+        .contrx-accounts-receivable-page-light .bg-orange-50,
+        .contrx-accounts-receivable-page-light .dark\:bg-orange-950\/30,
+        .contrx-accounts-receivable-page-light .dark\:bg-orange-900\/40 {
           background-color: #fff7ed !important;
         }
 
-        .rentix-accounts-receivable-page-light .bg-emerald-50,
-        .rentix-accounts-receivable-page-light .dark\:bg-emerald-950\/30 {
+        .contrx-accounts-receivable-page-light .bg-emerald-50,
+        .contrx-accounts-receivable-page-light .dark\:bg-emerald-950\/30 {
           background-color: #ecfdf5 !important;
         }
 
-        .rentix-accounts-receivable-page-light .bg-red-50,
-        .rentix-accounts-receivable-page-light .dark\:bg-red-950\/30 {
+        .contrx-accounts-receivable-page-light .bg-red-50,
+        .contrx-accounts-receivable-page-light .dark\:bg-red-950\/30 {
           background-color: #fef2f2 !important;
         }
 
-        .rentix-accounts-receivable-page-light .bg-amber-50,
-        .rentix-accounts-receivable-page-light .dark\:bg-amber-950\/30 {
+        .contrx-accounts-receivable-page-light .bg-amber-50,
+        .contrx-accounts-receivable-page-light .dark\:bg-amber-950\/30 {
           background-color: #fffbeb !important;
         }
 
-        .rentix-accounts-receivable-page-light .text-white,
-        .rentix-accounts-receivable-page-light .text-slate-100,
-        .rentix-accounts-receivable-page-light .dark\:text-white,
-        .rentix-accounts-receivable-page-light .dark\:text-slate-100 {
+        .contrx-accounts-receivable-page-light .text-white,
+        .contrx-accounts-receivable-page-light .text-slate-100,
+        .contrx-accounts-receivable-page-light .dark\:text-white,
+        .contrx-accounts-receivable-page-light .dark\:text-slate-100 {
           color: #0f172a !important;
         }
 
-        .rentix-accounts-receivable-page-light .text-slate-950,
-        .rentix-accounts-receivable-page-light .text-slate-900,
-        .rentix-accounts-receivable-page-light .text-slate-800,
-        .rentix-accounts-receivable-page-light .text-slate-700,
-        .rentix-accounts-receivable-page-light .dark\:text-slate-100,
-        .rentix-accounts-receivable-page-light .dark\:text-slate-200 {
+        .contrx-accounts-receivable-page-light .text-slate-950,
+        .contrx-accounts-receivable-page-light .text-slate-900,
+        .contrx-accounts-receivable-page-light .text-slate-800,
+        .contrx-accounts-receivable-page-light .text-slate-700,
+        .contrx-accounts-receivable-page-light .dark\:text-slate-100,
+        .contrx-accounts-receivable-page-light .dark\:text-slate-200 {
           color: #0f172a !important;
         }
 
-        .rentix-accounts-receivable-page-light .text-slate-600,
-        .rentix-accounts-receivable-page-light .text-slate-500,
-        .rentix-accounts-receivable-page-light .text-slate-400,
-        .rentix-accounts-receivable-page-light .dark\:text-slate-300,
-        .rentix-accounts-receivable-page-light .dark\:text-slate-400,
-        .rentix-accounts-receivable-page-light .dark\:text-slate-500 {
+        .contrx-accounts-receivable-page-light .text-slate-600,
+        .contrx-accounts-receivable-page-light .text-slate-500,
+        .contrx-accounts-receivable-page-light .text-slate-400,
+        .contrx-accounts-receivable-page-light .dark\:text-slate-300,
+        .contrx-accounts-receivable-page-light .dark\:text-slate-400,
+        .contrx-accounts-receivable-page-light .dark\:text-slate-500 {
           color: #64748b !important;
         }
 
-        .rentix-accounts-receivable-page-light .text-orange-600,
-        .rentix-accounts-receivable-page-light .text-orange-700,
-        .rentix-accounts-receivable-page-light .dark\:text-orange-300,
-        .rentix-accounts-receivable-page-light .dark\:text-orange-400 {
+        .contrx-accounts-receivable-page-light .text-orange-600,
+        .contrx-accounts-receivable-page-light .text-orange-700,
+        .contrx-accounts-receivable-page-light .dark\:text-orange-300,
+        .contrx-accounts-receivable-page-light .dark\:text-orange-400 {
           color: #ea580c !important;
         }
 
-        .rentix-accounts-receivable-page-light .text-emerald-700,
-        .rentix-accounts-receivable-page-light .dark\:text-emerald-300 {
+        .contrx-accounts-receivable-page-light .text-emerald-700,
+        .contrx-accounts-receivable-page-light .dark\:text-emerald-300 {
           color: #047857 !important;
         }
 
-        .rentix-accounts-receivable-page-light .text-red-600,
-        .rentix-accounts-receivable-page-light .text-red-700,
-        .rentix-accounts-receivable-page-light .dark\:text-red-300 {
+        .contrx-accounts-receivable-page-light .text-red-600,
+        .contrx-accounts-receivable-page-light .text-red-700,
+        .contrx-accounts-receivable-page-light .dark\:text-red-300 {
           color: #dc2626 !important;
         }
 
-        .rentix-accounts-receivable-page-light .border-slate-100,
-        .rentix-accounts-receivable-page-light .border-slate-200,
-        .rentix-accounts-receivable-page-light .border-slate-300,
-        .rentix-accounts-receivable-page-light .border-slate-700,
-        .rentix-accounts-receivable-page-light .dark\:border-slate-700 {
+        .contrx-accounts-receivable-page-light .border-slate-100,
+        .contrx-accounts-receivable-page-light .border-slate-200,
+        .contrx-accounts-receivable-page-light .border-slate-300,
+        .contrx-accounts-receivable-page-light .border-slate-700,
+        .contrx-accounts-receivable-page-light .dark\:border-slate-700 {
           border-color: #e2e8f0 !important;
         }
 
-        .rentix-accounts-receivable-page-light .ring-slate-100,
-        .rentix-accounts-receivable-page-light .ring-slate-200,
-        .rentix-accounts-receivable-page-light .ring-slate-700,
-        .rentix-accounts-receivable-page-light .dark\:ring-slate-700 {
+        .contrx-accounts-receivable-page-light .ring-slate-100,
+        .contrx-accounts-receivable-page-light .ring-slate-200,
+        .contrx-accounts-receivable-page-light .ring-slate-700,
+        .contrx-accounts-receivable-page-light .dark\:ring-slate-700 {
           --tw-ring-color: #e2e8f0 !important;
         }
 
-        .rentix-accounts-receivable-page-light input,
-        .rentix-accounts-receivable-page-light select,
-        .rentix-accounts-receivable-page-light textarea {
+        .contrx-accounts-receivable-page-light input,
+        .contrx-accounts-receivable-page-light select,
+        .contrx-accounts-receivable-page-light textarea {
           background-color: #ffffff !important;
           border-color: #cbd5e1 !important;
           color: #0f172a !important;
           color-scheme: light !important;
         }
 
-        .rentix-accounts-receivable-page-light input::placeholder,
-        .rentix-accounts-receivable-page-light textarea::placeholder {
+        .contrx-accounts-receivable-page-light input::placeholder,
+        .contrx-accounts-receivable-page-light textarea::placeholder {
           color: #94a3b8 !important;
         }
 
-        .rentix-accounts-receivable-page-light table,
-        .rentix-accounts-receivable-page-light tbody,
-        .rentix-accounts-receivable-page-light tbody tr,
-        .rentix-accounts-receivable-page-light .dark\:bg-slate-800 {
+        .contrx-accounts-receivable-page-light table,
+        .contrx-accounts-receivable-page-light tbody,
+        .contrx-accounts-receivable-page-light tbody tr,
+        .contrx-accounts-receivable-page-light .dark\:bg-slate-800 {
           background-color: #ffffff !important;
         }
 
-        .rentix-accounts-receivable-page-light thead,
-        .rentix-accounts-receivable-page-light .bg-orange-50 {
+        .contrx-accounts-receivable-page-light thead,
+        .contrx-accounts-receivable-page-light .bg-orange-50 {
           background-color: #fff7ed !important;
         }
 
-        .rentix-accounts-receivable-page-light tbody tr:hover,
-        .rentix-accounts-receivable-page-light .hover\:bg-slate-50:hover,
-        .rentix-accounts-receivable-page-light .dark\:hover\:bg-slate-800:hover,
-        .rentix-accounts-receivable-page-light .dark\:hover\:bg-slate-700:hover {
+        .contrx-accounts-receivable-page-light tbody tr:hover,
+        .contrx-accounts-receivable-page-light .hover\:bg-slate-50:hover,
+        .contrx-accounts-receivable-page-light .dark\:hover\:bg-slate-800:hover,
+        .contrx-accounts-receivable-page-light .dark\:hover\:bg-slate-700:hover {
           background-color: #f8fafc !important;
         }
 
-        .rentix-accounts-receivable-page-light .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
-        .rentix-accounts-receivable-page-light .dark\:divide-slate-700 > :not([hidden]) ~ :not([hidden]) {
+        .contrx-accounts-receivable-page-light .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+        .contrx-accounts-receivable-page-light .dark\:divide-slate-700 > :not([hidden]) ~ :not([hidden]) {
           border-color: #e2e8f0 !important;
         }
 
-        .rentix-accounts-receivable-page-light .shadow-sm,
-        .rentix-accounts-receivable-page-light .shadow-md,
-        .rentix-accounts-receivable-page-light .shadow-lg,
-        .rentix-accounts-receivable-page-light .shadow-xl,
-        .rentix-accounts-receivable-page-light .shadow-2xl {
+        .contrx-accounts-receivable-page-light .shadow-sm,
+        .contrx-accounts-receivable-page-light .shadow-md,
+        .contrx-accounts-receivable-page-light .shadow-lg,
+        .contrx-accounts-receivable-page-light .shadow-xl,
+        .contrx-accounts-receivable-page-light .shadow-2xl {
           box-shadow: 0 18px 45px rgba(15, 23, 42, 0.10) !important;
         }
 
-        .rentix-accounts-receivable-page-light .bg-emerald-600,
-        .rentix-accounts-receivable-page-light .bg-orange-500,
-        .rentix-accounts-receivable-page-light .bg-red-500 {
+        .contrx-accounts-receivable-page-light .bg-emerald-600,
+        .contrx-accounts-receivable-page-light .bg-orange-500,
+        .contrx-accounts-receivable-page-light .bg-red-500 {
           color: #ffffff !important;
         }
 
-        .rentix-accounts-receivable-page-black,
-        .rentix-accounts-receivable-page-black * {
+        .contrx-accounts-receivable-page-black,
+        .contrx-accounts-receivable-page-black * {
           color-scheme: dark !important;
         }
 
-        .rentix-accounts-receivable-page-black .bg-white,
-        .rentix-accounts-receivable-page-black .bg-slate-50,
-        .rentix-accounts-receivable-page-black .bg-slate-100 {
+        .contrx-accounts-receivable-page-black .bg-white,
+        .contrx-accounts-receivable-page-black .bg-slate-50,
+        .contrx-accounts-receivable-page-black .bg-slate-100 {
           background-color: #0f172a !important;
         }
 
-        .rentix-accounts-receivable-page-black .bg-gradient-to-r {
+        .contrx-accounts-receivable-page-black .bg-gradient-to-r {
           background-image: linear-gradient(to right, #0f172a, #111827) !important;
         }
 
-        .rentix-accounts-receivable-page-black .text-slate-950,
-        .rentix-accounts-receivable-page-black .text-slate-900,
-        .rentix-accounts-receivable-page-black .text-slate-800,
-        .rentix-accounts-receivable-page-black .text-slate-700 {
+        .contrx-accounts-receivable-page-black .text-slate-950,
+        .contrx-accounts-receivable-page-black .text-slate-900,
+        .contrx-accounts-receivable-page-black .text-slate-800,
+        .contrx-accounts-receivable-page-black .text-slate-700 {
           color: #f8fafc !important;
         }
 
-        .rentix-accounts-receivable-page-black .text-slate-600,
-        .rentix-accounts-receivable-page-black .text-slate-500,
-        .rentix-accounts-receivable-page-black .text-slate-400 {
+        .contrx-accounts-receivable-page-black .text-slate-600,
+        .contrx-accounts-receivable-page-black .text-slate-500,
+        .contrx-accounts-receivable-page-black .text-slate-400 {
           color: #cbd5e1 !important;
         }
 
-        .rentix-accounts-receivable-page-black input,
-        .rentix-accounts-receivable-page-black select,
-        .rentix-accounts-receivable-page-black textarea {
+        .contrx-accounts-receivable-page-black input,
+        .contrx-accounts-receivable-page-black select,
+        .contrx-accounts-receivable-page-black textarea {
           background-color: #020617 !important;
           border-color: #334155 !important;
           color: #f8fafc !important;
@@ -4136,57 +4283,57 @@ export default function AccountsReceivablePage() {
         }
 
 
-        .rentix-accounts-receivable-page-light .bg-slate-900,
-        .rentix-accounts-receivable-page-light .bg-emerald-600,
-        .rentix-accounts-receivable-page-light .bg-orange-500,
-        .rentix-accounts-receivable-page-light .bg-red-600,
-        .rentix-accounts-receivable-page-light .bg-red-500,
-        .rentix-accounts-receivable-page-light .bg-amber-600 {
+        .contrx-accounts-receivable-page-light .bg-slate-900,
+        .contrx-accounts-receivable-page-light .bg-emerald-600,
+        .contrx-accounts-receivable-page-light .bg-orange-500,
+        .contrx-accounts-receivable-page-light .bg-red-600,
+        .contrx-accounts-receivable-page-light .bg-red-500,
+        .contrx-accounts-receivable-page-light .bg-amber-600 {
           color: #ffffff !important;
         }
 
-        .rentix-accounts-receivable-page-light .bg-slate-900.text-white,
-        .rentix-accounts-receivable-page-light button.bg-slate-900,
-        .rentix-accounts-receivable-page-light button.bg-emerald-600,
-        .rentix-accounts-receivable-page-light button.bg-orange-500,
-        .rentix-accounts-receivable-page-light button.bg-red-600 {
+        .contrx-accounts-receivable-page-light .bg-slate-900.text-white,
+        .contrx-accounts-receivable-page-light button.bg-slate-900,
+        .contrx-accounts-receivable-page-light button.bg-emerald-600,
+        .contrx-accounts-receivable-page-light button.bg-orange-500,
+        .contrx-accounts-receivable-page-light button.bg-red-600 {
           color: #ffffff !important;
         }
 
-        .rentix-accounts-receivable-page-light .bg-slate-900:not(button):not(.text-white) {
+        .contrx-accounts-receivable-page-light .bg-slate-900:not(button):not(.text-white) {
           background-color: #ffffff !important;
         }
 
-        .rentix-accounts-receivable-page-light .bg-gradient-to-r.from-slate-50,
-        .rentix-accounts-receivable-page-light .bg-gradient-to-r.from-emerald-50,
-        .rentix-accounts-receivable-page-light .bg-gradient-to-r.from-orange-50 {
+        .contrx-accounts-receivable-page-light .bg-gradient-to-r.from-slate-50,
+        .contrx-accounts-receivable-page-light .bg-gradient-to-r.from-emerald-50,
+        .contrx-accounts-receivable-page-light .bg-gradient-to-r.from-orange-50 {
           background-image: linear-gradient(to right, #f8fafc, #ffffff) !important;
         }
 
-        .rentix-accounts-receivable-page-black .bg-slate-900,
-        .rentix-accounts-receivable-page-black .dark\:bg-slate-900,
-        .rentix-accounts-receivable-page-black .dark\:bg-slate-800 {
+        .contrx-accounts-receivable-page-black .bg-slate-900,
+        .contrx-accounts-receivable-page-black .dark\:bg-slate-900,
+        .contrx-accounts-receivable-page-black .dark\:bg-slate-800 {
           background-color: #0f172a !important;
         }
 
-        .rentix-accounts-receivable-page-black .bg-slate-50,
-        .rentix-accounts-receivable-page-black .bg-slate-100,
-        .rentix-accounts-receivable-page-black .bg-white {
+        .contrx-accounts-receivable-page-black .bg-slate-50,
+        .contrx-accounts-receivable-page-black .bg-slate-100,
+        .contrx-accounts-receivable-page-black .bg-white {
           background-color: #0f172a !important;
         }
 
-        .rentix-accounts-receivable-page-black .bg-gradient-to-r {
+        .contrx-accounts-receivable-page-black .bg-gradient-to-r {
           background-image: linear-gradient(to right, #0f172a, #111827) !important;
         }
 
       `}</style>
 
       <div
-        data-rentix-theme={isBlackTheme ? "black" : "light"}
+        data-contrx-theme={isBlackTheme ? "black" : "light"}
         className={
           isBlackTheme
-            ? "rentix-accounts-receivable-page-black space-y-8"
-            : "rentix-accounts-receivable-page-light space-y-8"
+            ? "contrx-accounts-receivable-page-black space-y-8"
+            : "contrx-accounts-receivable-page-light space-y-8"
         }
       >
         <div>
@@ -4390,16 +4537,27 @@ export default function AccountsReceivablePage() {
                       </td>
 
                       <td className="px-5 py-4 text-center text-sm font-bold text-slate-900 dark:text-slate-100">
-                        {formatCurrency(charge.amount)}
+                        <span className="block">
+                          {formatCurrency(
+                            charge.status === "Paid"
+                              ? getChargePaidAmount(charge)
+                              : getChargeRemainingAmount(charge),
+                          )}
+                        </span>
+                        {hasPartialPayment(charge) && (
+                          <span className="mt-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">
+                            Recebido {formatCurrency(getChargePaidAmount(charge))}
+                          </span>
+                        )}
                       </td>
 
                       <td className="px-5 py-4 text-center">
                         <span
-                          className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${getStatusClassName(
-                            charge.status,
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${getChargeStatusClassName(
+                            charge,
                           )}`}
                         >
-                          {getStatusLabel(charge.status)}
+                          {getChargeStatusLabel(charge)}
                         </span>
                       </td>
 
@@ -4455,7 +4613,7 @@ export default function AccountsReceivablePage() {
                                 Reimprimir carnê
                               </button>
 
-                              {charge.status === "Paid" && getChargePayment(charge.id) && (
+                              {getChargePayment(charge.id) && (
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -4465,6 +4623,19 @@ export default function AccountsReceivablePage() {
                                   className="block w-full px-4 py-3 text-left text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
                                 >
                                   Reimprimir recibo
+                                </button>
+                              )}
+
+                              {getChargePayment(charge.id) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionMenuChargeId(null);
+                                    openPaymentReversalConfirmation(charge);
+                                  }}
+                                  className="block w-full px-4 py-3 text-left text-sm font-bold text-red-700 transition hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/30"
+                                >
+                                  Estornar recebimentos
                                 </button>
                               )}
 
@@ -4494,7 +4665,7 @@ export default function AccountsReceivablePage() {
       </div>
 
       {isReportOpen && (
-        <div className={`fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
+        <div className={`fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
           <div
             className={`flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl shadow-2xl ring-1 ${
               isBlackTheme
@@ -4789,7 +4960,7 @@ export default function AccountsReceivablePage() {
       )}
 
       {isSearchOpen && (
-        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
+        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
           <div className="w-full max-w-xl overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-orange-50 to-white dark:from-orange-950/40 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
@@ -4883,7 +5054,7 @@ export default function AccountsReceivablePage() {
                     setAutoOpenSearch(value);
                     setCompanyStorageItem(
                       companyId,
-                      "rentix_auto_open_search",
+                      "contrx_auto_open_search",
                       JSON.stringify(value),
                     );
                   }}
@@ -4927,7 +5098,7 @@ export default function AccountsReceivablePage() {
       )}
 
       {isCreateOpen && (
-        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
+        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
           <div className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-950/40 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
@@ -5325,7 +5496,7 @@ export default function AccountsReceivablePage() {
                     {isEditingPaidCharge && (
                       <button
                         type="button"
-                        onClick={openPaymentReversalConfirmation}
+                        onClick={() => openPaymentReversalConfirmation()}
                         className="rounded-xl bg-amber-50 dark:bg-amber-950/300 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-amber-600"
                       >
                         Voltar para pagamento
@@ -5362,7 +5533,7 @@ export default function AccountsReceivablePage() {
       )}
 
       {chargePendingPaymentReceipt && (
-        <div className={`fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
+        <div className={`fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
           <div className="flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-950/40 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
@@ -5824,7 +5995,7 @@ export default function AccountsReceivablePage() {
       )}
 
       {isPaymentConfirmationOpen && chargePendingPaymentReceipt && (
-        <div className={`fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
+        <div className={`fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
           <div className="flex max-h-[94vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="flex-1 overflow-y-auto p-6 text-center">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 text-3xl ring-1 ring-emerald-100 dark:ring-emerald-900/50">
@@ -5939,7 +6110,7 @@ export default function AccountsReceivablePage() {
 
 
       {chargePendingDeletion && (
-        <div className={`fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
+        <div className={`fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
           <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="p-6 text-center">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 dark:bg-red-950/30 text-3xl ring-1 ring-red-100 dark:ring-red-900/50">
@@ -6016,7 +6187,7 @@ export default function AccountsReceivablePage() {
       )}
 
       {chargePendingPaymentReversal && (
-        <div className={`fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
+        <div className={`fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
           <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="p-6 text-center">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 dark:bg-amber-950/30 text-3xl ring-1 ring-amber-100 dark:ring-amber-900/50">
@@ -6094,7 +6265,7 @@ export default function AccountsReceivablePage() {
       )}
 
       {pendingContractPrintRequest && (
-        <div className={`fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
+        <div className={`fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
           <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="p-6 text-center">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50 dark:bg-orange-950/30 text-3xl ring-1 ring-orange-100 dark:ring-orange-900/50">
@@ -6160,7 +6331,7 @@ export default function AccountsReceivablePage() {
       )}
 
       {isTenantCreateOpen && (
-        <div className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-0 backdrop-blur-sm md:p-4 ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
+        <div className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-0 backdrop-blur-sm md:p-4 ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
           <div className="flex max-h-screen w-full max-w-6xl flex-col overflow-hidden rounded-none bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700 md:max-h-[94vh] md:rounded-3xl">
             <div className="border-b border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 px-6 py-5 md:px-8">
               <div className="flex items-start justify-between gap-4">
@@ -6469,7 +6640,7 @@ export default function AccountsReceivablePage() {
 
 
       {pendingContractPrintRequest && (
-        <div className={`fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "rentix-accounts-receivable-page-black" : "rentix-accounts-receivable-page-light"}`}>
+        <div className={`fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
           <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="p-6 text-center">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50 dark:bg-orange-950/30 text-3xl ring-1 ring-orange-100 dark:ring-orange-900/50">
@@ -6542,14 +6713,20 @@ export default function AccountsReceivablePage() {
 }
 
 function mapApiReceivableToCharge(account: ReceivableAccount): Charge {
+  const amount = normalizeApiAmount(account.amount);
+  const paidAmount = getReceivablePaidAmount(account);
+  const remainingAmount = Math.max(amount - paidAmount, 0);
+
   return {
     id: account.id,
     contractId: account.contractId || null,
     property: account.propertyName,
     tenant: account.tenantName,
     dueDate: account.dueDate,
-    amount: normalizeApiAmount(account.amount),
+    amount,
     status: account.status === "PAID" ? "Paid" : "Pending",
+    paidAmount,
+    remainingAmount,
     manual: account.manual,
     issueDate: account.issueDate || undefined,
     installmentNumber: account.installmentNumber || undefined,
@@ -6561,6 +6738,7 @@ function mapApiReceivableToCharge(account: ReceivableAccount): Charge {
 
 function mapApiReceivableToPayments(account: ReceivableAccount): ChargePayment[] {
   return (account.payments || []).map((payment) => ({
+    id: payment.id,
     chargeId: account.id,
     paidAt: payment.paidAt,
     method: mapApiPaymentMethodToUi(payment.method),
@@ -6570,6 +6748,13 @@ function mapApiReceivableToPayments(account: ReceivableAccount): ChargePayment[]
     amountPaid: normalizeApiAmount(payment.amountPaid),
     note: payment.note || "",
   }));
+}
+
+function getReceivablePaidAmount(account: ReceivableAccount) {
+  return (account.payments || []).reduce(
+    (total, payment) => total + normalizeApiAmount(payment.amountPaid),
+    0,
+  );
 }
 
 function mapApiContractToReceivableContract(contract: ApiContract): Contract {

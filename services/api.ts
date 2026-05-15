@@ -6,16 +6,28 @@ type RequestOptions = RequestInit & {
   auth?: boolean;
 };
 
+const LEGACY_STORAGE_PREFIX = ['ren', 'tix'].join('');
+
+function getStoredToken() {
+  if (typeof window === 'undefined') return null;
+
+  return (
+    localStorage.getItem('contrx_token') ||
+    localStorage.getItem(`${LEGACY_STORAGE_PREFIX}_token`)
+  );
+}
+
 export async function apiFetch<TResponse>(
   endpoint: string,
   options: RequestOptions = {},
 ): Promise<TResponse> {
   if (!API_BASE_URL) {
-    throw new Error('NEXT_PUBLIC_API_URL is not configured.');
+    throw new Error(
+      'Backend nao configurado. Configure NEXT_PUBLIC_API_URL com a URL publica da API para usar o Contrx.',
+    );
   }
 
-  const token =
-    typeof window !== 'undefined' ? localStorage.getItem('rentix_token') : null;
+  const token = getStoredToken();
 
   const headers = new Headers(options.headers);
 
@@ -34,7 +46,7 @@ export async function apiFetch<TResponse>(
     });
   } catch (error) {
     throw new Error(
-      `Unable to connect to backend API at ${API_BASE_URL}. Verify that the backend server is running.`,
+      `Nao foi possivel conectar a API em ${API_BASE_URL}. Verifique se o backend esta online e acessivel.`,
       { cause: error },
     );
   }

@@ -22,7 +22,7 @@ export function PrivateRoute({ children }: PrivateRouteProps) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
         <div className="rounded-2xl border border-white/10 bg-white/10 px-6 py-4 shadow-xl backdrop-blur">
-          Carregando Rentix...
+          Carregando Contrx...
         </div>
       </div>
     );

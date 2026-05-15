@@ -10,6 +10,8 @@ export type Person = {
   status: ApiPersonStatus;
   name: string;
   document: string;
+  stateRegistration?: string | null;
+  identityNumber?: string | null;
   email?: string | null;
   phone?: string | null;
   zipCode?: string | null;
@@ -25,13 +27,18 @@ export type CreatePersonDto = {
   type: ApiPersonType;
   name: string;
   document: string;
+  stateRegistration?: string;
+  identityNumber?: string;
   email?: string;
   phone?: string;
+  zipCode?: string;
   city?: string;
   state?: string;
   address?: string;
   status?: ApiPersonStatus;
 };
+
+export type UpdatePersonDto = Partial<Omit<CreatePersonDto, 'companyId'>>;
 
 export async function getPeople(companyId: string) {
   return apiFetch<Person[]>(`/pessoas?companyId=${encodeURIComponent(companyId)}`);
@@ -41,5 +48,18 @@ export async function createPerson(data: CreatePersonDto) {
   return apiFetch<Person>('/pessoas', {
     method: 'POST',
     body: JSON.stringify(data),
+  });
+}
+
+export async function updatePerson(id: string, data: UpdatePersonDto) {
+  return apiFetch<Person>(`/pessoas/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deletePerson(id: string) {
+  return apiFetch<Person>(`/pessoas/${id}`, {
+    method: 'DELETE',
   });
 }

@@ -19,6 +19,7 @@ export type FinancialReceivable = {
   status: FinancialStatus;
   paymentDate: string | null;
   paidAmount: number;
+  remainingAmount: number;
 };
 
 export type FinancialPayable = {
@@ -34,6 +35,7 @@ export type FinancialPayable = {
   status: FinancialStatus;
   paymentDate: string | null;
   paidAmount: number;
+  remainingAmount: number;
 };
 
 export type FinancialSummaryResponse = {
@@ -41,8 +43,23 @@ export type FinancialSummaryResponse = {
   payables: FinancialPayable[];
 };
 
-export async function getFinancialSummary(companyId: string) {
+export type FinancialSummaryFilters = {
+  startDate?: string;
+  endDate?: string;
+};
+
+export async function getFinancialSummary(
+  _companyId?: string,
+  filters: FinancialSummaryFilters = {},
+) {
+  const searchParams = new URLSearchParams();
+
+  if (filters.startDate) searchParams.set('startDate', filters.startDate);
+  if (filters.endDate) searchParams.set('endDate', filters.endDate);
+
+  const queryString = searchParams.toString();
+
   return apiFetch<FinancialSummaryResponse>(
-    `/financeiro/resumo?companyId=${encodeURIComponent(companyId)}`,
+    `/financeiro/resumo${queryString ? `?${queryString}` : ''}`,
   );
 }

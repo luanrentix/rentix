@@ -23,7 +23,12 @@ type PasswordSettings = {
   confirmPassword: string;
 };
 
-type SettingsValidationErrors = Partial<Record<keyof UserSettings | keyof CompanySettings, string>>;
+type SettingsValidationErrorKey =
+  | keyof UserSettings
+  | keyof CompanySettings
+  | "companyEmail"
+  | "userEmail";
+type SettingsValidationErrors = Partial<Record<SettingsValidationErrorKey, string>>;
 
 type PixKeyType = "cpf" | "cnpj" | "email" | "phone" | "random";
 
@@ -47,6 +52,28 @@ type CompanySettings = {
   contractDefaultNotes: string;
 };
 
+type BrasilApiCnpjResponse = {
+  cnpj?: string;
+  razao_social?: string;
+  nome_fantasia?: string;
+  cep?: string;
+  uf?: string;
+  municipio?: string;
+  logradouro?: string;
+  numero?: string;
+  bairro?: string;
+  ddd_telefone_1?: string;
+};
+
+type ViaCepResponse = {
+  erro?: boolean;
+  cep?: string;
+  uf?: string;
+  localidade?: string;
+  logradouro?: string;
+  bairro?: string;
+};
+
 type SettingsTab = "company" | "user" | "print" | "appearance";
 
 type ThemeMode = "light" | "black";
@@ -58,6 +85,7 @@ type ThemeSettings = {
 type PrintDocumentKey = "temporaryContract" | "standardContract" | "paymentBooklet";
 
 type PrintModalMode = "view" | "edit";
+type PrintEditorViewMode = "split" | "editor" | "preview";
 
 type PrintDocumentTemplate = {
   title: string;
@@ -135,7 +163,7 @@ const resetModuleOptions: ResetModuleOption[] = [
     description: "Remove cobranças, parcelas, pagamentos recebidos e filtros financeiros.",
     icon: "📥",
     storageKeys: [
-      "rentix_receivable_status_filter",
+      "contrx_receivable_status_filter",
     ],
   },
   {
@@ -144,7 +172,7 @@ const resetModuleOptions: ResetModuleOption[] = [
     description: "Remove contas a pagar e pagamentos registrados localmente.",
     icon: "📤",
     storageKeys: [
-      "rentix_payable_status_filter",
+      "contrx_payable_status_filter",
     ],
   },
   {
@@ -167,7 +195,7 @@ const defaultResetOptions: ResetOptions = {
 
 const defaultUserSettings: UserSettings = {
   name: "Luan",
-  email: "luan@Rentix.com",
+  email: "luan@contrx.com.br",
 };
 
 const defaultPasswordSettings: PasswordSettings = {
@@ -628,6 +656,56 @@ function onlyDigits(value: string) {
   return value.replace(/\D/g, "");
 }
 
+function isValidCpf(value: string) {
+  const digits = onlyDigits(value);
+
+  if (digits.length !== 11 || /^(\d)\1+$/.test(digits)) {
+    return false;
+  }
+
+  const calculateDigit = (base: string, factor: number) => {
+    const total = base
+      .split("")
+      .reduce((sum, digit) => sum + Number(digit) * factor--, 0);
+    const remainder = (total * 10) % 11;
+
+    return remainder === 10 ? 0 : remainder;
+  };
+
+  const firstDigit = calculateDigit(digits.slice(0, 9), 10);
+  const secondDigit = calculateDigit(digits.slice(0, 10), 11);
+
+  return digits.endsWith(`${firstDigit}${secondDigit}`);
+}
+
+function isValidCnpj(value: string) {
+  const digits = onlyDigits(value);
+
+  if (digits.length !== 14 || /^(\d)\1+$/.test(digits)) {
+    return false;
+  }
+
+  const calculateDigit = (base: string, factors: number[]) => {
+    const total = base
+      .split("")
+      .reduce((sum, digit, index) => sum + Number(digit) * factors[index], 0);
+    const remainder = total % 11;
+
+    return remainder < 2 ? 0 : 11 - remainder;
+  };
+
+  const firstDigit = calculateDigit(
+    digits.slice(0, 12),
+    [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2],
+  );
+  const secondDigit = calculateDigit(
+    digits.slice(0, 13),
+    [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2],
+  );
+
+  return digits.endsWith(`${firstDigit}${secondDigit}`);
+}
+
 function isValidEmail(value: string) {
   if (!value.trim()) {
     return true;
@@ -638,7 +716,11 @@ function isValidEmail(value: string) {
 
 function validateDocument(value: string) {
   const digits = onlyDigits(value);
-  return digits.length === 11 || digits.length === 14;
+
+  if (digits.length === 11) return isValidCpf(digits);
+  if (digits.length === 14) return isValidCnpj(digits);
+
+  return false;
 }
 
 function validatePixKey(value: string, pixKeyType: PixKeyType) {
@@ -665,6 +747,50 @@ function validatePixKey(value: string, pixKeyType: PixKeyType) {
   }
 
   return cleanValue.length >= 8;
+}
+
+async function fetchCompanyDataByCnpj(cleanCnpj: string) {
+  const response = await fetch(
+    `https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`,
+  );
+
+  if (!response.ok) return null;
+
+  const data = (await response.json()) as BrasilApiCnpjResponse;
+  const companyName = data.razao_social?.trim() || "";
+
+  if (!companyName) return null;
+
+  return {
+    companyName,
+    tradeName: data.nome_fantasia?.trim() || "",
+    document: data.cnpj || cleanCnpj,
+    phone: data.ddd_telefone_1 || "",
+    zipCode: data.cep || "",
+    state: data.uf || "",
+    city: data.municipio || "",
+    address: data.logradouro || "",
+    number: data.numero || "",
+    neighborhood: data.bairro || "",
+  };
+}
+
+async function fetchAddressByZipCode(cleanZipCode: string) {
+  const response = await fetch(`https://viacep.com.br/ws/${cleanZipCode}/json/`);
+
+  if (!response.ok) return null;
+
+  const data = (await response.json()) as ViaCepResponse;
+
+  if (data.erro) return null;
+
+  return {
+    zipCode: data.cep || cleanZipCode,
+    state: data.uf || "",
+    city: data.localidade || "",
+    address: data.logradouro || "",
+    neighborhood: data.bairro || "",
+  };
 }
 
 function getChangedSections(
@@ -723,15 +849,14 @@ function getValidationErrorMessages(validationErrors: SettingsValidationErrors) 
 }
 
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function renderPrintTemplatePreview(content: string, documentKey: PrintDocumentKey | null) {
   const previewValues: Record<string, string> = {
-    companyName: "Rentix Gestão de Locações LTDA",
-    tradeName: "Rentix",
-    landlordName: "Rentix Gestão de Locações LTDA",
+    companyName: "Contrx Gestão de Locações LTDA",
+    tradeName: "Contrx",
+    landlordName: "Contrx Gestão de Locações LTDA",
     landlordDocument: "12.345.678/0001-90",
     landlordAddress: "Rua Principal, nº 100, Centro, Rolim de Moura/RO, CEP 76940-000",
-    companyEmail: "contato@rentix.com",
+    companyEmail: "contato@contrx.com.br",
     companyPhone: "(69) 99999-0000",
     personName: "João da Silva",
     tenantName: "João da Silva",
@@ -749,7 +874,7 @@ function renderPrintTemplatePreview(content: string, documentKey: PrintDocumentK
     contractMonths: "12",
     amount: "R$ 1.200,00",
     dueDate: "10/05/2026",
-    pixKey: "pix@rentix.com",
+    pixKey: "pix@contrx.com.br",
     contractNumber: "CTR-0001",
     installmentNumber: "1/3",
     contractCity: "Rolim de Moura/RO",
@@ -770,142 +895,155 @@ function renderPrintTemplatePreview(content: string, documentKey: PrintDocumentK
   return previewContent;
 }
 
+function getPrintTemplateStats(content: string) {
+  const cleanContent = String(content || "");
+  const words = cleanContent.trim().split(/\s+/).filter(Boolean).length;
+  const lines = cleanContent.split(/\r\n|\r|\n/).length;
+  const variables = Array.from(new Set(cleanContent.match(/\{[a-zA-Z0-9]+\}/g) || []));
 
-const rentixThemeStyle = `
-  [data-rentix-theme="black"] {
+  return {
+    characters: cleanContent.length,
+    words,
+    lines,
+    variables,
+  };
+}
+
+const contrxThemeStyle = `
+  [data-contrx-theme="black"] {
     background: #020617 !important;
     color: #f8fafc !important;
   }
 
-  [data-rentix-theme="black"] * {
+  [data-contrx-theme="black"] * {
     scrollbar-color: #475569 #020617;
   }
 
-  [data-rentix-theme="black"] .bg-white,
-  [data-rentix-theme="black"] .bg-slate-50,
-  [data-rentix-theme="black"] .bg-slate-100,
-  [data-rentix-theme="black"] .bg-white\\/90 {
+  [data-contrx-theme="black"] .bg-white,
+  [data-contrx-theme="black"] .bg-slate-50,
+  [data-contrx-theme="black"] .bg-slate-100,
+  [data-contrx-theme="black"] .bg-white\\/90 {
     background-color: #0f172a !important;
   }
 
-  [data-rentix-theme="black"] .bg-gradient-to-r {
+  [data-contrx-theme="black"] .bg-gradient-to-r {
     background-image: none !important;
     background-color: #0f172a !important;
   }
 
-  [data-rentix-theme="black"] .from-orange-50,
-  [data-rentix-theme="black"] .via-white,
-  [data-rentix-theme="black"] .to-white,
-  [data-rentix-theme="black"] .from-slate-50 {
+  [data-contrx-theme="black"] .from-orange-50,
+  [data-contrx-theme="black"] .via-white,
+  [data-contrx-theme="black"] .to-white,
+  [data-contrx-theme="black"] .from-slate-50 {
     background-image: none !important;
   }
 
-  [data-rentix-theme="black"] .bg-orange-50,
-  [data-rentix-theme="black"] .bg-orange-50\\/40,
-  [data-rentix-theme="black"] .bg-orange-50\\/50,
-  [data-rentix-theme="black"] .bg-orange-50\\/60,
-  [data-rentix-theme="black"] .bg-orange-100 {
+  [data-contrx-theme="black"] .bg-orange-50,
+  [data-contrx-theme="black"] .bg-orange-50\\/40,
+  [data-contrx-theme="black"] .bg-orange-50\\/50,
+  [data-contrx-theme="black"] .bg-orange-50\\/60,
+  [data-contrx-theme="black"] .bg-orange-100 {
     background-color: rgba(249, 115, 22, 0.16) !important;
   }
 
-  [data-rentix-theme="black"] .bg-amber-50,
-  [data-rentix-theme="black"] .bg-amber-100 {
+  [data-contrx-theme="black"] .bg-amber-50,
+  [data-contrx-theme="black"] .bg-amber-100 {
     background-color: rgba(245, 158, 11, 0.16) !important;
   }
 
-  [data-rentix-theme="black"] .bg-red-50,
-  [data-rentix-theme="black"] .bg-red-100 {
+  [data-contrx-theme="black"] .bg-red-50,
+  [data-contrx-theme="black"] .bg-red-100 {
     background-color: rgba(239, 68, 68, 0.16) !important;
   }
 
-  [data-rentix-theme="black"] .bg-emerald-50,
-  [data-rentix-theme="black"] .bg-emerald-100 {
+  [data-contrx-theme="black"] .bg-emerald-50,
+  [data-contrx-theme="black"] .bg-emerald-100 {
     background-color: rgba(16, 185, 129, 0.16) !important;
   }
 
-  [data-rentix-theme="black"] .bg-slate-900,
-  [data-rentix-theme="black"] .bg-slate-950 {
+  [data-contrx-theme="black"] .bg-slate-900,
+  [data-contrx-theme="black"] .bg-slate-950 {
     background-color: #020617 !important;
   }
 
-  [data-rentix-theme="black"] .text-slate-950,
-  [data-rentix-theme="black"] .text-slate-900,
-  [data-rentix-theme="black"] .text-slate-800,
-  [data-rentix-theme="black"] .text-slate-700,
-  [data-rentix-theme="black"] .text-slate-600 {
+  [data-contrx-theme="black"] .text-slate-950,
+  [data-contrx-theme="black"] .text-slate-900,
+  [data-contrx-theme="black"] .text-slate-800,
+  [data-contrx-theme="black"] .text-slate-700,
+  [data-contrx-theme="black"] .text-slate-600 {
     color: #f8fafc !important;
   }
 
-  [data-rentix-theme="black"] .text-slate-500,
-  [data-rentix-theme="black"] .text-slate-400 {
+  [data-contrx-theme="black"] .text-slate-500,
+  [data-contrx-theme="black"] .text-slate-400 {
     color: #cbd5e1 !important;
   }
 
-  [data-rentix-theme="black"] .text-orange-600,
-  [data-rentix-theme="black"] .text-orange-700,
-  [data-rentix-theme="black"] .text-orange-800 {
+  [data-contrx-theme="black"] .text-orange-600,
+  [data-contrx-theme="black"] .text-orange-700,
+  [data-contrx-theme="black"] .text-orange-800 {
     color: #fb923c !important;
   }
 
-  [data-rentix-theme="black"] .text-red-600,
-  [data-rentix-theme="black"] .text-red-700,
-  [data-rentix-theme="black"] .text-red-800 {
+  [data-contrx-theme="black"] .text-red-600,
+  [data-contrx-theme="black"] .text-red-700,
+  [data-contrx-theme="black"] .text-red-800 {
     color: #fca5a5 !important;
   }
 
-  [data-rentix-theme="black"] .text-amber-600,
-  [data-rentix-theme="black"] .text-amber-700,
-  [data-rentix-theme="black"] .text-amber-800 {
+  [data-contrx-theme="black"] .text-amber-600,
+  [data-contrx-theme="black"] .text-amber-700,
+  [data-contrx-theme="black"] .text-amber-800 {
     color: #fbbf24 !important;
   }
 
-  [data-rentix-theme="black"] .text-emerald-600,
-  [data-rentix-theme="black"] .text-emerald-700 {
+  [data-contrx-theme="black"] .text-emerald-600,
+  [data-contrx-theme="black"] .text-emerald-700 {
     color: #6ee7b7 !important;
   }
 
-  [data-rentix-theme="black"] .border-slate-100,
-  [data-rentix-theme="black"] .border-slate-200,
-  [data-rentix-theme="black"] .border-orange-100,
-  [data-rentix-theme="black"] .border-orange-200,
-  [data-rentix-theme="black"] .border-amber-100,
-  [data-rentix-theme="black"] .border-red-100,
-  [data-rentix-theme="black"] .border-emerald-100 {
+  [data-contrx-theme="black"] .border-slate-100,
+  [data-contrx-theme="black"] .border-slate-200,
+  [data-contrx-theme="black"] .border-orange-100,
+  [data-contrx-theme="black"] .border-orange-200,
+  [data-contrx-theme="black"] .border-amber-100,
+  [data-contrx-theme="black"] .border-red-100,
+  [data-contrx-theme="black"] .border-emerald-100 {
     border-color: #1e293b !important;
   }
 
-  [data-rentix-theme="black"] input,
-  [data-rentix-theme="black"] select,
-  [data-rentix-theme="black"] textarea {
+  [data-contrx-theme="black"] input,
+  [data-contrx-theme="black"] select,
+  [data-contrx-theme="black"] textarea {
     background-color: #020617 !important;
     border-color: #334155 !important;
     color: #f8fafc !important;
   }
 
-  [data-rentix-theme="black"] input:focus,
-  [data-rentix-theme="black"] select:focus,
-  [data-rentix-theme="black"] textarea:focus {
+  [data-contrx-theme="black"] input:focus,
+  [data-contrx-theme="black"] select:focus,
+  [data-contrx-theme="black"] textarea:focus {
     border-color: #f97316 !important;
     box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.16) !important;
   }
 
-  [data-rentix-theme="black"] input::placeholder,
-  [data-rentix-theme="black"] textarea::placeholder {
+  [data-contrx-theme="black"] input::placeholder,
+  [data-contrx-theme="black"] textarea::placeholder {
     color: #64748b !important;
   }
 
-  [data-rentix-theme="black"] button:not(.bg-orange-500):not(.bg-red-500):not(.bg-red-600):not(.bg-emerald-600) {
+  [data-contrx-theme="black"] button:not(.bg-orange-500):not(.bg-red-500):not(.bg-red-600):not(.bg-emerald-600) {
     border-color: #1e293b;
   }
 
-  [data-rentix-theme="black"] .shadow-sm,
-  [data-rentix-theme="black"] .shadow-md,
-  [data-rentix-theme="black"] .shadow-xl,
-  [data-rentix-theme="black"] .shadow-2xl {
+  [data-contrx-theme="black"] .shadow-sm,
+  [data-contrx-theme="black"] .shadow-md,
+  [data-contrx-theme="black"] .shadow-xl,
+  [data-contrx-theme="black"] .shadow-2xl {
     box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35) !important;
   }
 
-  [data-rentix-theme="black"] pre {
+  [data-contrx-theme="black"] pre {
     color: #e2e8f0 !important;
   }
 `;
@@ -924,11 +1062,16 @@ export default function ConfiguracoesPage() {
   const [printTemplates, setPrintTemplates] = useState<PrintTemplates>(defaultPrintTemplates);
   const [initialPrintTemplates, setInitialPrintTemplates] = useState<PrintTemplates>(defaultPrintTemplates);
   const [printModalState, setPrintModalState] = useState<PrintModalState>(defaultPrintModalState);
+  const [printEditorViewMode, setPrintEditorViewMode] = useState<PrintEditorViewMode>("split");
   const [restorePrintModalState, setRestorePrintModalState] = useState<RestorePrintModalState>(defaultRestorePrintModalState);
   const [passwordSettings, setPasswordSettings] = useState<PasswordSettings>(defaultPasswordSettings);
   const [validationErrors, setValidationErrors] = useState<SettingsValidationErrors>({});
   const [successMessage, setSuccessMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [documentLookupError, setDocumentLookupError] = useState("");
+  const [zipCodeLookupError, setZipCodeLookupError] = useState("");
+  const [isDocumentLookupLoading, setIsDocumentLookupLoading] = useState(false);
+  const [isZipCodeLookupLoading, setIsZipCodeLookupLoading] = useState(false);
   const [isSaveConfirmModalOpen, setIsSaveConfirmModalOpen] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [resetOptions, setResetOptions] = useState<ResetOptions>(defaultResetOptions);
@@ -937,10 +1080,24 @@ export default function ConfiguracoesPage() {
   const printTemplateTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const userInitials = useMemo(() => getInitialLetters(userSettings.name), [userSettings.name]);
+  const isSystemOwner = user?.role === "SYSTEM_OWNER";
 
   const selectedPrintTemplate = printModalState.documentKey
     ? printTemplates[printModalState.documentKey]
     : null;
+
+  const selectedPrintTemplatePreview = useMemo(
+    () =>
+      selectedPrintTemplate
+        ? renderPrintTemplatePreview(selectedPrintTemplate.content, printModalState.documentKey)
+        : "",
+    [selectedPrintTemplate, printModalState.documentKey]
+  );
+
+  const selectedPrintTemplateStats = useMemo(
+    () => getPrintTemplateStats(selectedPrintTemplate?.content || ""),
+    [selectedPrintTemplate]
+  );
 
   const selectedRestorePrintTemplate = restorePrintModalState.documentKey
     ? printTemplates[restorePrintModalState.documentKey]
@@ -985,13 +1142,13 @@ export default function ConfiguracoesPage() {
   const loadSettingsFromLocalStorage = useCallback(() => {
     const storedUserSettings = getCompanyStorageItem(
       companyId,
-      "rentix_user_settings",
-      "rentix_user_settings",
+      "contrx_user_settings",
+      "contrx_user_settings",
     );
     const storedThemeSettings = getCompanyStorageItem(
       companyId,
-      "rentix_theme_settings",
-      "rentix_theme_settings",
+      "contrx_theme_settings",
+      "contrx_theme_settings",
     );
 
     if (storedUserSettings) {
@@ -1060,6 +1217,10 @@ export default function ConfiguracoesPage() {
   }, [companyId, loadSettings, loadSettingsFromLocalStorage]);
 
   function handleOpenResetModal() {
+    if (!isSystemOwner) {
+      return;
+    }
+
     setResetOptions(defaultResetOptions);
     setResetConfirmationText("");
     setResetError("");
@@ -1099,6 +1260,11 @@ export default function ConfiguracoesPage() {
   }
 
   function handleConfirmResetData() {
+    if (!isSystemOwner) {
+      setResetError("Acesso restrito ao dono do sistema.");
+      return;
+    }
+
     const selectedModules = resetModuleOptions.filter(
       (option) => resetOptions[option.key]
     );
@@ -1121,6 +1287,100 @@ export default function ConfiguracoesPage() {
 
     handleCloseResetModal();
     window.location.reload();
+  }
+
+  async function handleSearchCompanyDocument() {
+    const cleanDocument = onlyDigits(companySettings.document);
+
+    if (!cleanDocument) {
+      setDocumentLookupError("Informe o CNPJ antes de buscar os dados da empresa.");
+      return;
+    }
+
+    if (cleanDocument.length !== 14) {
+      setDocumentLookupError("A busca automática está disponível apenas para CNPJ.");
+      return;
+    }
+
+    if (!isValidCnpj(cleanDocument)) {
+      setDocumentLookupError("CNPJ inválido. Verifique o número informado.");
+      return;
+    }
+
+    try {
+      setIsDocumentLookupLoading(true);
+      setDocumentLookupError("");
+
+      const companyData = await fetchCompanyDataByCnpj(cleanDocument);
+
+      if (!companyData) {
+        setDocumentLookupError("Empresa não encontrada para o CNPJ informado.");
+        return;
+      }
+
+      setCompanySettings((currentSettings) => ({
+        ...currentSettings,
+        companyName: companyData.companyName || currentSettings.companyName,
+        tradeName: companyData.tradeName || currentSettings.tradeName,
+        document: formatDocument(companyData.document),
+        phone: companyData.phone
+          ? formatPhone(companyData.phone)
+          : currentSettings.phone,
+        zipCode: companyData.zipCode
+          ? formatZipCode(companyData.zipCode)
+          : currentSettings.zipCode,
+        state: companyData.state || currentSettings.state,
+        city: companyData.city || currentSettings.city,
+        contractCity: currentSettings.contractCity || companyData.city || "",
+        address: companyData.address || currentSettings.address,
+        number: companyData.number || currentSettings.number,
+        neighborhood: companyData.neighborhood || currentSettings.neighborhood,
+      }));
+    } catch {
+      setDocumentLookupError("Não foi possível consultar o CNPJ agora.");
+    } finally {
+      setIsDocumentLookupLoading(false);
+    }
+  }
+
+  async function handleSearchZipCode() {
+    const cleanZipCode = onlyDigits(companySettings.zipCode);
+
+    if (!cleanZipCode) {
+      setZipCodeLookupError("");
+      return;
+    }
+
+    if (cleanZipCode.length !== 8) {
+      setZipCodeLookupError("Informe um CEP válido com 8 números.");
+      return;
+    }
+
+    try {
+      setIsZipCodeLookupLoading(true);
+      setZipCodeLookupError("");
+
+      const addressData = await fetchAddressByZipCode(cleanZipCode);
+
+      if (!addressData) {
+        setZipCodeLookupError("CEP não encontrado.");
+        return;
+      }
+
+      setCompanySettings((currentSettings) => ({
+        ...currentSettings,
+        zipCode: formatZipCode(addressData.zipCode),
+        state: addressData.state || currentSettings.state,
+        city: addressData.city || currentSettings.city,
+        contractCity: currentSettings.contractCity || addressData.city || "",
+        address: addressData.address || currentSettings.address,
+        neighborhood: addressData.neighborhood || currentSettings.neighborhood,
+      }));
+    } catch {
+      setZipCodeLookupError("Não foi possível consultar o CEP agora.");
+    } finally {
+      setIsZipCodeLookupLoading(false);
+    }
   }
 
   function validatePasswordChange() {
@@ -1165,11 +1425,25 @@ export default function ConfiguracoesPage() {
     }
 
     if (companySettings.email.trim() && !isValidEmail(companySettings.email)) {
-      nextValidationErrors.email = "Informe um e-mail comercial válido.";
+      nextValidationErrors.companyEmail = "Informe um e-mail comercial válido.";
+    }
+
+    if (
+      companySettings.phone.trim() &&
+      onlyDigits(companySettings.phone).length < 10
+    ) {
+      nextValidationErrors.phone = "Informe um telefone com DDD válido.";
     }
 
     if (!validatePixKey(companySettings.pixKey, companySettings.pixKeyType)) {
       nextValidationErrors.pixKey = "Informe uma chave Pix válida para o tipo selecionado.";
+    }
+
+    if (
+      companySettings.zipCode.trim() &&
+      onlyDigits(companySettings.zipCode).length !== 8
+    ) {
+      nextValidationErrors.zipCode = "Informe um CEP com 8 números ou deixe em branco.";
     }
 
     if (!companySettings.city.trim()) {
@@ -1182,18 +1456,14 @@ export default function ConfiguracoesPage() {
       nextValidationErrors.state = "Informe a UF com 2 letras.";
     }
 
-    if (!companySettings.contractCity.trim()) {
-      nextValidationErrors.contractCity = "Informe a cidade padrão de assinatura.";
-    }
-
     if (!userSettings.name.trim()) {
       nextValidationErrors.name = "Informe o nome do usuário.";
     }
 
     if (!userSettings.email.trim()) {
-      nextValidationErrors.email = "Informe o e-mail do usuário.";
+      nextValidationErrors.userEmail = "Informe o e-mail do usuário.";
     } else if (!isValidEmail(userSettings.email)) {
-      nextValidationErrors.email = "Informe um e-mail de usuário válido.";
+      nextValidationErrors.userEmail = "Informe um e-mail de usuário válido.";
     }
 
     setValidationErrors(nextValidationErrors);
@@ -1202,6 +1472,7 @@ export default function ConfiguracoesPage() {
   }
 
   function handleOpenPrintModal(documentKey: PrintDocumentKey, mode: PrintModalMode) {
+    setPrintEditorViewMode(mode === "edit" ? "split" : "preview");
     setPrintModalState({
       isOpen: true,
       mode,
@@ -1337,18 +1608,18 @@ export default function ConfiguracoesPage() {
 
     setCompanyStorageItem(
       companyId,
-      "rentix_user_settings",
+      "contrx_user_settings",
       JSON.stringify(userSettings),
     );
     setCompanyStorageItem(
       companyId,
-      "rentix_theme_settings",
+      "contrx_theme_settings",
       JSON.stringify(themeSettings),
     );
     setCachedAppSettings({ userSettings, companySettings, printTemplates, themeSettings });
 
     if (passwordSettings.newPassword) {
-      setCompanyStorageItem(companyId, "rentix_user_password_updated", "true");
+      setCompanyStorageItem(companyId, "contrx_user_password_updated", "true");
       setPasswordSettings(defaultPasswordSettings);
     }
 
@@ -1360,7 +1631,7 @@ export default function ConfiguracoesPage() {
     setSuccessMessage("Configurações salvas com sucesso.");
     setCompanyStorageItem(
       companyId,
-      "rentix_dashboard_success_message",
+      "contrx_dashboard_success_message",
       "Configurações salvas com sucesso.",
     );
     setIsSaveConfirmModalOpen(false);
@@ -1370,10 +1641,10 @@ export default function ConfiguracoesPage() {
 
   return (
     <div
-      data-rentix-theme={themeSettings.mode}
+      data-contrx-theme={themeSettings.mode}
       className="min-h-screen bg-slate-100 px-4 py-6 sm:px-6 lg:px-8"
     >
-      <style>{rentixThemeStyle}</style>
+      <style>{contrxThemeStyle}</style>
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="rounded-[2rem] border border-orange-100 bg-white shadow-sm">
           <div className="border-b border-slate-100 bg-gradient-to-r from-orange-50 via-white to-white px-6 py-5 lg:px-8">
@@ -1382,7 +1653,7 @@ export default function ConfiguracoesPage() {
             </div>
 
             <h1 className="text-2xl font-black text-slate-950">
-              Configurações do Rentix
+              Configurações do Contrx
             </h1>
 
             <p className="mt-1 text-sm font-medium text-slate-500">
@@ -1466,13 +1737,15 @@ export default function ConfiguracoesPage() {
                 </button>
               </div>
 
-              <button
-                type="button"
-                onClick={handleOpenResetModal}
-                className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600 lg:mt-auto"
-              >
-                🗑️ Resetar dados de teste
-              </button>
+              {isSystemOwner && (
+                <button
+                  type="button"
+                  onClick={handleOpenResetModal}
+                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600 lg:mt-auto"
+                >
+                  🗑️ Resetar dados de teste
+                </button>
+              )}
             </aside>
 
             <section className="p-5 lg:p-8">
@@ -1500,14 +1773,14 @@ export default function ConfiguracoesPage() {
                       Cadastro da empresa
                     </h2>
                     <p className="mt-1 text-sm font-medium text-slate-500">
-                      Essas informações serão usadas em contratos, recibos, cobranças e documentos do Rentix.
+                      Essas informações serão usadas em contratos, recibos, cobranças e documentos do Contrx.
                     </p>
                   </div>
 
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <label className="space-y-2">
                       <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                        Razão social *
+                        Razão social
                       </span>
                       <input
                         type="text"
@@ -1518,14 +1791,14 @@ export default function ConfiguracoesPage() {
                             companyName: event.target.value,
                           })
                         }
-                        placeholder="Ex: Rentix Gestão de Locações LTDA"
+                        placeholder="Ex: Contrx Gestão de Locações LTDA"
                         className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                       />
                     </label>
 
                     <label className="space-y-2">
                       <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                        Nome fantasia *
+                        Nome fantasia
                       </span>
                       <input
                         type="text"
@@ -1536,28 +1809,50 @@ export default function ConfiguracoesPage() {
                             tradeName: event.target.value,
                           })
                         }
-                        placeholder="Ex: Rentix"
+                        placeholder="Ex: Contrx"
                         className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                       />
                     </label>
 
-                    <label className="space-y-2">
+                    <div className="space-y-2">
                       <span className="text-xs font-black uppercase tracking-wide text-slate-500">
                         CPF/CNPJ *
                       </span>
-                      <input
-                        type="text"
-                        value={companySettings.document}
-                        onChange={(event) =>
-                          setCompanySettings({
-                            ...companySettings,
-                            document: formatDocument(event.target.value),
-                          })
-                        }
-                        placeholder="00.000.000/0000-00"
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                      />
-                    </label>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <input
+                          type="text"
+                          value={companySettings.document}
+                          onChange={(event) => {
+                            setDocumentLookupError("");
+                            setCompanySettings({
+                              ...companySettings,
+                              document: formatDocument(event.target.value),
+                            });
+                          }}
+                          onBlur={() => {
+                            if (onlyDigits(companySettings.document).length === 14) {
+                              void handleSearchCompanyDocument();
+                            }
+                          }}
+                          placeholder="00.000.000/0000-00"
+                          className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={handleSearchCompanyDocument}
+                          disabled={isDocumentLookupLoading}
+                          className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isDocumentLookupLoading ? "Buscando..." : "Buscar CNPJ"}
+                        </button>
+                      </div>
+                      {(documentLookupError || validationErrors.document) && (
+                        <p className="text-xs font-bold text-red-600">
+                          {documentLookupError || validationErrors.document}
+                        </p>
+                      )}
+                    </div>
 
                     <label className="space-y-2">
                       <span className="text-xs font-black uppercase tracking-wide text-slate-500">
@@ -1615,7 +1910,7 @@ export default function ConfiguracoesPage() {
 
                     <label className="space-y-2 md:col-span-2">
                       <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                        E-mail comercial
+                        E-mail 
                       </span>
                       <input
                         type="email"
@@ -1626,7 +1921,7 @@ export default function ConfiguracoesPage() {
                             email: event.target.value,
                           })
                         }
-                        placeholder="empresa@rentix.com"
+                        placeholder="empresa@contrx.com.br"
                         className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                       />
                     </label>
@@ -1676,7 +1971,7 @@ export default function ConfiguracoesPage() {
 
                       <label className="space-y-2 md:col-span-2">
                         <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                          Chave Pix
+                          Chave Pix opcional
                         </span>
                         <input
                           type={companySettings.pixKeyType === "email" ? "email" : "text"}
@@ -1700,23 +1995,45 @@ export default function ConfiguracoesPage() {
                     </h3>
 
                     <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-4">
-                      <label className="space-y-2">
+                      <div className="space-y-2">
                         <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                          CEP
+                          CEP opcional
                         </span>
-                        <input
-                          type="text"
-                          value={companySettings.zipCode}
-                          onChange={(event) =>
-                            setCompanySettings({
-                              ...companySettings,
-                              zipCode: formatZipCode(event.target.value),
-                            })
-                          }
-                          placeholder="00000-000"
-                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                        />
-                      </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={companySettings.zipCode}
+                            onChange={(event) => {
+                              setZipCodeLookupError("");
+                              setCompanySettings({
+                                ...companySettings,
+                                zipCode: formatZipCode(event.target.value),
+                              });
+                            }}
+                            onBlur={() => {
+                              if (onlyDigits(companySettings.zipCode).length === 8) {
+                                void handleSearchZipCode();
+                              }
+                            }}
+                            placeholder="00000-000"
+                            className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                          />
+
+                          <button
+                            type="button"
+                            onClick={handleSearchZipCode}
+                            disabled={isZipCodeLookupLoading}
+                            className="rounded-2xl bg-orange-500 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isZipCodeLookupLoading ? "..." : "Buscar"}
+                          </button>
+                        </div>
+                        {(zipCodeLookupError || validationErrors.zipCode) && (
+                          <p className="text-xs font-bold text-red-600">
+                            {zipCodeLookupError || validationErrors.zipCode}
+                          </p>
+                        )}
+                      </div>
 
                       <label className="space-y-2 md:col-span-2">
                         <span className="text-xs font-black uppercase tracking-wide text-slate-500">
@@ -1821,7 +2138,7 @@ export default function ConfiguracoesPage() {
                     <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                       <label className="space-y-2">
                         <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                          Cidade padrão de assinatura *
+                          Cidade padrão de assinatura
                         </span>
                         <input
                           type="text"
@@ -1902,7 +2219,7 @@ export default function ConfiguracoesPage() {
                             email: event.target.value,
                           })
                         }
-                        placeholder="usuario@rentix.com"
+                        placeholder="usuario@contrx.com.br"
                         className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                       />
                     </label>
@@ -1996,7 +2313,7 @@ export default function ConfiguracoesPage() {
                       Aparência
                     </h2>
                     <p className="mt-1 text-sm font-medium text-slate-500">
-                      Escolha o tema visual do Rentix mantendo o laranja como cor principal do sistema.
+                      Escolha o tema visual do Contrx mantendo o laranja como cor principal do sistema.
                     </p>
                   </div>
 
@@ -2071,7 +2388,7 @@ export default function ConfiguracoesPage() {
                       Importante
                     </p>
                     <p className="mt-1 text-sm font-semibold leading-6 text-orange-700">
-                      A alteração será aplicada ao sistema depois de clicar em Salvar configurações. A identidade laranja do Rentix permanece nos dois temas.
+                      A alteração será aplicada ao sistema depois de clicar em Salvar configurações. A identidade laranja do Contrx permanece nos dois temas.
                     </p>
                   </div>
                 </div>
@@ -2079,26 +2396,56 @@ export default function ConfiguracoesPage() {
 
               {activeSettingsTab === "print" && (
                 <div className="space-y-6">
-                  <div>
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                     <h2 className="text-xl font-black text-slate-950">
                       Impressos
                     </h2>
                     <p className="mt-1 text-sm font-medium text-slate-500">
                       Visualize e edite os modelos de PDF que já existem no sistema.
                     </p>
+                    <div className="grid grid-cols-3 gap-2 rounded-3xl border border-slate-100 bg-slate-50 p-2 text-center">
+                      <div className="rounded-2xl bg-white px-4 py-3 shadow-sm">
+                        <p className="text-lg font-black text-slate-950">
+                          {Object.keys(printTemplates).length}
+                        </p>
+                        <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                          modelos
+                        </p>
+                      </div>
+                      <div className="rounded-2xl bg-white px-4 py-3 shadow-sm">
+                        <p className="text-lg font-black text-orange-600">
+                          {Object.values(printTemplates).reduce(
+                            (total, template) => total + getPrintTemplateStats(template.content).variables.length,
+                            0
+                          )}
+                        </p>
+                        <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                          campos
+                        </p>
+                      </div>
+                      <div className="rounded-2xl bg-white px-4 py-3 shadow-sm">
+                        <p className="text-lg font-black text-emerald-600">
+                          ao vivo
+                        </p>
+                        <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                          previa
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                     {(Object.keys(printTemplates) as PrintDocumentKey[]).map((documentKey) => {
                       const template = printTemplates[documentKey];
+                      const templateStats = getPrintTemplateStats(template.content);
 
                       return (
                         <div
                           key={documentKey}
-                          className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm"
+                          className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm"
                         >
-                          <div className="flex items-start gap-4">
-                            <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-orange-100 text-2xl">
+                          <div className="flex items-start gap-4 border-b border-slate-100 bg-gradient-to-r from-orange-50 via-white to-white px-5 py-5">
+                            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-3xl bg-orange-100 text-2xl">
                               {template.icon}
                             </div>
 
@@ -2118,40 +2465,49 @@ export default function ConfiguracoesPage() {
                                 </span>
                               </div>
 
-                              <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-                                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-                                  Modelo atual
-                                </p>
-                                <p className="mt-1 line-clamp-2 text-sm font-semibold leading-6 text-slate-600">
-                                  {template.content}
-                                </p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-4 p-5">
+                            <div className="grid grid-cols-3 gap-2">
+                              <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3">
+                                <p className="text-sm font-black text-slate-900">{templateStats.lines}</p>
+                                <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">linhas</p>
                               </div>
-
-                              <div className="mt-4 flex items-center justify-end gap-2 overflow-x-auto">
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenPrintModal(documentKey, "view")}
-                                  className="shrink-0 whitespace-nowrap rounded-2xl bg-slate-100 px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
-                                >
-                                  Visualizar
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenPrintModal(documentKey, "edit")}
-                                  className="shrink-0 whitespace-nowrap rounded-2xl bg-orange-500 px-4 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
-                                >
-                                  Editar
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenRestorePrintModal(documentKey)}
-                                  className="shrink-0 whitespace-nowrap rounded-2xl bg-red-50 px-4 py-3 text-sm font-black text-red-700 transition hover:bg-red-100"
-                                >
-                                  Restaurar
-                                </button>
+                              <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3">
+                                <p className="text-sm font-black text-slate-900">{templateStats.words}</p>
+                                <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">palavras</p>
                               </div>
+                              <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-3">
+                                <p className="text-sm font-black text-slate-900">{templateStats.variables.length}</p>
+                                <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">variaveis</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-end gap-2 overflow-x-auto">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenPrintModal(documentKey, "view")}
+                                className="shrink-0 whitespace-nowrap rounded-2xl bg-slate-100 px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                              >
+                                Visualizar
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleOpenPrintModal(documentKey, "edit")}
+                                className="shrink-0 whitespace-nowrap rounded-2xl bg-orange-500 px-4 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                              >
+                                Editar modelo
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleOpenRestorePrintModal(documentKey)}
+                                className="shrink-0 whitespace-nowrap rounded-2xl bg-red-50 px-4 py-3 text-sm font-black text-red-700 transition hover:bg-red-100"
+                              >
+                                Restaurar
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -2301,15 +2657,50 @@ export default function ConfiguracoesPage() {
 
               <div className="min-h-0 flex-1 overflow-y-auto p-6 lg:p-8">
                 {printModalState.mode === "view" ? (
-                  <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                    <div className="mx-auto min-h-[620px] max-w-3xl rounded-2xl bg-white p-8 shadow-sm">
-                      <pre className="whitespace-pre-wrap font-sans text-sm font-semibold leading-7 text-slate-700">
-                        {selectedPrintTemplate.content}
-                      </pre>
+                  <div className="grid grid-cols-1 gap-5 xl:grid-cols-[280px_1fr]">
+                    <aside className="space-y-3">
+                      <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                        <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                          Diagnostico
+                        </p>
+                        <div className="mt-3 grid grid-cols-3 gap-2 xl:grid-cols-1">
+                          <div className="rounded-2xl bg-slate-50 px-3 py-3">
+                            <p className="text-base font-black text-slate-950">{selectedPrintTemplateStats.lines}</p>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">linhas</p>
+                          </div>
+                          <div className="rounded-2xl bg-slate-50 px-3 py-3">
+                            <p className="text-base font-black text-slate-950">{selectedPrintTemplateStats.words}</p>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">palavras</p>
+                          </div>
+                          <div className="rounded-2xl bg-slate-50 px-3 py-3">
+                            <p className="text-base font-black text-slate-950">{selectedPrintTemplateStats.variables.length}</p>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">variaveis</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPrintEditorViewMode("split");
+                          setPrintModalState((currentState) => ({ ...currentState, mode: "edit" }));
+                        }}
+                        className="w-full rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                      >
+                        Editar este modelo
+                      </button>
+                    </aside>
+
+                    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                      <div className="mx-auto min-h-[620px] max-w-3xl rounded-2xl bg-white p-8 shadow-sm">
+                        <pre className="whitespace-pre-wrap font-sans text-sm font-semibold leading-7 text-slate-700">
+                          {selectedPrintTemplatePreview}
+                        </pre>
+                      </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 gap-5 xl:grid-cols-[360px_1fr]">
+                  <div className="grid grid-cols-1 gap-5 xl:grid-cols-[320px_1fr]">
                     <aside className="space-y-4 xl:max-h-[68vh] xl:overflow-y-auto xl:pr-1">
                       <div className="rounded-3xl border border-orange-100 bg-orange-50 px-4 py-4">
                         <p className="text-sm font-black text-orange-800">
@@ -2321,6 +2712,21 @@ export default function ConfiguracoesPage() {
                       </div>
 
                       <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                        <div className="mb-4 grid grid-cols-3 gap-2">
+                          <div className="rounded-2xl bg-slate-50 px-3 py-3">
+                            <p className="text-sm font-black text-slate-950">{selectedPrintTemplateStats.lines}</p>
+                            <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">linhas</p>
+                          </div>
+                          <div className="rounded-2xl bg-slate-50 px-3 py-3">
+                            <p className="text-sm font-black text-slate-950">{selectedPrintTemplateStats.words}</p>
+                            <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">palavras</p>
+                          </div>
+                          <div className="rounded-2xl bg-slate-50 px-3 py-3">
+                            <p className="text-sm font-black text-slate-950">{selectedPrintTemplateStats.variables.length}</p>
+                            <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">campos</p>
+                          </div>
+                        </div>
+
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <div>
                             <p className="text-sm font-black text-slate-800">
@@ -2381,20 +2787,55 @@ export default function ConfiguracoesPage() {
                           </p>
                         </div>
 
-                        <span className="w-fit rounded-full bg-white px-3 py-1 text-xs font-black text-slate-600 shadow-sm">
-                          {selectedPrintTemplate.content.length} caracteres
-                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {(["split", "editor", "preview"] as PrintEditorViewMode[]).map((viewMode) => (
+                            <button
+                              key={viewMode}
+                              type="button"
+                              onClick={() => setPrintEditorViewMode(viewMode)}
+                              className={`rounded-2xl px-3 py-2 text-xs font-black transition ${
+                                printEditorViewMode === viewMode
+                                  ? "bg-orange-500 text-white shadow-md shadow-orange-100"
+                                  : "bg-white text-slate-600 shadow-sm hover:bg-slate-100"
+                              }`}
+                            >
+                              {viewMode === "split" ? "Editor + previa" : viewMode === "editor" ? "Editor" : "Previa"}
+                            </button>
+                          ))}
+                        </div>
                       </div>
 
-                      <textarea
-                        ref={printTemplateTextareaRef}
-                        value={selectedPrintTemplate.content}
-                        onChange={(event) =>
-                          handleUpdatePrintTemplateContent(printModalState.documentKey!, event.target.value)
-                        }
-                        rows={34}
-                        className="h-[68vh] min-h-[680px] w-full resize-none rounded-3xl border border-slate-200 bg-white px-6 py-5 font-mono text-sm font-semibold leading-7 text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                      />
+                      <div className={`grid gap-3 ${printEditorViewMode === "split" ? "xl:grid-cols-[minmax(0,1fr)_420px]" : "grid-cols-1"}`}>
+                        {printEditorViewMode !== "preview" && (
+                          <textarea
+                            ref={printTemplateTextareaRef}
+                            value={selectedPrintTemplate.content}
+                            onChange={(event) =>
+                              handleUpdatePrintTemplateContent(printModalState.documentKey!, event.target.value)
+                            }
+                            rows={34}
+                            className="h-[68vh] min-h-[680px] w-full resize-none rounded-3xl border border-slate-200 bg-white px-6 py-5 font-mono text-sm font-semibold leading-7 text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                          />
+                        )}
+
+                        {printEditorViewMode !== "editor" && (
+                          <div className="h-[68vh] min-h-[680px] overflow-y-auto rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="mx-auto min-h-full rounded-2xl bg-white p-6 shadow-sm">
+                              <div className="mb-4 flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                                  Previa preenchida
+                                </p>
+                                <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black text-emerald-700">
+                                  dados exemplo
+                                </span>
+                              </div>
+                              <pre className="whitespace-pre-wrap font-sans text-sm font-semibold leading-7 text-slate-700">
+                                {selectedPrintTemplatePreview}
+                              </pre>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -2437,7 +2878,7 @@ export default function ConfiguracoesPage() {
                   </h2>
 
                   <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
-                    Esta ação vai substituir o texto atual pelo modelo padrão do Rentix. A alteração só será gravada definitivamente ao clicar em Salvar configurações.
+                    Esta ação vai substituir o texto atual pelo modelo padrão do Contrx. A alteração só será gravada definitivamente ao clicar em Salvar configurações.
                   </p>
                 </div>
               </div>
@@ -2477,7 +2918,7 @@ export default function ConfiguracoesPage() {
           </div>
         )}
 
-        {isResetModalOpen && (
+        {isResetModalOpen && isSystemOwner && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
             <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-[2rem] border border-red-100 bg-white shadow-2xl">
               <div className="border-b border-red-100 bg-gradient-to-r from-red-50 via-white to-white px-6 py-5">

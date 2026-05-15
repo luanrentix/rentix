@@ -94,7 +94,7 @@ export type CreateContractDto = {
   finishReason?: string | null;
 };
 
-export type UpdateContractDto = Partial<CreateContractDto>;
+export type UpdateContractDto = Partial<Omit<CreateContractDto, 'companyId'>>;
 
 export async function getContracts(companyId: string) {
   return apiFetch<Contract[]>(
@@ -116,6 +116,41 @@ export async function createContract(data: CreateContractDto) {
 export async function updateContract(id: string, data: UpdateContractDto) {
   return apiFetch<Contract>(`/contratos/${id}`, {
     method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function cancelContract(id: string, reason: string) {
+  return apiFetch<Contract>(`/contratos/${id}/cancelar`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function softDeleteContract(id: string, reason: string) {
+  return apiFetch<Contract>(`/contratos/${id}/excluir`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function finishContract(id: string, reason: string) {
+  return apiFetch<Contract>(`/contratos/${id}/finalizar`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function renewContract(
+  id: string,
+  data: {
+    endDate: string;
+    rentValue: number;
+    notes?: string;
+  },
+) {
+  return apiFetch<Contract>(`/contratos/${id}/renovar`, {
+    method: 'POST',
     body: JSON.stringify(data),
   });
 }

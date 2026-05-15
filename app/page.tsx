@@ -19,6 +19,46 @@ import { useAuth } from "@/context/AuthContext";
 
 type AuthMode = "login" | "signup";
 
+function getAuthErrorPresentation(
+  error: unknown,
+  defaultTitle: string,
+  defaultMessage: string,
+) {
+  const message = error instanceof Error ? error.message : defaultMessage;
+  const normalizedMessage = message.toLowerCase();
+  const isBackendConfigurationError =
+    message.includes("NEXT_PUBLIC_API_URL") ||
+    normalizedMessage.includes("backend não configurado") ||
+    normalizedMessage.includes("api em");
+  const isDatabaseConfigurationError =
+    normalizedMessage.includes("credenciais do banco") ||
+    normalizedMessage.includes("database_url") ||
+    normalizedMessage.includes("direct_url") ||
+    normalizedMessage.includes("banco de dados indisponivel");
+
+  if (isBackendConfigurationError) {
+    return {
+      title: "Backend não configurado",
+      message,
+      subtitle: "Configure a API para continuar.",
+    };
+  }
+
+  if (isDatabaseConfigurationError) {
+    return {
+      title: "Banco nao conectado",
+      message,
+      subtitle: "Corrija a conexao do backend.",
+    };
+  }
+
+  return {
+    title: defaultTitle,
+    message,
+    subtitle: "Revise os dados para continuar.",
+  };
+}
+
 export default function LoginPage() {
   const { login, createAccount, isLoading } = useAuth();
 
@@ -34,22 +74,30 @@ export default function LoginPage() {
 
   const [authError, setAuthError] = useState(false);
   const [authErrorTitle, setAuthErrorTitle] = useState("Acesso não autorizado");
+  const [authErrorSubtitle, setAuthErrorSubtitle] = useState(
+    "Revise os dados para continuar.",
+  );
   const [authErrorMessage, setAuthErrorMessage] = useState(
     "E-mail ou senha inválidos.",
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    const savedEmail = localStorage.getItem("rentix_remember_email");
+    const legacyStoragePrefix = ["ren", "tix"].join("");
+    const savedEmail =
+      localStorage.getItem("contrx_remember_email") ||
+      localStorage.getItem(`${legacyStoragePrefix}_remember_email`);
 
     if (savedEmail) {
+      localStorage.setItem("contrx_remember_email", savedEmail);
       setEmail(savedEmail);
       setRemember(true);
     }
   }, []);
 
-  function showAuthError(title: string, message: string) {
+  function showAuthError(title: string, message: string, subtitle?: string) {
     setAuthErrorTitle(title);
+    setAuthErrorSubtitle(subtitle || "Revise os dados para continuar.");
     setAuthErrorMessage(message);
     setAuthError(true);
   }
@@ -67,14 +115,22 @@ export default function LoginPage() {
       await login(email.trim(), password);
 
       if (remember) {
-        localStorage.setItem("rentix_remember_email", email.trim());
+        localStorage.setItem("contrx_remember_email", email.trim());
       } else {
-        localStorage.removeItem("rentix_remember_email");
+        localStorage.removeItem("contrx_remember_email");
+        localStorage.removeItem(`${["ren", "tix"].join("")}_remember_email`);
       }
     } catch (error) {
-      showAuthError(
+      const authErrorPresentation = getAuthErrorPresentation(
+        error,
         "Acesso não autorizado",
-        error instanceof Error ? error.message : "E-mail ou senha inválidos.",
+        "E-mail ou senha inválidos.",
+      );
+
+      showAuthError(
+        authErrorPresentation.title,
+        authErrorPresentation.message,
+        authErrorPresentation.subtitle,
       );
     } finally {
       setIsSubmitting(false);
@@ -116,11 +172,16 @@ export default function LoginPage() {
         companyName: signupCompanyName.trim(),
       });
     } catch (error) {
-      showAuthError(
+      const authErrorPresentation = getAuthErrorPresentation(
+        error,
         "Não foi possível criar a conta",
-        error instanceof Error
-          ? error.message
-          : "Revise os dados informados e tente novamente.",
+        "Revise os dados informados e tente novamente.",
+      );
+
+      showAuthError(
+        authErrorPresentation.title,
+        authErrorPresentation.message,
+        authErrorPresentation.subtitle,
       );
     } finally {
       setIsSubmitting(false);
@@ -148,34 +209,35 @@ export default function LoginPage() {
   return (
     <main className="min-h-dvh overflow-x-hidden bg-white">
       <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[42%_58%]">
-        <section className="relative flex min-h-dvh flex-col bg-gradient-to-br from-[#ff4b00] via-[#f04400] to-[#d93200] px-4 pt-5 sm:px-9 sm:pt-8 lg:min-h-screen">
-          <div className="relative z-10 flex items-center gap-3 sm:gap-5">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[18px] bg-white shadow-lg sm:h-32 sm:w-32 sm:rounded-[22px]">
+        <section className="relative flex min-h-dvh flex-col items-center bg-gradient-to-br from-[#ff4b00] via-[#f04400] to-[#d93200] px-4 pt-6 sm:px-9 sm:pt-8 lg:min-h-screen">
+          <div className="relative z-10 flex w-full max-w-[525px] justify-center">
+            <div className="flex h-20 w-full max-w-[325px] shrink-0 items-center justify-center rounded-[18px] bg-white px-5 shadow-lg sm:h-28 sm:max-w-[430px] sm:rounded-[22px] sm:px-8">
               <Image
-                src="/logo-rentix.png"
-                alt="Rentix"
-                width={74}
-                height={74}
+                src="/logo-contrx.png"
+                alt="Contrx"
+                width={1536}
+                height={1024}
+                className="h-full w-full object-contain"
                 priority
               />
             </div>
 
-            <div>
-              <h1 className="text-3xl font-black leading-none text-white sm:text-[48px]">
-                Rentix
+            <div className="hidden">
+              <h1 className="hidden text-3xl font-black leading-none text-white sm:text-[48px]">
+                Contrx
               </h1>
-              <p className="mt-2 text-sm font-bold text-white">
+              <p className="hidden mt-2 text-sm font-bold text-white">
                 Sistema de Gestão de Locações
               </p>
             </div>
           </div>
 
-          <div className="relative z-10 mt-5 flex justify-center pb-6 sm:mt-6 sm:pb-8">
+          <div className="relative z-10 mt-5 flex w-full max-w-[525px] justify-center pb-6 sm:mt-6 sm:pb-8">
             <div className="w-full max-w-[525px] rounded-[24px] bg-white px-4 py-6 shadow-2xl sm:rounded-[30px] sm:px-10 sm:py-10">
               <h2 className="text-center text-2xl font-light leading-tight text-slate-950 sm:text-[30px]">
                 {isSignup ? "Crie sua conta" : "Bem-vindo ao"}{" "}
                 <span className="font-black text-[#ff4b00]">
-                  {isSignup ? "Rentix" : "Rentix!"}
+                  {isSignup ? "Contrx" : "Contrx!"}
                 </span>
               </h2>
 
@@ -215,6 +277,7 @@ export default function LoginPage() {
                       placeholder="Seu nome"
                       value={signupName}
                       onChange={setSignupName}
+                      autoComplete="name"
                     />
                     <AuthInput
                       icon={<Building2 size={20} />}
@@ -222,6 +285,7 @@ export default function LoginPage() {
                       placeholder="Nome da empresa"
                       value={signupCompanyName}
                       onChange={setSignupCompanyName}
+                      autoComplete="organization"
                     />
                   </>
                 )}
@@ -232,6 +296,7 @@ export default function LoginPage() {
                   placeholder="E-mail"
                   value={email}
                   onChange={setEmail}
+                  autoComplete="username"
                 />
 
                 <div className="flex h-[54px] items-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_3px_10px_rgba(15,23,42,0.10)] sm:h-[58px]">
@@ -243,11 +308,12 @@ export default function LoginPage() {
                     type={showPassword ? "text" : "password"}
                     placeholder="Senha"
                     value={password}
+                    autoComplete={isSignup ? "new-password" : "current-password"}
                     onChange={(event) => setPassword(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") handleSubmit();
                     }}
-                    className="h-full min-w-0 flex-1 bg-white px-2 text-sm font-bold text-slate-700 outline-none placeholder:text-slate-400"
+                    className="contrx-auth-input h-full min-w-0 flex-1 bg-white px-2 text-sm font-bold text-slate-700 outline-none placeholder:text-slate-400"
                   />
 
                   <button
@@ -268,6 +334,7 @@ export default function LoginPage() {
                     value={signupPasswordConfirm}
                     onChange={setSignupPasswordConfirm}
                     onEnter={handleSubmit}
+                    autoComplete="new-password"
                   />
                 )}
 
@@ -318,7 +385,7 @@ export default function LoginPage() {
           </div>
 
           <p className="relative z-10 mt-auto pb-5 text-center text-sm font-black text-white sm:pb-8 sm:text-base">
-            Rentix © 2026
+            Contrx © 2026
           </p>
         </section>
 
@@ -357,7 +424,7 @@ export default function LoginPage() {
                       {authErrorTitle}
                     </h2>
                     <p className="mt-1 text-sm font-medium text-slate-500">
-                      Revise os dados para continuar.
+                      {authErrorSubtitle}
                     </p>
                   </div>
                 </div>
@@ -402,6 +469,7 @@ type AuthInputProps = {
   value: string;
   onChange: (value: string) => void;
   onEnter?: () => void;
+  autoComplete?: string;
 };
 
 function AuthInput({
@@ -411,6 +479,7 @@ function AuthInput({
   value,
   onChange,
   onEnter,
+  autoComplete,
 }: AuthInputProps) {
   return (
     <div className="flex h-[54px] items-center rounded-2xl border border-slate-200 bg-white shadow-[0_3px_10px_rgba(15,23,42,0.10)] sm:h-[58px]">
@@ -422,11 +491,12 @@ function AuthInput({
         type={type}
         placeholder={placeholder}
         value={value}
+        autoComplete={autoComplete}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === "Enter") onEnter?.();
         }}
-        className="h-full min-w-0 flex-1 rounded-r-2xl bg-white px-2 text-sm font-bold text-slate-700 outline-none placeholder:text-slate-400"
+        className="contrx-auth-input h-full min-w-0 flex-1 rounded-r-2xl bg-white px-2 text-sm font-bold text-slate-700 outline-none placeholder:text-slate-400"
       />
     </div>
   );

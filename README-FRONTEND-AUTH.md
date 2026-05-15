@@ -1,11 +1,11 @@
-# Rentix - Frontend autenticado com JWT
+# Contrx - Frontend autenticado com JWT
 
 ## Onde colocar os arquivos
 
 Copie os arquivos para dentro do projeto frontend:
 
 ```txt
-rentix/
+contrx/
  ├── app/
  ├── components/
  ├── context/
@@ -25,6 +25,20 @@ NEXT_PUBLIC_API_URL=http://localhost:3001
 ```bash
 npm run dev
 ```
+
+O frontend roda em `http://localhost:3000` e consome a API configurada em
+`NEXT_PUBLIC_API_URL`.
+
+## Rodar backend local
+
+Em outro terminal, suba a API Nest:
+
+```bash
+npm run dev:backend
+```
+
+A API local roda em `http://localhost:3001`. Evite iniciar o Next.js nessa porta,
+porque ela fica reservada para o backend.
 
 ## Fluxo
 

@@ -1,12 +1,31 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Ban,
+  ChevronDown,
+  CheckCircle,
+  Clock,
+  DollarSign,
+  Eye,
+  FileText,
+  MapPin,
+  Maximize2,
+  Minimize2,
+  Pencil,
+  RefreshCw,
+  Trash2,
+  X,
+} from "lucide-react";
 import AppShell from "@/components/layout/app-shell";
 import { useAuth } from "@/context/AuthContext";
-import { apiFetch } from "@/services/api";
 import {
   createContract,
+  cancelContract,
   getContracts,
+  finishContract as finishContractAction,
+  renewContract,
+  softDeleteContract,
   updateContract,
   type Contract as ApiContract,
   type ContractRenewalRecord as ApiContractRenewalRecord,
@@ -19,9 +38,11 @@ import {
   createReceivableAccount,
   deleteReceivableAccount,
   getReceivableAccounts,
+  updateReceivableAccount,
   type ReceivableAccount,
 } from "@/services/financial.service";
 import { getProperties, type Property as ApiProperty } from "@/services/properties.service";
+import { getPeople, type Person as ApiPerson } from "@/services/people.service";
 import { createPropertyMovement } from "@/services/property-movements.service";
 import {
   getCachedCompanySettings,
@@ -35,7 +56,7 @@ import {
 const EXPIRING_CONTRACT_DAYS_LIMIT = 30;
 const DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME = "14:00";
 const DEFAULT_TEMPORARY_RENTAL_CHECK_OUT_TIME = "12:00";
-const TEMPORARY_RENTAL_TIME_DEFAULTS_STORAGE_KEY = "rentix_temporary_rental_time_defaults";
+const TEMPORARY_RENTAL_TIME_DEFAULTS_STORAGE_KEY = "contrx_temporary_rental_time_defaults";
 const LEGACY_SETTINGS_TEMPORARY_CONTRACT_CONTENT = `CONTRATO TEMPORÁRIO
 
 LOCADOR: {companyName}
@@ -351,26 +372,7 @@ type Property = {
   contractDefaultNotes?: string;
 };
 
-type ApiPerson = {
-  id: string;
-  companyId: string;
-  type: "INDIVIDUAL" | "COMPANY";
-  status: "ACTIVE" | "INACTIVE";
-  name: string;
-  document: string;
-  stateRegistration?: string | null;
-  identityNumber?: string | null;
-  email?: string | null;
-  phone?: string | null;
-  zipCode?: string | null;
-  city?: string | null;
-  state?: string | null;
-  address?: string | null;
-  createdAt: string;
-  updatedAt?: string;
-};
-
-type RentixTenant = {
+type ContrxTenant = {
   id: string;
   name: string;
   isTenant?: boolean;
@@ -476,6 +478,11 @@ type PendingStatusChange = {
   nextStatus: "Canceled" | "Deleted";
 };
 
+type ActionMenuPosition = {
+  top: number;
+  left: number;
+};
+
 type PropertyMovement = {
   id: string;
   propertyId: string;
@@ -496,12 +503,13 @@ export default function ContractsPage() {
 
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
-  const [tenants, setTenants] = useState<RentixTenant[]>([]);
+  const [tenants, setTenants] = useState<ContrxTenant[]>([]);
   const [receivableAccounts, setReceivableAccounts] = useState<ReceivableAccount[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isLoadingPageData, setIsLoadingPageData] = useState(true);
   const [isBlackTheme, setIsBlackTheme] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isFormMinimized, setIsFormMinimized] = useState(false);
   const [formError, setFormError] = useState("");
   const [editingContractId, setEditingContractId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<ContractFilterStatus>("Active");
@@ -514,7 +522,6 @@ export default function ContractsPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [rentValue, setRentValue] = useState("");
-  const [contractStatus, setContractStatus] = useState<ContractStatus>("Active");
   const [isTemporaryRental, setIsTemporaryRental] = useState(false);
   const [checkInTime, setCheckInTime] = useState("");
   const [checkOutTime, setCheckOutTime] = useState("");
@@ -535,23 +542,31 @@ export default function ContractsPage() {
   const [finishReason, setFinishReason] = useState("");
   const [finishReasonError, setFinishReasonError] = useState("");
   const [openActionMenuContractId, setOpenActionMenuContractId] = useState<string | null>(null);
+  const [actionMenuPosition, setActionMenuPosition] = useState<ActionMenuPosition | null>(null);
   const [selectedContractDetails, setSelectedContractDetails] = useState<Contract | null>(null);
   const [contractDetailsActiveTab, setContractDetailsActiveTab] = useState<ContractDetailsTab>("Data");
 
   const isEditing = editingContractId !== null;
   const companyId = user?.companyId;
+  const openActionMenuContract = useMemo(
+    () =>
+      openActionMenuContractId
+        ? contracts.find((contract) => contract.id === openActionMenuContractId) || null
+        : null,
+    [contracts, openActionMenuContractId],
+  );
 
   useEffect(() => {
     function applyStoredTheme() {
       const storedThemeSettings = getCompanyStorageItem(
         companyId,
-        "rentix_theme_settings",
-        "rentix_theme_settings",
+        "contrx_theme_settings",
+        "contrx_theme_settings",
       );
       const legacyTheme = getCompanyStorageItem(
         companyId,
-        "rentix_theme",
-        "rentix_theme",
+        "contrx_theme",
+        "contrx_theme",
       );
 
       try {
@@ -696,7 +711,7 @@ export default function ContractsPage() {
       const [apiContracts, apiProperties, apiPeople, apiReceivableAccounts] = await Promise.all([
         getContracts(currentCompanyId),
         getProperties(currentCompanyId),
-        apiFetch<ApiPerson[]>(`/pessoas?companyId=${encodeURIComponent(currentCompanyId)}`),
+        getPeople(currentCompanyId),
         getReceivableAccounts(currentCompanyId),
       ]);
 
@@ -710,7 +725,7 @@ export default function ContractsPage() {
       setFormError(
         error instanceof Error
           ? error.message
-          : "NÃ£o foi possÃ­vel carregar os contratos do backend."
+          : "Não foi possível carregar os contratos do backend."
       );
     } finally {
       setIsLoaded(true);
@@ -724,7 +739,6 @@ export default function ContractsPage() {
     setStartDate("");
     setEndDate("");
     setRentValue("");
-    setContractStatus("Active");
     setIsTemporaryRental(false);
     setCheckInTime("");
     setCheckOutTime("");
@@ -743,8 +757,10 @@ export default function ContractsPage() {
     setFinishReason("");
     setFinishReasonError("");
     setOpenActionMenuContractId(null);
+    setActionMenuPosition(null);
     setSelectedContractDetails(null);
     setContractDetailsActiveTab("Data");
+    setIsFormMinimized(false);
     setIsFormOpen(false);
   }
 
@@ -759,12 +775,12 @@ export default function ContractsPage() {
     setTenantId(String(contract.tenantId));
     setStartDate(contract.startDate);
     setEndDate(contract.endDate);
-    setRentValue(String(contract.rentValue || ""));
-    setContractStatus(contract.status || getAutomaticContractStatus(contract.endDate));
+    setRentValue(formatCurrencyInput(contract.rentValue));
     setIsTemporaryRental(contract.isTemporaryRental ?? false);
     setCheckInTime(contract.checkInTime || "");
     setCheckOutTime(contract.checkOutTime || "");
     setFormError("");
+    setIsFormMinimized(false);
     setIsFormOpen(true);
   }
 
@@ -821,6 +837,31 @@ export default function ContractsPage() {
     return Math.max(monthDifference, 1);
   }
 
+  function getContractReceivableSchedule(contract: Contract) {
+    if (contract.isTemporaryRental) {
+      return [
+        {
+          dueDate: contract.startDate,
+          amount: Number(contract.rentValue || 0),
+          installmentNumber: 1,
+          installmentTotal: 1,
+        },
+      ];
+    }
+
+    const installmentQuantity = getContractInstallmentQuantity(contract.startDate, contract.endDate);
+    const firstDueDate = getFirstDueDateFromStartDate(contract.startDate);
+
+    if (!firstDueDate) return [];
+
+    return Array.from({ length: installmentQuantity }, (_, index) => ({
+      dueDate: addMonthsToDate(firstDueDate, index),
+      amount: Number(contract.rentValue || 0),
+      installmentNumber: index + 1,
+      installmentTotal: installmentQuantity,
+    }));
+  }
+
   function registerPropertyMovementFromContract(
     contract: Contract,
     type: PropertyMovement["type"],
@@ -873,7 +914,7 @@ export default function ContractsPage() {
       Object.assign(contractToSave, mapApiContractToContract(savedContract));
     } catch (error) {
       setFormError(
-        error instanceof Error ? error.message : "NÃ£o foi possÃ­vel salvar o contrato."
+        error instanceof Error ? error.message : "Não foi possível salvar o contrato."
       );
       return;
     }
@@ -888,6 +929,7 @@ export default function ContractsPage() {
           : "Contrato cancelado e parcelas vinculadas removidas."
       );
     } else {
+      await syncOpenReceivableChargesFromContract(contractToSave);
       registerPropertyMovementFromContract(
         contractToSave,
         "ContractUpdated",
@@ -914,7 +956,42 @@ export default function ContractsPage() {
       return;
     }
 
-    await applyEditedContract(pendingStatusChange.contract, cleanReason);
+    try {
+      const savedContract =
+        pendingStatusChange.nextStatus === "Deleted"
+          ? await softDeleteContract(pendingStatusChange.contract.id, cleanReason)
+          : await cancelContract(pendingStatusChange.contract.id, cleanReason);
+      const nextContract = mapApiContractToContract(savedContract);
+
+      setContracts((currentContracts) =>
+        currentContracts.map((contract) =>
+          contract.id === nextContract.id ? nextContract : contract
+        )
+      );
+      setReceivableAccounts((currentAccounts) =>
+        currentAccounts.filter(
+          (account) =>
+            String(account.contractId || "") !== String(nextContract.id) ||
+            account.status === "PAID",
+        ),
+      );
+
+      registerPropertyMovementFromContract(
+        nextContract,
+        pendingStatusChange.nextStatus === "Deleted" ? "ContractDeleted" : "ContractCanceled",
+        pendingStatusChange.nextStatus === "Deleted"
+          ? "Contrato marcado como excluído e parcelas em aberto removidas."
+          : "Contrato cancelado e parcelas em aberto removidas.",
+      );
+    } catch (error) {
+      setStatusReasonError(
+        error instanceof Error
+           ? error.message
+          : "Não foi possível atualizar o status do contrato.",
+      );
+      return;
+    }
+
     setPendingStatusChange(null);
     setStatusReason("");
     setStatusReasonError("");
@@ -944,17 +1021,15 @@ export default function ContractsPage() {
     const companyId = user?.companyId;
 
     if (!companyId) {
-      setFormError("Empresa do usuÃ¡rio nÃ£o encontrada. FaÃ§a login novamente.");
+      setFormError("Empresa do usuário não encontrada. Faça login novamente.");
       return;
     }
 
-    const installmentQuantity = getContractInstallmentQuantity(contract.startDate, contract.endDate);
-    const monthlyRentAmount = Number(contract.rentValue || 0);
-    const firstDueDate = getFirstDueDateFromStartDate(contract.startDate);
     const installmentGroupId = `${contract.id}-installments`;
+    const receivableSchedule = getContractReceivableSchedule(contract);
 
-    if (!firstDueDate) {
-      setFormError("Data inicial do contrato invalida para gerar cobrancas.");
+    if (receivableSchedule.length === 0) {
+      setFormError("Data inicial do contrato inválida para gerar cobranças.");
       return;
     }
 
@@ -964,7 +1039,7 @@ export default function ContractsPage() {
 
     if (existingAccounts.length === 0) {
       const createdAccounts = await Promise.all(
-        Array.from({ length: installmentQuantity }, (_, index) =>
+        receivableSchedule.map((installment) =>
           createReceivableAccount({
             companyId,
             contractId: String(contract.id),
@@ -972,12 +1047,12 @@ export default function ContractsPage() {
             property: contract.propertyName,
             tenant: contract.tenantName,
             issueDate: contract.startDate,
-            dueDate: addMonthsToDate(firstDueDate, index),
-            amount: monthlyRentAmount,
+            dueDate: installment.dueDate,
+            amount: installment.amount,
             status: "PENDING",
             manual: false,
-            installmentNumber: index + 1,
-            installmentTotal: installmentQuantity,
+            installmentNumber: installment.installmentNumber,
+            installmentTotal: installment.installmentTotal,
             installmentGroupId,
             isDownPayment: false,
           }),
@@ -991,6 +1066,87 @@ export default function ContractsPage() {
     }
 
     window.location.href = "/contas-receber";
+  }
+
+  async function syncOpenReceivableChargesFromContract(contract: Contract) {
+    const companyId = user?.companyId;
+
+    if (!companyId) return;
+
+    const receivableSchedule = getContractReceivableSchedule(contract);
+    const linkedAccounts = receivableAccounts
+      .filter((account) => String(account.contractId || "") === String(contract.id))
+      .sort((firstAccount, secondAccount) => {
+        const firstNumber = firstAccount.installmentNumber || 0;
+        const secondNumber = secondAccount.installmentNumber || 0;
+
+        return firstNumber - secondNumber;
+      });
+    const paidAccounts = linkedAccounts.filter((account) => account.status === "PAID");
+    const openAccounts = linkedAccounts.filter((account) => account.status !== "PAID");
+    const openReceivableSchedule = receivableSchedule.slice(paidAccounts.length);
+    const installmentGroupId = `${contract.id}-installments`;
+
+    const updatedAccounts = await Promise.all(
+      openAccounts.slice(0, openReceivableSchedule.length).map((account, index) => {
+        const installment = openReceivableSchedule[index];
+
+        return updateReceivableAccount(account.id, {
+          tenantId: String(contract.tenantId),
+          property: contract.propertyName,
+          tenant: contract.tenantName,
+          issueDate: contract.startDate,
+          dueDate: installment.dueDate,
+          amount: installment.amount,
+          manual: false,
+          installmentNumber: installment.installmentNumber,
+          installmentTotal: installment.installmentTotal,
+          installmentGroupId,
+          isDownPayment: false,
+        });
+      }),
+    );
+
+    const extraOpenAccounts = openAccounts.slice(openReceivableSchedule.length);
+    await Promise.all(extraOpenAccounts.map((account) => deleteReceivableAccount(account.id)));
+
+    const missingSchedule = openReceivableSchedule.slice(openAccounts.length);
+    const createdAccounts = await Promise.all(
+      missingSchedule.map((installment) =>
+        createReceivableAccount({
+          companyId,
+          contractId: String(contract.id),
+          tenantId: String(contract.tenantId),
+          property: contract.propertyName,
+          tenant: contract.tenantName,
+          issueDate: contract.startDate,
+          dueDate: installment.dueDate,
+          amount: installment.amount,
+          status: "PENDING",
+          manual: false,
+          installmentNumber: installment.installmentNumber,
+          installmentTotal: installment.installmentTotal,
+          installmentGroupId,
+          isDownPayment: false,
+        }),
+      ),
+    );
+
+    const changedAccountIds = new Set([
+      ...updatedAccounts.map((account) => account.id),
+      ...extraOpenAccounts.map((account) => account.id),
+    ]);
+
+    setReceivableAccounts((currentAccounts) => [
+      ...createdAccounts,
+      ...updatedAccounts,
+      ...paidAccounts,
+      ...currentAccounts.filter(
+        (account) =>
+          String(account.contractId || "") !== String(contract.id) &&
+          !changedAccountIds.has(account.id),
+      ),
+    ]);
   }
 
   async function handleSubmitContract(event: React.FormEvent<HTMLFormElement>) {
@@ -1051,7 +1207,9 @@ export default function ContractsPage() {
       return;
     }
 
-    if (!rentValue || Number(rentValue) <= 0) {
+    const normalizedRentValue = parseCurrencyInput(rentValue);
+
+    if (!normalizedRentValue || normalizedRentValue <= 0) {
       setFormError("Informe um valor de aluguel válido.");
       return;
     }
@@ -1072,37 +1230,20 @@ export default function ContractsPage() {
         tenantName: selectedTenant.name,
         startDate,
         endDate,
-        rentValue: Number(rentValue),
-        status: contractStatus,
+        rentValue: normalizedRentValue,
+        status: currentContract.status || "Active",
         isTemporaryRental,
         checkInTime: isTemporaryRental ? checkInTime : "",
         checkOutTime: isTemporaryRental ? checkOutTime : "",
-        deletedAt:
-          contractStatus === "Deleted"
-            ? currentContract.deletedAt || new Date().toISOString()
-            : null,
+        deletedAt: currentContract.status === "Deleted" ? currentContract.deletedAt : null,
       };
-
-      const statusRequiresReason =
-        (contractStatus === "Canceled" || contractStatus === "Deleted") &&
-        currentContract.status !== contractStatus;
-
-      if (statusRequiresReason) {
-        setPendingStatusChange({
-          contract: updatedContract,
-          nextStatus: contractStatus,
-        });
-        setStatusReason("");
-        setStatusReasonError("");
-        return;
-      }
 
       await applyEditedContract(updatedContract);
       return;
     }
 
     if (!companyId) {
-      setFormError("Empresa nÃ£o identificada. FaÃ§a login novamente.");
+      setFormError("Empresa não identificada. Faça login novamente.");
       return;
     }
 
@@ -1114,12 +1255,12 @@ export default function ContractsPage() {
       tenantName: selectedTenant.name,
       startDate,
       endDate,
-      rentValue: Number(rentValue),
-      status: contractStatus,
+      rentValue: normalizedRentValue,
+      status: "Active",
       isTemporaryRental,
       checkInTime: isTemporaryRental ? checkInTime : "",
       checkOutTime: isTemporaryRental ? checkOutTime : "",
-      deletedAt: contractStatus === "Deleted" ? new Date().toISOString() : null,
+      deletedAt: null,
       statusReason: null,
       statusReasonType: null,
       statusReasonAt: null,
@@ -1136,7 +1277,7 @@ export default function ContractsPage() {
       Object.assign(newContract, mapApiContractToContract(savedContract));
     } catch (error) {
       setFormError(
-        error instanceof Error ? error.message : "NÃ£o foi possÃ­vel criar o contrato."
+        error instanceof Error ? error.message : "Não foi possível criar o contrato."
       );
       return;
     }
@@ -1162,7 +1303,7 @@ export default function ContractsPage() {
     );
 
     if (selectedProperty) {
-      setRentValue(String(selectedProperty.rentValue || ""));
+      setRentValue(formatCurrencyInput(selectedProperty.rentValue || 0));
     }
   }
 
@@ -1207,15 +1348,81 @@ export default function ContractsPage() {
   }
 
 
-  function handleToggleContractActions(contractId: string) {
-    setOpenActionMenuContractId((currentContractId) =>
-      currentContractId === contractId ? null : contractId
+  function handleToggleContractActions(
+    contractId: string,
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) {
+    if (openActionMenuContractId === contractId) {
+      handleCloseContractActions();
+      return;
+    }
+
+    const buttonRect = event.currentTarget.getBoundingClientRect();
+    const menuWidth = 224;
+    const estimatedMenuHeight = 316;
+    const viewportPadding = 16;
+    const availableBottomSpace = window.innerHeight - buttonRect.bottom;
+    const top =
+      availableBottomSpace < estimatedMenuHeight
+          ? Math.max(viewportPadding, buttonRect.top - estimatedMenuHeight - 6)
+        : buttonRect.bottom + 8;
+    const left = Math.min(
+      Math.max(viewportPadding, buttonRect.right - menuWidth),
+      window.innerWidth - menuWidth - viewportPadding,
     );
+
+    setActionMenuPosition({ top, left });
+    setOpenActionMenuContractId(contractId);
   }
 
   function handleCloseContractActions() {
     setOpenActionMenuContractId(null);
+    setActionMenuPosition(null);
   }
+
+  useEffect(() => {
+    if (!openActionMenuContractId) return;
+
+    function closeFloatingActionMenu() {
+      handleCloseContractActions();
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+
+      if (!(target instanceof Element)) {
+        closeFloatingActionMenu();
+        return;
+      }
+
+      if (
+        target.closest("[data-contract-action-menu]") ||
+        target.closest("[data-contract-action-trigger]")
+      ) {
+        return;
+      }
+
+      closeFloatingActionMenu();
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeFloatingActionMenu();
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", closeFloatingActionMenu);
+    window.addEventListener("scroll", closeFloatingActionMenu, true);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", closeFloatingActionMenu);
+      window.removeEventListener("scroll", closeFloatingActionMenu, true);
+    };
+  }, [openActionMenuContractId]);
 
   function handleOpenContractDetails(contract: Contract) {
     setSelectedContractDetails(contract);
@@ -1259,18 +1466,40 @@ export default function ContractsPage() {
   }
 
   function canRenewContract(displayStatus: ContractDisplayStatus) {
-    return displayStatus === "Expiring";
+    return ["Active", "Expiring", "Inactive"].includes(displayStatus);
   }
 
   function canFinishContract(displayStatus: ContractDisplayStatus) {
     return !["Finished", "Deleted", "Canceled"].includes(displayStatus);
   }
 
+  function canCancelContract(displayStatus: ContractDisplayStatus) {
+    return !["Deleted", "Canceled", "Finished"].includes(displayStatus);
+  }
+
+  function canDeleteContract(displayStatus: ContractDisplayStatus) {
+    return displayStatus !== "Deleted";
+  }
+
+  function handleOpenStatusReasonModal(contract: Contract, nextStatus: "Canceled" | "Deleted") {
+    setPendingStatusChange({
+      contract: {
+        ...contract,
+        status: nextStatus,
+        deletedAt: nextStatus === "Deleted" ? contract.deletedAt || new Date().toISOString() : null,
+      },
+      nextStatus,
+    });
+    setStatusReason("");
+    setStatusReasonError("");
+    handleCloseContractActions();
+  }
+
 
   function handleOpenRenewalModal(contract: Contract) {
     setRenewalContract(contract);
     setRenewalEndDate(contract.endDate || "");
-    setRenewalRentValue(String(contract.rentValue || ""));
+    setRenewalRentValue(formatCurrencyInput(contract.rentValue || 0));
     setRenewalNotes("");
     setRenewalError("");
   }
@@ -1287,7 +1516,7 @@ export default function ContractsPage() {
     if (!renewalContract) return;
 
     const nextEndDate = renewalEndDate;
-    const nextRentValue = Number(renewalRentValue || 0);
+    const nextRentValue = parseCurrencyInput(renewalRentValue);
 
     if (!nextEndDate) {
       setRenewalError("Informe a nova data de término do contrato.");
@@ -1304,51 +1533,35 @@ export default function ContractsPage() {
       return;
     }
 
-    const renewedAt = new Date().toISOString();
-    const renewalRecord: ContractRenewalRecord = {
-      renewedAt,
-      previousEndDate: renewalContract.endDate,
-      newEndDate: nextEndDate,
-      previousRentValue: Number(renewalContract.rentValue || 0),
-      newRentValue: nextRentValue,
-      notes: renewalNotes.trim() || undefined,
-    };
-
-    const renewedContract: Contract = {
-      ...renewalContract,
-      endDate: nextEndDate,
-      rentValue: nextRentValue,
-      status: "Active",
-      renewedAt,
-      renewalHistory: [...(renewalContract.renewalHistory || []), renewalRecord],
-      finishedAt: null,
-      finishReason: null,
-    };
-
     try {
-      const savedContract = await updateContract(
-        renewedContract.id,
-        buildContractPayload(renewedContract),
+      const savedContract = await renewContract(renewalContract.id, {
+        endDate: nextEndDate,
+        rentValue: nextRentValue,
+        notes: renewalNotes.trim() || undefined,
+      });
+      const renewedContract = mapApiContractToContract(savedContract);
+
+      setContracts((currentContracts) =>
+        currentContracts.map((contract) =>
+          contract.id === renewalContract.id ? renewedContract : contract
+        )
       );
-      Object.assign(renewedContract, mapApiContractToContract(savedContract));
+
+      if (companyId) {
+        setReceivableAccounts(await getReceivableAccounts(companyId));
+      }
+
+      registerPropertyMovementFromContract(
+        renewedContract,
+        "ContractRenewed",
+        `Contrato renovado até ${formatDate(nextEndDate)}.`
+      );
     } catch (error) {
       setRenewalError(
-        error instanceof Error ? error.message : "NÃ£o foi possÃ­vel renovar o contrato."
+        error instanceof Error ? error.message : "Não foi possível renovar o contrato."
       );
       return;
     }
-
-    setContracts((currentContracts) =>
-      currentContracts.map((contract) =>
-        contract.id === renewalContract.id ? renewedContract : contract
-      )
-    );
-
-    registerPropertyMovementFromContract(
-      renewedContract,
-      "ContractRenewed",
-      `Contrato renovado até ${formatDate(nextEndDate)}.`
-    );
 
     handleCloseRenewalModal();
   }
@@ -1375,65 +1588,33 @@ export default function ContractsPage() {
       return;
     }
 
-    const finishedContract: Contract = {
-      ...finishContract,
-      status: "Finished",
-      finishedAt: new Date().toISOString(),
-      finishReason: cleanReason,
-      statusReason: cleanReason,
-      statusReasonType: null,
-      statusReasonAt: new Date().toISOString(),
-    };
-
     try {
-      const savedContract = await updateContract(
-        finishedContract.id,
-        buildContractPayload(finishedContract),
+      const savedContract = await finishContractAction(finishContract.id, cleanReason);
+      const finishedContract = mapApiContractToContract(savedContract);
+
+      setContracts((currentContracts) =>
+        currentContracts.map((contract) =>
+          contract.id === finishContract.id ? finishedContract : contract
+        )
       );
-      Object.assign(finishedContract, mapApiContractToContract(savedContract));
+
+      if (companyId) {
+        setReceivableAccounts(await getReceivableAccounts(companyId));
+      }
+
+      registerPropertyMovementFromContract(
+        finishedContract,
+        "ContractFinished",
+        "Contrato finalizado e imóvel liberado para nova locação."
+      );
     } catch (error) {
       setFinishReasonError(
-        error instanceof Error ? error.message : "NÃ£o foi possÃ­vel finalizar o contrato."
+        error instanceof Error ? error.message : "Não foi possível finalizar o contrato."
       );
       return;
     }
 
-    await removeFutureReceivableChargesFromContract(finishedContract);
-    registerPropertyMovementFromContract(
-      finishedContract,
-      "ContractFinished",
-      "Contrato finalizado e imóvel liberado para nova locação."
-    );
-
-    setContracts((currentContracts) =>
-      currentContracts.map((contract) =>
-        contract.id === finishContract.id ? finishedContract : contract
-      )
-    );
-
     handleCloseFinishModal();
-  }
-
-  async function removeFutureReceivableChargesFromContract(contract: Contract) {
-    const today = new Date();
-
-    today.setHours(0, 0, 0, 0);
-
-    const futureAccounts = receivableAccounts.filter((account) => {
-      if (String(account.contractId || "") !== String(contract.id)) return false;
-
-      const dueDate = account.dueDate ? new Date(`${account.dueDate.slice(0, 10)}T00:00:00`) : null;
-
-      return dueDate && !Number.isNaN(dueDate.getTime()) && dueDate >= today;
-    });
-
-    await Promise.all(futureAccounts.map((account) => deleteReceivableAccount(account.id)));
-
-    const futureAccountIds = new Set(futureAccounts.map((account) => account.id));
-
-    setReceivableAccounts((currentAccounts) =>
-      currentAccounts.filter((account) => !futureAccountIds.has(account.id)),
-    );
   }
 
   function handleOpenPrintableContract(contract: Contract) {
@@ -1471,320 +1652,320 @@ export default function ContractsPage() {
   return (
     <AppShell>
       <style jsx global>{`
-        .rentix-contracts-page.rentix-black-theme {
+        .contrx-contracts-page.contrx-black-theme {
           color: #f8fafc;
         }
 
-        .rentix-contracts-page.rentix-black-theme .bg-white {
+        .contrx-contracts-page.contrx-black-theme .bg-white {
           background-color: #0f172a !important;
         }
 
-        .rentix-contracts-page.rentix-black-theme .bg-slate-50,
-        .rentix-contracts-page.rentix-black-theme .bg-slate-100 {
+        .contrx-contracts-page.contrx-black-theme .bg-slate-50,
+        .contrx-contracts-page.contrx-black-theme .bg-slate-100 {
           background-color: #111827 !important;
         }
 
-        .rentix-contracts-page.rentix-black-theme .bg-orange-50,
-        .rentix-contracts-page.rentix-black-theme .bg-orange-100,
-        .rentix-contracts-page.rentix-black-theme .bg-orange-50\/50,
-        .rentix-contracts-page.rentix-black-theme .bg-orange-50\/60,
-        .rentix-contracts-page.rentix-black-theme .bg-orange-50\/40 {
+        .contrx-contracts-page.contrx-black-theme .bg-orange-50,
+        .contrx-contracts-page.contrx-black-theme .bg-orange-100,
+        .contrx-contracts-page.contrx-black-theme .bg-orange-50\/50,
+        .contrx-contracts-page.contrx-black-theme .bg-orange-50\/60,
+        .contrx-contracts-page.contrx-black-theme .bg-orange-50\/40 {
           background-color: rgba(249, 115, 22, 0.13) !important;
         }
 
-        .rentix-contracts-page.rentix-black-theme .bg-red-50,
-        .rentix-contracts-page.rentix-black-theme .bg-red-100 {
+        .contrx-contracts-page.contrx-black-theme .bg-red-50,
+        .contrx-contracts-page.contrx-black-theme .bg-red-100 {
           background-color: rgba(239, 68, 68, 0.12) !important;
         }
 
-        .rentix-contracts-page.rentix-black-theme .bg-emerald-50,
-        .rentix-contracts-page.rentix-black-theme .bg-emerald-100 {
+        .contrx-contracts-page.contrx-black-theme .bg-emerald-50,
+        .contrx-contracts-page.contrx-black-theme .bg-emerald-100 {
           background-color: rgba(16, 185, 129, 0.12) !important;
         }
 
-        .rentix-contracts-page.rentix-black-theme .bg-amber-50,
-        .rentix-contracts-page.rentix-black-theme .bg-amber-100 {
+        .contrx-contracts-page.contrx-black-theme .bg-amber-50,
+        .contrx-contracts-page.contrx-black-theme .bg-amber-100 {
           background-color: rgba(245, 158, 11, 0.14) !important;
         }
 
-        .rentix-contracts-page.rentix-black-theme .bg-blue-100 {
+        .contrx-contracts-page.contrx-black-theme .bg-blue-100 {
           background-color: rgba(59, 130, 246, 0.14) !important;
         }
 
-        .rentix-contracts-page.rentix-black-theme .bg-zinc-200 {
+        .contrx-contracts-page.contrx-black-theme .bg-zinc-200 {
           background-color: #334155 !important;
         }
 
-        .rentix-contracts-page.rentix-black-theme .text-slate-950,
-        .rentix-contracts-page.rentix-black-theme .text-slate-900,
-        .rentix-contracts-page.rentix-black-theme .text-slate-800,
-        .rentix-contracts-page.rentix-black-theme .text-slate-700 {
+        .contrx-contracts-page.contrx-black-theme .text-slate-950,
+        .contrx-contracts-page.contrx-black-theme .text-slate-900,
+        .contrx-contracts-page.contrx-black-theme .text-slate-800,
+        .contrx-contracts-page.contrx-black-theme .text-slate-700 {
           color: #f8fafc !important;
         }
 
-        .rentix-contracts-page.rentix-black-theme .text-slate-600,
-        .rentix-contracts-page.rentix-black-theme .text-slate-500,
-        .rentix-contracts-page.rentix-black-theme .text-slate-400 {
+        .contrx-contracts-page.contrx-black-theme .text-slate-600,
+        .contrx-contracts-page.contrx-black-theme .text-slate-500,
+        .contrx-contracts-page.contrx-black-theme .text-slate-400 {
           color: #cbd5e1 !important;
         }
 
-        .rentix-contracts-page.rentix-black-theme .text-orange-600,
-        .rentix-contracts-page.rentix-black-theme .text-orange-700,
-        .rentix-contracts-page.rentix-black-theme .text-orange-800 {
+        .contrx-contracts-page.contrx-black-theme .text-orange-600,
+        .contrx-contracts-page.contrx-black-theme .text-orange-700,
+        .contrx-contracts-page.contrx-black-theme .text-orange-800 {
           color: #fb923c !important;
         }
 
-        .rentix-contracts-page.rentix-black-theme .text-red-600,
-        .rentix-contracts-page.rentix-black-theme .text-red-700 {
+        .contrx-contracts-page.contrx-black-theme .text-red-600,
+        .contrx-contracts-page.contrx-black-theme .text-red-700 {
           color: #fca5a5 !important;
         }
 
-        .rentix-contracts-page.rentix-black-theme .text-emerald-700,
-        .rentix-contracts-page.rentix-black-theme .text-emerald-800 {
+        .contrx-contracts-page.contrx-black-theme .text-emerald-700,
+        .contrx-contracts-page.contrx-black-theme .text-emerald-800 {
           color: #6ee7b7 !important;
         }
 
-        .rentix-contracts-page.rentix-black-theme .text-amber-700 {
+        .contrx-contracts-page.contrx-black-theme .text-amber-700 {
           color: #fcd34d !important;
         }
 
-        .rentix-contracts-page.rentix-black-theme .text-blue-700 {
+        .contrx-contracts-page.contrx-black-theme .text-blue-700 {
           color: #93c5fd !important;
         }
 
-        .rentix-contracts-page.rentix-black-theme .border-orange-100,
-        .rentix-contracts-page.rentix-black-theme .border-orange-200,
-        .rentix-contracts-page.rentix-black-theme .border-red-100,
-        .rentix-contracts-page.rentix-black-theme .border-red-200,
-        .rentix-contracts-page.rentix-black-theme .border-emerald-200,
-        .rentix-contracts-page.rentix-black-theme .border-slate-100,
-        .rentix-contracts-page.rentix-black-theme .border-slate-200,
-        .rentix-contracts-page.rentix-black-theme .border-slate-300 {
+        .contrx-contracts-page.contrx-black-theme .border-orange-100,
+        .contrx-contracts-page.contrx-black-theme .border-orange-200,
+        .contrx-contracts-page.contrx-black-theme .border-red-100,
+        .contrx-contracts-page.contrx-black-theme .border-red-200,
+        .contrx-contracts-page.contrx-black-theme .border-emerald-200,
+        .contrx-contracts-page.contrx-black-theme .border-slate-100,
+        .contrx-contracts-page.contrx-black-theme .border-slate-200,
+        .contrx-contracts-page.contrx-black-theme .border-slate-300 {
           border-color: #334155 !important;
         }
 
-        .rentix-contracts-page.rentix-black-theme input,
-        .rentix-contracts-page.rentix-black-theme select,
-        .rentix-contracts-page.rentix-black-theme textarea {
+        .contrx-contracts-page.contrx-black-theme input,
+        .contrx-contracts-page.contrx-black-theme select,
+        .contrx-contracts-page.contrx-black-theme textarea {
           background-color: #020617 !important;
           border-color: #334155 !important;
           color: #f8fafc !important;
         }
 
-        .rentix-contracts-page.rentix-black-theme input::placeholder,
-        .rentix-contracts-page.rentix-black-theme textarea::placeholder {
+        .contrx-contracts-page.contrx-black-theme input::placeholder,
+        .contrx-contracts-page.contrx-black-theme textarea::placeholder {
           color: #64748b !important;
         }
 
-        .rentix-contracts-page.rentix-black-theme table,
-        .rentix-contracts-page.rentix-black-theme tbody,
-        .rentix-contracts-page.rentix-black-theme tr {
+        .contrx-contracts-page.contrx-black-theme table,
+        .contrx-contracts-page.contrx-black-theme tbody,
+        .contrx-contracts-page.contrx-black-theme tr {
           background-color: #0f172a !important;
         }
 
-        .rentix-contracts-page.rentix-black-theme thead {
+        .contrx-contracts-page.contrx-black-theme thead {
           background-color: rgba(249, 115, 22, 0.15) !important;
         }
 
-        .rentix-contracts-page.rentix-black-theme tbody tr:hover {
+        .contrx-contracts-page.contrx-black-theme tbody tr:hover {
           background-color: #1e293b !important;
         }
 
-        .rentix-contracts-page.rentix-force-light,
-        .rentix-contracts-page .rentix-force-light,
-        .rentix-contracts-page.rentix-force-light .bg-white,
-        .rentix-contracts-page .rentix-force-light .bg-white,
-        .rentix-contracts-page.rentix-force-light .bg-slate-50,
-        .rentix-contracts-page .rentix-force-light .bg-slate-50,
-        .rentix-contracts-page.rentix-force-light .bg-slate-100,
-        .rentix-contracts-page .rentix-force-light .bg-slate-100 {
+        .contrx-contracts-page.contrx-force-light,
+        .contrx-contracts-page .contrx-force-light,
+        .contrx-contracts-page.contrx-force-light .bg-white,
+        .contrx-contracts-page .contrx-force-light .bg-white,
+        .contrx-contracts-page.contrx-force-light .bg-slate-50,
+        .contrx-contracts-page .contrx-force-light .bg-slate-50,
+        .contrx-contracts-page.contrx-force-light .bg-slate-100,
+        .contrx-contracts-page .contrx-force-light .bg-slate-100 {
           background-color: #ffffff !important;
           color: #0f172a !important;
         }
 
-        .rentix-contracts-page.rentix-force-light .bg-slate-50,
-        .rentix-contracts-page .rentix-force-light .bg-slate-50,
-        .rentix-contracts-page.rentix-force-light .bg-slate-100,
-        .rentix-contracts-page .rentix-force-light .bg-slate-100 {
+        .contrx-contracts-page.contrx-force-light .bg-slate-50,
+        .contrx-contracts-page .contrx-force-light .bg-slate-50,
+        .contrx-contracts-page.contrx-force-light .bg-slate-100,
+        .contrx-contracts-page .contrx-force-light .bg-slate-100 {
           background-color: #f8fafc !important;
         }
 
-        .rentix-contracts-page.rentix-force-light .bg-orange-50,
-        .rentix-contracts-page .rentix-force-light .bg-orange-50,
-        .rentix-contracts-page.rentix-force-light .bg-orange-100,
-        .rentix-contracts-page .rentix-force-light .bg-orange-100,
-        .rentix-contracts-page.rentix-force-light .bg-orange-50\/50,
-        .rentix-contracts-page .rentix-force-light .bg-orange-50\/50,
-        .rentix-contracts-page.rentix-force-light .bg-orange-50\/60,
-        .rentix-contracts-page .rentix-force-light .bg-orange-50\/60,
-        .rentix-contracts-page.rentix-force-light .bg-orange-50\/40,
-        .rentix-contracts-page .rentix-force-light .bg-orange-50\/40 {
+        .contrx-contracts-page.contrx-force-light .bg-orange-50,
+        .contrx-contracts-page .contrx-force-light .bg-orange-50,
+        .contrx-contracts-page.contrx-force-light .bg-orange-100,
+        .contrx-contracts-page .contrx-force-light .bg-orange-100,
+        .contrx-contracts-page.contrx-force-light .bg-orange-50\/50,
+        .contrx-contracts-page .contrx-force-light .bg-orange-50\/50,
+        .contrx-contracts-page.contrx-force-light .bg-orange-50\/60,
+        .contrx-contracts-page .contrx-force-light .bg-orange-50\/60,
+        .contrx-contracts-page.contrx-force-light .bg-orange-50\/40,
+        .contrx-contracts-page .contrx-force-light .bg-orange-50\/40 {
           background-color: #fff7ed !important;
         }
 
-        .rentix-contracts-page.rentix-force-light .bg-red-50,
-        .rentix-contracts-page .rentix-force-light .bg-red-50,
-        .rentix-contracts-page.rentix-force-light .bg-red-100,
-        .rentix-contracts-page .rentix-force-light .bg-red-100 {
+        .contrx-contracts-page.contrx-force-light .bg-red-50,
+        .contrx-contracts-page .contrx-force-light .bg-red-50,
+        .contrx-contracts-page.contrx-force-light .bg-red-100,
+        .contrx-contracts-page .contrx-force-light .bg-red-100 {
           background-color: #fef2f2 !important;
         }
 
-        .rentix-contracts-page.rentix-force-light .bg-emerald-50,
-        .rentix-contracts-page .rentix-force-light .bg-emerald-50,
-        .rentix-contracts-page.rentix-force-light .bg-emerald-100,
-        .rentix-contracts-page .rentix-force-light .bg-emerald-100 {
+        .contrx-contracts-page.contrx-force-light .bg-emerald-50,
+        .contrx-contracts-page .contrx-force-light .bg-emerald-50,
+        .contrx-contracts-page.contrx-force-light .bg-emerald-100,
+        .contrx-contracts-page .contrx-force-light .bg-emerald-100 {
           background-color: #ecfdf5 !important;
         }
 
-        .rentix-contracts-page.rentix-force-light .bg-amber-50,
-        .rentix-contracts-page .rentix-force-light .bg-amber-50,
-        .rentix-contracts-page.rentix-force-light .bg-amber-100,
-        .rentix-contracts-page .rentix-force-light .bg-amber-100 {
+        .contrx-contracts-page.contrx-force-light .bg-amber-50,
+        .contrx-contracts-page .contrx-force-light .bg-amber-50,
+        .contrx-contracts-page.contrx-force-light .bg-amber-100,
+        .contrx-contracts-page .contrx-force-light .bg-amber-100 {
           background-color: #fffbeb !important;
         }
 
-        .rentix-contracts-page.rentix-force-light .bg-blue-100,
-        .rentix-contracts-page .rentix-force-light .bg-blue-100 {
+        .contrx-contracts-page.contrx-force-light .bg-blue-100,
+        .contrx-contracts-page .contrx-force-light .bg-blue-100 {
           background-color: #dbeafe !important;
         }
 
-        .rentix-contracts-page.rentix-force-light .text-white,
-        .rentix-contracts-page .rentix-force-light .text-white,
-        .rentix-contracts-page.rentix-force-light .text-slate-950,
-        .rentix-contracts-page .rentix-force-light .text-slate-950,
-        .rentix-contracts-page.rentix-force-light .text-slate-900,
-        .rentix-contracts-page .rentix-force-light .text-slate-900,
-        .rentix-contracts-page.rentix-force-light .text-slate-800,
-        .rentix-contracts-page .rentix-force-light .text-slate-800,
-        .rentix-contracts-page.rentix-force-light .text-slate-700,
-        .rentix-contracts-page .rentix-force-light .text-slate-700 {
+        .contrx-contracts-page.contrx-force-light .text-white,
+        .contrx-contracts-page .contrx-force-light .text-white,
+        .contrx-contracts-page.contrx-force-light .text-slate-950,
+        .contrx-contracts-page .contrx-force-light .text-slate-950,
+        .contrx-contracts-page.contrx-force-light .text-slate-900,
+        .contrx-contracts-page .contrx-force-light .text-slate-900,
+        .contrx-contracts-page.contrx-force-light .text-slate-800,
+        .contrx-contracts-page .contrx-force-light .text-slate-800,
+        .contrx-contracts-page.contrx-force-light .text-slate-700,
+        .contrx-contracts-page .contrx-force-light .text-slate-700 {
           color: #0f172a !important;
         }
 
-        .rentix-contracts-page.rentix-force-light .text-slate-600,
-        .rentix-contracts-page .rentix-force-light .text-slate-600,
-        .rentix-contracts-page.rentix-force-light .text-slate-500,
-        .rentix-contracts-page .rentix-force-light .text-slate-500,
-        .rentix-contracts-page.rentix-force-light .text-slate-400,
-        .rentix-contracts-page .rentix-force-light .text-slate-400 {
+        .contrx-contracts-page.contrx-force-light .text-slate-600,
+        .contrx-contracts-page .contrx-force-light .text-slate-600,
+        .contrx-contracts-page.contrx-force-light .text-slate-500,
+        .contrx-contracts-page .contrx-force-light .text-slate-500,
+        .contrx-contracts-page.contrx-force-light .text-slate-400,
+        .contrx-contracts-page .contrx-force-light .text-slate-400 {
           color: #64748b !important;
         }
 
-        .rentix-contracts-page.rentix-force-light .text-orange-400,
-        .rentix-contracts-page .rentix-force-light .text-orange-400,
-        .rentix-contracts-page.rentix-force-light .text-orange-500,
-        .rentix-contracts-page .rentix-force-light .text-orange-500,
-        .rentix-contracts-page.rentix-force-light .text-orange-600,
-        .rentix-contracts-page .rentix-force-light .text-orange-600,
-        .rentix-contracts-page.rentix-force-light .text-orange-700,
-        .rentix-contracts-page .rentix-force-light .text-orange-700,
-        .rentix-contracts-page.rentix-force-light .text-orange-800,
-        .rentix-contracts-page .rentix-force-light .text-orange-800 {
+        .contrx-contracts-page.contrx-force-light .text-orange-400,
+        .contrx-contracts-page .contrx-force-light .text-orange-400,
+        .contrx-contracts-page.contrx-force-light .text-orange-500,
+        .contrx-contracts-page .contrx-force-light .text-orange-500,
+        .contrx-contracts-page.contrx-force-light .text-orange-600,
+        .contrx-contracts-page .contrx-force-light .text-orange-600,
+        .contrx-contracts-page.contrx-force-light .text-orange-700,
+        .contrx-contracts-page .contrx-force-light .text-orange-700,
+        .contrx-contracts-page.contrx-force-light .text-orange-800,
+        .contrx-contracts-page .contrx-force-light .text-orange-800 {
           color: #ea580c !important;
         }
 
-        .rentix-contracts-page.rentix-force-light .text-red-300,
-        .rentix-contracts-page .rentix-force-light .text-red-300,
-        .rentix-contracts-page.rentix-force-light .text-red-600,
-        .rentix-contracts-page .rentix-force-light .text-red-600,
-        .rentix-contracts-page.rentix-force-light .text-red-700,
-        .rentix-contracts-page .rentix-force-light .text-red-700 {
+        .contrx-contracts-page.contrx-force-light .text-red-300,
+        .contrx-contracts-page .contrx-force-light .text-red-300,
+        .contrx-contracts-page.contrx-force-light .text-red-600,
+        .contrx-contracts-page .contrx-force-light .text-red-600,
+        .contrx-contracts-page.contrx-force-light .text-red-700,
+        .contrx-contracts-page .contrx-force-light .text-red-700 {
           color: #dc2626 !important;
         }
 
-        .rentix-contracts-page.rentix-force-light .text-emerald-700,
-        .rentix-contracts-page .rentix-force-light .text-emerald-700 {
+        .contrx-contracts-page.contrx-force-light .text-emerald-700,
+        .contrx-contracts-page .contrx-force-light .text-emerald-700 {
           color: #047857 !important;
         }
 
-        .rentix-contracts-page.rentix-force-light .text-amber-700,
-        .rentix-contracts-page .rentix-force-light .text-amber-700 {
+        .contrx-contracts-page.contrx-force-light .text-amber-700,
+        .contrx-contracts-page .contrx-force-light .text-amber-700 {
           color: #b45309 !important;
         }
 
-        .rentix-contracts-page.rentix-force-light .border-orange-100,
-        .rentix-contracts-page .rentix-force-light .border-orange-100,
-        .rentix-contracts-page.rentix-force-light .border-orange-200,
-        .rentix-contracts-page .rentix-force-light .border-orange-200 {
+        .contrx-contracts-page.contrx-force-light .border-orange-100,
+        .contrx-contracts-page .contrx-force-light .border-orange-100,
+        .contrx-contracts-page.contrx-force-light .border-orange-200,
+        .contrx-contracts-page .contrx-force-light .border-orange-200 {
           border-color: #fed7aa !important;
         }
 
-        .rentix-contracts-page.rentix-force-light .border-slate-100,
-        .rentix-contracts-page .rentix-force-light .border-slate-100,
-        .rentix-contracts-page.rentix-force-light .border-slate-200,
-        .rentix-contracts-page .rentix-force-light .border-slate-200,
-        .rentix-contracts-page.rentix-force-light .border-slate-300,
-        .rentix-contracts-page .rentix-force-light .border-slate-300,
-        .rentix-contracts-page.rentix-force-light .border-slate-700,
-        .rentix-contracts-page .rentix-force-light .border-slate-700,
-        .rentix-contracts-page.rentix-force-light .border-slate-800,
-        .rentix-contracts-page .rentix-force-light .border-slate-800 {
+        .contrx-contracts-page.contrx-force-light .border-slate-100,
+        .contrx-contracts-page .contrx-force-light .border-slate-100,
+        .contrx-contracts-page.contrx-force-light .border-slate-200,
+        .contrx-contracts-page .contrx-force-light .border-slate-200,
+        .contrx-contracts-page.contrx-force-light .border-slate-300,
+        .contrx-contracts-page .contrx-force-light .border-slate-300,
+        .contrx-contracts-page.contrx-force-light .border-slate-700,
+        .contrx-contracts-page .contrx-force-light .border-slate-700,
+        .contrx-contracts-page.contrx-force-light .border-slate-800,
+        .contrx-contracts-page .contrx-force-light .border-slate-800 {
           border-color: #e2e8f0 !important;
         }
 
-        .rentix-contracts-page.rentix-force-light input,
-        .rentix-contracts-page .rentix-force-light input,
-        .rentix-contracts-page.rentix-force-light select,
-        .rentix-contracts-page .rentix-force-light select,
-        .rentix-contracts-page.rentix-force-light textarea,
-        .rentix-contracts-page .rentix-force-light textarea {
+        .contrx-contracts-page.contrx-force-light input,
+        .contrx-contracts-page .contrx-force-light input,
+        .contrx-contracts-page.contrx-force-light select,
+        .contrx-contracts-page .contrx-force-light select,
+        .contrx-contracts-page.contrx-force-light textarea,
+        .contrx-contracts-page .contrx-force-light textarea {
           background-color: #ffffff !important;
           border-color: #e2e8f0 !important;
           color: #334155 !important;
           color-scheme: light !important;
         }
 
-        .rentix-contracts-page.rentix-force-light input::placeholder,
-        .rentix-contracts-page .rentix-force-light input::placeholder,
-        .rentix-contracts-page.rentix-force-light textarea::placeholder,
-        .rentix-contracts-page .rentix-force-light textarea::placeholder {
+        .contrx-contracts-page.contrx-force-light input::placeholder,
+        .contrx-contracts-page .contrx-force-light input::placeholder,
+        .contrx-contracts-page.contrx-force-light textarea::placeholder,
+        .contrx-contracts-page .contrx-force-light textarea::placeholder {
           color: #94a3b8 !important;
         }
 
-        .rentix-contracts-page.rentix-force-light .bg-slate-900,
-        .rentix-contracts-page .rentix-force-light .bg-slate-900,
-        .rentix-contracts-page.rentix-force-light .bg-slate-950,
-        .rentix-contracts-page .rentix-force-light .bg-slate-950,
-        .rentix-contracts-page.rentix-force-light .bg-slate-800,
-        .rentix-contracts-page .rentix-force-light .bg-slate-800,
-        .rentix-contracts-page.rentix-force-light .bg-slate-700,
-        .rentix-contracts-page .rentix-force-light .bg-slate-700 {
+        .contrx-contracts-page.contrx-force-light .bg-slate-900,
+        .contrx-contracts-page .contrx-force-light .bg-slate-900,
+        .contrx-contracts-page.contrx-force-light .bg-slate-950,
+        .contrx-contracts-page .contrx-force-light .bg-slate-950,
+        .contrx-contracts-page.contrx-force-light .bg-slate-800,
+        .contrx-contracts-page .contrx-force-light .bg-slate-800,
+        .contrx-contracts-page.contrx-force-light .bg-slate-700,
+        .contrx-contracts-page .contrx-force-light .bg-slate-700 {
           background-color: #f8fafc !important;
         }
 
-        .rentix-contracts-page.rentix-force-light button.bg-slate-900,
-        .rentix-contracts-page .rentix-force-light button.bg-slate-900,
-        .rentix-contracts-page.rentix-force-light button.bg-slate-800,
-        .rentix-contracts-page .rentix-force-light button.bg-slate-800,
-        .rentix-contracts-page.rentix-force-light button.bg-slate-700,
-        .rentix-contracts-page .rentix-force-light button.bg-slate-700 {
+        .contrx-contracts-page.contrx-force-light button.bg-slate-900,
+        .contrx-contracts-page .contrx-force-light button.bg-slate-900,
+        .contrx-contracts-page.contrx-force-light button.bg-slate-800,
+        .contrx-contracts-page .contrx-force-light button.bg-slate-800,
+        .contrx-contracts-page.contrx-force-light button.bg-slate-700,
+        .contrx-contracts-page .contrx-force-light button.bg-slate-700 {
           background-color: #f1f5f9 !important;
           color: #475569 !important;
         }
 
-        .rentix-contracts-page.rentix-force-light button.bg-orange-500,
-        .rentix-contracts-page .rentix-force-light button.bg-orange-500 {
+        .contrx-contracts-page.contrx-force-light button.bg-orange-500,
+        .contrx-contracts-page .contrx-force-light button.bg-orange-500 {
           background-color: #f97316 !important;
           color: #ffffff !important;
         }
 
-        .rentix-contracts-page.rentix-force-light button.bg-orange-500:hover,
-        .rentix-contracts-page .rentix-force-light button.bg-orange-500:hover {
+        .contrx-contracts-page.contrx-force-light button.bg-orange-500:hover,
+        .contrx-contracts-page .contrx-force-light button.bg-orange-500:hover {
           background-color: #ea580c !important;
         }
 
-        .rentix-contracts-page.rentix-force-light button.bg-red-500,
-        .rentix-contracts-page .rentix-force-light button.bg-red-500 {
+        .contrx-contracts-page.contrx-force-light button.bg-red-500,
+        .contrx-contracts-page .contrx-force-light button.bg-red-500 {
           background-color: #ef4444 !important;
           color: #ffffff !important;
         }
 
-        .rentix-contracts-page.rentix-force-light button.bg-red-500:hover,
-        .rentix-contracts-page .rentix-force-light button.bg-red-500:hover {
+        .contrx-contracts-page.contrx-force-light button.bg-red-500:hover,
+        .contrx-contracts-page .contrx-force-light button.bg-red-500:hover {
           background-color: #dc2626 !important;
         }
       `}</style>
-      <div className={`rentix-contracts-page space-y-8 ${isBlackTheme ? "rentix-black-theme" : "rentix-force-light"}`}>
+      <div className={`contrx-contracts-page space-y-8 ${isBlackTheme ? "contrx-black-theme" : "contrx-force-light"}`}>
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h1 className="text-4xl font-black tracking-tight text-slate-950">
@@ -1804,10 +1985,10 @@ export default function ContractsPage() {
           </button>
         </div>
 
-        <div className="grid gap-5 md:grid-cols-3">
-          <SummaryCard icon="📄" title="Contratos ativos" value={activeContracts} detail="Inclui vencendo" />
-          <SummaryCard icon="⏳" title="Vencendo" value={expiringContracts} detail={`Até ${EXPIRING_CONTRACT_DAYS_LIMIT} dias`} />
-          <SummaryCard icon="💰" title="Receita mensal" value={formatCurrency(monthlyRevenue)} detail="Contratos ativos" />
+        <div className="grid gap-4 md:grid-cols-3">
+          <SummaryCard icon={<FileText className="h-5 w-5" />} title="Contratos ativos" value={activeContracts} detail="Inclui vencendo" />
+          <SummaryCard icon={<Clock className="h-5 w-5" />} title="Vencendo" value={expiringContracts} detail={`Até ${EXPIRING_CONTRACT_DAYS_LIMIT} dias`} />
+          <SummaryCard icon={<DollarSign className="h-5 w-5" />} title="Receita mensal" value={formatCurrency(monthlyRevenue)} detail="Contratos ativos" />
         </div>
 
         <div className="rounded-3xl border border-orange-100 bg-white shadow-sm">
@@ -1936,7 +2117,8 @@ export default function ContractsPage() {
                           <div className="relative flex flex-col items-end gap-2">
                             <button
                               type="button"
-                              onClick={() => handleToggleContractActions(contract.id)}
+                              onClick={(event) => handleToggleContractActions(contract.id, event)}
+                              data-contract-action-trigger
                               className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
                               aria-expanded={openActionMenuContractId === contract.id}
                               aria-label={`Abrir ações do contrato ${contract.propertyName || contract.id}`}
@@ -1947,74 +2129,10 @@ export default function ContractsPage() {
                                   openActionMenuContractId === contract.id ? "rotate-180" : ""
                                 }`}
                               >
-                                ▼
+                                <ChevronDown className="h-4 w-4" />
                               </span>
                             </button>
 
-                            {openActionMenuContractId === contract.id && (
-                              <div className="w-56 rounded-3xl border border-slate-100 bg-white p-2 text-left shadow-xl">
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenContractDetails(contract)}
-                                  className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100"
-                                >
-                                  <span>Ver detalhes</span>
-                                  <span>👁️</span>
-                                </button>
-
-                                {canRenewContract(displayStatus) && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      handleCloseContractActions();
-                                      handleOpenRenewalModal(contract);
-                                    }}
-                                    className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-50"
-                                  >
-                                    <span>Renovar</span>
-                                    <span>🔄</span>
-                                  </button>
-                                )}
-
-                                {canFinishContract(displayStatus) && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      handleCloseContractActions();
-                                      handleOpenFinishModal(contract);
-                                    }}
-                                    className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-black text-red-600 transition hover:bg-red-50"
-                                  >
-                                    <span>Finalizar</span>
-                                    <span>✅</span>
-                                  </button>
-                                )}
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    handleCloseContractActions();
-                                    handleOpenPrintableContract(contract);
-                                  }}
-                                  className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-black text-orange-600 transition hover:bg-orange-50"
-                                >
-                                  <span>Gerar contrato</span>
-                                  <span>📄</span>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    handleCloseContractActions();
-                                    handleEditContract(contract);
-                                  }}
-                                  className="flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100"
-                                >
-                                  <span>Editar</span>
-                                  <span>✏️</span>
-                                </button>
-                              </div>
-                            )}
                           </div>
                         </div>
                       </td>
@@ -2042,22 +2160,53 @@ export default function ContractsPage() {
           </div>
         </div>
 
+        {openActionMenuContract && actionMenuPosition && (
+          <ContractActionMenu
+            contract={openActionMenuContract}
+            displayStatus={getDisplayContractStatus(openActionMenuContract)}
+            position={actionMenuPosition}
+            canRenew={canRenewContract(getDisplayContractStatus(openActionMenuContract))}
+            canFinish={canFinishContract(getDisplayContractStatus(openActionMenuContract))}
+            canCancel={canCancelContract(getDisplayContractStatus(openActionMenuContract))}
+            canDelete={canDeleteContract(getDisplayContractStatus(openActionMenuContract))}
+            onDetails={() => handleOpenContractDetails(openActionMenuContract)}
+            onRenew={() => {
+              handleCloseContractActions();
+              handleOpenRenewalModal(openActionMenuContract);
+            }}
+            onFinish={() => {
+              handleCloseContractActions();
+              handleOpenFinishModal(openActionMenuContract);
+            }}
+            onCancel={() => handleOpenStatusReasonModal(openActionMenuContract, "Canceled")}
+            onPrint={() => {
+              handleCloseContractActions();
+              handleOpenPrintableContract(openActionMenuContract);
+            }}
+            onEdit={() => {
+              handleCloseContractActions();
+              handleEditContract(openActionMenuContract);
+            }}
+            onDelete={() => handleOpenStatusReasonModal(openActionMenuContract, "Deleted")}
+          />
+        )}
+
         {selectedContractDetails && (() => {
           const detailsDisplayStatus = getDisplayContractStatus(selectedContractDetails);
           const detailsProperty = properties.find((property) => String(property.id) === String(selectedContractDetails.propertyId));
           const detailsTenant = tenants.find((tenant) => String(tenant.id) === String(selectedContractDetails.tenantId));
           const receivableSummary = getContractReceivableSummary(selectedContractDetails);
-          const detailsTabs: { id: ContractDetailsTab; label: string; icon: string }[] = [
-            { id: "Data", label: "Dados", icon: "📌" },
-            { id: "Financial", label: "Financeiro", icon: "💰" },
-            { id: "History", label: "Histórico", icon: "🕘" },
-            { id: "Prints", label: "Impressos", icon: "📄" },
-            { id: "Notes", label: "Observações", icon: "📝" },
+          const detailsTabs: { id: ContractDetailsTab; label: string; icon: React.ReactNode }[] = [
+            { id: "Data", label: "Dados", icon: <MapPin className="h-4 w-4" /> },
+            { id: "Financial", label: "Financeiro", icon: <DollarSign className="h-4 w-4" /> },
+            { id: "History", label: "Histórico", icon: <Clock className="h-4 w-4" /> },
+            { id: "Prints", label: "Impressos", icon: <FileText className="h-4 w-4" /> },
+            { id: "Notes", label: "Observações", icon: <Pencil className="h-4 w-4" /> },
           ];
 
           return (
             <div className="fixed inset-0 z-[72] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
-              <div className={`flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl ${isBlackTheme ? "rentix-black-theme" : "rentix-force-light"}`}>
+              <div className={`flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl ${isBlackTheme ? "contrx-black-theme" : "contrx-force-light"}`}>
                 <div className="border-b border-slate-100 bg-white px-6 py-5">
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div>
@@ -2074,45 +2223,19 @@ export default function ContractsPage() {
                         </span>
                       </div>
                       <p className="mt-2 text-sm font-semibold text-slate-500">
-                        {selectedContractDetails.tenantName || "Inquilino não informado"} • {formatDate(selectedContractDetails.startDate)} até {formatDate(selectedContractDetails.endDate)}
+                        {selectedContractDetails.tenantName || "Inquilino não informado"} ⬢ {formatDate(selectedContractDetails.startDate)} até {formatDate(selectedContractDetails.endDate)}
                       </p>
                     </div>
 
-                    <div className="flex flex-wrap gap-3">
-                      {canRenewContract(detailsDisplayStatus) && (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenRenewalModal(selectedContractDetails)}
-                          className="rounded-2xl bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
-                        >
-                          Renovar
-                        </button>
-                      )}
-
-                      {canFinishContract(detailsDisplayStatus) && (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenFinishModal(selectedContractDetails)}
-                          className="rounded-2xl bg-red-50 px-5 py-3 text-sm font-black text-red-600 transition hover:bg-red-100"
-                        >
-                          Finalizar
-                        </button>
-                      )}
-
-                      <button
-                        type="button"
-                        onClick={() => handleOpenPrintableContract(selectedContractDetails)}
-                        className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
-                      >
-                        Imprimir contrato
-                      </button>
-
+                    <div className="flex justify-end">
                       <button
                         type="button"
                         onClick={handleCloseContractDetails}
-                        className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                        className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-red-50 hover:text-red-600"
+                        title="Fechar detalhes"
+                        aria-label="Fechar detalhes"
                       >
-                        Fechar
+                        <X className="h-5 w-5" />
                       </button>
                     </div>
                   </div>
@@ -2127,11 +2250,11 @@ export default function ContractsPage() {
                         onClick={() => setContractDetailsActiveTab(tab.id)}
                         className={`whitespace-nowrap rounded-2xl px-4 py-3 text-sm font-black transition ${
                           contractDetailsActiveTab === tab.id
-                            ? "bg-orange-500 text-white shadow-md shadow-orange-100"
+                              ? "bg-orange-500 text-white shadow-md shadow-orange-100"
                             : "bg-white text-slate-600 ring-1 ring-slate-100 hover:bg-orange-50 hover:text-orange-700"
                         }`}
                       >
-                        <span className="mr-2">{tab.icon}</span>
+                        <span className="mr-2 inline-flex align-[-2px]">{tab.icon}</span>
                         {tab.label}
                       </button>
                     ))}
@@ -2153,7 +2276,15 @@ export default function ContractsPage() {
                       <DetailCard title="Inquilino" value={selectedContractDetails.tenantName || "Não informado"} detail={detailsTenant?.phone || detailsTenant?.email || "Contato não informado"} />
                       <DetailCard title="Valor do aluguel" value={formatCurrency(selectedContractDetails.rentValue)} detail="Valor base do contrato" />
                       <DetailCard title="Período" value={`${formatDate(selectedContractDetails.startDate)} até ${formatDate(selectedContractDetails.endDate)}`} detail={`${getContractDurationInMonths(selectedContractDetails.startDate, selectedContractDetails.endDate)} mês(es) / ${getContractDurationInDays(selectedContractDetails.startDate, selectedContractDetails.endDate)} dia(s)`} />
-                      <DetailCard title="Tipo" value={selectedContractDetails.isTemporaryRental ? "Locação temporária" : "Contrato padrão residencial"} detail={selectedContractDetails.isTemporaryRental ? `Entrada ${selectedContractDetails.checkInTime || "--:--"} / Saída ${selectedContractDetails.checkOutTime || "--:--"}` : "Modelo residencial padrão"} />
+                      <DetailCard
+                        title="Tipo"
+                        value={selectedContractDetails.isTemporaryRental ? "Locação temporária" : "Contrato padrão residencial"}
+                        detail={
+                          selectedContractDetails.isTemporaryRental
+                            ? `Entrada ${selectedContractDetails.checkInTime || "--:--"} / Saída ${selectedContractDetails.checkOutTime || "--:--"}`
+                            : "Modelo residencial padrão"
+                        }
+                      />
                       <DetailCard title="Status atual" value={getContractStatusLabel(detailsDisplayStatus)} detail={detailsDisplayStatus === "Expiring" ? `Vence em ${getDaysUntilDate(selectedContractDetails.endDate)} dia(s)` : "Controle operacional do contrato"} />
                     </div>
                   )}
@@ -2222,24 +2353,29 @@ export default function ContractsPage() {
 
                   {contractDetailsActiveTab === "History" && (
                     <div className="space-y-4">
-                      <TimelineItem icon="📄" title="Contrato criado" description="Contrato registrado no módulo de contratos e imóvel vinculado à locação." date={formatDate(selectedContractDetails.startDate)} />
+                      <TimelineItem icon={<FileText className="h-5 w-5" />} title="Contrato criado" description="Contrato registrado no módulo de contratos e imóvel vinculado à locação." date={formatDate(selectedContractDetails.startDate)} />
 
                       {(selectedContractDetails.renewalHistory || []).map((renewal, index) => (
                         <TimelineItem
                           key={`${renewal.renewedAt}-${index}`}
-                          icon="🔄"
+                          icon={<RefreshCw className="h-5 w-5" />}
                           title="Contrato renovado"
-                          description={`De ${formatDate(renewal.previousEndDate)} para ${formatDate(renewal.newEndDate)} • Valor: ${formatCurrency(renewal.previousRentValue)} para ${formatCurrency(renewal.newRentValue)}${renewal.notes ? ` • ${renewal.notes}` : ""}`}
+                          description={`De ${formatDate(renewal.previousEndDate)} para ${formatDate(renewal.newEndDate)} - Valor: ${formatCurrency(renewal.previousRentValue)} para ${formatCurrency(renewal.newRentValue)}${renewal.notes ? ` - ${renewal.notes}` : ""}`}
                           date={new Date(renewal.renewedAt).toLocaleString("pt-BR")}
                         />
                       ))}
 
                       {selectedContractDetails.finishedAt && (
-                        <TimelineItem icon="✅" title="Contrato finalizado" description={selectedContractDetails.finishReason || "Contrato finalizado."} date={new Date(selectedContractDetails.finishedAt).toLocaleString("pt-BR")} />
+                        <TimelineItem icon={<CheckCircle className="h-5 w-5" />} title="Contrato finalizado" description={selectedContractDetails.finishReason || "Contrato finalizado."} date={new Date(selectedContractDetails.finishedAt).toLocaleString("pt-BR")} />
                       )}
 
                       {selectedContractDetails.statusReason && (
-                        <TimelineItem icon={selectedContractDetails.statusReasonType === "Deleted" ? "🗑️" : "🚫"} title={selectedContractDetails.statusReasonType === "Deleted" ? "Contrato excluído" : "Contrato cancelado"} description={selectedContractDetails.statusReason} date={selectedContractDetails.statusReasonAt ? new Date(selectedContractDetails.statusReasonAt).toLocaleString("pt-BR") : "Data não informada"} />
+                        <TimelineItem
+                          icon={selectedContractDetails.statusReasonType === "Deleted" ? <Trash2 className="h-5 w-5" /> : <Ban className="h-5 w-5" />}
+                          title={selectedContractDetails.statusReasonType === "Deleted" ? "Contrato excluído" : "Contrato cancelado"}
+                          description={selectedContractDetails.statusReason}
+                          date={selectedContractDetails.statusReasonAt ? new Date(selectedContractDetails.statusReasonAt).toLocaleString("pt-BR") : "Data não informada"}
+                        />
                       )}
                     </div>
                   )}
@@ -2249,7 +2385,7 @@ export default function ContractsPage() {
                       <div className="rounded-3xl border border-orange-100 bg-orange-50 p-6">
                         <p className="text-sm font-black uppercase tracking-wide text-orange-600">Contrato</p>
                         <h3 className="mt-3 text-2xl font-black text-slate-950">
-                          {selectedContractDetails.isTemporaryRental ? "Contrato temporário" : "Contrato padrão residencial"}
+                           {selectedContractDetails.isTemporaryRental ? "Contrato temporário" : "Contrato padrão residencial"}
                         </h3>
                         <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
                           Usa o mesmo modelo configurado na ferramenta de contratos e em Configurações &gt; Impresso.
@@ -2283,7 +2419,11 @@ export default function ContractsPage() {
                   {contractDetailsActiveTab === "Notes" && (
                     <div className="grid gap-5 md:grid-cols-2">
                       <DetailCard title="Motivo / observação de status" value={selectedContractDetails.statusReason || selectedContractDetails.finishReason || "Sem observações registradas"} detail="Informações salvas em cancelamento, exclusão ou finalização." />
-                      <DetailCard title="Última renovação" value={selectedContractDetails.renewedAt ? new Date(selectedContractDetails.renewedAt).toLocaleString("pt-BR") : "Sem renovação registrada"} detail={`${selectedContractDetails.renewalHistory?.length || 0} renovação(ões) no histórico`} />
+                      <DetailCard
+                        title="Última renovação"
+                        value={selectedContractDetails.renewedAt ? new Date(selectedContractDetails.renewedAt).toLocaleString("pt-BR") : "Sem renovação registrada"}
+                        detail={`${selectedContractDetails.renewalHistory?.length || 0} renovação(ões) no histórico`}
+                      />
                     </div>
                   )}
                 </div>
@@ -2295,9 +2435,9 @@ export default function ContractsPage() {
 
         {renewalContract && (
           <div className="fixed inset-0 z-[68] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
-            <div className={`w-full max-w-2xl rounded-[2rem] border border-emerald-100 bg-white p-8 shadow-2xl ${isBlackTheme ? "rentix-black-theme" : "rentix-force-light"}`}>
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-50 text-3xl">
-                🔄
+            <div className={`w-full max-w-2xl rounded-[2rem] border border-emerald-100 bg-white p-8 shadow-2xl ${isBlackTheme ? "contrx-black-theme" : "contrx-force-light"}`}>
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-50 text-emerald-600">
+                <RefreshCw className="h-8 w-8" />
               </div>
 
               <div className="mt-5 text-center">
@@ -2314,7 +2454,7 @@ export default function ContractsPage() {
                   {renewalContract.propertyName || "Contrato"}
                 </p>
                 <p className="mt-1 text-xs font-semibold text-slate-500">
-                  {renewalContract.tenantName || "Inquilino não informado"} • Vence em {formatDate(renewalContract.endDate)}
+                  {renewalContract.tenantName || "Inquilino não informado"} ⬢ Vence em {formatDate(renewalContract.endDate)}
                 </p>
               </div>
 
@@ -2333,13 +2473,14 @@ export default function ContractsPage() {
 
                 <FormField label="Novo valor do aluguel">
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     value={renewalRentValue}
                     onChange={(event) => {
-                      setRenewalRentValue(event.target.value);
+                      setRenewalRentValue(formatCurrencyInput(event.target.value));
                       setRenewalError("");
                     }}
-                    placeholder="Ex: 1800"
+                    placeholder="R$ 0,00"
                     className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                   />
                 </FormField>
@@ -2387,9 +2528,9 @@ export default function ContractsPage() {
 
         {finishContract && (
           <div className="fixed inset-0 z-[68] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
-            <div className={`w-full max-w-lg rounded-[2rem] border border-red-100 bg-white p-8 shadow-2xl ${isBlackTheme ? "rentix-black-theme" : "rentix-force-light"}`}>
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 text-3xl">
-                ✅
+            <div className={`w-full max-w-lg rounded-[2rem] border border-red-100 bg-white p-8 shadow-2xl ${isBlackTheme ? "contrx-black-theme" : "contrx-force-light"}`}>
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 text-red-600">
+                <CheckCircle className="h-8 w-8" />
               </div>
 
               <div className="mt-5 text-center">
@@ -2455,7 +2596,7 @@ export default function ContractsPage() {
 
         {printableContract && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
-            <div className={`flex max-h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl ${isBlackTheme ? "rentix-black-theme" : "rentix-force-light"}`}>
+            <div className={`flex max-h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl ${isBlackTheme ? "contrx-black-theme" : "contrx-force-light"}`}>
               <div className="flex flex-col gap-4 border-b border-slate-100 bg-white px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-500">
@@ -2501,12 +2642,12 @@ export default function ContractsPage() {
                   ref={printableContractFrameRef}
                   title={
                     printableContract.isTemporaryRental
-                      ? "Visualização do contrato temporário"
+                        ? "Visualização do contrato temporário"
                       : "Visualização do contrato padrão residencial"
                   }
                   srcDoc={
                     printableContract.isTemporaryRental
-                      ? buildTemporaryRentalContractHtml(
+                         ? buildTemporaryRentalContractHtml(
                           printableContract,
                           properties.find((property) => String(property.id) === String(printableContract.propertyId)),
                           tenants.find((tenant) => String(tenant.id) === String(printableContract.tenantId)),
@@ -2527,16 +2668,20 @@ export default function ContractsPage() {
         )}
 
         {pendingStatusChange && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
-            <div className={`w-full max-w-lg rounded-[2rem] border border-red-100 bg-white p-8 shadow-2xl ${isBlackTheme ? "rentix-black-theme" : "rentix-force-light"}`}>
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 text-3xl">
-                {pendingStatusChange.nextStatus === "Deleted" ? "🗑️" : "🚫"}
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
+            <div className={`w-full max-w-lg rounded-[2rem] border border-red-100 bg-white p-8 shadow-2xl ${isBlackTheme ? "contrx-black-theme" : "contrx-force-light"}`}>
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 text-red-600">
+                {pendingStatusChange.nextStatus === "Deleted" ? (
+                  <Trash2 className="h-8 w-8" />
+                ) : (
+                  <Ban className="h-8 w-8" />
+                )}
               </div>
 
               <div className="mt-5 text-center">
                 <h3 className="text-2xl font-black text-slate-950">
                   {pendingStatusChange.nextStatus === "Deleted"
-                    ? "Motivo da exclusão"
+                      ? "Motivo da exclusão"
                     : "Motivo do cancelamento"}
                 </h3>
 
@@ -2566,7 +2711,7 @@ export default function ContractsPage() {
                   }}
                   placeholder={
                     pendingStatusChange.nextStatus === "Deleted"
-                      ? "Descreva o motivo da exclusão do contrato"
+                       ? "Descreva o motivo da exclusão do contrato"
                       : "Descreva o motivo do cancelamento do contrato"
                   }
                   rows={4}
@@ -2604,9 +2749,9 @@ export default function ContractsPage() {
 
         {isDefaultTimeModalOpen && (
           <div className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
-            <div className={`w-full max-w-lg rounded-[2rem] border border-orange-100 bg-white p-8 shadow-2xl ${isBlackTheme ? "rentix-black-theme" : "rentix-force-light"}`}>
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 text-3xl">
-                ✏️
+            <div className={`w-full max-w-lg rounded-[2rem] border border-orange-100 bg-white p-8 shadow-2xl ${isBlackTheme ? "contrx-black-theme" : "contrx-force-light"}`}>
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 text-orange-600">
+                <Pencil className="h-8 w-8" />
               </div>
 
               <div className="mt-5 text-center">
@@ -2659,9 +2804,55 @@ export default function ContractsPage() {
           </div>
         )}
 
-        {isFormOpen && (
+        {isFormOpen && isFormMinimized && (
+          <div className="contrx-minimized-modal fixed bottom-6 right-6 z-50 w-[min(30rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border-2 border-orange-300 bg-white shadow-2xl">
+            <div className="h-2 bg-orange-500" />
+            <div className="p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="rounded-full bg-orange-100 px-3 py-1 text-[0.68rem] font-black uppercase tracking-wide text-orange-700">
+                      Minimizado
+                    </span>
+                    <span className="h-2 w-2 rounded-full bg-orange-500 shadow-[0_0_0_4px_rgb(249_115_22/0.16)]" />
+                  </div>
+                  <p className="truncate text-base font-black text-slate-950">
+                    {isEditing ? "Editar contrato" : "Novo contrato"}
+                  </p>
+                  <p className="truncate text-sm font-semibold text-slate-500">
+                    {properties.find((property) => String(property.id) === String(propertyId))?.name || "Contrato em andamento"}
+                  </p>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsFormMinimized(false)}
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-200 transition hover:bg-orange-600"
+                    title="Restaurar modal"
+                    aria-label="Restaurar modal"
+                  >
+                    <Maximize2 className="h-5 w-5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-slate-200"
+                    title="Fechar modal"
+                    aria-label="Fechar modal"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isFormOpen && !isFormMinimized && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
-            <div className={`max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 bg-white shadow-2xl ${isBlackTheme ? "rentix-black-theme" : "rentix-force-light"}`}>
+            <div className={`max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 bg-white shadow-2xl ${isBlackTheme ? "contrx-black-theme" : "contrx-force-light"}`}>
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-8 py-6">
                 <div>
                   <h2 className="text-2xl font-black text-slate-950">
@@ -2672,13 +2863,27 @@ export default function ContractsPage() {
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-600 transition hover:bg-red-50 hover:text-red-600"
-                >
-                  ×
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsFormMinimized(true)}
+                    className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-orange-50 hover:text-orange-600"
+                    title="Minimizar modal"
+                    aria-label="Minimizar modal"
+                  >
+                    <Minimize2 className="h-5 w-5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-red-50 hover:text-red-600"
+                    title="Fechar modal"
+                    aria-label="Fechar modal"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
 
               <form onSubmit={handleSubmitContract}>
@@ -2728,13 +2933,14 @@ export default function ContractsPage() {
 
                     <FormField label="Valor aluguel">
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
                         value={rentValue}
                         onChange={(event) => {
-                          setRentValue(event.target.value);
+                          setRentValue(formatCurrencyInput(event.target.value));
                           setFormError("");
                         }}
-                        placeholder="Ex: 1800"
+                        placeholder="R$ 0,00"
                         required
                         className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                       />
@@ -2766,20 +2972,12 @@ export default function ContractsPage() {
                       />
                     </FormField>
 
-                    <FormField label="Status">
-                      <select
-                        value={contractStatus}
-                        onChange={(event) => setContractStatus(event.target.value as ContractStatus)}
-                        required
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                      >
-                        <option value="Active">Ativo</option>
-                        <option value="Inactive">Inativo</option>
-                        <option value="Canceled">Cancelado</option>
-                        <option value="Finished">Finalizado</option>
-                        <option value="Deleted">Excluído</option>
-                      </select>
-                    </FormField>
+                    <div className="rounded-3xl border border-orange-100 bg-orange-50 px-5 py-4">
+                      <p className="text-sm font-black text-slate-800">Status automático</p>
+                      <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
+                        O contrato novo entra como ativo. Cancelamento, finalização e exclusão ficam nas ações do contrato, sempre com registro de motivo quando necessário.
+                      </p>
+                    </div>
                   </div>
 
                   <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-2xl border border-orange-100 bg-orange-50 px-5 py-4 transition hover:bg-orange-50">
@@ -2834,7 +3032,7 @@ export default function ContractsPage() {
                             onClick={handleOpenDefaultTimeModal}
                             className="rounded-2xl bg-slate-100 px-4 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-200"
                           >
-                            ✏️
+                            <Pencil className="h-4 w-4" />
                           </button>
                         </div>
                       </div>
@@ -2910,22 +3108,141 @@ function FormField({ label, children }: FormFieldProps) {
 }
 
 type SummaryCardProps = {
-  icon: string;
+  icon: React.ReactNode;
   title: string;
   value: string | number;
   detail: string;
 };
 
+type ContractActionMenuProps = {
+  contract: Contract;
+  displayStatus: ContractDisplayStatus;
+  position: ActionMenuPosition;
+  canRenew: boolean;
+  canFinish: boolean;
+  canCancel: boolean;
+  canDelete: boolean;
+  onDetails: () => void;
+  onRenew: () => void;
+  onFinish: () => void;
+  onCancel: () => void;
+  onPrint: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+};
+
+function ContractActionMenu({
+  position,
+  canRenew,
+  canFinish,
+  canCancel,
+  canDelete,
+  onDetails,
+  onRenew,
+  onFinish,
+  onCancel,
+  onPrint,
+  onEdit,
+  onDelete,
+}: ContractActionMenuProps) {
+  return (
+    <div
+      data-contract-action-menu
+      className="fixed z-[90] w-56 rounded-3xl border border-slate-100 bg-white p-2 text-left shadow-2xl shadow-slate-300/40"
+      style={{ top: position.top, left: position.left }}
+    >
+      <ActionMenuButton onClick={onDetails} icon={<Eye className="h-4 w-4 shrink-0" />}>
+        Ver detalhes
+      </ActionMenuButton>
+
+      {canRenew && (
+        <ActionMenuButton
+          onClick={onRenew}
+          icon={<RefreshCw className="h-4 w-4 shrink-0" />}
+          className="text-emerald-700 hover:bg-emerald-50"
+        >
+          Renovar
+        </ActionMenuButton>
+      )}
+
+      {canFinish && (
+        <ActionMenuButton
+          onClick={onFinish}
+          icon={<CheckCircle className="h-4 w-4 shrink-0" />}
+          className="text-red-600 hover:bg-red-50"
+        >
+          Finalizar
+        </ActionMenuButton>
+      )}
+
+      {canCancel && (
+        <ActionMenuButton
+          onClick={onCancel}
+          icon={<Ban className="h-4 w-4 shrink-0" />}
+          className="text-red-600 hover:bg-red-50"
+        >
+          Cancelar
+        </ActionMenuButton>
+      )}
+
+      <ActionMenuButton
+        onClick={onPrint}
+        icon={<FileText className="h-4 w-4 shrink-0" />}
+        className="text-orange-600 hover:bg-orange-50"
+      >
+        Gerar contrato
+      </ActionMenuButton>
+
+      <ActionMenuButton onClick={onEdit} icon={<Pencil className="h-4 w-4 shrink-0" />}>
+        Editar
+      </ActionMenuButton>
+
+      {canDelete && (
+        <ActionMenuButton
+          onClick={onDelete}
+          icon={<Trash2 className="h-4 w-4 shrink-0" />}
+          className="text-zinc-700 hover:bg-zinc-100"
+        >
+          Excluir
+        </ActionMenuButton>
+      )}
+    </div>
+  );
+}
+
+function ActionMenuButton({
+  children,
+  className = "text-slate-700 hover:bg-slate-100",
+  icon,
+  onClick,
+}: {
+  children: React.ReactNode;
+    className?: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-black transition ${className}`}
+    >
+      {icon}
+      <span>{children}</span>
+    </button>
+  );
+}
+
 function SummaryCard({ icon, title, value, detail }: SummaryCardProps) {
   return (
-    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
-      <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-xl text-orange-600">
+    <div className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100 text-orange-600">
         {icon}
       </div>
 
-      <p className="text-sm font-bold text-slate-500">{title}</p>
-      <h3 className="mt-3 text-3xl font-black text-slate-950">{value}</h3>
-      <p className="mt-3 text-sm font-bold text-orange-600">{detail}</p>
+      <p className="text-xs font-bold text-slate-500">{title}</p>
+      <h3 className="mt-2 text-2xl font-black text-slate-950">{value}</h3>
+      <p className="mt-2 text-xs font-bold text-orange-600">{detail}</p>
     </div>
   );
 }
@@ -2984,7 +3301,7 @@ function TimelineItem({
   description,
   date,
 }: {
-  icon: string;
+  icon: React.ReactNode;
   title: string;
   description: string;
   date: string;
@@ -3009,11 +3326,11 @@ function mapApiContractToContract(apiContract: ApiContract): Contract {
   const propertyName =
     apiContract.propertyName ||
     apiContract.property?.title ||
-    "IMÃ“VEL NÃƒO INFORMADO";
+    "IMÓVEL NÃO INFORMADO";
   const tenantName =
     apiContract.tenantName ||
     apiContract.tenant?.name ||
-    "LOCATÃRIO NÃƒO INFORMADO";
+    "LOCATÁRIO NÃO INFORMADO";
 
   return {
     id: apiContract.id,
@@ -3099,7 +3416,7 @@ function mapApiPropertyToProperty(
   };
 }
 
-function mapApiPersonToTenant(apiPerson: ApiPerson): RentixTenant {
+function mapApiPersonToTenant(apiPerson: ApiPerson): ContrxTenant {
   return {
     id: apiPerson.id,
     name: apiPerson.name,
@@ -3283,7 +3600,7 @@ function getDaysUntilDate(value: string) {
 function buildStandardResidentialContractHtml(
   contract: Contract,
   property?: Property,
-  tenant?: RentixTenant,
+  tenant?: ContrxTenant,
   showToolbar = true
 ) {
   const companySettings = getCompanySettingsForContractPrint();
@@ -3373,7 +3690,7 @@ function buildStandardResidentialContractHtml(
 function buildTemporaryRentalContractHtml(
   contract: Contract,
   property?: Property,
-  tenant?: RentixTenant,
+  tenant?: ContrxTenant,
   showToolbar = true
 ) {
   const companySettings = getCompanySettingsForContractPrint();
@@ -3730,7 +4047,7 @@ function formatFullAddressForPrint(address: {
     address.street,
     address.number ? `nº ${address.number}` : "",
     address.complement,
-    address.neighborhood ? `Bairro: ${address.neighborhood}` : "",
+     address.neighborhood ? `Bairro: ${address.neighborhood}` : "",
     address.city && address.state ? `${address.city}/${address.state}` : address.city || address.state,
     address.zipCode ? `CEP ${address.zipCode}` : "",
   ];
@@ -3835,6 +4152,20 @@ function formatCurrency(value?: number) {
     style: "currency",
     currency: "BRL",
   });
+}
+
+function parseCurrencyInput(value: string) {
+  const digits = String(value || "").replace(/\D/g, "");
+
+  return Number(digits || 0) / 100;
+}
+
+function formatCurrencyInput(value: string | number) {
+  if (typeof value === "number") {
+    return formatCurrency(value);
+  }
+
+  return formatCurrency(parseCurrencyInput(value));
 }
 
 function formatDate(value: string) {
