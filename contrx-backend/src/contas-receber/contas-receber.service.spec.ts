@@ -17,7 +17,11 @@ describe('ContasReceberService', () => {
     const tx = {
       pagamentoRecebido: {
         aggregate: jest.fn().mockResolvedValue({
-          _sum: { amountPaid: new Prisma.Decimal(currentPaidAmount) },
+          _sum: {
+            amountPaid: new Prisma.Decimal(currentPaidAmount),
+            discount: new Prisma.Decimal(0),
+            interest: new Prisma.Decimal(0),
+          },
         }),
         create: jest.fn().mockResolvedValue({ id: 'payment-1' }),
         deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
@@ -94,6 +98,35 @@ describe('ContasReceberService', () => {
 
     expect(tx.pagamentoRecebido.create).toHaveBeenCalled();
     expect(tx.pagamentoRecebido.deleteMany).not.toHaveBeenCalled();
+    expect(tx.contaReceber.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { status: FinancialAccountStatus.PAID },
+      }),
+    );
+  });
+
+  it('quita a conta quando pagamento com desconto liquida o valor original', async () => {
+    const { service, tx } = createService();
+
+    await service.receivePayment(
+      'receivable-1',
+      {
+        paidAt: '2026-05-15',
+        method: 'PIX',
+        amountPaid: 900,
+        discount: 100,
+      },
+      'company-1',
+    );
+
+    expect(tx.pagamentoRecebido.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          amountPaid: new Prisma.Decimal(900),
+          discount: new Prisma.Decimal(100),
+        }),
+      }),
+    );
     expect(tx.contaReceber.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: { status: FinancialAccountStatus.PAID },

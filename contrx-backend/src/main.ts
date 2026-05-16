@@ -1,9 +1,21 @@
-import 'dotenv/config';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+import { config } from 'dotenv';
 
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 
 import { AppModule } from './app.module';
+
+const defaultEnvPath = resolve(process.cwd(), '.env');
+const supabaseEnvPath = resolve(process.cwd(), '.env.supabase');
+
+config({ path: defaultEnvPath });
+
+if (existsSync(supabaseEnvPath)) {
+  config({ path: supabaseEnvPath, override: true });
+}
 
 function getAllowedOrigins() {
   const configuredOrigins = process.env.CORS_ORIGINS?.split(',')
@@ -12,7 +24,12 @@ function getAllowedOrigins() {
 
   return configuredOrigins?.length
     ? configuredOrigins
-    : ['http://localhost:3000', 'http://localhost:3001'];
+    : [
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'https://contrx.com.br',
+        'https://www.contrx.com.br',
+      ];
 }
 
 async function bootstrap() {

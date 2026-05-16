@@ -97,17 +97,25 @@ export class ContasReceberService {
     return this.prisma.$transaction(async (tx) => {
       const currentPaymentSummary = await tx.pagamentoRecebido.aggregate({
         where: { chargeId: id },
-        _sum: { amountPaid: true },
+        _sum: { amountPaid: true, discount: true, interest: true },
       });
-      const currentPaidAmount = Number(
-        currentPaymentSummary._sum.amountPaid || 0,
+      const currentSettlementAmount = this.getSettlementAmount(
+        currentPaymentSummary._sum.amountPaid,
+        currentPaymentSummary._sum.discount,
+        currentPaymentSummary._sum.interest,
       );
 
-      if (currentPaidAmount >= Number(account.amount)) {
+      if (currentSettlementAmount >= Number(account.amount)) {
         throw new BadRequestException('Esta conta a receber ja esta quitada.');
       }
 
-      const nextPaidAmount = currentPaidAmount + data.amountPaid;
+      const nextSettlementAmount =
+        currentSettlementAmount +
+        this.getSettlementAmount(
+          data.amountPaid,
+          data.discount || 0,
+          data.interest || 0,
+        );
 
       await tx.pagamentoRecebido.create({
         data: {
@@ -130,7 +138,7 @@ export class ContasReceberService {
         data: {
           status: this.getStatusAfterPayment(
             Number(account.amount),
-            nextPaidAmount,
+            nextSettlementAmount,
           ),
         },
         include: this.defaultInclude,
@@ -314,5 +322,17 @@ export class ContasReceberService {
     return amountPaid >= accountAmount
       ? FinancialAccountStatus.PAID
       : FinancialAccountStatus.PENDING;
+  }
+
+  private getSettlementAmount(
+    amountPaid: unknown,
+    discount: unknown,
+    interest: unknown,
+  ) {
+    return (
+      Number(amountPaid || 0) +
+      Number(discount || 0) -
+      Number(interest || 0)
+    );
   }
 }

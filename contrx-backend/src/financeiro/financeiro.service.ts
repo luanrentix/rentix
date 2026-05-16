@@ -32,6 +32,8 @@ type FinancialPayable = {
 type FinancialPayment = {
   paidAt: Date;
   amountPaid: unknown;
+  discount?: unknown;
+  interest?: unknown;
 };
 
 type FinancialSummaryFilters = {
@@ -79,7 +81,7 @@ export class FinanceiroService {
           status: this.getStatus(
             account.status,
             account.dueDate,
-            paymentSummary.paidAmount,
+            paymentSummary.settlementAmount,
             amount,
           ),
           paymentDate: paymentSummary.paymentDate,
@@ -105,7 +107,7 @@ export class FinanceiroService {
           status: this.getStatus(
             account.status,
             account.dueDate,
-            paymentSummary.paidAmount,
+            paymentSummary.settlementAmount,
             amount,
           ),
           paymentDate: paymentSummary.paymentDate,
@@ -212,6 +214,7 @@ export class FinanceiroService {
       return {
         paymentDate: null,
         paidAmount,
+        settlementAmount: paidAmount,
         remainingAmount: Math.max(accountAmount - paidAmount, 0),
       };
     }
@@ -221,11 +224,20 @@ export class FinanceiroService {
 
       return total + (Number.isFinite(amount) ? amount : 0);
     }, 0);
+    const settlementAmount = payments.reduce((total, payment) => {
+      const amountPaid = Number(payment.amountPaid || 0);
+      const discount = Number(payment.discount || 0);
+      const interest = Number(payment.interest || 0);
+      const amount = amountPaid + discount - interest;
+
+      return total + (Number.isFinite(amount) ? amount : 0);
+    }, 0);
 
     return {
       paymentDate: this.toDateOnly(payments[0].paidAt),
       paidAmount,
-      remainingAmount: Math.max(accountAmount - paidAmount, 0),
+      settlementAmount,
+      remainingAmount: Math.max(accountAmount - settlementAmount, 0),
     };
   }
 

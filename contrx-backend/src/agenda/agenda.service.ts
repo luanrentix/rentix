@@ -53,7 +53,6 @@ export class AgendaService {
     return this.prisma.scheduleItem.update({
       where: { id },
       data: {
-        companyId,
         title: data.title,
         customerName: data.customerName,
         propertyName: data.propertyName,

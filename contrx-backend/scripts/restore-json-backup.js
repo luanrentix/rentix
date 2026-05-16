@@ -21,6 +21,8 @@ const roleMap = {
   SYSTEM_OWNER: 'DONO_SISTEMA',
 };
 
+const ADMIN_EMAILS = new Set(['adm@contrx.com.br', 'adm@contrx.com']);
+
 const personTypeMap = {
   INDIVIDUAL: 'PESSOA_FISICA',
   COMPANY: 'PESSOA_JURIDICA',
@@ -90,10 +92,10 @@ async function main() {
     }
 
     for (const user of data.users || []) {
-      const role =
-        user.email === 'adm@contrx.com'
-          ? 'DONO_SISTEMA'
-          : roleMap[user.role] || 'USER';
+      const normalizedEmail = required(user.email, 'user.email').toLowerCase();
+      const role = ADMIN_EMAILS.has(normalizedEmail)
+        ? 'DONO_SISTEMA'
+        : roleMap[user.role] || 'USER';
 
       await client.query(
         `
@@ -122,7 +124,7 @@ async function main() {
           required(user.id, 'user.id'),
           required(user.companyId, 'user.companyId'),
           required(user.name, 'user.name'),
-          required(user.email, 'user.email').toLowerCase(),
+          normalizedEmail,
           required(user.passwordHash, 'user.passwordHash'),
           role,
           user.isActive !== false,
@@ -269,7 +271,9 @@ async function main() {
     }
 
     const firstCompany = data.companies?.[0];
-    const adminUser = data.users?.find((user) => user.email === 'adm@contrx.com');
+    const adminUser = data.users?.find((user) =>
+      ADMIN_EMAILS.has(String(user.email || '').toLowerCase()),
+    );
 
     if (firstCompany && adminUser) {
       await client.query(

@@ -1,6 +1,7 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 
 @Injectable()
 export class PrismaService
@@ -14,8 +15,15 @@ export class PrismaService
       throw new Error('DATABASE_URL environment variable is not defined.');
     }
 
-    const adapter = new PrismaPg({
-      connectionString: databaseUrl,
+    const isSupabaseConnection = databaseUrl.includes('supabase.com');
+    const pool = new Pool({
+      connectionString: isSupabaseConnection
+        ? databaseUrl.replace(/\?sslmode=require.*/, '')
+        : databaseUrl,
+      ssl: isSupabaseConnection ? { rejectUnauthorized: false } : undefined,
+    });
+    const adapter = new PrismaPg(pool, {
+      disposeExternalPool: true,
     });
 
     super({

@@ -4,8 +4,14 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const { Client } = require('pg');
 
-const ADMIN_EMAILS = ['admin@rentix.com', 'admin@contrx.com', 'adm@contrx.com'];
-const ADMIN_EMAIL = 'adm@contrx.com';
+const ADMIN_EMAILS = [
+  'admin@rentix.com',
+  'admin@contrx.com',
+  'adm@contrx.com',
+  'admin@contrx.com.br',
+  'adm@contrx.com.br',
+];
+const ADMIN_EMAIL = 'adm@contrx.com.br';
 const ADMIN_PASSWORD = '123456';
 const ADMIN_NAME = 'Administrador Contrx';
 const COMPANY_NAME = 'Contrx';

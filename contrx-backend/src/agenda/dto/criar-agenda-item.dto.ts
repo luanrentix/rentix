@@ -1,9 +1,13 @@
-import { IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import {
+  IsDateString,
+  IsIn,
+  IsOptional,
+  IsString,
+  Matches,
+  MinLength,
+} from 'class-validator';
 
 export class CriarAgendaItemDto {
-  @IsUUID()
-  companyId: string;
-
   @IsString()
   @MinLength(1)
   title: string;
@@ -14,21 +18,21 @@ export class CriarAgendaItemDto {
   @IsString()
   propertyName: string;
 
-  @IsString()
+  @IsDateString({ strict: true })
   date: string;
 
-  @IsString()
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/)
   time: string;
 
   @IsString()
   type: string;
 
   @IsOptional()
-  @IsString()
+  @IsIn(['scheduled', 'completed', 'canceled'])
   status?: string;
 
   @IsOptional()
-  @IsString()
+  @IsIn(['low', 'medium', 'high'])
   priority?: string;
 
   @IsString()
