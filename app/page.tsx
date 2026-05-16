@@ -3,21 +3,16 @@
 import Image from "next/image";
 import {
   AlertTriangle,
-  Building2,
   Eye,
   EyeOff,
   Home,
   LockKeyhole,
   LogIn,
   Mail,
-  User,
-  UserPlus,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-
-type AuthMode = "login" | "signup";
 
 function getAuthErrorPresentation(
   error: unknown,
@@ -29,6 +24,7 @@ function getAuthErrorPresentation(
   const isBackendConfigurationError =
     message.includes("NEXT_PUBLIC_API_URL") ||
     normalizedMessage.includes("backend não configurado") ||
+    normalizedMessage.includes("backend nao configurado") ||
     normalizedMessage.includes("api em");
   const isDatabaseConfigurationError =
     normalizedMessage.includes("credenciais do banco") ||
@@ -46,9 +42,9 @@ function getAuthErrorPresentation(
 
   if (isDatabaseConfigurationError) {
     return {
-      title: "Banco nao conectado",
+      title: "Banco não conectado",
       message,
-      subtitle: "Corrija a conexao do backend.",
+      subtitle: "Corrija a conexão do backend.",
     };
   }
 
@@ -60,18 +56,12 @@ function getAuthErrorPresentation(
 }
 
 export default function LoginPage() {
-  const { login, createAccount, isLoading } = useAuth();
+  const { login, isLoading } = useAuth();
 
-  const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-
-  const [signupName, setSignupName] = useState("");
-  const [signupCompanyName, setSignupCompanyName] = useState("");
-  const [signupPasswordConfirm, setSignupPasswordConfirm] = useState("");
-
   const [authError, setAuthError] = useState(false);
   const [authErrorTitle, setAuthErrorTitle] = useState("Acesso não autorizado");
   const [authErrorSubtitle, setAuthErrorSubtitle] = useState(
@@ -137,74 +127,9 @@ export default function LoginPage() {
     }
   }
 
-  async function handleCreateAccount() {
-    const normalizedEmail = email.trim();
-
-    if (!signupName.trim() || !normalizedEmail || !password || !signupCompanyName.trim()) {
-      showAuthError(
-        "Cadastro incompleto",
-        "Preencha nome, e-mail, senha e nome da empresa.",
-      );
-      return;
-    }
-
-    if (password.length < 8) {
-      showAuthError(
-        "Senha muito curta",
-        "Use uma senha com pelo menos 8 caracteres.",
-      );
-      return;
-    }
-
-    if (password !== signupPasswordConfirm) {
-      showAuthError("Senhas diferentes", "Confirme a senha digitada.");
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      setAuthError(false);
-
-      await createAccount({
-        name: signupName.trim(),
-        email: normalizedEmail,
-        password,
-        companyName: signupCompanyName.trim(),
-      });
-    } catch (error) {
-      const authErrorPresentation = getAuthErrorPresentation(
-        error,
-        "Não foi possível criar a conta",
-        "Revise os dados informados e tente novamente.",
-      );
-
-      showAuthError(
-        authErrorPresentation.title,
-        authErrorPresentation.message,
-        authErrorPresentation.subtitle,
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
   function handleSubmit() {
-    if (mode === "login") {
-      void handleLogin();
-      return;
-    }
-
-    void handleCreateAccount();
+    void handleLogin();
   }
-
-  function switchMode(nextMode: AuthMode) {
-    setMode(nextMode);
-    setAuthError(false);
-    setPassword("");
-    setSignupPasswordConfirm("");
-  }
-
-  const isSignup = mode === "signup";
 
   return (
     <main className="min-h-dvh overflow-x-hidden bg-white">
@@ -221,75 +146,20 @@ export default function LoginPage() {
                 priority
               />
             </div>
-
-            <div className="hidden">
-              <h1 className="hidden text-3xl font-black leading-none text-white sm:text-[48px]">
-                Contrx
-              </h1>
-              <p className="hidden mt-2 text-sm font-bold text-white">
-                Sistema de Gestão de Locações
-              </p>
-            </div>
           </div>
 
           <div className="relative z-10 mt-5 flex w-full max-w-[525px] justify-center pb-6 sm:mt-6 sm:pb-8">
             <div className="w-full max-w-[525px] rounded-[24px] bg-white px-4 py-6 shadow-2xl sm:rounded-[30px] sm:px-10 sm:py-10">
-              <h2 className="text-center text-2xl font-light leading-tight text-slate-950 sm:text-[30px]">
-                {isSignup ? "Crie sua conta" : "Bem-vindo ao"}{" "}
-                <span className="font-black text-[#ff4b00]">
-                  {isSignup ? "Contrx" : "Contrx!"}
-                </span>
-              </h2>
+              <h1 className="text-center text-2xl font-light leading-tight text-slate-950 sm:text-[30px]">
+                Bem-vindo ao{" "}
+                <span className="font-black text-[#ff4b00]">Contrx!</span>
+              </h1>
 
-              <div className="mt-5 grid grid-cols-2 rounded-2xl bg-slate-100 p-1 sm:mt-7">
-                <button
-                  type="button"
-                  onClick={() => switchMode("login")}
-                  className={`flex h-11 items-center justify-center gap-2 rounded-xl text-sm font-black transition ${
-                    mode === "login"
-                      ? "bg-white text-[#ff4b00] shadow-sm"
-                      : "text-slate-500 hover:text-slate-900"
-                  }`}
-                >
-                  <LogIn size={17} />
-                  Entrar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => switchMode("signup")}
-                  className={`flex h-11 items-center justify-center gap-2 rounded-xl text-sm font-black transition ${
-                    mode === "signup"
-                      ? "bg-white text-[#ff4b00] shadow-sm"
-                      : "text-slate-500 hover:text-slate-900"
-                  }`}
-                >
-                  <UserPlus size={17} />
-                  Criar conta
-                </button>
-              </div>
+              <p className="mx-auto mt-3 max-w-[360px] text-center text-sm font-semibold leading-6 text-slate-500">
+                Acesso restrito aos usuários liberados pelo Dono do sistema.
+              </p>
 
-              <div className="mt-5 space-y-3 sm:mt-7 sm:space-y-4">
-                {isSignup && (
-                  <>
-                    <AuthInput
-                      icon={<User size={20} />}
-                      type="text"
-                      placeholder="Seu nome"
-                      value={signupName}
-                      onChange={setSignupName}
-                      autoComplete="name"
-                    />
-                    <AuthInput
-                      icon={<Building2 size={20} />}
-                      type="text"
-                      placeholder="Nome da empresa"
-                      value={signupCompanyName}
-                      onChange={setSignupCompanyName}
-                      autoComplete="organization"
-                    />
-                  </>
-                )}
-
+              <div className="mt-6 space-y-3 sm:mt-7 sm:space-y-4">
                 <AuthInput
                   icon={<Mail size={20} />}
                   type="email"
@@ -297,6 +167,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={setEmail}
                   autoComplete="username"
+                  onEnter={handleSubmit}
                 />
 
                 <div className="flex h-[54px] items-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_3px_10px_rgba(15,23,42,0.10)] sm:h-[58px]">
@@ -308,7 +179,7 @@ export default function LoginPage() {
                     type={showPassword ? "text" : "password"}
                     placeholder="Senha"
                     value={password}
-                    autoComplete={isSignup ? "new-password" : "current-password"}
+                    autoComplete="current-password"
                     onChange={(event) => setPassword(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") handleSubmit();
@@ -326,31 +197,17 @@ export default function LoginPage() {
                   </button>
                 </div>
 
-                {isSignup && (
-                  <AuthInput
-                    icon={<LockKeyhole size={20} />}
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Confirmar senha"
-                    value={signupPasswordConfirm}
-                    onChange={setSignupPasswordConfirm}
-                    onEnter={handleSubmit}
-                    autoComplete="new-password"
+                <label className="flex w-fit items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={remember}
+                    onChange={(event) => setRemember(event.target.checked)}
+                    className="h-4 w-4 accent-[#ff4b00]"
                   />
-                )}
-
-                {!isSignup && (
-                  <label className="flex w-fit items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={remember}
-                      onChange={(event) => setRemember(event.target.checked)}
-                      className="h-4 w-4 accent-[#ff4b00]"
-                    />
-                    <span className="text-sm font-bold text-slate-600">
-                      Lembrar e-mail
-                    </span>
-                  </label>
-                )}
+                  <span className="text-sm font-bold text-slate-600">
+                    Lembrar e-mail
+                  </span>
+                </label>
 
                 <button
                   type="button"
@@ -358,14 +215,8 @@ export default function LoginPage() {
                   disabled={isSubmitting || isLoading}
                   className="flex h-[58px] w-full items-center justify-center gap-2 rounded-2xl bg-[#ff4b00] text-base font-black text-white shadow-[0_14px_30px_rgba(255,75,0,0.28)] transition hover:bg-[#e94400] disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {isSignup ? <UserPlus size={19} /> : <LogIn size={19} />}
-                  {isSubmitting
-                    ? isSignup
-                      ? "Criando..."
-                      : "Entrando..."
-                    : isSignup
-                      ? "Criar conta"
-                      : "Entrar"}
+                  <LogIn size={19} />
+                  {isSubmitting ? "Entrando..." : "Entrar"}
                 </button>
               </div>
 

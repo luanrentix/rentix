@@ -1086,7 +1086,7 @@ export default function AgendaPage() {
           <div>
             <p className="text-sm font-semibold text-orange-600">Operacional</p>
             <h1 className={`mt-1 text-3xl font-black ${strongTextClass}`}>
-              Agenda
+              AGENDA TESTE
             </h1>
             <p className={`mt-2 max-w-3xl text-sm leading-6 ${mutedTextClass}`}>
               Organize compromissos, vistorias, cobranças, entregas e manutenções

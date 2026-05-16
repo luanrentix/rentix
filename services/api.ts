@@ -1,6 +1,24 @@
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  (process.env.NODE_ENV === 'development' ? 'http://localhost:3001' : '');
+function getApiBaseUrl() {
+  const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+  if (configuredApiUrl) {
+    return configuredApiUrl.replace(/\/$/, '');
+  }
+
+  if (typeof window !== 'undefined') {
+    const isLocalhost =
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1';
+
+    if (isLocalhost) {
+      return 'http://localhost:3001';
+    }
+  }
+
+  return '';
+}
+
+const API_BASE_URL = getApiBaseUrl();
 
 type RequestOptions = RequestInit & {
   auth?: boolean;
@@ -23,7 +41,7 @@ export async function apiFetch<TResponse>(
 ): Promise<TResponse> {
   if (!API_BASE_URL) {
     throw new Error(
-      'Backend nao configurado. Configure NEXT_PUBLIC_API_URL com a URL publica da API para usar o Contrx.',
+      'Backend nao configurado. Configure NEXT_PUBLIC_API_URL com a URL publica da API do Contrx no deploy do frontend.',
     );
   }
 

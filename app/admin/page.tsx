@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   Building2,
@@ -70,8 +71,13 @@ function getTotalCompanyRecords(company: AdminCompany) {
   );
 }
 
+function isSystemOwnerRole(role?: string | null) {
+  return role === "SYSTEM_OWNER" || role === "DONO_SISTEMA";
+}
+
 export default function AdminPage() {
-  const { user } = useAuth();
+  const router = useRouter();
+  const { user, isLoading: isAuthLoading } = useAuth();
   const [summary, setSummary] = useState<AdminSummary | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [companies, setCompanies] = useState<AdminCompany[]>([]);
@@ -81,17 +87,22 @@ export default function AdminPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [roleFilter, setRoleFilter] = useState("all");
 
-  const isSystemOwner = user?.role === "SYSTEM_OWNER";
+  const isSystemOwner = isSystemOwnerRole(user?.role);
   const normalizedSearchTerm = normalizeText(searchTerm);
 
   useEffect(() => {
+    if (isAuthLoading) {
+      return;
+    }
+
     if (!isSystemOwner) {
       setIsLoading(false);
+      router.replace("/dashboard");
       return;
     }
 
     loadAdminData();
-  }, [isSystemOwner]);
+  }, [isAuthLoading, isSystemOwner, router]);
 
   async function loadAdminData() {
     try {

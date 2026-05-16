@@ -1,4 +1,11 @@
-import { Body, Controller, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 
 import { AutenticacaoService } from './autenticacao.service';
 
@@ -27,8 +34,10 @@ export class AutenticacaoController {
   }
 
   @Post('criar-conta')
-  async createAccount(@Body() data: CriarContaDto) {
-    return this.authService.createAccount(data);
+  async createAccount(@Body() _data: CriarContaDto) {
+    throw new ForbiddenException(
+      'A criacao publica de contas esta desativada. Solicite acesso ao dono do sistema.',
+    );
   }
 
   @Patch('me/senha')

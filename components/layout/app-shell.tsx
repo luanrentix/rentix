@@ -274,6 +274,10 @@ function getPixKeyPlaceholder(pixKeyType: PixKeyType) {
   return placeholders[pixKeyType];
 }
 
+function isSystemOwnerRole(role?: string | null) {
+  return role === "SYSTEM_OWNER" || role === "DONO_SISTEMA";
+}
+
 
 const contrxThemeStyle = `
   [data-contrx-theme="light"] {
@@ -538,12 +542,12 @@ export default function AppShell({ children }: AppShellProps) {
   const userInitials = useMemo(() => getInitialLetters(userSettings.name), [userSettings.name]);
   const visibleMenuItems = useMemo(
     () =>
-      user?.role === "SYSTEM_OWNER"
+      isSystemOwnerRole(user?.role)
         ? [...menuItems, ...systemOwnerMenuItems]
         : menuItems,
     [user?.role],
   );
-  const isSystemOwner = user?.role === "SYSTEM_OWNER";
+  const isSystemOwner = isSystemOwnerRole(user?.role);
 
   const loadSettingsFromLocalStorage = useCallback(() => {
     const storedUserSettings = getCompanyStorageItem(
