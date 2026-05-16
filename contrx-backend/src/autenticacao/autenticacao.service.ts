@@ -165,9 +165,9 @@ export class AutenticacaoService {
       throw new BadRequestException('Preencha nome, e-mail, senha e empresa.');
     }
 
-    if (password.length < 8) {
+    if (password.length < 6) {
       throw new BadRequestException(
-        'A senha precisa ter pelo menos 8 caracteres.',
+        'A senha precisa ter pelo menos 6 caracteres.',
       );
     }
 
@@ -206,7 +206,7 @@ export class AutenticacaoService {
             name,
             email,
             passwordHash,
-            role: 'OWNER',
+            role: 'ADMIN',
           },
         });
 
@@ -267,9 +267,9 @@ export class AutenticacaoService {
     const currentPassword = data.currentPassword;
     const newPassword = data.newPassword;
 
-    if (newPassword.length < 8) {
+    if (newPassword.length < 6) {
       throw new BadRequestException(
-        'A nova senha precisa ter pelo menos 8 caracteres.',
+        'A nova senha precisa ter pelo menos 6 caracteres.',
       );
     }
 

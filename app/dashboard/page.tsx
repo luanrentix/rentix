@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import {
   getContracts,
@@ -83,6 +84,7 @@ type FinancialMovement = {
 };
 
 type ThemeMode = "light" | "black";
+type DashboardFinancialPeriod = "CurrentMonth" | "CurrentYear" | "All";
 
 const chartColors = {
   orange: "#f97316",
@@ -197,6 +199,11 @@ export default function DashboardPage() {
   const [dashboardTheme, setDashboardTheme] = useState<ThemeMode>("light");
   const [receivables, setReceivables] = useState<FinancialReceivable[]>([]);
   const [payables, setPayables] = useState<FinancialPayable[]>([]);
+  const [isDashboardLoading, setIsDashboardLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState("");
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [financialPeriod, setFinancialPeriod] =
+    useState<DashboardFinancialPeriod>("CurrentMonth");
   const [revenueChartView, setRevenueChartView] = useState<"month" | "day">(
     "month",
   );
@@ -204,35 +211,18 @@ export default function DashboardPage() {
     "month",
   );
 
-  useEffect(() => {
-    if (!companyId) return;
+  const loadDashboardData = useCallback(async (currentCompanyId: string) => {
+    setIsDashboardLoading(true);
+    setDashboardError("");
 
-    loadDashboardData(companyId);
-  }, [companyId]);
-
-  useEffect(() => {
-    const storedThemeSettings = getCompanyStorageItem(
-      companyId,
-      "contrx_theme_settings",
-      "contrx_theme_settings",
-    );
-
-    if (storedThemeSettings) {
-      try {
-        const parsedThemeSettings = JSON.parse(storedThemeSettings) as { mode?: ThemeMode };
-        setDashboardTheme(parsedThemeSettings.mode === "black" ? "black" : "light");
-      } catch {
-        setDashboardTheme("light");
-      }
-    }
-  }, [companyId]);
-
-  async function loadDashboardData(currentCompanyId: string) {
     try {
       const [apiProperties, apiContracts, financialSummary] = await Promise.all([
         getProperties(currentCompanyId),
         getContracts(currentCompanyId),
-        getFinancialSummary(currentCompanyId),
+        getFinancialSummary(
+          currentCompanyId,
+          getFinancialSummaryFilters(financialPeriod),
+        ),
       ]);
 
       const normalizedContracts = apiContracts.map(mapApiContractToDashboardContract);
@@ -262,9 +252,46 @@ export default function DashboardPage() {
           value: payable.amount,
         })),
       );
+      setLastUpdatedAt(new Date());
     } catch (error) {
       console.error("Não foi possível carregar o dashboard.", error);
+      setDashboardError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível carregar os dados da Dashboard.",
+      );
+    } finally {
+      setIsDashboardLoading(false);
     }
+  }, [financialPeriod]);
+
+  useEffect(() => {
+    if (!companyId) return;
+
+    loadDashboardData(companyId);
+  }, [companyId, loadDashboardData]);
+
+  useEffect(() => {
+    const storedThemeSettings = getCompanyStorageItem(
+      companyId,
+      "contrx_theme_settings",
+      "contrx_theme_settings",
+    );
+
+    if (storedThemeSettings) {
+      try {
+        const parsedThemeSettings = JSON.parse(storedThemeSettings) as { mode?: ThemeMode };
+        setDashboardTheme(parsedThemeSettings.mode === "black" ? "black" : "light");
+      } catch {
+        setDashboardTheme("light");
+      }
+    }
+  }, [companyId]);
+
+  function refreshDashboardData() {
+    if (!companyId || isDashboardLoading) return;
+
+    loadDashboardData(companyId);
   }
 
   const activeContractsList = useMemo(
@@ -314,6 +341,34 @@ export default function DashboardPage() {
     activeContracts > 0 ? Math.round(monthlyRevenue / activeContracts) : 0;
 
   const annualRevenueProjection = monthlyRevenue * 12;
+  const openReceivableTotal = receivables
+    .filter((receivable) => receivable.status !== "Paid")
+    .reduce(
+      (total, receivable) =>
+        total + normalizeAmount(receivable.remainingAmount ?? receivable.amount),
+      0,
+    );
+  const receivedTotal = receivables
+    .filter((receivable) => receivable.status === "Paid")
+    .reduce(
+      (total, receivable) =>
+        total + normalizeAmount(receivable.paidAmount ?? receivable.amount),
+      0,
+    );
+  const openPayableTotal = payables
+    .filter((payable) => payable.status !== "Paid")
+    .reduce(
+      (total, payable) =>
+        total + normalizeAmount(payable.remainingAmount ?? payable.amount),
+      0,
+    );
+  const overdueReceivableTotal = receivables
+    .filter((receivable) => receivable.status === "Overdue")
+    .reduce(
+      (total, receivable) =>
+        total + normalizeAmount(receivable.remainingAmount ?? receivable.amount),
+      0,
+    );
 
   const revenueChartData = useMemo<RevenueMonth[]>(() => {
     return getLastSixMonths().map((monthDate) => {
@@ -492,13 +547,13 @@ export default function DashboardPage() {
 
   const revenueChartDescription =
     revenueChartView === "month"
-      ? "Receita mensal estimada com base nos contratos cadastrados e seus valores."
-      : "Receita diária estimada dos últimos 30 dias com base nos contratos cadastrados e seus valores.";
+      ? "Receita prevista por mês com base nos contratos cadastrados. Não representa recebimento confirmado."
+      : "Projeção diária dos últimos 30 dias com base nos contratos ativos em cada data.";
 
   const contractChartDescription =
     contractChartView === "month"
-      ? "Contratos criados e ativos nos últimos 6 meses."
-      : "Contratos criados e ativos nos últimos 30 dias.";
+      ? "Contratos iniciados e contratos ativos nos últimos 6 meses."
+      : "Contratos iniciados e contratos ativos nos últimos 30 dias.";
 
   const receivableMovements = useMemo(() => {
     return getFinancialMovementsFromReceivables(receivables);
@@ -664,15 +719,59 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            <div className="rounded-2xl border border-orange-100 bg-white px-5 py-3 text-sm font-bold text-slate-600 shadow-sm">
-              📅 Hoje, {new Date().toLocaleDateString("pt-BR")}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <select
+                value={financialPeriod}
+                onChange={(event) =>
+                  setFinancialPeriod(event.target.value as DashboardFinancialPeriod)
+                }
+                className="h-12 rounded-2xl border border-orange-100 bg-white px-4 text-sm font-black text-slate-600 shadow-sm outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                aria-label="Período financeiro da Dashboard"
+              >
+                <option value="CurrentMonth">Mês atual</option>
+                <option value="CurrentYear">Ano atual</option>
+                <option value="All">Todos</option>
+              </select>
+
+              <div className="rounded-2xl border border-orange-100 bg-white px-5 py-3 text-sm font-bold text-slate-600 shadow-sm">
+                📅 Hoje, {new Date().toLocaleDateString("pt-BR")}
+                {lastUpdatedAt && (
+                  <span className="ml-2 text-xs font-black text-orange-600">
+                    Atualizado {lastUpdatedAt.toLocaleTimeString("pt-BR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={refreshDashboardData}
+                disabled={!companyId || isDashboardLoading}
+                className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isDashboardLoading ? "Atualizando..." : "Atualizar dados"}
+              </button>
             </div>
           </div>
+
+          {dashboardError && (
+            <div className="rounded-3xl border border-red-100 bg-red-50 p-5 text-sm font-bold text-red-700 shadow-sm">
+              {dashboardError}
+            </div>
+          )}
+
+          {isDashboardLoading && !dashboardError && (
+            <div className="rounded-3xl border border-orange-100 bg-white p-5 text-sm font-bold text-slate-600 shadow-sm">
+              Carregando indicadores da Dashboard...
+            </div>
+          )}
 
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
             <MetricCard
               icon="💰"
-              title="Receita mensal ativa"
+              title="Receita mensal prevista"
               value={formatCurrency(monthlyRevenue)}
               detail={`${formatCurrency(annualRevenueProjection)} projetado ao ano`}
               trend={`${revenueEfficiency}% da capacidade`}
@@ -696,10 +795,31 @@ export default function DashboardPage() {
 
             <MetricCard
               icon="🏠"
-              title="Receita em aberto"
+              title="A receber em aberto"
+              value={formatCurrency(openReceivableTotal)}
+              detail={`${formatCurrency(overdueReceivableTotal)} vencido(s)`}
+              trend="Financeiro real"
+            />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <FinancialSummaryCard
+              title="Recebido confirmado"
+              value={formatCurrency(receivedTotal)}
+              detail={`${receivables.filter((item) => item.status === "Paid").length} paga(s) no ${getFinancialPeriodLabel(financialPeriod).toLowerCase()}`}
+              tone="green"
+            />
+            <FinancialSummaryCard
+              title="A pagar em aberto"
+              value={formatCurrency(openPayableTotal)}
+              detail={`${payables.filter((item) => item.status !== "Paid").length} pendente(s) no ${getFinancialPeriodLabel(financialPeriod).toLowerCase()}`}
+              tone="red"
+            />
+            <FinancialSummaryCard
+              title="Potencial disponível"
               value={formatCurrency(availablePotentialRevenue)}
-              detail={`${availableProperties} imóvel(is) disponível(is)`}
-              trend="Potencial mensal"
+              detail={`${availableProperties} imóvel(is) sem contrato ativo`}
+              tone="slate"
             />
           </div>
 
@@ -742,7 +862,7 @@ export default function DashboardPage() {
                     </button>
                   </div>
 
-                  <ChartBadge label="Receita" color="bg-orange-500" />
+                  <ChartBadge label="Receita prevista" color="bg-orange-500" />
                   <ChartBadge label="Contratos" color="bg-slate-400" />
                 </div>
               </div>
@@ -777,7 +897,7 @@ export default function DashboardPage() {
                     <Tooltip
                       formatter={(value, name) => {
                         if (name === "expected")
-                          return [formatCurrency(Number(value)), "Receita"];
+                          return [formatCurrency(Number(value)), "Receita prevista"];
                         return [Number(value), "Contratos"];
                       }}
                       labelFormatter={(label) =>
@@ -806,16 +926,53 @@ export default function DashboardPage() {
 
             <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-4">
               <h2 className="text-lg font-black text-slate-950">
-                Central de atenção
+                Financeiro operacional
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Pontos que merecem acompanhamento para melhorar a operação.
+                Contas vencidas, vencendo hoje e próximos lançamentos no {getFinancialPeriodLabel(financialPeriod).toLowerCase()}.
               </p>
 
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <FinancialSummaryCard
+                  title="Receber atenção"
+                  value={formatCurrency(todayReceivableTotal)}
+                  detail={`${todayReceivableMovements.length} vencido(s)/hoje`}
+                  tone="orange"
+                />
+                <FinancialSummaryCard
+                  title="Pagar atenção"
+                  value={formatCurrency(todayPayableTotal)}
+                  detail={`${todayPayableMovements.length} vencido(s)/hoje`}
+                  tone="slate"
+                />
+                <FinancialSummaryCard
+                  title="Próx. recebimentos"
+                  value={formatCurrency(upcomingReceivableTotal)}
+                  detail={`${upcomingReceivableMovements.length} item(ns)`}
+                  tone="green"
+                />
+                <FinancialSummaryCard
+                  title="Próx. pagamentos"
+                  value={formatCurrency(upcomingPayableTotal)}
+                  detail={`${upcomingPayableMovements.length} item(ns)`}
+                  tone="red"
+                />
+              </div>
+
               <div className="mt-5 space-y-3">
-                {dashboardAlerts.map((alert) => (
-                  <AlertCard key={alert.id} alert={alert} />
-                ))}
+                <FinancialMovementPreview
+                  title="Receber"
+                  href="/contas-receber"
+                  emptyMessage="Nenhuma conta a receber próxima."
+                  movements={[...todayReceivableMovements, ...upcomingReceivableMovements].slice(0, 4)}
+                />
+
+                <FinancialMovementPreview
+                  title="Pagar"
+                  href="/contas-pagar"
+                  emptyMessage="Nenhuma conta a pagar próxima."
+                  movements={[...todayPayableMovements, ...upcomingPayableMovements].slice(0, 4)}
+                />
               </div>
             </section>
           </div>
@@ -859,7 +1016,7 @@ export default function DashboardPage() {
                     </button>
                   </div>
 
-                  <ChartBadge label="Criados" color="bg-orange-500" />
+                  <ChartBadge label="Iniciados" color="bg-orange-500" />
                   <ChartBadge label="Ativos" color="bg-slate-400" />
                 </div>
               </div>
@@ -882,7 +1039,7 @@ export default function DashboardPage() {
                     <Tooltip
                       formatter={(value, name) => {
                         if (name === "createdContracts")
-                          return [Number(value), "Criados"];
+                          return [Number(value), "Iniciados"];
                         return [Number(value), "Ativos"];
                       }}
                       labelFormatter={(label) =>
@@ -909,51 +1066,16 @@ export default function DashboardPage() {
 
             <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-4">
               <h2 className="text-lg font-black text-slate-950">
-                Financeiro do dia
+                Central de atenção
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Movimentos vencendo hoje, atrasados e próximos lançamentos.
+                Pontos que merecem acompanhamento para melhorar a operação.
               </p>
 
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                <FinancialSummaryCard
-                  title="A receber hoje"
-                  value={formatCurrency(todayReceivableTotal)}
-                  detail={`${todayReceivableMovements.length} item(ns)`}
-                  tone="orange"
-                />
-                <FinancialSummaryCard
-                  title="A pagar hoje"
-                  value={formatCurrency(todayPayableTotal)}
-                  detail={`${todayPayableMovements.length} item(ns)`}
-                  tone="slate"
-                />
-                <FinancialSummaryCard
-                  title="Próx. recebimentos"
-                  value={formatCurrency(upcomingReceivableTotal)}
-                  detail={`${upcomingReceivableMovements.length} item(ns)`}
-                  tone="green"
-                />
-                <FinancialSummaryCard
-                  title="Próx. pagamentos"
-                  value={formatCurrency(upcomingPayableTotal)}
-                  detail={`${upcomingPayableMovements.length} item(ns)`}
-                  tone="red"
-                />
-              </div>
-
               <div className="mt-5 space-y-3">
-                <FinancialMovementPreview
-                  title="Receber"
-                  emptyMessage="Nenhuma conta a receber próxima."
-                  movements={[...todayReceivableMovements, ...upcomingReceivableMovements].slice(0, 4)}
-                />
-
-                <FinancialMovementPreview
-                  title="Pagar"
-                  emptyMessage="Nenhuma conta a pagar próxima."
-                  movements={[...todayPayableMovements, ...upcomingPayableMovements].slice(0, 4)}
-                />
+                {dashboardAlerts.map((alert) => (
+                  <AlertCard key={alert.id} alert={alert} />
+                ))}
               </div>
             </section>
           </div>
@@ -1063,19 +1185,26 @@ function FinancialSummaryCard({ title, value, detail, tone }: FinancialSummaryCa
 
 type FinancialMovementPreviewProps = {
   title: string;
+  href: string;
   emptyMessage: string;
   movements: FinancialMovement[];
 };
 
 function FinancialMovementPreview({
   title,
+  href,
   emptyMessage,
   movements,
 }: FinancialMovementPreviewProps) {
   return (
     <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-black text-slate-800">{title}</p>
+        <Link
+          href={href}
+          className="rounded-xl px-2 py-1 text-sm font-black text-slate-800 transition hover:bg-white hover:text-orange-600"
+        >
+          {title}
+        </Link>
         <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-slate-500">
           {movements.length}
         </span>
@@ -1218,6 +1347,43 @@ function getLastThirtyDays() {
       currentDate.getDate() - 29 + index,
     );
   });
+}
+
+function getFinancialSummaryFilters(period: DashboardFinancialPeriod) {
+  const today = new Date();
+
+  if (period === "All") return {};
+
+  if (period === "CurrentYear") {
+    return {
+      startDate: getLocalDateValue(new Date(today.getFullYear(), 0, 1)),
+      endDate: getLocalDateValue(new Date(today.getFullYear(), 11, 31)),
+    };
+  }
+
+  return {
+    startDate: getLocalDateValue(
+      new Date(today.getFullYear(), today.getMonth(), 1),
+    ),
+    endDate: getLocalDateValue(
+      new Date(today.getFullYear(), today.getMonth() + 1, 0),
+    ),
+  };
+}
+
+function getFinancialPeriodLabel(period: DashboardFinancialPeriod) {
+  if (period === "CurrentYear") return "ano atual";
+  if (period === "All") return "período completo";
+
+  return "mês atual";
+}
+
+function getLocalDateValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 function getStartOfToday() {

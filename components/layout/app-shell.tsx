@@ -95,6 +95,7 @@ const systemOwnerMenuItems = [
 ];
 
 const menuLinkPrefetch = process.env.NODE_ENV === "production" ? null : false;
+const mobileMenuItems = menuItems;
 let loadedSettingsCompanyId: string | null = null;
 
 const pixKeyTypeOptions: { label: string; value: PixKeyType }[] = [
@@ -902,13 +903,14 @@ export default function AppShell({ children }: AppShellProps) {
               : "w-72 -translate-x-full lg:translate-x-0"
           }`}
         >
-          <Link
-            href="/dashboard"
-            prefetch={menuLinkPrefetch}
-            onClick={handleCloseMobileSidebar}
-          >
-            <div className="cursor-pointer border-b border-orange-100 px-4 py-5 transition hover:bg-orange-50">
-              <div className="flex items-center justify-center">
+          <div className="border-b border-orange-100 px-4 py-5">
+            <div className="flex items-center justify-between gap-3 lg:justify-center">
+              <Link
+                href="/dashboard"
+                prefetch={menuLinkPrefetch}
+                onClick={handleCloseMobileSidebar}
+                className="flex min-w-0 flex-1 items-center justify-center transition hover:opacity-90"
+              >
                 <Image
                   src="/logo-contrx.png"
                   alt="Contrx"
@@ -916,10 +918,17 @@ export default function AppShell({ children }: AppShellProps) {
                   height={1024}
                   className={`object-contain transition-all duration-300 ease-in-out ${isSidebarOpen ? "h-24 w-56 lg:h-28 lg:w-60" : "h-12 w-14 lg:h-12 lg:w-14"}`}
                 />
-              </div>
-
+              </Link>
+              <button
+                type="button"
+                onClick={handleCloseMobileSidebar}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-lg font-black text-slate-600 transition hover:bg-red-50 hover:text-red-600 lg:hidden"
+                aria-label="Fechar menu"
+              >
+                ×
+              </button>
             </div>
-          </Link>
+          </div>
 
           <div
             className={`hidden overflow-hidden border-b border-orange-100 px-4 transition-all duration-300 ease-in-out lg:block ${
@@ -947,7 +956,7 @@ export default function AppShell({ children }: AppShellProps) {
             </label>
           </div>
 
-          <nav className="flex-1 space-y-2 overflow-y-auto overflow-x-hidden px-2 py-6">
+          <nav className="flex-1 space-y-2 overflow-y-auto overflow-x-hidden px-2 py-4 lg:py-6">
             {visibleMenuItems.map((item) => {
               const isActive = isActiveRoute(item.href);
 
@@ -958,7 +967,7 @@ export default function AppShell({ children }: AppShellProps) {
                   prefetch={menuLinkPrefetch}
                   title={!isSidebarOpen ? item.label : undefined}
                   onClick={handleCloseMobileSidebar}
-                  className={`group flex items-center overflow-hidden rounded-2xl px-3 py-4 text-sm font-bold transition-colors duration-200 ${
+                  className={`group flex items-center overflow-hidden rounded-2xl px-3 py-3.5 text-sm font-bold transition-colors duration-200 lg:py-4 ${
                     isActive
                       ? "bg-orange-500 text-white shadow-md shadow-orange-100"
                       : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
@@ -1087,9 +1096,42 @@ export default function AppShell({ children }: AppShellProps) {
             </div>
           </header>
 
-          <main className="min-w-0 flex-1 overflow-x-hidden px-3 py-4 sm:px-5 lg:px-8 lg:py-8">
+          <main className="min-w-0 flex-1 overflow-x-hidden px-3 pb-28 pt-4 sm:px-5 lg:px-8 lg:py-8">
             {children}
           </main>
+
+          <nav
+            className={`contrx-mobile-bottom-nav fixed inset-x-0 bottom-0 z-30 border-t px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 shadow-[0_-18px_45px_rgba(15,23,42,0.12)] backdrop-blur lg:hidden ${
+              themeSettings.mode === "black"
+                ? "border-slate-800 bg-slate-950/95"
+                : "border-orange-100 bg-white/95"
+            }`}
+            aria-label="Navegação principal mobile"
+          >
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {mobileMenuItems.map((item) => {
+                const isActive = isActiveRoute(item.href);
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    prefetch={menuLinkPrefetch}
+                    className={`flex min-w-[4.75rem] flex-col items-center justify-center gap-1 rounded-2xl px-3 py-2 text-[11px] font-black transition ${
+                      isActive
+                        ? "bg-orange-500 text-white shadow-md shadow-orange-100"
+                        : themeSettings.mode === "black"
+                          ? "bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-orange-300"
+                          : "bg-slate-50 text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                    }`}
+                  >
+                    <span className="text-base leading-none">{item.icon}</span>
+                    <span className="max-w-[4.2rem] truncate">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </nav>
         </div>
 
         {isSettingsOpen && (

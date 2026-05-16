@@ -137,4 +137,61 @@ textarea {
   .recharts-responsive-container {
     min-width: 0 !important;
   }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+
+  .contrx-mobile-bottom-nav {
+    padding-left: max(0.5rem, env(safe-area-inset-left));
+    padding-right: max(0.5rem, env(safe-area-inset-right));
+  }
+
+  .contrx-mobile-bottom-nav > div {
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .contrx-mobile-bottom-nav > div::-webkit-scrollbar {
+    display: none;
+  }
+
+  [class*="rounded-3xl"],
+  [class*="rounded-[2rem]"] {
+    border-radius: 1.25rem !important;
+  }
+
+  [class*="p-8"] {
+    padding: 1.25rem !important;
+  }
+
+  [class*="px-8"] {
+    padding-left: 1.25rem !important;
+    padding-right: 1.25rem !important;
+  }
+
+  [class*="py-8"] {
+    padding-top: 1.25rem !important;
+    padding-bottom: 1.25rem !important;
+  }
+
+  [class*="text-4xl"] {
+    font-size: 1.875rem !important;
+    line-height: 2.25rem !important;
+  }
+
+  [class*="text-3xl"] {
+    font-size: 1.5rem !important;
+    line-height: 2rem !important;
+  }
 }
