@@ -22,7 +22,6 @@ export type ScheduleItem = {
 };
 
 export type CreateScheduleItemDto = {
-  companyId: string;
   title: string;
   customerName: string;
   propertyName: string;
@@ -38,8 +37,8 @@ export type CreateScheduleItemDto = {
 
 export type UpdateScheduleItemDto = Partial<CreateScheduleItemDto>;
 
-export async function getScheduleItems(companyId: string) {
-  return apiFetch<ScheduleItem[]>(`/agenda?companyId=${encodeURIComponent(companyId)}`);
+export async function getScheduleItems() {
+  return apiFetch<ScheduleItem[]>('/agenda');
 }
 
 export async function createScheduleItem(data: CreateScheduleItemDto) {

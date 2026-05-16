@@ -17,7 +17,6 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import AppShell from "@/components/layout/app-shell";
 import { useAuth } from "@/context/AuthContext";
 import {
   createContract,
@@ -1650,7 +1649,7 @@ export default function ContractsPage() {
   }
 
   return (
-    <AppShell>
+    <>
       <style jsx global>{`
         .contrx-contracts-page.contrx-black-theme {
           color: #f8fafc;
@@ -3087,7 +3086,7 @@ export default function ContractsPage() {
           </div>
         )}
       </div>
-    </AppShell>
+    </>
   );
 }
 

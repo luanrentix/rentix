@@ -13,7 +13,12 @@ import {
   removeCompanyStorageItem,
 } from "@/services/company-storage";
 import { getAppSettings, saveAppSettings } from "@/services/settings.service";
-import { setCachedAppSettings } from "@/services/settings-cache";
+import {
+  getCachedCompanySettings,
+  getCachedThemeSettings,
+  getCachedUserSettings,
+  setCachedAppSettings,
+} from "@/services/settings-cache";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -88,6 +93,9 @@ const menuItems = [
 const systemOwnerMenuItems = [
   { label: "Admin", href: "/admin", icon: "SYS" },
 ];
+
+const menuLinkPrefetch = process.env.NODE_ENV === "production" ? null : false;
+let loadedSettingsCompanyId: string | null = null;
 
 const pixKeyTypeOptions: { label: string; value: PixKeyType }[] = [
   { label: "CPF", value: "cpf" },
@@ -555,9 +563,42 @@ export default function AppShell({ children }: AppShellProps) {
   }, [companyId]);
 
   const loadSettings = useCallback(async (currentCompanyId: string) => {
+    const cachedUserSettings = getCachedUserSettings();
+    const cachedCompanySettings = getCachedCompanySettings();
+    const cachedThemeSettings = getCachedThemeSettings();
+
+    if (
+      loadedSettingsCompanyId === currentCompanyId &&
+      (cachedUserSettings || cachedCompanySettings || cachedThemeSettings)
+    ) {
+      if (cachedUserSettings) {
+        setUserSettings({
+          ...defaultUserSettings,
+          ...cachedUserSettings,
+        } as UserSettings);
+      }
+
+      if (cachedCompanySettings) {
+        setCompanySettings({
+          ...defaultCompanySettings,
+          ...cachedCompanySettings,
+        } as CompanySettings);
+      }
+
+      if (cachedThemeSettings) {
+        setThemeSettings({
+          ...defaultThemeSettings,
+          ...cachedThemeSettings,
+        } as ThemeSettings);
+      }
+
+      return;
+    }
+
     try {
       const settings = await getAppSettings(currentCompanyId);
       setCachedAppSettings(settings);
+      loadedSettingsCompanyId = currentCompanyId;
 
       setUserSettings({
         ...defaultUserSettings,
@@ -573,6 +614,32 @@ export default function AppShell({ children }: AppShellProps) {
       } as ThemeSettings);
     } catch {
       console.warn("Settings API unavailable. Local cached settings were loaded.");
+
+      if (cachedUserSettings || cachedCompanySettings || cachedThemeSettings) {
+        if (cachedUserSettings) {
+          setUserSettings({
+            ...defaultUserSettings,
+            ...cachedUserSettings,
+          } as UserSettings);
+        }
+
+        if (cachedCompanySettings) {
+          setCompanySettings({
+            ...defaultCompanySettings,
+            ...cachedCompanySettings,
+          } as CompanySettings);
+        }
+
+        if (cachedThemeSettings) {
+          setThemeSettings({
+            ...defaultThemeSettings,
+            ...cachedThemeSettings,
+          } as ThemeSettings);
+        }
+
+        return;
+      }
+
       loadSettingsFromLocalStorage();
     }
   }, [loadSettingsFromLocalStorage]);
@@ -621,12 +688,9 @@ export default function AppShell({ children }: AppShellProps) {
     window.addEventListener("storage", syncThemeFromStorage);
     window.addEventListener("contrx-theme-change", syncThemeFromStorage);
 
-    const syncInterval = window.setInterval(syncThemeFromStorage, 500);
-
     return () => {
       window.removeEventListener("storage", syncThemeFromStorage);
       window.removeEventListener("contrx-theme-change", syncThemeFromStorage);
-      window.clearInterval(syncInterval);
     };
   }, [companyId]);
 
@@ -834,7 +898,11 @@ export default function AppShell({ children }: AppShellProps) {
               : "w-72 -translate-x-full lg:translate-x-0"
           }`}
         >
-          <Link href="/dashboard" onClick={handleCloseMobileSidebar}>
+          <Link
+            href="/dashboard"
+            prefetch={menuLinkPrefetch}
+            onClick={handleCloseMobileSidebar}
+          >
             <div className="cursor-pointer border-b border-orange-100 px-4 py-5 transition hover:bg-orange-50">
               <div className="flex items-center justify-center">
                 <Image
@@ -883,6 +951,7 @@ export default function AppShell({ children }: AppShellProps) {
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch={menuLinkPrefetch}
                   title={!isSidebarOpen ? item.label : undefined}
                   onClick={handleCloseMobileSidebar}
                   className={`group flex items-center overflow-hidden rounded-2xl px-3 py-4 text-sm font-bold transition-colors duration-200 ${
@@ -987,6 +1056,7 @@ export default function AppShell({ children }: AppShellProps) {
 
                   <Link
                     href="/configuracoes"
+                    prefetch={menuLinkPrefetch}
                     onClick={() => setIsUserMenuOpen(false)}
                     className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition ${
                       themeSettings.mode === "black"

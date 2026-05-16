@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import AppShell from "@/components/layout/app-shell";
+import type { MouseEvent } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { PersonCreateModal } from "@/components/people/person-create-modal";
 import {
   createPayableAccount,
   deletePayableAccount,
@@ -13,7 +14,7 @@ import {
   type PayableAccount,
   type PaymentMethod as ApiPaymentMethod,
 } from "@/services/financial.service";
-import { createPerson, getPeople, type Person } from "@/services/people.service";
+import { getPeople, type Person } from "@/services/people.service";
 import {
   getCompanyStorageItem,
   setCompanyStorageItem,
@@ -30,6 +31,11 @@ type ReportDueFilter =
   | "Upcoming"
   | "DateRange";
 type ExpenseLaunchType = "single" | "installment";
+
+type ActionMenuPosition = {
+  top: number;
+  left: number;
+};
 
 type PaymentMethod =
   | "Cash"
@@ -75,6 +81,8 @@ type InstallmentPreview = {
   dueDate: string;
 };
 
+const MAX_INSTALLMENT_QUANTITY = 120;
+
 type Expense = {
   id: string;
   personId?: string;
@@ -96,6 +104,7 @@ type Expense = {
 type Tenant = {
   id: string;
   name: string;
+  document?: string;
   personType?: PersonType;
   cpf?: string;
   phone?: string;
@@ -107,56 +116,6 @@ type Tenant = {
   number?: string;
   district?: string;
   complement?: string;
-};
-
-type TenantFormData = {
-  personType: PersonType;
-  name: string;
-  cpf: string;
-  phone: string;
-  isTenant: boolean;
-  zipCode: string;
-  state: string;
-  city: string;
-  street: string;
-  number: string;
-  district: string;
-  complement: string;
-};
-
-type BrasilApiCnpjResponse = {
-  cnpj?: string;
-  razao_social?: string;
-  nome_fantasia?: string;
-  cep?: string;
-  uf?: string;
-  municipio?: string;
-  logradouro?: string;
-  numero?: string;
-  bairro?: string;
-  complemento?: string;
-  ddd_telefone_1?: string;
-};
-
-type CnpjWsResponse = {
-  razao_social?: string;
-  estabelecimento?: {
-    nome_fantasia?: string;
-    cnpj?: string;
-    ddd1?: string;
-    telefone1?: string;
-    cep?: string;
-    estado?: {
-      sigla?: string;
-    };
-    cidade?: {
-      nome?: string;
-    };
-    logradouro?: string;
-    numero?: string;
-    bairro?: string;
-    complemento?: string;
-  };
 };
 
 const paymentMethodOptions: PaymentMethodOption[] = [
@@ -181,20 +140,13 @@ const expenseCategoryOptions = [
   "Outros",
 ];
 
-const initialTenantFormData: TenantFormData = {
-  personType: "Individual",
-  name: "",
-  cpf: "",
-  phone: "",
-  isTenant: true,
-  zipCode: "",
-  state: "",
-  city: "",
-  street: "",
-  number: "",
-  district: "",
-  complement: "",
-};
+function createLocalId(prefix: string) {
+  const randomId =
+    globalThis.crypto?.randomUUID?.() ||
+    Math.random().toString(36).slice(2, 12);
+
+  return `${prefix}-${randomId}`;
+}
 
 function normalizeAmount(value: unknown) {
   if (typeof value === "number") {
@@ -218,6 +170,40 @@ function normalizeAmount(value: unknown) {
 
 function formatAmountInput(value: number) {
   return value.toFixed(2).replace(".", ",");
+}
+
+function getAmountInCents(value: unknown) {
+  return Math.round(normalizeAmount(value) * 100);
+}
+
+function formatCentsAsAmountInput(valueInCents: number) {
+  return formatAmountInput(valueInCents / 100);
+}
+
+function formatCurrencyInput(value: string) {
+  const digits = value.replace(/\D/g, "");
+
+  if (!digits) return "";
+
+  return formatAmountInput(Number(digits) / 100);
+}
+
+function distributeAmountInCents(totalInCents: number, quantity: number) {
+  if (quantity <= 0) return [];
+
+  const normalizedTotalInCents = Math.max(Math.round(totalInCents), 0);
+  const baseAmountInCents = Math.floor(normalizedTotalInCents / quantity);
+  let centsRemainder = normalizedTotalInCents - baseAmountInCents * quantity;
+
+  return Array.from({ length: quantity }, () => {
+    const extraCent = centsRemainder > 0 ? 1 : 0;
+
+    if (centsRemainder > 0) {
+      centsRemainder -= 1;
+    }
+
+    return baseAmountInCents + extraCent;
+  });
 }
 
 function getLocalDateValue(date: Date) {
@@ -245,10 +231,16 @@ export default function AccountsPayablePage() {
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const [search, setSearch] = useState("");
+  const [openActionMenuExpenseId, setOpenActionMenuExpenseId] = useState<
+    string | null
+  >(null);
+  const [actionMenuPosition, setActionMenuPosition] =
+    useState<ActionMenuPosition | null>(null);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isTenantCreateOpen, setIsTenantCreateOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isExpenseSaving, setIsExpenseSaving] = useState(false);
 
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [expensePendingDeletion, setExpensePendingDeletion] =
@@ -276,13 +268,6 @@ export default function AccountsPayablePage() {
     InstallmentPreview[]
   >([]);
   const [expenseFormError, setExpenseFormError] = useState("");
-  const [tenantFormData, setTenantFormData] = useState<TenantFormData>(
-    initialTenantFormData,
-  );
-  const [isZipCodeLoading, setIsZipCodeLoading] = useState(false);
-  const [zipCodeError, setZipCodeError] = useState("");
-  const [isCnpjLoading, setIsCnpjLoading] = useState(false);
-  const [cnpjSearchError, setCnpjSearchError] = useState("");
 
   const [paymentInterest, setPaymentInterest] = useState("");
   const [paymentDiscount, setPaymentDiscount] = useState("");
@@ -322,7 +307,7 @@ export default function AccountsPayablePage() {
       setPaymentRecords(nextPaymentRecords);
       setTenants(apiPeople.map(mapApiPersonToTenant));
     } catch (error) {
-      console.error("NÃ£o foi possÃ­vel carregar contas a pagar.", error);
+      console.error("Não foi possível carregar contas a pagar.", error);
     }
   }
 
@@ -475,6 +460,104 @@ export default function AccountsPayablePage() {
     return result;
   }, [expensesWithStatus, search, statusFilter]);
 
+  const openActionMenuExpense = useMemo(() => {
+    return openActionMenuExpenseId
+      ? expensesWithStatus.find(
+          (expense) => String(expense.id) === String(openActionMenuExpenseId),
+        ) || null
+      : null;
+  }, [expensesWithStatus, openActionMenuExpenseId]);
+
+  function getFloatingActionMenuPosition(
+    buttonRect: DOMRect,
+    estimatedMenuHeight: number,
+  ) {
+    const menuWidth = 208;
+    const viewportPadding = 16;
+    const availableBottomSpace = window.innerHeight - buttonRect.bottom;
+    const top =
+      availableBottomSpace < estimatedMenuHeight
+        ? Math.max(viewportPadding, buttonRect.top - estimatedMenuHeight - 8)
+        : buttonRect.bottom + 8;
+    const left = Math.min(
+      Math.max(viewportPadding, buttonRect.right - menuWidth),
+      window.innerWidth - menuWidth - viewportPadding,
+    );
+
+    return { top, left };
+  }
+
+  function handleToggleExpenseActions(
+    expense: Expense,
+    event: MouseEvent<HTMLButtonElement>,
+  ) {
+    if (openActionMenuExpenseId === expense.id) {
+      handleCloseExpenseActions();
+      return;
+    }
+
+    const visibleActionCount =
+      1 + (expense.status !== "Paid" ? 1 : 0) + (getExpensePayment(expense.id) ? 1 : 0);
+    const estimatedMenuHeight = visibleActionCount * 48 + 16;
+
+    setActionMenuPosition(
+      getFloatingActionMenuPosition(
+        event.currentTarget.getBoundingClientRect(),
+        estimatedMenuHeight,
+      ),
+    );
+    setOpenActionMenuExpenseId(expense.id);
+  }
+
+  function handleCloseExpenseActions() {
+    setOpenActionMenuExpenseId(null);
+    setActionMenuPosition(null);
+  }
+
+  useEffect(() => {
+    if (!openActionMenuExpenseId) return;
+
+    function closeFloatingActionMenu() {
+      handleCloseExpenseActions();
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+
+      if (!(target instanceof Element)) {
+        closeFloatingActionMenu();
+        return;
+      }
+
+      if (
+        target.closest("[data-payable-action-menu]") ||
+        target.closest("[data-payable-action-trigger]")
+      ) {
+        return;
+      }
+
+      closeFloatingActionMenu();
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeFloatingActionMenu();
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", closeFloatingActionMenu);
+    window.addEventListener("scroll", closeFloatingActionMenu, true);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", closeFloatingActionMenu);
+      window.removeEventListener("scroll", closeFloatingActionMenu, true);
+    };
+  }, [openActionMenuExpenseId]);
+
   const totalPayable = useMemo(() => {
     return filteredExpenses
       .filter((expense) => expense.status !== "Paid")
@@ -528,330 +611,26 @@ export default function AccountsPayablePage() {
     return normalizedDate;
   }
 
-  function onlyNumbers(value: string) {
-    return value.replace(/\D/g, "");
-  }
-
-  function formatCpf(value: string) {
-    return onlyNumbers(value)
-      .slice(0, 11)
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
-  }
-
-  function formatCnpj(value: string) {
-    return onlyNumbers(value)
-      .slice(0, 14)
-      .replace(/^(\d{2})(\d)/, "$1.$2")
-      .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
-      .replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3/$4")
-      .replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/, "$1.$2.$3/$4-$5");
-  }
-
-  function formatDocument(value: string, personType: PersonType) {
-    if (personType === "Company") return formatCnpj(value);
-
-    return formatCpf(value);
-  }
-
-  function formatPhone(value: string) {
-    const numbers = onlyNumbers(value).slice(0, 11);
-
-    if (numbers.length <= 10) {
-      return numbers
-        .replace(/(\d{2})(\d)/, "($1) $2")
-        .replace(/(\d{4})(\d)/, "$1-$2");
-    }
-
-    return numbers
-      .replace(/(\d{2})(\d)/, "($1) $2")
-      .replace(/(\d{5})(\d)/, "$1-$2");
-  }
-
-  function formatZipCode(value: string) {
-    return onlyNumbers(value)
-      .slice(0, 8)
-      .replace(/(\d{5})(\d)/, "$1-$2");
-  }
-
-  async function verifyZipCode() {
-    const zipCode = onlyNumbers(tenantFormData.zipCode);
-
-    if (zipCode.length === 0) {
-      setZipCodeError("");
-      return;
-    }
-
-    if (zipCode.length !== 8) {
-      setZipCodeError("CEP inválido. Digite 8 números.");
-      return;
-    }
-
-    try {
-      setIsZipCodeLoading(true);
-      setZipCodeError("");
-
-      const response = await fetch(`https://viacep.com.br/ws/${zipCode}/json/`);
-      const data = await response.json();
-
-      if (data.erro) {
-        setZipCodeError("CEP não encontrado.");
-        return;
-      }
-
-      setTenantFormData((currentData) => ({
-        ...currentData,
-        zipCode: formatZipCode(zipCode),
-        state: data.uf || currentData.state,
-        city: data.localidade || currentData.city,
-        street: data.logradouro || currentData.street,
-        district: data.bairro || currentData.district,
-        complement: currentData.complement,
-      }));
-    } catch {
-      setZipCodeError("Não foi possível consultar o CEP agora.");
-    } finally {
-      setIsZipCodeLoading(false);
-    }
-  }
-
-  function updateTenantFormData<K extends keyof TenantFormData>(
-    field: K,
-    value: TenantFormData[K],
-  ) {
-    setTenantFormData((currentData) => ({
-      ...currentData,
-      [field]: value,
-    }));
-  }
-
-  function updateTenantPersonType(personType: PersonType) {
-    setTenantFormData((currentData) => ({
-      ...currentData,
-      personType,
-      cpf: "",
-    }));
-    setZipCodeError("");
-    setCnpjSearchError("");
-  }
-
-  async function searchCompanyByCnpj() {
-    const cleanCnpj = onlyNumbers(tenantFormData.cpf);
-
-    if (tenantFormData.personType !== "Company") return;
-
-    if (cleanCnpj.length !== 14) {
-      setCnpjSearchError(
-        "Informe um CNPJ com 14 números para buscar os dados.",
-      );
-      return;
-    }
-
-    if (!isValidCnpj(cleanCnpj)) {
-      setCnpjSearchError("CNPJ inválido. Verifique o número informado.");
-      return;
-    }
-
-    try {
-      setIsCnpjLoading(true);
-      setCnpjSearchError("");
-
-      const companyData = await fetchCompanyDataByCnpj(cleanCnpj);
-
-      if (!companyData) {
-        setCnpjSearchError("Empresa não encontrada para o CNPJ informado.");
-        return;
-      }
-
-      setTenantFormData((currentData) => ({
-        ...currentData,
-        name: companyData.name || currentData.name,
-        cpf: formatCnpj(companyData.cnpj || cleanCnpj),
-        phone: companyData.phone
-          ? formatPhone(companyData.phone)
-          : currentData.phone,
-        zipCode: companyData.zipCode
-          ? formatZipCode(companyData.zipCode)
-          : currentData.zipCode,
-        state: companyData.state || currentData.state,
-        city: companyData.city || currentData.city,
-        street: companyData.street || currentData.street,
-        number: companyData.number || currentData.number,
-        district: companyData.district || currentData.district,
-        complement: companyData.complement || currentData.complement,
-      }));
-    } catch {
-      setCnpjSearchError(
-        "Não foi possível consultar o CNPJ agora. Tente novamente em alguns segundos.",
-      );
-    } finally {
-      setIsCnpjLoading(false);
-    }
-  }
-
-  async function fetchCompanyDataByCnpj(cleanCnpj: string) {
-    const brasilApiData = await fetchCompanyDataFromBrasilApi(cleanCnpj);
-
-    if (brasilApiData) return brasilApiData;
-
-    return fetchCompanyDataFromCnpjWs(cleanCnpj);
-  }
-
-  async function fetchCompanyDataFromBrasilApi(cleanCnpj: string) {
-    try {
-      const response = await fetch(
-        `https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`,
-      );
-
-      if (!response.ok) return null;
-
-      const data = (await response.json()) as BrasilApiCnpjResponse;
-      const companyName =
-        data.razao_social?.trim() || data.nome_fantasia?.trim() || "";
-
-      if (!companyName) return null;
-
-      return {
-        name: companyName,
-        cnpj: data.cnpj || cleanCnpj,
-        phone: data.ddd_telefone_1 || "",
-        zipCode: data.cep || "",
-        state: data.uf || "",
-        city: data.municipio || "",
-        street: data.logradouro || "",
-        number: data.numero || "",
-        district: data.bairro || "",
-        complement: data.complemento || "",
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  async function fetchCompanyDataFromCnpjWs(cleanCnpj: string) {
-    const response = await fetch(`https://publica.cnpj.ws/cnpj/${cleanCnpj}`);
-
-    if (!response.ok) return null;
-
-    const data = (await response.json()) as CnpjWsResponse;
-    const establishment = data.estabelecimento;
-    const phone = [establishment?.ddd1, establishment?.telefone1]
-      .filter(Boolean)
-      .join("");
-
-    const companyName =
-      data.razao_social?.trim() || establishment?.nome_fantasia?.trim() || "";
-
-    if (!companyName) return null;
-
-    return {
-      name: companyName,
-      cnpj: establishment?.cnpj || cleanCnpj,
-      phone,
-      zipCode: establishment?.cep || "",
-      state: establishment?.estado?.sigla || "",
-      city: establishment?.cidade?.nome || "",
-      street: establishment?.logradouro || "",
-      number: establishment?.numero || "",
-      district: establishment?.bairro || "",
-      complement: establishment?.complemento || "",
-    };
-  }
-
   function openTenantCreateModal() {
-    setTenantFormData(initialTenantFormData);
-    setZipCodeError("");
-    setCnpjSearchError("");
-    setIsCnpjLoading(false);
     setIsTenantCreateOpen(true);
   }
 
   function closeTenantCreateModal() {
-    setTenantFormData(initialTenantFormData);
-    setZipCodeError("");
-    setCnpjSearchError("");
-    setIsCnpjLoading(false);
     setIsTenantCreateOpen(false);
   }
 
-  async function createTenantFromModal() {
-    const trimmedTenantName = tenantFormData.name.trim();
-    const normalizedDocument = onlyNumbers(tenantFormData.cpf);
+  function handleTenantCreated(apiPerson: Person) {
+    const newTenant = mapApiPersonToTenant(apiPerson);
 
-    if (!trimmedTenantName) return;
-
-    if (!normalizedDocument) {
-      setCnpjSearchError(
-        tenantFormData.personType === "Company"
-          ? "Informe o CNPJ antes de cadastrar a pessoa."
-          : "Informe o CPF antes de cadastrar a pessoa.",
+    setTenants((currentTenants) => {
+      const tenantAlreadyExists = currentTenants.some(
+        (tenant) => String(tenant.id) === String(newTenant.id),
       );
-      return;
-    }
 
-    const expectedDocumentLength =
-      tenantFormData.personType === "Company" ? 14 : 11;
-
-    if (normalizedDocument.length !== expectedDocumentLength) {
-      setCnpjSearchError(
-        tenantFormData.personType === "Company"
-          ? "Informe um CNPJ válido com 14 números."
-          : "Informe um CPF válido com 11 números.",
-      );
-      return;
-    }
-
-    const documentAlreadyExists = tenants.some((tenant) => {
-      const currentDocument = onlyNumbers(tenant.cpf || "");
-
-      return currentDocument === normalizedDocument;
+      return tenantAlreadyExists ? currentTenants : [...currentTenants, newTenant];
     });
-
-    if (documentAlreadyExists) {
-      setCnpjSearchError(
-        tenantFormData.personType === "Company"
-          ? "Já existe uma pessoa cadastrada com este CNPJ."
-          : "Já existe uma pessoa cadastrada com este CPF.",
-      );
-      return;
-    }
-
-    if (!companyId) {
-      setCnpjSearchError("Empresa do usuario nao encontrada. Faca login novamente.");
-      return;
-    }
-
-    try {
-      const apiPerson = await createPerson({
-        companyId,
-        type: tenantFormData.personType === "Company" ? "COMPANY" : "INDIVIDUAL",
-        name: trimmedTenantName,
-        document: normalizedDocument,
-        phone: tenantFormData.phone.trim(),
-        city: tenantFormData.city.trim(),
-        state: tenantFormData.state.trim(),
-        address: buildPersonAddressFromTenantForm(tenantFormData),
-        status: "ACTIVE",
-      });
-
-      const newTenant = mapApiPersonToTenant(apiPerson);
-      const updatedTenants = [...tenants, newTenant];
-
-      setTenants(updatedTenants);
-      setFormTenant(newTenant.id);
-      setTenantFormData(initialTenantFormData);
-      setZipCodeError("");
-      setCnpjSearchError("");
-      setIsCnpjLoading(false);
-      setIsTenantCreateOpen(false);
-    } catch (error) {
-      setCnpjSearchError(
-        error instanceof Error
-          ? error.message
-          : "Nao foi possivel cadastrar a pessoa no backend.",
-      );
-    }
+    setFormTenant(newTenant.id);
+    setExpenseFormError("");
   }
 
   function getStatusLabel(status?: ExpenseStatus) {
@@ -966,12 +745,50 @@ export default function AccountsPayablePage() {
     );
   }
 
+  function getPaymentEntriesDifference() {
+    return getPaymentEntriesTotal() - normalizeAmount(paymentFinalAmount);
+  }
+
+  function getPaymentEntriesBalanceLabel() {
+    const difference = getPaymentEntriesDifference();
+
+    if (difference > 0.01) {
+      return `Excedente: ${formatCurrency(difference)}`;
+    }
+
+    if (difference < -0.01) {
+      return `Falta informar: ${formatCurrency(Math.abs(difference))}`;
+    }
+
+    return "Valores conferidos";
+  }
+
+  function getPaymentEntriesBalanceClassName() {
+    const difference = getPaymentEntriesDifference();
+
+    if (difference > 0.01) {
+      return isBlackTheme
+        ? "border-sky-900/60 bg-sky-950/30 text-sky-300"
+        : "border-sky-200 bg-sky-50 text-sky-700";
+    }
+
+    if (difference < -0.01) {
+      return isBlackTheme
+        ? "border-amber-900/60 bg-amber-950/30 text-amber-300"
+        : "border-amber-200 bg-amber-50 text-amber-700";
+    }
+
+    return isBlackTheme
+      ? "border-emerald-900/60 bg-emerald-950/30 text-emerald-300"
+      : "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
   function addPaymentEntry() {
     setPaymentFormError("");
     setPaymentEntries((currentEntries) => [
       ...currentEntries,
       {
-        id: `payment-entry-${Date.now()}`,
+        id: createLocalId("payment-entry"),
         method: "Pix",
         amount: "",
       },
@@ -1040,6 +857,7 @@ export default function AccountsPayablePage() {
     setFormInstallmentQuantity("2");
     setInstallmentPreview([]);
     setExpenseFormError("");
+    setIsExpenseSaving(false);
     setIsCreateOpen(true);
   }
 
@@ -1069,6 +887,7 @@ export default function AccountsPayablePage() {
     setFormInstallmentQuantity("2");
     setInstallmentPreview([]);
     setExpenseFormError("");
+    setIsExpenseSaving(false);
     setIsCreateOpen(true);
   }
 
@@ -1086,35 +905,51 @@ export default function AccountsPayablePage() {
     setFormInstallmentQuantity("2");
     setInstallmentPreview([]);
     setExpenseFormError("");
-    setTenantFormData(initialTenantFormData);
-    setZipCodeError("");
-    setIsZipCodeLoading(false);
     setIsTenantCreateOpen(false);
   }
 
   function closeCreateModal() {
     resetCreateForm();
+    setIsExpenseSaving(false);
     setIsCreateOpen(false);
   }
 
+  async function saveExpenseWithSavingState() {
+    if (isExpenseSaving) return;
+
+    setIsExpenseSaving(true);
+
+    try {
+      await saveExpense();
+    } finally {
+      setIsExpenseSaving(false);
+    }
+  }
+
   const generateInstallmentPreview = useCallback(() => {
-    const totalAmount = normalizeAmount(formAmount);
+    const totalAmountInCents = getAmountInCents(formAmount);
     const quantity = Number(formInstallmentQuantity);
 
-    if (!formDueDate || totalAmount <= 0 || !Number.isFinite(quantity)) {
+    if (!formDueDate || totalAmountInCents <= 0 || !Number.isFinite(quantity)) {
       setInstallmentPreview([]);
       return;
     }
 
-    const normalizedQuantity = Math.max(2, Math.trunc(quantity));
-    const installmentAmount = totalAmount / normalizedQuantity;
+    const normalizedQuantity = Math.min(
+      MAX_INSTALLMENT_QUANTITY,
+      Math.max(2, Math.trunc(quantity)),
+    );
+    const installmentAmountsInCents = distributeAmountInCents(
+      totalAmountInCents,
+      normalizedQuantity,
+    );
 
     const generatedInstallments = Array.from(
       { length: normalizedQuantity },
       (_, index) => ({
         id: `preview-${index + 1}`,
         installmentNumber: index + 1,
-        amount: formatAmountInput(installmentAmount),
+        amount: formatCentsAsAmountInput(installmentAmountsInCents[index] || 0),
         dueDate: addDaysToDate(formDueDate, index * 30),
       }),
     );
@@ -1132,11 +967,66 @@ export default function AccountsPayablePage() {
   }, [formLaunchType, generateInstallmentPreview]);
 
   function updateInstallmentAmount(id: string, amount: string) {
-    setInstallmentPreview((currentInstallments) =>
-      currentInstallments.map((installment) =>
-        installment.id === id ? { ...installment, amount } : installment,
-      ),
-    );
+    setExpenseFormError("");
+
+    setInstallmentPreview((currentInstallments) => {
+      const totalAmountInCents = getAmountInCents(formAmount);
+      const changedInstallment = currentInstallments.find(
+        (installment) => installment.id === id,
+      );
+
+      if (!changedInstallment || totalAmountInCents <= 0) {
+        return currentInstallments.map((installment) =>
+          installment.id === id ? { ...installment, amount } : installment,
+        );
+      }
+
+      const changedAmountInCents = getAmountInCents(amount);
+      const otherInstallments = currentInstallments.filter(
+        (installment) => installment.id !== id,
+      );
+      const remainingAmountInCents = totalAmountInCents - changedAmountInCents;
+
+      if (remainingAmountInCents < 0) {
+        setExpenseFormError(
+          "O valor informado ultrapassa o valor total da conta.",
+        );
+
+        return currentInstallments.map((installment) =>
+          installment.id === id ? { ...installment, amount } : installment,
+        );
+      }
+
+      if (otherInstallments.length === 0) {
+        return currentInstallments.map((installment) =>
+          installment.id === id ? { ...installment, amount } : installment,
+        );
+      }
+
+      const redistributedAmountsInCents = distributeAmountInCents(
+        remainingAmountInCents,
+        otherInstallments.length,
+      );
+      let redistributedIndex = 0;
+
+      return currentInstallments.map((installment) => {
+        if (installment.id === id) {
+          return {
+            ...installment,
+            amount,
+          };
+        }
+
+        const redistributedAmountInCents =
+          redistributedAmountsInCents[redistributedIndex] || 0;
+        redistributedIndex += 1;
+
+        return {
+          ...installment,
+          amount: formatCentsAsAmountInput(redistributedAmountInCents),
+        };
+      });
+    });
   }
 
   function updateInstallmentDueDate(id: string, dueDate: string) {
@@ -1210,7 +1100,7 @@ export default function AccountsPayablePage() {
           setExpenseFormError(
             error instanceof Error
               ? error.message
-              : "NÃ£o foi possÃ­vel atualizar o pagamento no backend.",
+              : "Não foi possível atualizar o pagamento no backend.",
           );
           return;
         }
@@ -1251,7 +1141,7 @@ export default function AccountsPayablePage() {
 
     if (formLaunchType === "single") {
       const savedExpense: Expense = {
-        id: editingExpenseId || `expense-${Date.now()}`,
+        id: editingExpenseId || createLocalId("expense"),
         personId: selectedTenant.id,
         personName: selectedTenant.name,
         description: trimmedDescription,
@@ -1301,7 +1191,7 @@ export default function AccountsPayablePage() {
           setExpenseFormError(
             error instanceof Error
               ? error.message
-              : "NÃ£o foi possÃ­vel salvar a conta a pagar no backend.",
+              : "Não foi possível salvar a conta a pagar no backend.",
           );
           return;
         }
@@ -1335,7 +1225,22 @@ export default function AccountsPayablePage() {
       return;
     }
 
-    const installmentGroupId = `expense-installment-${Date.now()}`;
+    const installmentTotalInCents = installmentPreview.reduce(
+      (total, installment) => total + getAmountInCents(installment.amount),
+      0,
+    );
+    const expenseTotalInCents = getAmountInCents(formAmount);
+
+    if (installmentTotalInCents !== expenseTotalInCents) {
+      setExpenseFormError(
+        `A soma das parcelas precisa fechar exatamente o valor total da conta. Diferença: ${formatCurrency(
+          Math.abs(installmentTotalInCents - expenseTotalInCents) / 100,
+        )}.`,
+      );
+      return;
+    }
+
+    const installmentGroupId = createLocalId("expense-installment");
 
     const newExpenses: Expense[] = installmentPreview.map((installment) => ({
       id: `${installmentGroupId}-${installment.installmentNumber}`,
@@ -1384,7 +1289,7 @@ export default function AccountsPayablePage() {
         setExpenseFormError(
           error instanceof Error
             ? error.message
-            : "NÃ£o foi possÃ­vel salvar as parcelas no backend.",
+            : "Não foi possível salvar as parcelas no backend.",
         );
         return;
       }
@@ -1395,14 +1300,17 @@ export default function AccountsPayablePage() {
   }
 
   function openPayExpenseModal(expense: Expense) {
+    const today = new Date();
+
     setExpensePendingPaymentReceipt(expense);
     setPaymentInterest("");
     setPaymentDiscount("");
     setPaymentFinalAmount(formatAmountInput(expense.amount));
+    setFormPaymentDate(getLocalDateValue(today));
     setPaymentMethod("Cash");
     setPaymentEntries([
       {
-        id: `payment-entry-${Date.now()}`,
+        id: createLocalId("payment-entry"),
         method: "Cash",
         amount: formatAmountInput(expense.amount),
       },
@@ -1417,6 +1325,7 @@ export default function AccountsPayablePage() {
     setPaymentInterest("");
     setPaymentDiscount("");
     setPaymentFinalAmount("");
+    setFormPaymentDate("");
     setPaymentMethod("Cash");
     setPaymentEntries([]);
     setPaymentNote("");
@@ -1456,8 +1365,12 @@ export default function AccountsPayablePage() {
     }
 
     if (Math.abs(paymentEntriesTotal - amountPaid) > 0.01) {
+      const difference = Math.abs(amountPaid - paymentEntriesTotal);
+
       setPaymentFormError(
-        "A soma das formas de pagamento precisa ser igual ao valor final pago.",
+        paymentEntriesTotal < amountPaid
+          ? `Falta informar ${formatCurrency(difference)} nas formas de pagamento.`
+          : `As formas de pagamento excedem o valor pago em ${formatCurrency(difference)}.`,
       );
       return;
     }
@@ -1475,7 +1388,9 @@ export default function AccountsPayablePage() {
 
     const paymentRecord: ExpensePayment = {
       expenseId: expensePendingPaymentReceipt.id,
-      paidAt: new Date().toISOString(),
+      paidAt: formPaymentDate
+        ? new Date(`${formPaymentDate}T00:00:00`).toISOString()
+        : new Date().toISOString(),
       method: paymentEntries[0]?.method || paymentMethod,
       paymentItems: paymentEntries.map((entry) => ({
         id: entry.id,
@@ -1512,7 +1427,7 @@ export default function AccountsPayablePage() {
         setPaymentFormError(
           error instanceof Error
             ? error.message
-            : "NÃ£o foi possÃ­vel registrar o pagamento no backend.",
+            : "Não foi possível registrar o pagamento no backend.",
         );
         return;
       }
@@ -1551,7 +1466,7 @@ export default function AccountsPayablePage() {
         setExpenseFormError(
           error instanceof Error
             ? error.message
-            : "NÃ£o foi possÃ­vel excluir a conta a pagar no backend.",
+            : "Não foi possível excluir a conta a pagar no backend.",
         );
         setExpensePendingDeletion(null);
         return;
@@ -1573,12 +1488,14 @@ export default function AccountsPayablePage() {
     closeCreateModal();
   }
 
-  function openPaymentReversalConfirmation() {
-    if (!editingExpenseId) return;
+  function openPaymentReversalConfirmation(selectedExpense?: Expense) {
+    if (!selectedExpense && !editingExpenseId) return;
 
-    const expense = expensesWithStatus.find(
-      (item) => String(item.id) === String(editingExpenseId),
-    );
+    const expense =
+      selectedExpense ||
+      expensesWithStatus.find(
+        (item) => String(item.id) === String(editingExpenseId),
+      );
 
     if (!expense || !getExpensePayment(expense.id)) {
       setExpenseFormError("Esta conta não está marcada como paga.");
@@ -1602,7 +1519,7 @@ export default function AccountsPayablePage() {
         setExpenseFormError(
           error instanceof Error
             ? error.message
-            : "NÃ£o foi possÃ­vel estornar o pagamento no backend.",
+            : "Não foi possível estornar o pagamento no backend.",
         );
         setExpensePendingPaymentReversal(null);
         return;
@@ -1918,7 +1835,7 @@ export default function AccountsPayablePage() {
   }
 
   return (
-    <AppShell>
+    <>
       <style jsx global>{`
         .contrx-accounts-payable-page-light,
         .contrx-accounts-payable-page-light * {
@@ -2168,7 +2085,7 @@ export default function AccountsPayablePage() {
                     onClick={() => setStatusFilter(status)}
                     className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
                       statusFilter === status
-                        ? "bg-orange-50 dark:bg-orange-950/300 text-white shadow-sm"
+                        ? "bg-orange-500 text-white shadow-sm"
                         : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
                     }`}
                   >
@@ -2337,36 +2254,19 @@ export default function AccountsPayablePage() {
                       </td>
 
                       <td className="px-5 py-4 text-center">
-                        {expense.status !== "Paid" ? (
-                          <div className="flex flex-wrap justify-center gap-2">
-                            <button
-                              onClick={() => openEditExpense(expense)}
-                              className="rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 shadow-sm transition hover:bg-slate-200 dark:hover:bg-slate-700"
-                            >
-                              Editar
-                            </button>
+                        <div className="relative inline-flex justify-center">
+                          <button
+                            type="button"
+                            onClick={(event) => handleToggleExpenseActions(expense, event)}
+                            data-payable-action-trigger
+                            aria-expanded={openActionMenuExpenseId === expense.id}
+                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-800 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                          >
+                            Ações
+                            <span className="text-xs">▼</span>
+                          </button>
 
-                            <button
-                              onClick={() => openPayExpenseModal(expense)}
-                              className="rounded-xl bg-orange-50 dark:bg-orange-950/300 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
-                            >
-                              Pagar
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex flex-wrap justify-center gap-2">
-                            <button
-                              onClick={() => openEditExpense(expense)}
-                              className="rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 shadow-sm transition hover:bg-slate-200 dark:hover:bg-slate-700"
-                            >
-                              Editar
-                            </button>
-
-                            <span className="inline-flex items-center text-sm font-semibold text-emerald-600">
-                              Pago
-                            </span>
-                          </div>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -2377,28 +2277,85 @@ export default function AccountsPayablePage() {
         </div>
       </div>
 
+      {openActionMenuExpense && actionMenuPosition && (
+        <div
+          data-payable-action-menu
+          className="fixed z-[90] max-h-[calc(100vh-32px)] w-52 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1 text-left shadow-2xl ring-1 ring-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:ring-slate-700"
+          style={{ top: actionMenuPosition.top, left: actionMenuPosition.left }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              handleCloseExpenseActions();
+              openEditExpense(openActionMenuExpense);
+            }}
+            className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            Editar
+          </button>
+
+          {openActionMenuExpense.status !== "Paid" && (
+            <button
+              type="button"
+              onClick={() => {
+                handleCloseExpenseActions();
+                openPayExpenseModal(openActionMenuExpense);
+              }}
+              className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-orange-700 transition hover:bg-orange-50 dark:text-orange-300 dark:hover:bg-orange-950/30"
+            >
+              Pagar
+            </button>
+          )}
+
+          {getExpensePayment(openActionMenuExpense.id) && (
+            <button
+              type="button"
+              onClick={() => {
+                handleCloseExpenseActions();
+                openPaymentReversalConfirmation(openActionMenuExpense);
+              }}
+              className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-red-700 transition hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/30"
+            >
+              Estornar pagamento
+            </button>
+          )}
+        </div>
+      )}
+
       {isCreateOpen && (
         <div className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-payable-page-black" : "contrx-accounts-payable-page-light"}`}>
           <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
-            <div className="border-b border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-gradient-to-r from-orange-50 to-white dark:from-orange-950/30 dark:to-slate-900 p-6">
+            <div className="border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-orange-50 to-white dark:from-orange-950/40 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">
-                    {editingExpenseId
-                      ? "Editar conta a pagar"
-                      : "Nova conta a pagar"}
-                  </h2>
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-sm font-black text-white shadow-lg shadow-orange-500/20 dark:shadow-orange-950/30">
+                    R$
+                  </div>
 
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                    Informe descrição, categoria, valor, vencimento e
-                    observações.
-                  </p>
+                  <div>
+                    <h2 className={`text-xl font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
+                      {editingExpenseId
+                        ? "Editar conta a pagar"
+                        : "Nova conta a pagar"}
+                    </h2>
+
+                    <p className={`mt-1 text-sm leading-6 ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
+                      {editingExpenseId
+                        ? "Ajuste os dados da conta a pagar selecionada."
+                        : "Cadastre uma conta a pagar avulsa, única ou parcelada."}
+                    </p>
+                  </div>
                 </div>
 
                 <button
                   type="button"
                   onClick={closeCreateModal}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 dark:text-slate-500 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-800 hover:text-slate-900 dark:text-slate-100"
+                  disabled={isExpenseSaving}
+                  className={`flex h-10 w-10 items-center justify-center rounded-xl shadow-sm ring-1 transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    isBlackTheme
+                      ? "bg-[#1e293b] text-[#cbd5e1] ring-[#334155] hover:bg-[#334155] hover:text-[#ffffff]"
+                      : "bg-[#ffffff] text-[#64748b] ring-[#dbe4ef] hover:bg-[#f8fafc] hover:text-[#0f172a]"
+                  }`}
                   aria-label="Fechar cadastro"
                 >
                   ✕
@@ -2406,83 +2363,113 @@ export default function AccountsPayablePage() {
               </div>
             </div>
 
-            <div className="flex-1 space-y-5 overflow-y-auto p-6">
+            <div className="max-h-[calc(92vh-120px)] space-y-5 overflow-y-auto p-6">
               {!editingExpenseId && (
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Tipo de lançamento
                   </label>
 
                   <div className="grid gap-3 md:grid-cols-2">
                     <button
                       type="button"
-                      onClick={() => setFormLaunchType("single")}
-                      className={`rounded-2xl border px-4 py-3 text-sm font-bold transition ${
+                      onClick={() => {
+                        setExpenseFormError("");
+                        setFormLaunchType("single");
+                      }}
+                      className={`rounded-2xl border px-4 py-3 text-left transition ${
                         formLaunchType === "single"
-                          ? "border-orange-500 bg-orange-50 dark:bg-orange-950/300 text-white shadow-sm"
-                          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800/80"
+                          ? "border-orange-500 bg-orange-50 dark:bg-orange-950/30 ring-4 ring-orange-100 dark:ring-orange-900/50"
+                          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800"
                       }`}
                     >
-                      Conta única
+                      <p className={`text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
+                        Conta única
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Lançamento avulso com apenas um vencimento.
+                      </p>
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => setFormLaunchType("installment")}
-                      className={`rounded-2xl border px-4 py-3 text-sm font-bold transition ${
+                      onClick={() => {
+                        setExpenseFormError("");
+                        setFormLaunchType("installment");
+                      }}
+                      className={`rounded-2xl border px-4 py-3 text-left transition ${
                         formLaunchType === "installment"
-                          ? "border-orange-500 bg-orange-50 dark:bg-orange-950/300 text-white shadow-sm"
-                          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800/80"
+                          ? "border-orange-500 bg-orange-50 dark:bg-orange-950/30 ring-4 ring-orange-100 dark:ring-orange-900/50"
+                          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800"
                       }`}
                     >
-                      Parcelado
+                      <p className={`text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
+                        Sequência de parcelas
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Divide o valor total em parcelas editáveis.
+                      </p>
                     </button>
                   </div>
                 </div>
               )}
 
-              <div>
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">
-                    Pessoa
-                  </label>
+              <div
+                className={`rounded-2xl border p-4 ${
+                  isBlackTheme
+                    ? "border-[#334155] bg-[#111827]"
+                    : "border-[#dbe4ef] bg-[#f8fafc]"
+                }`}
+              >
+                <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                  <div>
+                    <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
+                      Pessoa/Fornecedor
+                    </label>
 
-                  <button
-                    type="button"
-                    onClick={openTenantCreateModal}
-                    disabled={isEditingPaidExpense}
-                    className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-slate-800 disabled:bg-slate-300 dark:disabled:bg-slate-700"
-                  >
-                    Cadastrar pessoa
-                  </button>
+                    <select
+                      value={formTenant}
+                      disabled={isEditingPaidExpense}
+                      onChange={(event) => {
+                        setExpenseFormError("");
+                        setFormTenant(event.target.value);
+                      }}
+                      className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
+                        isEditingPaidExpense
+                          ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                          : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                      }`}
+                    >
+                      <option value="">Selecione a pessoa/fornecedor</option>
+                      {tenants.map((tenant) => (
+                        <option key={tenant.id} value={tenant.id}>
+                          {tenant.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {!isEditingPaidExpense && (
+                    <button
+                      type="button"
+                      onClick={openTenantCreateModal}
+                      className="h-12 rounded-xl bg-[#0f172a] px-5 text-sm font-bold text-[#ffffff] shadow-sm transition hover:bg-slate-800"
+                    >
+                      NOVO
+                    </button>
+                  )}
                 </div>
 
-                <select
-                  value={formTenant}
-                  disabled={isEditingPaidExpense}
-                  onChange={(event) => {
-                    setExpenseFormError("");
-                    setFormTenant(event.target.value);
-                  }}
-                  className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40 disabled:bg-slate-100 dark:bg-slate-800 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:text-slate-400 dark:text-slate-500"
-                >
-                  <option value="">Selecione uma pessoa</option>
-                  {tenants.map((tenant) => (
-                    <option key={tenant.id} value={tenant.id}>
-                      {tenant.name}
-                    </option>
-                  ))}
-                </select>
-
-                <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                  Use o mesmo cadastro de pessoas/inquilinos do Contas a
-                  Receber.
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  {isEditingPaidExpense
+                    ? "Conta paga não permite alteração de pessoa/fornecedor."
+                    : "Use o botão NOVO para abrir o cadastro completo de pessoa e selecionar automaticamente no lançamento."}
                 </p>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Descrição
                   </label>
 
@@ -2494,12 +2481,16 @@ export default function AccountsPayablePage() {
                       setFormDescription(event.target.value);
                     }}
                     placeholder="Ex: Energia elétrica"
-                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40 disabled:bg-slate-100 dark:bg-slate-800 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:text-slate-400 dark:text-slate-500"
+                    className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
+                      isEditingPaidExpense
+                        ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                        : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                    }`}
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Categoria
                   </label>
 
@@ -2510,7 +2501,11 @@ export default function AccountsPayablePage() {
                       setExpenseFormError("");
                       setFormCategory(event.target.value);
                     }}
-                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40 disabled:bg-slate-100 dark:bg-slate-800 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:text-slate-400 dark:text-slate-500"
+                    className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
+                      isEditingPaidExpense
+                        ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                        : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                    }`}
                   >
                     {expenseCategoryOptions.map((category) => (
                       <option key={category} value={category}>
@@ -2523,25 +2518,41 @@ export default function AccountsPayablePage() {
 
               <div className="grid gap-4 md:grid-cols-3">
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
-                    Valor
+                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
+                    Valor total
                   </label>
 
-                  <input
-                    value={formAmount}
-                    disabled={isEditingPaidExpense}
-                    onChange={(event) => {
-                      setExpenseFormError("");
-                      setFormAmount(event.target.value);
-                    }}
-                    placeholder="0,00"
-                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40 disabled:bg-slate-100 dark:bg-slate-800 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:text-slate-400 dark:text-slate-500"
-                  />
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-slate-500 dark:text-slate-400">
+                      R$
+                    </span>
+
+                    <input
+                      inputMode="decimal"
+                      value={formAmount}
+                      disabled={isEditingPaidExpense}
+                      onChange={(event) => {
+                        setExpenseFormError("");
+                        setFormAmount(formatCurrencyInput(event.target.value));
+                      }}
+                      onBlur={() => {
+                        const amount = normalizeAmount(formAmount);
+
+                        setFormAmount(amount > 0 ? formatAmountInput(amount) : "");
+                      }}
+                      placeholder="0,00"
+                      className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 pl-11 text-sm font-black outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
+                        isEditingPaidExpense
+                          ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                          : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                      }`}
+                    />
+                  </div>
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
-                    Lançamento
+                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
+                    Data de lançamento
                   </label>
 
                   <input
@@ -2552,13 +2563,17 @@ export default function AccountsPayablePage() {
                       setExpenseFormError("");
                       setFormIssueDate(event.target.value);
                     }}
-                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40 disabled:bg-slate-100 dark:bg-slate-800 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:text-slate-400 dark:text-slate-500"
+                    className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
+                      isEditingPaidExpense
+                        ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                        : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                    }`}
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
-                    Vencimento
+                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
+                    Primeiro vencimento
                   </label>
 
                   <input
@@ -2569,14 +2584,18 @@ export default function AccountsPayablePage() {
                       setExpenseFormError("");
                       setFormDueDate(event.target.value);
                     }}
-                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40 disabled:bg-slate-100 dark:bg-slate-800 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:text-slate-400 dark:text-slate-500"
+                    className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
+                      isEditingPaidExpense
+                        ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                        : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                    }`}
                   />
                 </div>
               </div>
 
               {isEditingPaidExpense && (
-                <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                <div className="rounded-2xl border border-emerald-100 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 p-4">
+                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Data de pagamento
                   </label>
 
@@ -2587,13 +2606,18 @@ export default function AccountsPayablePage() {
                       setExpenseFormError("");
                       setFormPaymentDate(event.target.value);
                     }}
-                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
+                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50 md:max-w-xs"
                   />
+
+                  <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    Para conta paga, somente a data de pagamento pode ser
+                    ajustada antes de salvar.
+                  </p>
                 </div>
               )}
 
               <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                   Observação
                 </label>
 
@@ -2602,446 +2626,187 @@ export default function AccountsPayablePage() {
                   disabled={isEditingPaidExpense}
                   onChange={(event) => setFormNote(event.target.value)}
                   placeholder="Informações adicionais sobre a conta..."
-                  className="min-h-24 w-full resize-none rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40 disabled:bg-slate-100 dark:bg-slate-800 dark:disabled:bg-slate-800 disabled:text-slate-500 dark:text-slate-400 dark:text-slate-500"
+                  className={`min-h-24 w-full resize-none rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
+                    isEditingPaidExpense
+                      ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                      : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  }`}
                 />
               </div>
 
               {formLaunchType === "installment" && !editingExpenseId && (
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4">
-                  <div className="grid gap-4 md:grid-cols-[220px_1fr] md:items-end">
+                <div className="space-y-4 rounded-2xl border border-orange-100 dark:border-orange-900/50 bg-orange-50 dark:bg-orange-950/30 p-4">
+                  <div className="grid gap-4 md:grid-cols-[220px_1fr] md:items-start">
                     <div>
-                      <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                      <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                         Quantidade de parcelas
                       </label>
 
                       <input
                         type="number"
                         min={2}
+                        max={MAX_INSTALLMENT_QUANTITY}
                         value={formInstallmentQuantity}
-                        onChange={(event) =>
-                          setFormInstallmentQuantity(event.target.value)
-                        }
-                        className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
+                        onChange={(event) => {
+                          setExpenseFormError("");
+                          const nextQuantity = Number(event.target.value);
+
+                          if (!event.target.value || !Number.isFinite(nextQuantity)) {
+                            setFormInstallmentQuantity(event.target.value);
+                            return;
+                          }
+
+                          setFormInstallmentQuantity(
+                            String(
+                              Math.min(
+                                MAX_INSTALLMENT_QUANTITY,
+                                Math.max(2, Math.trunc(nextQuantity)),
+                              ),
+                            ),
+                          );
+                        }}
+                        className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
                       />
+                      <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        Limite de {MAX_INSTALLMENT_QUANTITY} parcelas.
+                      </p>
                     </div>
 
-                    <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                    <div className="rounded-xl bg-white dark:bg-slate-900 p-4 text-sm text-slate-600 dark:text-slate-400 ring-1 ring-orange-100 dark:ring-orange-900/50">
                       As parcelas são geradas a cada 30 dias e podem ser
                       ajustadas antes de salvar.
-                    </p>
+                    </div>
                   </div>
 
                   {installmentPreview.length > 0 && (
-                    <div className="mt-4 space-y-3">
-                      {installmentPreview.map((installment) => (
-                        <div
-                          key={installment.id}
-                          className="grid gap-3 rounded-xl bg-white dark:bg-slate-900 p-3 ring-1 ring-slate-200 dark:ring-slate-700 md:grid-cols-[120px_1fr_1fr]"
-                        >
-                          <div className="flex items-center text-sm font-black text-slate-700 dark:text-slate-300">
-                            Parcela {installment.installmentNumber}
+                    <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                      <div className="hidden grid-cols-[90px_1fr_1fr] bg-slate-50 dark:bg-slate-800 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400 md:grid">
+                        <span>Parcela</span>
+                        <span>Valor</span>
+                        <span>Vencimento</span>
+                      </div>
+
+                      <div className="divide-y divide-slate-100 dark:divide-slate-700">
+                        {installmentPreview.map((installment) => (
+                          <div
+                            key={installment.id}
+                            className="grid gap-3 px-4 py-3 md:grid-cols-[90px_1fr_1fr]"
+                          >
+                            <div className="flex items-center text-sm font-black text-slate-900 dark:text-slate-100">
+                              {installment.installmentNumber}/
+                              {installmentPreview.length}
+                            </div>
+
+                            <input
+                              value={installment.amount}
+                              onChange={(event) =>
+                                updateInstallmentAmount(
+                                  installment.id,
+                                  event.target.value,
+                                )
+                              }
+                              aria-label={`Valor da parcela ${installment.installmentNumber}`}
+                              className="h-11 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
+                            />
+
+                            <input
+                              type="date"
+                              value={installment.dueDate}
+                              onChange={(event) =>
+                                updateInstallmentDueDate(
+                                  installment.id,
+                                  event.target.value,
+                                )
+                              }
+                              aria-label={`Vencimento da parcela ${installment.installmentNumber}`}
+                              className="h-11 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
+                            />
                           </div>
-
-                          <input
-                            value={installment.amount}
-                            onChange={(event) =>
-                              updateInstallmentAmount(
-                                installment.id,
-                                event.target.value,
-                              )
-                            }
-                            className="h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
-                          />
-
-                          <input
-                            type="date"
-                            value={installment.dueDate}
-                            onChange={(event) =>
-                              updateInstallmentDueDate(
-                                installment.id,
-                                event.target.value,
-                              )
-                            }
-                            className="h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
-                          />
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
               )}
 
               {expenseFormError && (
-                <div className="rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm font-bold text-red-700">
+                <div className={`rounded-2xl border px-4 py-3 text-sm font-bold ${isBlackTheme ? "border-red-900/60 bg-red-950/30 text-red-300" : "border-red-200 bg-red-50 text-red-700"}`}>
                   {expenseFormError}
                 </div>
               )}
-            </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 md:flex-row md:justify-between">
-              <div className="flex flex-col gap-3 md:flex-row">
+              <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-700 pt-5 md:flex-row md:items-center md:justify-between">
                 {editingExpenseId && (
-                  <button
-                    type="button"
-                    onClick={openDeleteExpenseConfirmation}
-                    className="rounded-xl bg-red-50 dark:bg-red-950/30 px-5 py-3 text-sm font-bold text-red-700 shadow-sm ring-1 ring-red-200 dark:ring-red-900/60 transition hover:bg-red-100 dark:hover:bg-red-900/40"
-                  >
-                    Excluir
-                  </button>
-                )}
-
-                {isEditingPaidExpense && (
-                  <button
-                    type="button"
-                    onClick={openPaymentReversalConfirmation}
-                    className="rounded-xl bg-amber-50 dark:bg-amber-950/30 px-5 py-3 text-sm font-bold text-amber-700 shadow-sm ring-1 ring-amber-200 dark:ring-amber-900/60 transition hover:bg-amber-100 dark:hover:bg-amber-900/40"
-                  >
-                    Voltar para pendente
-                  </button>
-                )}
-              </div>
-
-              <div className="flex flex-col-reverse gap-3 md:flex-row md:justify-end">
-                <button
-                  type="button"
-                  onClick={closeCreateModal}
-                  className="rounded-xl bg-slate-100 dark:bg-slate-800 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  type="button"
-                  onClick={saveExpense}
-                  className="rounded-xl bg-orange-50 dark:bg-orange-950/300 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
-                >
-                  Salvar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isTenantCreateOpen && (
-        <div className={`fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-0 backdrop-blur-sm md:p-4 ${isBlackTheme ? "contrx-accounts-payable-page-black" : "contrx-accounts-payable-page-light"}`}>
-          <div className="flex max-h-screen w-full max-w-6xl flex-col overflow-hidden rounded-none bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700 md:max-h-[94vh] md:rounded-3xl">
-            <div className="border-b border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-5 md:px-8">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-2xl font-black text-slate-950 dark:text-white">
-                    Nova pessoa
-                  </h2>
-
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                    Preencha os dados pessoais e endereço da pessoa.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={closeTenantCreateModal}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 text-xl font-black text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
-                  aria-label="Fechar cadastro de pessoa"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 space-y-7 overflow-y-auto px-6 py-6 md:px-8">
-              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Nome completo / Razão social
-                  </label>
-
-                  <input
-                    value={tenantFormData.name}
-                    onChange={(event) =>
-                      updateTenantFormData("name", event.target.value)
-                    }
-                    placeholder={
-                      tenantFormData.personType === "Company"
-                        ? "Ex: Empresa LTDA"
-                        : "Ex: João Silva"
-                    }
-                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Tipo de pessoa
-                  </label>
-
-                  <select
-                    value={tenantFormData.personType}
-                    onChange={(event) =>
-                      updateTenantPersonType(event.target.value as PersonType)
-                    }
-                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
-                  >
-                    <option value="Individual">Pessoa física</option>
-                    <option value="Company">Pessoa jurídica</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    {tenantFormData.personType === "Company" ? "CNPJ" : "CPF"}
-                  </label>
-
-                  <input
-                    value={tenantFormData.cpf}
-                    onChange={(event) => {
-                      setCnpjSearchError("");
-                      updateTenantFormData(
-                        "cpf",
-                        formatDocument(
-                          event.target.value,
-                          tenantFormData.personType,
-                        ),
-                      );
-                    }}
-                    onBlur={() => {
-                      if (tenantFormData.personType === "Company") {
-                        searchCompanyByCnpj();
-                      }
-                    }}
-                    placeholder={
-                      tenantFormData.personType === "Company"
-                        ? "Ex: 12.345.678/0001-90"
-                        : "Ex: 123.456.789-00"
-                    }
-                    maxLength={
-                      tenantFormData.personType === "Company" ? 18 : 14
-                    }
-                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
-                  />
-
-                  {tenantFormData.personType === "Company" && (
-                    <button
-                      type="button"
-                      onClick={searchCompanyByCnpj}
-                      disabled={isCnpjLoading}
-                      className="mt-3 w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isCnpjLoading
-                        ? "Buscando CNPJ..."
-                        : "Buscar dados da empresa"}
-                    </button>
-                  )}
-
-                  {cnpjSearchError &&
-                    tenantFormData.personType === "Company" && (
-                      <p className="mt-2 text-xs font-bold text-red-500">
-                        {cnpjSearchError}
-                      </p>
+                  <div className="flex flex-col-reverse gap-3 md:flex-row">
+                    {!isEditingPaidExpense && (
+                      <button
+                        type="button"
+                        disabled={isExpenseSaving}
+                        onClick={openDeleteExpenseConfirmation}
+                        className="rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Excluir conta
+                      </button>
                     )}
-                </div>
 
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Telefone
-                  </label>
+                    {isEditingPaidExpense && (
+                      <button
+                        type="button"
+                        disabled={isExpenseSaving}
+                        onClick={() => openPaymentReversalConfirmation()}
+                        className="rounded-xl bg-amber-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Voltar para pendente
+                      </button>
+                    )}
+                  </div>
+                )}
 
-                  <input
-                    value={tenantFormData.phone}
-                    onChange={(event) =>
-                      updateTenantFormData(
-                        "phone",
-                        formatPhone(event.target.value),
-                      )
-                    }
-                    placeholder="Ex: (69) 99999-0000"
-                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
-                  />
-                </div>
-              </div>
-
-              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-orange-100 dark:border-orange-900/50 bg-orange-50 dark:bg-orange-950/30/50 dark:bg-orange-950/30 px-5 py-4 transition hover:bg-orange-50 dark:bg-orange-950/30 dark:hover:bg-orange-950/40">
-                <input
-                  type="checkbox"
-                  checked={tenantFormData.isTenant}
-                  onChange={(event) =>
-                    updateTenantFormData("isTenant", event.target.checked)
-                  }
-                  className="mt-1 h-5 w-5 rounded border-slate-300 accent-orange-500"
-                />
-
-                <span>
-                  <span className="block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Esta pessoa é inquilino
-                  </span>
-
-                  <span className="mt-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                    Quando desmarcado, esta pessoa não poderá ser vinculada a
-                    contratos de aluguel.
-                  </span>
-                </span>
-              </label>
-
-              <div>
-                <h3 className="text-sm font-black uppercase tracking-wide text-orange-600">
-                  Endereço
-                </h3>
-              </div>
-
-              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    CEP
-                  </label>
-
-                  <div className="flex gap-2">
-                    <input
-                      value={tenantFormData.zipCode}
-                      onChange={(event) =>
-                        updateTenantFormData(
-                          "zipCode",
-                          formatZipCode(event.target.value),
-                        )
-                      }
-                      onBlur={verifyZipCode}
-                      placeholder="Ex: 76940-000"
-                      className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
-                    />
-
+                <div className="flex flex-col-reverse gap-3 md:ml-auto md:flex-row md:justify-end">
+                  {!isEditingPaidExpense && (
                     <button
                       type="button"
-                      onClick={verifyZipCode}
-                      disabled={isZipCodeLoading}
-                      className="h-14 rounded-2xl bg-orange-50 dark:bg-orange-950/300 px-4 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 disabled:bg-orange-300"
+                      disabled={isExpenseSaving}
+                      onClick={closeCreateModal}
+                      className={`rounded-xl px-5 py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                        isBlackTheme
+                          ? "bg-[#1e293b] text-[#cbd5e1] hover:bg-[#334155]"
+                          : "bg-[#f1f5f9] text-[#475569] hover:bg-[#e2e8f0]"
+                      }`}
                     >
-                      {isZipCodeLoading ? "..." : "Buscar"}
+                      Cancelar
                     </button>
-                  </div>
-
-                  {zipCodeError && (
-                    <p className="mt-2 text-xs font-bold text-red-500">
-                      {zipCodeError}
-                    </p>
                   )}
-                </div>
 
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Estado
-                  </label>
-
-                  <input
-                    value={tenantFormData.state}
-                    onChange={(event) =>
-                      updateTenantFormData(
-                        "state",
-                        event.target.value.toUpperCase(),
-                      )
-                    }
-                    placeholder="UF"
-                    maxLength={2}
-                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Cidade
-                  </label>
-
-                  <input
-                    value={tenantFormData.city}
-                    onChange={(event) =>
-                      updateTenantFormData("city", event.target.value)
-                    }
-                    placeholder="Cidade"
-                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Logradouro
-                  </label>
-
-                  <input
-                    value={tenantFormData.street}
-                    onChange={(event) =>
-                      updateTenantFormData("street", event.target.value)
-                    }
-                    placeholder="Rua, avenida..."
-                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Número
-                  </label>
-
-                  <input
-                    value={tenantFormData.number}
-                    onChange={(event) =>
-                      updateTenantFormData("number", event.target.value)
-                    }
-                    placeholder="Número da casa"
-                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Bairro
-                  </label>
-
-                  <input
-                    value={tenantFormData.district}
-                    onChange={(event) =>
-                      updateTenantFormData("district", event.target.value)
-                    }
-                    placeholder="Bairro"
-                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Complemento
-                  </label>
-
-                  <input
-                    value={tenantFormData.complement}
-                    onChange={(event) =>
-                      updateTenantFormData("complement", event.target.value)
-                    }
-                    placeholder="Apartamento, bloco, referência..."
-                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
-                  />
+                  <button
+                    type="button"
+                    disabled={isExpenseSaving}
+                    onClick={saveExpenseWithSavingState}
+                    className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isExpenseSaving
+                      ? "Salvando..."
+                      : editingExpenseId
+                        ? "Salvar ajustes"
+                        : "Salvar conta"}
+                  </button>
                 </div>
               </div>
-            </div>
-
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-5 md:flex-row md:justify-end md:px-8">
-              <button
-                type="button"
-                onClick={closeTenantCreateModal}
-                className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-4 text-sm font-black text-slate-600 dark:text-slate-400 dark:text-slate-500 transition hover:bg-slate-200 dark:hover:bg-slate-700"
-              >
-                Cancelar
-              </button>
-
-              <button
-                type="button"
-                onClick={createTenantFromModal}
-                className="rounded-2xl bg-orange-50 dark:bg-orange-950/300 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600"
-              >
-                Cadastrar pessoa
-              </button>
             </div>
           </div>
         </div>
       )}
 
+      <PersonCreateModal
+        open={isTenantCreateOpen}
+        companyId={companyId}
+        people={tenants.map((tenant) => ({
+          id: tenant.id,
+          document: tenant.document || tenant.cpf || "",
+        }))}
+        onClose={closeTenantCreateModal}
+        onCreated={handleTenantCreated}
+      />
       {expensePendingPaymentReceipt && (
         <div className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-payable-page-black" : "contrx-accounts-payable-page-light"}`}>
           <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
@@ -3082,7 +2847,20 @@ export default function AccountsPayablePage() {
                 </p>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-4">
+                <div>
+                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                    Data de pagamento
+                  </label>
+
+                  <input
+                    type="date"
+                    value={formPaymentDate}
+                    onChange={(event) => setFormPaymentDate(event.target.value)}
+                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
+                  />
+                </div>
+
                 <div>
                   <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
                     Juros
@@ -3211,6 +2989,12 @@ export default function AccountsPayablePage() {
                 <p className="mt-2 text-sm font-bold text-slate-600 dark:text-slate-400 dark:text-slate-500">
                   Total informado: {formatCurrency(getPaymentEntriesTotal())}
                 </p>
+
+                <div
+                  className={`mt-3 rounded-2xl border px-4 py-3 text-sm font-bold ${getPaymentEntriesBalanceClassName()}`}
+                >
+                  {getPaymentEntriesBalanceLabel()}
+                </div>
               </div>
 
               <div>
@@ -3245,7 +3029,7 @@ export default function AccountsPayablePage() {
               <button
                 type="button"
                 onClick={confirmPayExpense}
-                className="rounded-xl bg-orange-50 dark:bg-orange-950/300 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
+                className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
               >
                 Confirmar pagamento
               </button>
@@ -3511,7 +3295,7 @@ export default function AccountsPayablePage() {
           </div>
         </div>
       )}
-    </AppShell>
+    </>
   );
 }
 
@@ -3519,7 +3303,7 @@ function mapApiPayableToExpense(account: PayableAccount): Expense {
   return {
     id: account.id,
     personId: account.personId || undefined,
-    personName: account.personName || "Pessoa nÃ£o informada",
+    personName: account.personName || "Pessoa não informada",
     description: account.description,
     category: account.category || "Outros",
     note: account.note || "",
@@ -3552,6 +3336,7 @@ function mapApiPersonToTenant(person: Person): Tenant {
   return {
     id: person.id,
     name: person.name,
+    document: person.document,
     personType: person.type === "COMPANY" ? "Company" : "Individual",
     cpf: person.document,
     phone: person.phone || "",
@@ -3560,17 +3345,6 @@ function mapApiPersonToTenant(person: Person): Tenant {
     city: person.city || "",
     street: person.address || "",
   };
-}
-
-function buildPersonAddressFromTenantForm(formData: TenantFormData) {
-  return [
-    formData.street.trim(),
-    formData.number.trim(),
-    formData.district.trim(),
-    formData.complement.trim(),
-  ]
-    .filter(Boolean)
-    .join(", ");
 }
 
 function mapUiPaymentMethodToApi(method: PaymentMethod): ApiPaymentMethod {
@@ -3650,35 +3424,6 @@ function normalizeApiAmount(value: unknown) {
   }
 
   return 0;
-}
-
-function isValidCnpj(value: string) {
-  const cnpj = value.replace(/\D/g, "");
-
-  if (cnpj.length !== 14) return false;
-  if (/^(\d)\1{13}$/.test(cnpj)) return false;
-
-  const calculateDigit = (base: string, weights: number[]) => {
-    const sum = weights.reduce(
-      (total, weight, index) => total + Number(base[index]) * weight,
-      0,
-    );
-
-    const rest = sum % 11;
-
-    return rest < 2 ? 0 : 11 - rest;
-  };
-
-  const firstWeights = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
-  const secondWeights = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
-
-  const firstCheckDigit = calculateDigit(cnpj.slice(0, 12), firstWeights);
-  const secondCheckDigit = calculateDigit(cnpj.slice(0, 13), secondWeights);
-
-  return (
-    firstCheckDigit === Number(cnpj[12]) &&
-    secondCheckDigit === Number(cnpj[13])
-  );
 }
 
 function Card({
@@ -3784,7 +3529,7 @@ function ConfirmationModal({
             className={`rounded-xl px-5 py-3 text-sm font-bold text-white shadow-sm transition ${
               danger
                 ? "bg-red-600 hover:bg-red-700"
-                : "bg-orange-50 dark:bg-orange-950/300 hover:bg-orange-600"
+                : "bg-orange-500 hover:bg-orange-600"
             }`}
           >
             {confirmLabel}
@@ -3794,3 +3539,4 @@ function ConfirmationModal({
     </div>
   );
 }
+

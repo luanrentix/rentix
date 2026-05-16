@@ -9,8 +9,8 @@ import {
   type ReactNode,
 } from "react";
 import { LoaderCircle, Maximize2, Minimize2, Search, X } from "lucide-react";
-import AppShell from "@/components/layout/app-shell";
 import { useAuth } from "@/context/AuthContext";
+import { PersonCreateModal } from "@/components/people/person-create-modal";
 import {
   createPerson,
   deletePerson,
@@ -774,7 +774,7 @@ export default function PeoplePage() {
   }
 
   return (
-    <AppShell>
+    <>
       <div className="space-y-7">
         <section className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -1130,7 +1130,24 @@ export default function PeoplePage() {
         </div>
       )}
 
-      {isModalOpen && !isModalMinimized && (
+      <PersonCreateModal
+        open={isModalOpen && !editingPersonId}
+        companyId={companyId}
+        people={people}
+        onClose={closeModal}
+        onCreated={(createdPerson) => {
+          setPeople((currentPeople) => [
+            mapApiPersonToPerson(createdPerson),
+            ...currentPeople,
+          ]);
+          setToast({
+            type: "success",
+            message: "Pessoa cadastrada com sucesso.",
+          });
+        }}
+      />
+
+      {isModalOpen && editingPersonId && !isModalMinimized && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6 backdrop-blur-sm">
           <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
             <div className="flex items-start justify-between border-b border-orange-100 px-8 py-6">
@@ -1559,7 +1576,7 @@ export default function PeoplePage() {
           </div>
         </div>
       )}
-    </AppShell>
+    </>
   );
 }
 

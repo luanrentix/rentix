@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { LoaderCircle, Maximize2, Minimize2, Search, X } from "lucide-react";
-import AppShell from "@/components/layout/app-shell";
 import {
   createProperty,
   getProperties,
@@ -763,7 +762,7 @@ export default function PropertiesPage() {
   }
 
   return (
-    <AppShell>
+    <>
       <style jsx global>{`
         .dark .contrx-properties-page {
           color: #f8fafc;
@@ -2117,7 +2116,7 @@ export default function PropertiesPage() {
           />
         )}
       </div>
-    </AppShell>
+    </>
   );
 }
 

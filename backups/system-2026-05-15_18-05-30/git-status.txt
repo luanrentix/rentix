@@ -1,0 +1,13 @@
+﻿ M app/admin/page.tsx
+ M app/agenda/page.tsx
+ M app/contas-pagar/page.tsx
+ M app/contas-receber/page.tsx
+ M app/contratos/page.tsx
+ M app/dashboard/page.tsx
+ M app/financeiro/page.tsx
+ M app/imoveis/page.tsx
+ M app/layout.tsx
+ M app/pessoas/page.tsx
+ M components/layout/app-shell.tsx
+?? backups/
+?? components/layout/app-frame.tsx

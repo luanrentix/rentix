@@ -13,7 +13,6 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
-import AppShell from "@/components/layout/app-shell";
 import { useAuth } from "@/context/AuthContext";
 import { getCompanyStorageItem } from "@/services/company-storage";
 import {
@@ -453,7 +452,7 @@ export default function FinancialPage() {
   const isProjectedPositive = balance.projectedBalance >= 0;
 
   return (
-    <AppShell>
+    <>
       <style>{contrxFinancialThemeStyle}</style>
       <div
         data-contrx-theme={financialTheme}
@@ -697,7 +696,7 @@ export default function FinancialPage() {
           />
         </div>
       </div>
-    </AppShell>
+    </>
   );
 }
 

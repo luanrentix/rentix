@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import AppShell from "@/components/layout/app-shell";
-import { PrivateRoute } from "@/components/PrivateRoute";
 import { useAuth } from "@/context/AuthContext";
 import {
   getContracts,
@@ -652,8 +650,7 @@ export default function DashboardPage() {
   ]);
 
   return (
-    <PrivateRoute>
-      <AppShell>
+    <>
         <style>{contrxDashboardThemeStyle}</style>
         <div data-contrx-theme={dashboardTheme} className="contrx-dashboard-page space-y-8 pt-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -961,8 +958,7 @@ export default function DashboardPage() {
             </section>
           </div>
         </div>
-      </AppShell>
-    </PrivateRoute>
+      </>
   );
 }
 

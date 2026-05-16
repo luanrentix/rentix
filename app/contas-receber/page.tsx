@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
-import AppShell from "@/components/layout/app-shell";
+import type { MouseEvent, ReactNode } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { PersonCreateModal } from "@/components/people/person-create-modal";
 import {
   createReceivableAccount,
   deleteReceivableAccount,
@@ -15,7 +15,7 @@ import {
   type ReceivableAccount,
 } from "@/services/financial.service";
 import { getContracts, type Contract as ApiContract } from "@/services/contracts.service";
-import { getPeople, createPerson, type Person } from "@/services/people.service";
+import { getPeople, type Person } from "@/services/people.service";
 import { getProperties, type Property as ApiProperty } from "@/services/properties.service";
 import {
   getCachedCompanySettings,
@@ -385,6 +385,7 @@ type Tenant = {
 type Charge = {
   id: string;
   contractId?: string | number | null;
+  tenantId?: string | null;
   property: string;
   tenant: string;
   dueDate: string;
@@ -403,6 +404,11 @@ type Charge = {
 type StatusFilter = "All" | "Pending" | "Paid" | "Overdue";
 type ReportDueFilter = "All" | "Overdue" | "DueToday" | "Upcoming" | "DateRange";
 type ChargeLaunchType = "single" | "installment";
+
+type ActionMenuPosition = {
+  top: number;
+  left: number;
+};
 
 type InstallmentPreview = {
   id: string;
@@ -424,6 +430,8 @@ type ReceivableFromContractPayload = {
   endDate?: string;
   installmentQuantity?: number;
 };
+
+const MAX_INSTALLMENT_QUANTITY = 120;
 
 type PaymentMethod =
   | "Cash"
@@ -475,50 +483,6 @@ const paymentMethodOptions: PaymentMethodOption[] = [
   { value: "Other", label: "Outros" },
 ];
 
-type BrasilApiCnpjResponse = {
-  cnpj?: string;
-  razao_social?: string;
-  nome_fantasia?: string;
-  cep?: string;
-  uf?: string;
-  municipio?: string;
-  logradouro?: string;
-  numero?: string;
-  bairro?: string;
-  complemento?: string;
-  ddd_telefone_1?: string;
-};
-
-type TenantFormData = {
-  personType: PersonType;
-  name: string;
-  cpf: string;
-  phone: string;
-  isTenant: boolean;
-  zipCode: string;
-  state: string;
-  city: string;
-  street: string;
-  number: string;
-  district: string;
-  complement: string;
-};
-
-const initialTenantFormData: TenantFormData = {
-  personType: "Individual",
-  name: "",
-  cpf: "",
-  phone: "",
-  isTenant: true,
-  zipCode: "",
-  state: "",
-  city: "",
-  street: "",
-  number: "",
-  district: "",
-  complement: "",
-};
-
 function normalizeAmount(value: unknown) {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : 0;
@@ -566,6 +530,14 @@ function formatCentsAsAmountInput(valueInCents: number) {
   return formatAmountInput(valueInCents / 100);
 }
 
+function formatCurrencyInput(value: string) {
+  const digits = value.replace(/\D/g, "");
+
+  if (!digits) return "";
+
+  return formatAmountInput(Number(digits) / 100);
+}
+
 function distributeAmountInCents(totalInCents: number, quantity: number) {
   if (quantity <= 0) return [];
 
@@ -599,11 +571,14 @@ export default function AccountsReceivablePage() {
   const [autoOpenSearch, setAutoOpenSearch] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isTenantCreateOpen, setIsTenantCreateOpen] = useState(false);
+  const [isChargeSaving, setIsChargeSaving] = useState(false);
 
   const [search, setSearch] = useState("");
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const [openActionMenuChargeId, setOpenActionMenuChargeId] = useState<string | null>(null);
+  const [actionMenuPosition, setActionMenuPosition] =
+    useState<ActionMenuPosition | null>(null);
 
   const [formTenant, setFormTenant] = useState("");
   const [formContractId, setFormContractId] = useState("");
@@ -621,13 +596,6 @@ export default function AccountsReceivablePage() {
     InstallmentPreview[]
   >([]);
 
-  const [tenantFormData, setTenantFormData] = useState<TenantFormData>(
-    initialTenantFormData,
-  );
-  const [isZipCodeLoading, setIsZipCodeLoading] = useState(false);
-  const [zipCodeError, setZipCodeError] = useState("");
-  const [isCnpjLoading, setIsCnpjLoading] = useState(false);
-  const [cnpjSearchError, setCnpjSearchError] = useState("");
   const [chargeFormError, setChargeFormError] = useState("");
   const [editingChargeId, setEditingChargeId] = useState<string | null>(null);
   const [chargePendingDeletion, setChargePendingDeletion] =
@@ -692,7 +660,7 @@ export default function AccountsReceivablePage() {
       setProperties(apiProperties.map(mapApiPropertyToReceivableProperty));
       setTenants(apiPeople.map(mapApiPersonToReceivableTenant));
     } catch (error) {
-      console.error("NÃ£o foi possÃ­vel carregar contas a receber.", error);
+      console.error("Não foi possível carregar contas a receber.", error);
     }
   }
 
@@ -842,97 +810,6 @@ export default function AccountsReceivablePage() {
     );
   }, [companyId, statusFilter]);
 
-  function onlyNumbers(value: string) {
-    return value.replace(/\D/g, "");
-  }
-
-  function formatCpf(value: string) {
-    return onlyNumbers(value)
-      .slice(0, 11)
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d)/, "$1.$2")
-      .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
-  }
-
-  function formatCnpj(value: string) {
-    return onlyNumbers(value)
-      .slice(0, 14)
-      .replace(/^(\d{2})(\d)/, "$1.$2")
-      .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
-      .replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3/$4")
-      .replace(
-        /^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/,
-        "$1.$2.$3/$4-$5",
-      );
-  }
-
-  function formatDocument(value: string, personType: PersonType) {
-    if (personType === "Company") return formatCnpj(value);
-
-    return formatCpf(value);
-  }
-
-  function formatPhone(value: string) {
-    const numbers = onlyNumbers(value).slice(0, 11);
-
-    if (numbers.length <= 10) {
-      return numbers
-        .replace(/(\d{2})(\d)/, "($1) $2")
-        .replace(/(\d{4})(\d)/, "$1-$2");
-    }
-
-    return numbers
-      .replace(/(\d{2})(\d)/, "($1) $2")
-      .replace(/(\d{5})(\d)/, "$1-$2");
-  }
-
-  function formatZipCode(value: string) {
-    return onlyNumbers(value)
-      .slice(0, 8)
-      .replace(/(\d{5})(\d)/, "$1-$2");
-  }
-
-  async function verifyZipCode() {
-    const zipCode = onlyNumbers(tenantFormData.zipCode);
-
-    if (zipCode.length === 0) {
-      setZipCodeError("");
-      return;
-    }
-
-    if (zipCode.length !== 8) {
-      setZipCodeError("CEP inválido. Digite 8 números.");
-      return;
-    }
-
-    try {
-      setIsZipCodeLoading(true);
-      setZipCodeError("");
-
-      const response = await fetch(`https://viacep.com.br/ws/${zipCode}/json/`);
-      const data = await response.json();
-
-      if (data.erro) {
-        setZipCodeError("CEP não encontrado.");
-        return;
-      }
-
-      setTenantFormData((currentData) => ({
-        ...currentData,
-        zipCode: formatZipCode(zipCode),
-        state: data.uf || currentData.state,
-        city: data.localidade || currentData.city,
-        street: data.logradouro || currentData.street,
-        district: data.bairro || currentData.district,
-        complement: currentData.complement,
-      }));
-    } catch {
-      setZipCodeError("Não foi possível consultar o CEP agora.");
-    } finally {
-      setIsZipCodeLoading(false);
-    }
-  }
-
   const getContractAmount = useCallback((contract: Contract) => {
     return normalizeAmount(
       contract.value ??
@@ -1020,6 +897,105 @@ export default function AccountsReceivablePage() {
     ];
   }, [automaticCharges, manualChargesWithStatus]);
 
+  const openActionMenuCharge = useMemo(() => {
+    return openActionMenuChargeId
+      ? charges.find((charge) => String(charge.id) === String(openActionMenuChargeId)) || null
+      : null;
+  }, [charges, openActionMenuChargeId]);
+
+  function getFloatingActionMenuPosition(
+    buttonRect: DOMRect,
+    estimatedMenuHeight: number,
+  ) {
+    const menuWidth = 208;
+    const viewportPadding = 16;
+    const availableBottomSpace = window.innerHeight - buttonRect.bottom;
+    const top =
+      availableBottomSpace < estimatedMenuHeight
+        ? Math.max(viewportPadding, buttonRect.top - estimatedMenuHeight - 8)
+        : buttonRect.bottom + 8;
+    const left = Math.min(
+      Math.max(viewportPadding, buttonRect.right - menuWidth),
+      window.innerWidth - menuWidth - viewportPadding,
+    );
+
+    return { top, left };
+  }
+
+  function handleToggleChargeActions(
+    charge: Charge,
+    event: MouseEvent<HTMLButtonElement>,
+  ) {
+    if (openActionMenuChargeId === charge.id) {
+      handleCloseChargeActions();
+      return;
+    }
+
+    const visibleActionCount =
+      3 +
+      (charge.status !== "Paid" ? 1 : 0) +
+      (getChargePayment(charge.id) ? 2 : 0) +
+      (charge.status === "Paid" ? 1 : 0);
+    const estimatedMenuHeight = Math.min(visibleActionCount * 48 + 16, 360);
+
+    setActionMenuPosition(
+      getFloatingActionMenuPosition(
+        event.currentTarget.getBoundingClientRect(),
+        estimatedMenuHeight,
+      ),
+    );
+    setOpenActionMenuChargeId(charge.id);
+  }
+
+  function handleCloseChargeActions() {
+    setOpenActionMenuChargeId(null);
+    setActionMenuPosition(null);
+  }
+
+  useEffect(() => {
+    if (!openActionMenuChargeId) return;
+
+    function closeFloatingActionMenu() {
+      handleCloseChargeActions();
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+
+      if (!(target instanceof Element)) {
+        closeFloatingActionMenu();
+        return;
+      }
+
+      if (
+        target.closest("[data-receivable-action-menu]") ||
+        target.closest("[data-receivable-action-trigger]")
+      ) {
+        return;
+      }
+
+      closeFloatingActionMenu();
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeFloatingActionMenu();
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", closeFloatingActionMenu);
+    window.addEventListener("scroll", closeFloatingActionMenu, true);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", closeFloatingActionMenu);
+      window.removeEventListener("scroll", closeFloatingActionMenu, true);
+    };
+  }, [openActionMenuChargeId]);
+
   const getChargePayments = useCallback((chargeId: string) => {
     return paymentRecords
       .filter(
@@ -1047,13 +1023,24 @@ export default function AccountsReceivablePage() {
     );
   }, [getChargePayments]);
 
+  const getChargeSettlementAmount = useCallback((charge: Charge) => {
+    return getChargePayments(charge.id).reduce((total, paymentRecord) => {
+      return (
+        total +
+        paymentRecord.amountPaid +
+        paymentRecord.discount -
+        paymentRecord.interest
+      );
+    }, 0);
+  }, [getChargePayments]);
+
   const getChargeRemainingAmount = useCallback((charge: Charge) => {
     if (typeof charge.remainingAmount === "number") {
       return Math.max(charge.remainingAmount, 0);
     }
 
-    return Math.max(charge.amount - getChargePaidAmount(charge), 0);
-  }, [getChargePaidAmount]);
+    return Math.max(charge.amount - getChargeSettlementAmount(charge), 0);
+  }, [getChargeSettlementAmount]);
 
   useEffect(() => {
     window.dispatchEvent(new Event("contrx-receivables-updated"));
@@ -1067,7 +1054,9 @@ export default function AccountsReceivablePage() {
     if (selectedTenant) {
       result = result.filter(
         (charge) =>
-          charge.tenant.toLowerCase() === selectedTenant.name.toLowerCase(),
+          String(charge.tenantId || "") === String(selectedTenant.id) ||
+          (!charge.tenantId &&
+            charge.tenant.toLowerCase() === selectedTenant.name.toLowerCase()),
       );
     }
 
@@ -1525,6 +1514,7 @@ export default function AccountsReceivablePage() {
 
       if (
         selectedReportTenant &&
+        String(charge.tenantId || "") !== String(selectedReportTenant.id) &&
         charge.tenant.toLowerCase() !== selectedReportTenant.name.toLowerCase()
       ) {
         return false;
@@ -2199,20 +2189,19 @@ export default function AccountsReceivablePage() {
 
     dueDate.setDate(today.getDate() + 30);
 
+    resetCreateForm();
     setFormIssueDate(getLocalDateValue(today));
     setFormDueDate(getLocalDateValue(dueDate));
-    setFormPaymentDate("");
-    setFormContractId("");
-    setFormLaunchType("single");
-    setFormFirstInstallmentAsDownPayment(false);
     setEditingChargeId(null);
-    setChargeFormError("");
+    setIsChargeSaving(false);
     setIsCreateOpen(true);
   }
 
   function openEditCharge(charge: Charge) {
     const tenant = tenants.find(
-      (item) => item.name.toLowerCase() === charge.tenant.toLowerCase(),
+      (item) =>
+        String(item.id) === String(charge.tenantId || "") ||
+        item.name.toLowerCase() === charge.tenant.toLowerCase(),
     );
     const property = properties.find(
       (item) => item.name.toLowerCase() === charge.property.toLowerCase(),
@@ -2239,6 +2228,7 @@ export default function AccountsReceivablePage() {
     setFormInstallmentQuantity("2");
     setInstallmentPreview([]);
     setChargeFormError("");
+    setIsChargeSaving(false);
     setIsCreateOpen(true);
   }
 
@@ -2378,7 +2368,7 @@ export default function AccountsReceivablePage() {
         setPaymentFormError(
           error instanceof Error
             ? error.message
-            : "NÃ£o foi possÃ­vel registrar o recebimento no backend.",
+            : "Não foi possível registrar o recebimento no backend.",
         );
         return;
       }
@@ -2419,9 +2409,13 @@ export default function AccountsReceivablePage() {
         ...receivedPaymentRecords,
       ]);
     } else {
-      const nextPaidAmount =
-        getChargePaidAmount(chargePendingPaymentReceipt) + amountPaid;
-      const shouldMarkAsPaid = nextPaidAmount >= chargePendingPaymentReceipt.amount;
+      const nextSettlementAmount =
+        getChargeSettlementAmount(chargePendingPaymentReceipt) +
+        amountPaid +
+        discount -
+        interest;
+      const shouldMarkAsPaid =
+        nextSettlementAmount >= chargePendingPaymentReceipt.amount;
 
       setPaid((currentPaid) => {
         const nextPaid = currentPaid.filter(
@@ -2468,11 +2462,6 @@ export default function AccountsReceivablePage() {
     setFormInstallmentQuantity("2");
     setInstallmentPreview([]);
     setChargeFormError("");
-    setTenantFormData(initialTenantFormData);
-    setZipCodeError("");
-    setCnpjSearchError("");
-    setIsCnpjLoading(false);
-    setIsZipCodeLoading(false);
     setIsTenantCreateOpen(false);
   }
 
@@ -2545,7 +2534,7 @@ export default function AccountsReceivablePage() {
         setChargeFormError(
           error instanceof Error
             ? error.message
-            : "NÃ£o foi possÃ­vel estornar o recebimento no backend.",
+            : "Não foi possível estornar o recebimento no backend.",
         );
         setChargePendingPaymentReversal(null);
         return;
@@ -2619,7 +2608,7 @@ export default function AccountsReceivablePage() {
         setChargeFormError(
           error instanceof Error
             ? error.message
-            : "NÃ£o foi possÃ­vel excluir a cobranÃ§a no backend.",
+            : "Não foi possível excluir a cobrança no backend.",
         );
         setChargePendingDeletion(null);
         return;
@@ -2646,134 +2635,25 @@ export default function AccountsReceivablePage() {
   }
 
   function openTenantCreateModal() {
-    setTenantFormData(initialTenantFormData);
-    setZipCodeError("");
-    setCnpjSearchError("");
-    setIsCnpjLoading(false);
     setIsTenantCreateOpen(true);
   }
 
   function closeTenantCreateModal() {
-    setTenantFormData(initialTenantFormData);
-    setZipCodeError("");
-    setCnpjSearchError("");
-    setIsCnpjLoading(false);
     setIsTenantCreateOpen(false);
   }
 
-  function updateTenantFormData<K extends keyof TenantFormData>(
-    field: K,
-    value: TenantFormData[K],
-  ) {
-    setTenantFormData((currentData) => ({
-      ...currentData,
-      [field]: value,
-    }));
-  }
+  function handleTenantCreated(apiPerson: Person) {
+    const newTenant = mapApiPersonToReceivableTenant(apiPerson);
 
-  function updateTenantPersonType(personType: PersonType) {
-    setTenantFormData((currentData) => ({
-      ...currentData,
-      personType,
-      cpf: "",
-    }));
-    setZipCodeError("");
-    setCnpjSearchError("");
-  }
-
-  async function searchCompanyByCnpj() {
-    const cleanCnpj = onlyNumbers(tenantFormData.cpf);
-
-    if (tenantFormData.personType !== "Company") return;
-
-    if (cleanCnpj.length !== 14) {
-      setCnpjSearchError("Informe um CNPJ com 14 números para buscar os dados.");
-      return;
-    }
-
-    if (!isValidCnpj(cleanCnpj)) {
-      setCnpjSearchError("CNPJ inválido. Verifique o número informado.");
-      return;
-    }
-
-    try {
-      setIsCnpjLoading(true);
-      setCnpjSearchError("");
-
-      const response = await fetch(
-        `https://brasilapi.com.br/api/cnpj/v1/${cleanCnpj}`,
+    setTenants((currentTenants) => {
+      const tenantAlreadyExists = currentTenants.some(
+        (tenant) => String(tenant.id) === String(newTenant.id),
       );
 
-      if (!response.ok) {
-        setCnpjSearchError("Empresa não encontrada para o CNPJ informado.");
-        return;
-      }
-
-      const data = (await response.json()) as BrasilApiCnpjResponse;
-
-      setTenantFormData((currentData) => ({
-        ...currentData,
-        name:
-          data.razao_social?.trim() ||
-          data.nome_fantasia?.trim() ||
-          currentData.name,
-        cpf: formatCnpj(data.cnpj || cleanCnpj),
-        phone: data.ddd_telefone_1
-          ? formatPhone(data.ddd_telefone_1)
-          : currentData.phone,
-        zipCode: data.cep ? formatZipCode(data.cep) : currentData.zipCode,
-        state: data.uf || currentData.state,
-        city: data.municipio || currentData.city,
-        street: data.logradouro || currentData.street,
-        number: data.numero || currentData.number,
-        district: data.bairro || currentData.district,
-        complement: data.complemento || currentData.complement,
-      }));
-    } catch {
-      setCnpjSearchError("Não foi possível consultar o CNPJ no momento.");
-    } finally {
-      setIsCnpjLoading(false);
-    }
-  }
-
-  async function createTenantFromModal() {
-    const trimmedTenantName = tenantFormData.name.trim();
-
-    if (!trimmedTenantName) return;
-
-    if (!companyId) {
-      setZipCodeError("Empresa do usuario nao encontrada. Faca login novamente.");
-      return;
-    }
-
-    try {
-      const apiPerson = await createPerson({
-        companyId,
-        type: tenantFormData.personType === "Company" ? "COMPANY" : "INDIVIDUAL",
-        name: trimmedTenantName,
-        document: onlyNumbers(tenantFormData.cpf) || tenantFormData.cpf.trim(),
-        phone: tenantFormData.phone.trim(),
-        city: tenantFormData.city.trim(),
-        state: tenantFormData.state.trim(),
-        address: buildPersonAddressFromTenantForm(tenantFormData),
-        status: "ACTIVE",
-      });
-
-      const newTenant = mapApiPersonToReceivableTenant(apiPerson);
-      const updatedTenants = [...tenants, newTenant];
-
-      setTenants(updatedTenants);
-      setFormTenant(newTenant.id);
-      setTenantFormData(initialTenantFormData);
-      setZipCodeError("");
-      setIsTenantCreateOpen(false);
-    } catch (error) {
-      setZipCodeError(
-        error instanceof Error
-          ? error.message
-          : "Nao foi possivel cadastrar a pessoa no backend.",
-      );
-    }
+      return tenantAlreadyExists ? currentTenants : [...currentTenants, newTenant];
+    });
+    setFormTenant(newTenant.id);
+    setChargeFormError("");
   }
 
   const generateInstallmentPreview = useCallback(() => {
@@ -2785,7 +2665,10 @@ export default function AccountsReceivablePage() {
       return;
     }
 
-    const normalizedQuantity = Math.max(2, Math.trunc(quantity));
+    const normalizedQuantity = Math.min(
+      MAX_INSTALLMENT_QUANTITY,
+      Math.max(2, Math.trunc(quantity)),
+    );
     const installmentAmountsInCents = distributeAmountInCents(
       totalAmountInCents,
       normalizedQuantity,
@@ -3580,6 +3463,18 @@ export default function AccountsReceivablePage() {
   }
 
   async function saveManualCharge() {
+    if (isChargeSaving) return;
+
+    setIsChargeSaving(true);
+
+    try {
+      await saveManualChargeTransaction();
+    } finally {
+      setIsChargeSaving(false);
+    }
+  }
+
+  async function saveManualChargeTransaction() {
     setChargeFormError("");
 
     const normalizedAmount = normalizeAmount(formAmount);
@@ -3636,7 +3531,7 @@ export default function AccountsReceivablePage() {
           setChargeFormError(
             error instanceof Error
               ? error.message
-              : "NÃ£o foi possÃ­vel atualizar o recebimento no backend.",
+              : "Não foi possível atualizar o recebimento no backend.",
           );
           return;
         }
@@ -3695,6 +3590,7 @@ export default function AccountsReceivablePage() {
       const savedCharge: Charge = {
         id: editingChargeId || createLocalId("manual"),
         contractId: formContractId || null,
+        tenantId: tenant.id,
         property: chargeProperty,
         tenant: tenant.name,
         dueDate: new Date(`${formDueDate}T00:00:00`).toISOString(),
@@ -3738,7 +3634,7 @@ export default function AccountsReceivablePage() {
           setChargeFormError(
             error instanceof Error
               ? error.message
-              : "NÃ£o foi possÃ­vel salvar a cobranÃ§a no backend.",
+              : "Não foi possível salvar a cobrança no backend.",
           );
           return;
         }
@@ -3801,6 +3697,7 @@ export default function AccountsReceivablePage() {
     const newCharges: Charge[] = installmentPreview.map((installment) => ({
       id: `${installmentGroupId}-${installment.installmentNumber}`,
       contractId: formContractId || null,
+      tenantId: tenant.id,
       property: chargeProperty,
       tenant: tenant.name,
       dueDate: new Date(`${installment.dueDate}T00:00:00`).toISOString(),
@@ -3843,7 +3740,7 @@ export default function AccountsReceivablePage() {
         setChargeFormError(
           error instanceof Error
             ? error.message
-            : "NÃ£o foi possÃ­vel salvar as parcelas no backend.",
+            : "Não foi possível salvar as parcelas no backend.",
         );
         return;
       }
@@ -3873,7 +3770,7 @@ export default function AccountsReceivablePage() {
   }
 
   return (
-    <AppShell>
+    <>
       <style jsx global>{`
         .contrx-accounts-receivable-page-light {
           color: #0f172a;
@@ -4449,7 +4346,7 @@ export default function AccountsReceivablePage() {
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={openCreateModal}
-                  className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
+                  className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
                 >
                   Nova cobrança
                 </button>
@@ -4463,7 +4360,7 @@ export default function AccountsReceivablePage() {
 
                 <button
                   onClick={() => setIsSearchOpen(true)}
-                  className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
+                  className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700"
                 >
                   Buscar inquilino
                 </button>
@@ -4565,94 +4462,15 @@ export default function AccountsReceivablePage() {
                         <div className="relative inline-flex justify-center">
                           <button
                             type="button"
-                            onClick={() =>
-                              setOpenActionMenuChargeId((currentChargeId) =>
-                                currentChargeId === charge.id ? null : charge.id,
-                              )
-                            }
+                            onClick={(event) => handleToggleChargeActions(charge, event)}
+                            data-receivable-action-trigger
+                            aria-expanded={openActionMenuChargeId === charge.id}
                             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-800 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
                           >
                             Ações
                             <span className="text-xs">▼</span>
                           </button>
 
-                          {openActionMenuChargeId === charge.id && (
-                            <div className="absolute right-0 top-11 z-40 w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-2xl ring-1 ring-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:ring-slate-700">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setOpenActionMenuChargeId(null);
-                                  openEditCharge(charge);
-                                }}
-                                className="block w-full px-4 py-3 text-left text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
-                              >
-                                Editar
-                              </button>
-
-                              {charge.status !== "Paid" && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setOpenActionMenuChargeId(null);
-                                    openReceivePaymentModal(charge);
-                                  }}
-                                  className="block w-full px-4 py-3 text-left text-sm font-bold text-orange-700 transition hover:bg-orange-50 dark:text-orange-300 dark:hover:bg-orange-950/30"
-                                >
-                                  Receber
-                                </button>
-                              )}
-
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setOpenActionMenuChargeId(null);
-                                  reprintPaymentCarnet(charge);
-                                }}
-                                className="block w-full px-4 py-3 text-left text-sm font-bold text-emerald-700 transition hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
-                              >
-                                Reimprimir carnê
-                              </button>
-
-                              {getChargePayment(charge.id) && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setOpenActionMenuChargeId(null);
-                                    reprintPaymentReceipt(charge);
-                                  }}
-                                  className="block w-full px-4 py-3 text-left text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
-                                >
-                                  Reimprimir recibo
-                                </button>
-                              )}
-
-                              {getChargePayment(charge.id) && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setOpenActionMenuChargeId(null);
-                                    openPaymentReversalConfirmation(charge);
-                                  }}
-                                  className="block w-full px-4 py-3 text-left text-sm font-bold text-red-700 transition hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/30"
-                                >
-                                  Estornar recebimentos
-                                </button>
-                              )}
-
-                              {charge.status === "Paid" && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setOpenActionMenuChargeId(null);
-                                    openEditCharge(charge);
-                                  }}
-                                  className="block w-full px-4 py-3 text-left text-sm font-bold text-amber-700 transition hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30"
-                                >
-                                  Ajustar pagamento
-                                </button>
-                              )}
-                            </div>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -4663,6 +4481,88 @@ export default function AccountsReceivablePage() {
           </div>
         </div>
       </div>
+
+      {openActionMenuCharge && actionMenuPosition && (
+        <div
+          data-receivable-action-menu
+          className="fixed z-[90] max-h-[calc(100vh-32px)] w-52 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1 text-left shadow-2xl ring-1 ring-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:ring-slate-700"
+          style={{ top: actionMenuPosition.top, left: actionMenuPosition.left }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              handleCloseChargeActions();
+              openEditCharge(openActionMenuCharge);
+            }}
+            className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            Editar
+          </button>
+
+          {openActionMenuCharge.status !== "Paid" && (
+            <button
+              type="button"
+              onClick={() => {
+                handleCloseChargeActions();
+                openReceivePaymentModal(openActionMenuCharge);
+              }}
+              className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-orange-700 transition hover:bg-orange-50 dark:text-orange-300 dark:hover:bg-orange-950/30"
+            >
+              Receber
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              handleCloseChargeActions();
+              reprintPaymentCarnet(openActionMenuCharge);
+            }}
+            className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-emerald-700 transition hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
+          >
+            Reimprimir carne
+          </button>
+
+          {getChargePayment(openActionMenuCharge.id) && (
+            <button
+              type="button"
+              onClick={() => {
+                handleCloseChargeActions();
+                reprintPaymentReceipt(openActionMenuCharge);
+              }}
+              className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              Reimprimir recibo
+            </button>
+          )}
+
+          {getChargePayment(openActionMenuCharge.id) && (
+            <button
+              type="button"
+              onClick={() => {
+                handleCloseChargeActions();
+                openPaymentReversalConfirmation(openActionMenuCharge);
+              }}
+              className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-red-700 transition hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/30"
+            >
+              Estornar recebimentos
+            </button>
+          )}
+
+          {openActionMenuCharge.status === "Paid" && (
+            <button
+              type="button"
+              onClick={() => {
+                handleCloseChargeActions();
+                openEditCharge(openActionMenuCharge);
+              }}
+              className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-amber-700 transition hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30"
+            >
+              Ajustar pagamento
+            </button>
+          )}
+        </div>
+      )}
 
       {isReportOpen && (
         <div className={`fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
@@ -4689,7 +4589,7 @@ export default function AccountsReceivablePage() {
                         : "bg-[#f8fafc] shadow-slate-200/70 ring-1 ring-[#e2e8f0]"
                     }`}
                   >
-                    📄
+                    ðŸ“„
                   </div>
 
                   <div>
@@ -4966,7 +4866,7 @@ export default function AccountsReceivablePage() {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50 dark:bg-orange-950/300 text-xl shadow-lg shadow-orange-500/20">
-                    🔎
+                    ðŸ”Ž
                   </div>
 
                   <div>
@@ -5099,12 +4999,12 @@ export default function AccountsReceivablePage() {
 
       {isCreateOpen && (
         <div className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
-          <div className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
-            <div className="border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-950/40 dark:to-slate-900 p-6">
+          <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
+            <div className="border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-orange-50 to-white dark:from-orange-950/40 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-xl shadow-lg shadow-emerald-600/20 dark:shadow-emerald-950/30">
-                    💰
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-xl shadow-lg shadow-orange-500/20 dark:shadow-orange-950/30">
+                    ðŸ’°
                   </div>
 
                   <div>
@@ -5150,7 +5050,7 @@ export default function AccountsReceivablePage() {
                       }}
                       className={`rounded-2xl border px-4 py-3 text-left transition ${
                         formLaunchType === "single"
-                          ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 ring-4 ring-emerald-100 dark:ring-emerald-900/50"
+                          ? "border-orange-500 bg-orange-50 dark:bg-orange-950/30 ring-4 ring-orange-100 dark:ring-orange-900/50"
                           : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 dark:bg-slate-800"
                       }`}
                     >
@@ -5170,7 +5070,7 @@ export default function AccountsReceivablePage() {
                       }}
                       className={`rounded-2xl border px-4 py-3 text-left transition ${
                         formLaunchType === "installment"
-                          ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 ring-4 ring-emerald-100 dark:ring-emerald-900/50"
+                          ? "border-orange-500 bg-orange-50 dark:bg-orange-950/30 ring-4 ring-orange-100 dark:ring-orange-900/50"
                           : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 dark:bg-slate-800"
                       }`}
                     >
@@ -5205,7 +5105,7 @@ export default function AccountsReceivablePage() {
                         setChargeFormError("");
                         setFormTenant(event.target.value);
                       }}
-                      className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50 ${
+                      className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
                         isEditingPaidCharge
                           ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 dark:text-slate-500"
                           : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
@@ -5253,7 +5153,7 @@ export default function AccountsReceivablePage() {
                     setChargeFormError("");
                     setFormProperty(event.target.value);
                   }}
-                  className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50 ${
+                  className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
                     isEditingPaidCharge
                       ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 dark:text-slate-500"
                       : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
@@ -5274,20 +5174,32 @@ export default function AccountsReceivablePage() {
                     Valor total
                   </label>
 
-                  <input
-                    placeholder="Ex: 1500,00"
-                    value={formAmount}
-                    disabled={isEditingPaidCharge}
-                    onChange={(event) => {
-                      setChargeFormError("");
-                      setFormAmount(event.target.value);
-                    }}
-                    className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50 ${
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-slate-500 dark:text-slate-400">
+                      R$
+                    </span>
+
+                    <input
+                      inputMode="decimal"
+                      placeholder="0,00"
+                      value={formAmount}
+                      disabled={isEditingPaidCharge}
+                      onChange={(event) => {
+                        setChargeFormError("");
+                        setFormAmount(formatCurrencyInput(event.target.value));
+                      }}
+                      onBlur={() => {
+                        const amount = normalizeAmount(formAmount);
+
+                        setFormAmount(amount > 0 ? formatAmountInput(amount) : "");
+                      }}
+                      className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 pl-11 text-sm font-black outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
                       isEditingPaidCharge
                         ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 dark:text-slate-500"
                         : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-                    }`}
-                  />
+                      }`}
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -5303,7 +5215,7 @@ export default function AccountsReceivablePage() {
                       setChargeFormError("");
                       setFormIssueDate(event.target.value);
                     }}
-                    className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50 ${
+                    className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
                       isEditingPaidCharge
                         ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 dark:text-slate-500"
                         : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
@@ -5324,7 +5236,7 @@ export default function AccountsReceivablePage() {
                       setChargeFormError("");
                       setFormDueDate(event.target.value);
                     }}
-                    className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50 ${
+                    className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
                       isEditingPaidCharge
                         ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 dark:text-slate-500"
                         : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
@@ -5357,7 +5269,7 @@ export default function AccountsReceivablePage() {
               )}
 
               {!editingChargeId && formLaunchType === "installment" && (
-                <div className="space-y-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30/40 p-4">
+                <div className="space-y-4 rounded-2xl border border-orange-100 dark:border-orange-900/50 bg-orange-50 dark:bg-orange-950/30 p-4">
                   <div className="grid gap-4 md:grid-cols-[220px_1fr] md:items-start">
                     <div className="space-y-3">
                       <div>
@@ -5368,18 +5280,37 @@ export default function AccountsReceivablePage() {
                         <input
                           type="number"
                           min={2}
+                          max={MAX_INSTALLMENT_QUANTITY}
                           value={formInstallmentQuantity}
-                          onChange={(event) =>
-                            setFormInstallmentQuantity(event.target.value)
-                          }
-                          className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50"
+                          onChange={(event) => {
+                            setChargeFormError("");
+                            const nextQuantity = Number(event.target.value);
+
+                            if (!event.target.value || !Number.isFinite(nextQuantity)) {
+                              setFormInstallmentQuantity(event.target.value);
+                              return;
+                            }
+
+                            setFormInstallmentQuantity(
+                              String(
+                                Math.min(
+                                  MAX_INSTALLMENT_QUANTITY,
+                                  Math.max(2, Math.trunc(nextQuantity)),
+                                ),
+                              ),
+                            );
+                          }}
+                          className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
                         />
+                        <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                          Limite de {MAX_INSTALLMENT_QUANTITY} parcelas.
+                        </p>
                       </div>
 
                       <label className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition ${
                         formFirstInstallmentAsDownPayment
-                          ? "border-emerald-300 bg-white text-emerald-800 ring-2 ring-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200 dark:ring-emerald-900/60"
-                          : "border-slate-200 bg-white text-slate-600 hover:border-emerald-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
+                          ? "border-orange-300 bg-white text-orange-800 ring-2 ring-orange-100 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-200 dark:ring-orange-900/60"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-orange-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400"
                       }`}>
                         <input
                           type="checkbox"
@@ -5388,21 +5319,21 @@ export default function AccountsReceivablePage() {
                             setChargeFormError("");
                             setFormFirstInstallmentAsDownPayment(event.target.checked);
                           }}
-                          className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
                         />
 
                         <span>
                           <strong className="block text-sm font-black">
-                             Entrada
+                            Primeira parcela como entrada
                           </strong>
                           <small className="mt-1 block text-xs font-semibold leading-5">
-                            
+                            Usa a data de lançamento e abre o recebimento da entrada após salvar.
                           </small>
                         </span>
                       </label>
                     </div>
 
-                    <div className="rounded-xl bg-white dark:bg-slate-900 p-4 text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500 ring-1 ring-emerald-100 dark:ring-emerald-900/50">
+                    <div className="rounded-xl bg-white dark:bg-slate-900 p-4 text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500 ring-1 ring-orange-100 dark:ring-orange-900/50">
                       O sistema divide o valor total em parcelas iguais e gera
                       os vencimentos automaticamente de 30 em 30 dias. Quando a
                       primeira parcela for marcada como entrada, ela usa a data
@@ -5413,7 +5344,7 @@ export default function AccountsReceivablePage() {
 
                   {installmentPreview.length > 0 && (
                     <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                      <div className="grid grid-cols-[90px_1fr_1fr] bg-slate-50 dark:bg-slate-800 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                      <div className="hidden grid-cols-[90px_1fr_1fr] bg-slate-50 dark:bg-slate-800 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500 md:grid">
                         <span>Parcela</span>
                         <span>Valor</span>
                         <span>Vencimento</span>
@@ -5423,11 +5354,11 @@ export default function AccountsReceivablePage() {
                         {installmentPreview.map((installment) => (
                           <div
                             key={installment.id}
-                            className="grid grid-cols-[90px_1fr_1fr] gap-3 px-4 py-3"
+                            className="grid gap-3 px-4 py-3 md:grid-cols-[90px_1fr_1fr]"
                           >
                             <div className="flex items-center text-sm font-black text-slate-900 dark:text-slate-100">
                               {installment.isDownPayment ? (
-                                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-800">
+                                <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-orange-700 ring-1 ring-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:ring-orange-800">
                                   Entrada
                                 </span>
                               ) : (
@@ -5446,7 +5377,8 @@ export default function AccountsReceivablePage() {
                                   event.target.value,
                                 )
                               }
-                              className="h-11 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50"
+                              aria-label={`Valor da parcela ${installment.installmentNumber}`}
+                              className="h-11 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
                             />
 
                             <input
@@ -5458,7 +5390,8 @@ export default function AccountsReceivablePage() {
                                   event.target.value,
                                 )
                               }
-                              className="h-11 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50"
+                              aria-label={`Vencimento da parcela ${installment.installmentNumber}`}
+                              className="h-11 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
                             />
                           </div>
                         ))}
@@ -5496,8 +5429,9 @@ export default function AccountsReceivablePage() {
                     {isEditingPaidCharge && (
                       <button
                         type="button"
+                        disabled={isChargeSaving}
                         onClick={() => openPaymentReversalConfirmation()}
-                        className="rounded-xl bg-amber-50 dark:bg-amber-950/300 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-amber-600"
+                        className="rounded-xl bg-amber-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         Voltar para pagamento
                       </button>
@@ -5508,6 +5442,8 @@ export default function AccountsReceivablePage() {
                 <div className="flex flex-col-reverse gap-3 md:ml-auto md:flex-row md:justify-end">
                   {!isEditingPaidCharge && (
                     <button
+                      type="button"
+                      disabled={isChargeSaving}
                       onClick={closeCreateModal}
                       className={`rounded-xl px-5 py-3 text-sm font-bold transition ${
                   isBlackTheme
@@ -5520,10 +5456,16 @@ export default function AccountsReceivablePage() {
                   )}
 
                   <button
+                    type="button"
+                    disabled={isChargeSaving}
                     onClick={saveManualCharge}
-                    className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
+                    className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {editingChargeId ? "Salvar ajustes" : "Salvar cobrança"}
+                    {isChargeSaving
+                      ? "Salvando..."
+                      : editingChargeId
+                        ? "Salvar ajustes"
+                        : "Salvar cobrança"}
                   </button>
                 </div>
               </div>
@@ -5539,7 +5481,7 @@ export default function AccountsReceivablePage() {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-xl shadow-lg shadow-emerald-600/20 dark:shadow-emerald-950/30">
-                    💵
+                    ðŸ’µ
                   </div>
 
                   <div>
@@ -5995,731 +5937,153 @@ export default function AccountsReceivablePage() {
       )}
 
       {isPaymentConfirmationOpen && chargePendingPaymentReceipt && (
-        <div className={`fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
-          <div className="flex max-h-[94vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
-            <div className="flex-1 overflow-y-auto p-6 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 text-3xl ring-1 ring-emerald-100 dark:ring-emerald-900/50">
-                ✅
-              </div>
-
-              <h2 className="mt-5 text-xl font-black text-slate-950 dark:text-white">
-                Confirmar recebimento?
-              </h2>
-
-              <p className="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                Confira os dados antes de concluir. Depois de confirmar, a
-                cobrança será marcada como paga.
-              </p>
-
-              <div className="mt-5 rounded-2xl border border-emerald-100 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 p-4 text-left">
-                <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
-                  Cobrança selecionada
+        <ConfirmationModal
+          icon="OK"
+          title="Confirmar recebimento?"
+          description="Confira os dados antes de concluir. Depois de confirmar, a cobrança será marcada como paga."
+          itemLabel="Cobrança selecionada"
+          itemValue={chargePendingPaymentReceipt.tenant}
+          details={
+            <>
+              <p>Imóvel: {chargePendingPaymentReceipt.property}</p>
+              <p>Vencimento: {formatDate(chargePendingPaymentReceipt.dueDate)}</p>
+              <p>Valor original: {formatCurrency(chargePendingPaymentReceipt.amount)}</p>
+              <p>Juros: {formatCurrency(normalizeAmount(paymentInterest))}</p>
+              <p>Desconto: {formatCurrency(normalizeAmount(paymentDiscount))}</p>
+              <p>Valor final: {formatCurrency(normalizeAmount(paymentFinalAmount))}</p>
+              <div>
+                <p className="font-black text-slate-950 dark:text-white">
+                  Formas de pagamento:
                 </p>
-
-                <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">Inquilino:</span>{" "}
-                    {chargePendingPaymentReceipt.tenant}
-                  </p>
-
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">Imóvel:</span>{" "}
-                    {chargePendingPaymentReceipt.property}
-                  </p>
-
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">Vencimento:</span>{" "}
-                    {formatDate(chargePendingPaymentReceipt.dueDate)}
-                  </p>
-
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">Valor original:</span>{" "}
-                    {formatCurrency(chargePendingPaymentReceipt.amount)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4 text-left">
-                <p className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                  Dados do recebimento
-                </p>
-
-                <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">Juros:</span>{" "}
-                    {formatCurrency(normalizeAmount(paymentInterest))}
-                  </p>
-
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">Desconto:</span>{" "}
-                    {formatCurrency(normalizeAmount(paymentDiscount))}
-                  </p>
-
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">Valor final:</span>{" "}
-                    {formatCurrency(normalizeAmount(paymentFinalAmount))}
-                  </p>
-
-                  <div>
-                    <p className="font-black text-slate-950 dark:text-white">Formas de pagamento:</p>
-                    <div className="mt-2 space-y-1">
-                      {paymentEntries.map((entry) => (
-                        <p key={entry.id}>
-                          {getPaymentMethodLabel(entry.method)} · {formatCurrency(normalizeAmount(entry.amount))}
-                        </p>
-                      ))}
-                    </div>
-                  </div>
-
-                  {paymentNote.trim() && (
-                    <p>
-                      <span className="font-black text-slate-950 dark:text-white">Observação:</span>{" "}
-                      {paymentNote.trim()}
+                <div className="mt-2 space-y-1">
+                  {paymentEntries.map((entry) => (
+                    <p key={entry.id}>
+                      {getPaymentMethodLabel(entry.method)} - {formatCurrency(normalizeAmount(entry.amount))}
                     </p>
-                  )}
+                  ))}
                 </div>
               </div>
-            </div>
-
-            <div
-              className={`flex flex-col-reverse gap-3 border-t p-5 md:flex-row md:justify-end ${
-                isBlackTheme
-                  ? "border-[#334155] bg-[#0f172a]"
-                  : "border-[#e2e8f0] bg-[#ffffff]"
-              }`}
-            >
-              <button
-                type="button"
-                onClick={closePaymentConfirmation}
-                className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-3 text-sm font-black text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
-              >
-                Conferir novamente
-              </button>
-
-              <button
-                type="button"
-                onClick={finishReceivePayment}
-                className="rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-emerald-600/20 dark:shadow-emerald-950/30 transition hover:bg-emerald-700"
-              >
-                Sim, confirmar
-              </button>
-            </div>
-          </div>
-        </div>
+              {paymentNote.trim() && <p>Observação: {paymentNote.trim()}</p>}
+            </>
+          }
+          confirmLabel="Confirmar recebimento"
+          cancelLabel="Conferir novamente"
+          tone="emerald"
+          onCancel={closePaymentConfirmation}
+          onConfirm={finishReceivePayment}
+          isBlackTheme={isBlackTheme}
+        />
       )}
 
-
       {chargePendingDeletion && (
-        <div className={`fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
-          <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
-            <div className="p-6 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 dark:bg-red-950/30 text-3xl ring-1 ring-red-100 dark:ring-red-900/50">
-                ⚠️
-              </div>
-
-              <h2 className="mt-5 text-xl font-black text-slate-950 dark:text-white">
-                Excluir cobrança?
-              </h2>
-
-              <p className="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                Esta ação removerá a cobrança selecionada do contas a receber.
-                Depois de confirmar, ela não aparecerá mais na listagem.
-              </p>
-
-              <div className="mt-5 rounded-2xl border border-red-100 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 p-4 text-left">
-                <p className="text-xs font-black uppercase tracking-wide text-red-600">
-                  Cobrança selecionada
-                </p>
-
-                <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">
-                      Inquilino:
-                    </span>{" "}
-                    {chargePendingDeletion.tenant}
-                  </p>
-
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">Imóvel:</span>{" "}
-                    {chargePendingDeletion.property}
-                  </p>
-
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">
-                      Vencimento:
-                    </span>{" "}
-                    {formatDate(chargePendingDeletion.dueDate)}
-                  </p>
-
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">Valor:</span>{" "}
-                    {formatCurrency(chargePendingDeletion.amount)}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div
-              className={`flex flex-col-reverse gap-3 border-t p-5 md:flex-row md:justify-end ${
-                isBlackTheme
-                  ? "border-[#334155] bg-[#0f172a]"
-                  : "border-[#e2e8f0] bg-[#ffffff]"
-              }`}
-            >
-              <button
-                type="button"
-                onClick={closeDeleteChargeConfirmation}
-                className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-3 text-sm font-black text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
-              >
-                Cancelar
-              </button>
-
-              <button
-                type="button"
-                onClick={confirmDeleteCharge}
-                className="rounded-2xl bg-red-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-red-600/20 dark:shadow-red-950/30 transition hover:bg-red-700"
-              >
-                Sim, excluir
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmationModal
+          icon="!"
+          title="Excluir cobrança?"
+          description="Esta ação removerá a cobrança selecionada do contas a receber."
+          itemLabel="Cobrança"
+          itemValue={chargePendingDeletion.tenant}
+          details={
+            <>
+              <p>Imóvel: {chargePendingDeletion.property}</p>
+              <p>Vencimento: {formatDate(chargePendingDeletion.dueDate)}</p>
+              <p>Valor: {formatCurrency(chargePendingDeletion.amount)}</p>
+            </>
+          }
+          confirmLabel="Excluir cobrança"
+          danger
+          onCancel={closeDeleteChargeConfirmation}
+          onConfirm={confirmDeleteCharge}
+          isBlackTheme={isBlackTheme}
+          zIndex="z-[70]"
+        />
       )}
 
       {chargePendingPaymentReversal && (
-        <div className={`fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
-          <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
-            <div className="p-6 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 dark:bg-amber-950/30 text-3xl ring-1 ring-amber-100 dark:ring-amber-900/50">
-                ↩️
-              </div>
-
-              <h2 className="mt-5 text-xl font-black text-slate-950 dark:text-white">
-                Voltar cobrança para pagamento?
-              </h2>
-
-              <p className="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                Esta ação removerá o status de pago da cobrança selecionada.
-                Depois de confirmar, ela voltará para pendente ou vencida,
-                conforme a data de vencimento.
-              </p>
-
-              <div className="mt-5 rounded-2xl border border-amber-100 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 p-4 text-left">
-                <p className="text-xs font-black uppercase tracking-wide text-amber-600">
-                  Cobrança selecionada
-                </p>
-
-                <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">
-                      Inquilino:
-                    </span>{" "}
-                    {chargePendingPaymentReversal.tenant}
-                  </p>
-
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">Imóvel:</span>{" "}
-                    {chargePendingPaymentReversal.property}
-                  </p>
-
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">
-                      Vencimento:
-                    </span>{" "}
-                    {formatDate(chargePendingPaymentReversal.dueDate)}
-                  </p>
-
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">Valor:</span>{" "}
-                    {formatCurrency(chargePendingPaymentReversal.amount)}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div
-              className={`flex flex-col-reverse gap-3 border-t p-5 md:flex-row md:justify-end ${
-                isBlackTheme
-                  ? "border-[#334155] bg-[#0f172a]"
-                  : "border-[#e2e8f0] bg-[#ffffff]"
-              }`}
-            >
-              <button
-                type="button"
-                onClick={closePaymentReversalConfirmation}
-                className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-3 text-sm font-black text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
-              >
-                Cancelar
-              </button>
-
-              <button
-                type="button"
-                onClick={confirmPaymentReversal}
-                className="rounded-2xl bg-amber-50 dark:bg-amber-950/300 px-6 py-3 text-sm font-black text-white shadow-lg shadow-amber-500/20 dark:shadow-amber-950/30 transition hover:bg-amber-600"
-              >
-                Sim, voltar
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmationModal
+          icon="↩"
+          title="Voltar cobrança para pagamento?"
+          description="O registro de pagamento será removido e a cobrança voltará para pendente ou vencida, conforme a data de vencimento."
+          itemLabel="Cobrança selecionada"
+          itemValue={chargePendingPaymentReversal.tenant}
+          details={
+            <>
+              <p>Imóvel: {chargePendingPaymentReversal.property}</p>
+              <p>Vencimento: {formatDate(chargePendingPaymentReversal.dueDate)}</p>
+              <p>Valor: {formatCurrency(chargePendingPaymentReversal.amount)}</p>
+            </>
+          }
+          confirmLabel="Voltar para pagamento"
+          tone="amber"
+          onCancel={closePaymentReversalConfirmation}
+          onConfirm={confirmPaymentReversal}
+          isBlackTheme={isBlackTheme}
+          zIndex="z-[70]"
+        />
       )}
 
       {pendingContractPrintRequest && (
-        <div className={`fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
-          <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
-            <div className="p-6 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50 dark:bg-orange-950/30 text-3xl ring-1 ring-orange-100 dark:ring-orange-900/50">
-                📄
-              </div>
-
-              <h2 className="mt-5 text-xl font-black text-slate-950 dark:text-white">
-                Deseja imprimir o contrato agora?
-              </h2>
-
-              <p className="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                As parcelas do contrato foram salvas e o carnê foi aberto. Você também pode abrir o contrato vinculado para impressão.
+        <ConfirmationModal
+          icon="DOC"
+          title="Imprimir contrato agora?"
+          description="As parcelas foram lançadas e o carnê foi aberto. Você também pode abrir o contrato vinculado para impressão."
+          itemLabel="Contrato vinculado"
+          itemValue={
+            pendingContractPrintRequest.propertyName ||
+            properties.find((property) => String(property.id) === String(pendingContractPrintRequest.propertyId))?.name ||
+            "Não informado"
+          }
+          details={
+            <>
+              <p>
+                Inquilino:{" "}
+                {pendingContractPrintRequest.tenantName ||
+                  tenants.find((tenant) => String(tenant.id) === String(pendingContractPrintRequest.tenantId))?.name ||
+                  "Não informado"}
               </p>
-
-              <div className="mt-5 rounded-2xl border border-orange-100 dark:border-orange-900/50 bg-orange-50 dark:bg-orange-950/30 p-4 text-left">
-                <p className="text-xs font-black uppercase tracking-wide text-orange-700">
-                  Contrato vinculado
-                </p>
-
-                <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">Imóvel:</span>{" "}
-                    {pendingContractPrintRequest.propertyName ||
-                      properties.find((property) => String(property.id) === String(pendingContractPrintRequest.propertyId))?.name ||
-                      "Não informado"}
-                  </p>
-
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">Inquilino:</span>{" "}
-                    {pendingContractPrintRequest.tenantName ||
-                      tenants.find((tenant) => String(tenant.id) === String(pendingContractPrintRequest.tenantId))?.name ||
-                      "Não informado"}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div
-              className={`flex flex-col-reverse gap-3 border-t p-5 md:flex-row md:justify-end ${
-                isBlackTheme
-                  ? "border-[#334155] bg-[#0f172a]"
-                  : "border-[#e2e8f0] bg-[#ffffff]"
-              }`}
-            >
-              <button
-                type="button"
-                onClick={closeContractPrintQuestion}
-                className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-3 text-sm font-black text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
-              >
-                Não, voltar para contratos
-              </button>
-
-              <button
-                type="button"
-                onClick={confirmContractPrintQuestion}
-                className="rounded-2xl bg-orange-500 px-6 py-3 text-sm font-black text-white shadow-lg shadow-orange-500/20 dark:shadow-orange-950/30 transition hover:bg-orange-600"
-              >
-                Sim, imprimir e voltar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isTenantCreateOpen && (
-        <div className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-0 backdrop-blur-sm md:p-4 ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
-          <div className="flex max-h-screen w-full max-w-6xl flex-col overflow-hidden rounded-none bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700 md:max-h-[94vh] md:rounded-3xl">
-            <div className="border-b border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 px-6 py-5 md:px-8">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-2xl font-black text-slate-950 dark:text-white">
-                    Nova pessoa
-                  </h2>
-
-                  <p className={`mt-1 text-sm leading-6 ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
-                    Preencha os dados pessoais e endereço da pessoa.
-                  </p>
-                </div>
-
-                <button
-                  onClick={closeTenantCreateModal}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 text-xl font-black text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
-                  aria-label="Fechar cadastro de pessoa"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 space-y-7 overflow-y-auto px-6 py-6 md:px-8">
-              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Nome completo / Razão social
-                  </label>
-
-                  <input
-                    value={tenantFormData.name}
-                    onChange={(event) =>
-                      updateTenantFormData("name", event.target.value)
-                    }
-                    placeholder={
-                      tenantFormData.personType === "Company"
-                        ? "Ex: Empresa LTDA"
-                        : "Ex: João Silva"
-                    }
-                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Tipo de pessoa
-                  </label>
-
-                  <select
-                    value={tenantFormData.personType}
-                    onChange={(event) =>
-                      updateTenantPersonType(event.target.value as PersonType)
-                    }
-                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
-                  >
-                    <option value="Individual">Pessoa física</option>
-                    <option value="Company">Pessoa jurídica</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    {tenantFormData.personType === "Company" ? "CNPJ" : "CPF"}
-                  </label>
-
-                  <input
-                    value={tenantFormData.cpf}
-                    onChange={(event) =>
-                      updateTenantFormData(
-                        "cpf",
-                        formatDocument(
-                          event.target.value,
-                          tenantFormData.personType,
-                        ),
-                      )
-                    }
-                    onBlur={() => {
-                      if (tenantFormData.personType === "Company") {
-                        searchCompanyByCnpj();
-                      }
-                    }}
-                    placeholder={
-                      tenantFormData.personType === "Company"
-                        ? "Ex: 12.345.678/0001-90"
-                        : "Ex: 123.456.789-00"
-                    }
-                    maxLength={tenantFormData.personType === "Company" ? 18 : 14}
-                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
-                  />
-
-                  {tenantFormData.personType === "Company" && (
-                    <button
-                      type="button"
-                      onClick={searchCompanyByCnpj}
-                      disabled={isCnpjLoading}
-                      className="mt-3 w-full rounded-2xl bg-[#0f172a] px-4 py-3 text-sm font-black text-[#ffffff] shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isCnpjLoading
-                        ? "Buscando CNPJ..."
-                        : "Buscar dados da empresa"}
-                    </button>
-                  )}
-
-                  {cnpjSearchError && tenantFormData.personType === "Company" && (
-                    <p className="mt-2 text-xs font-bold text-red-500">
-                      {cnpjSearchError}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Telefone
-                  </label>
-
-                  <input
-                    value={tenantFormData.phone}
-                    onChange={(event) =>
-                      updateTenantFormData("phone", formatPhone(event.target.value))
-                    }
-                    placeholder="Ex: (69) 99999-0000"
-                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
-                  />
-                </div>
-              </div>
-
-              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-orange-100 dark:border-orange-900/50 bg-orange-50 dark:bg-orange-950/30/50 px-5 py-4 transition hover:bg-orange-50 dark:hover:bg-orange-950/40 dark:bg-orange-950/30">
-                <input
-                  type="checkbox"
-                  checked={tenantFormData.isTenant}
-                  onChange={(event) =>
-                    updateTenantFormData("isTenant", event.target.checked)
-                  }
-                  className="mt-1 h-5 w-5 rounded border-slate-300 accent-orange-500"
-                />
-
-                <span>
-                  <span className="block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Esta pessoa é inquilino
-                  </span>
-
-                  <span className="mt-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                    Quando desmarcado, esta pessoa não poderá ser vinculada a
-                    contratos de aluguel.
-                  </span>
-                </span>
-              </label>
-
-              <div>
-                <h3 className="text-sm font-black uppercase tracking-wide text-orange-600">
-                  Endereço
-                </h3>
-              </div>
-
-              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    CEP
-                  </label>
-
-                  <div className="flex gap-2">
-                    <input
-                      value={tenantFormData.zipCode}
-                      onChange={(event) =>
-                        updateTenantFormData(
-                          "zipCode",
-                          formatZipCode(event.target.value),
-                        )
-                      }
-                      onBlur={verifyZipCode}
-                      placeholder="Ex: 76940-000"
-                      className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
-                    />
-
-                    <button
-                      type="button"
-                      onClick={verifyZipCode}
-                      disabled={isZipCodeLoading}
-                      className="h-14 rounded-2xl bg-orange-500 px-4 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 disabled:bg-orange-300"
-                    >
-                      {isZipCodeLoading ? "..." : "Buscar"}
-                    </button>
-                  </div>
-
-                  {zipCodeError && (
-                    <p className="mt-2 text-xs font-bold text-red-500">
-                      {zipCodeError}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Estado
-                  </label>
-
-                  <input
-                    value={tenantFormData.state}
-                    onChange={(event) =>
-                      updateTenantFormData("state", event.target.value.toUpperCase())
-                    }
-                    placeholder="UF"
-                    maxLength={2}
-                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Cidade
-                  </label>
-
-                  <input
-                    value={tenantFormData.city}
-                    onChange={(event) =>
-                      updateTenantFormData("city", event.target.value)
-                    }
-                    placeholder="Cidade"
-                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Logradouro
-                  </label>
-
-                  <input
-                    value={tenantFormData.street}
-                    onChange={(event) =>
-                      updateTenantFormData("street", event.target.value)
-                    }
-                    placeholder="Rua, avenida..."
-                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Número
-                  </label>
-
-                  <input
-                    value={tenantFormData.number}
-                    onChange={(event) =>
-                      updateTenantFormData("number", event.target.value)
-                    }
-                    placeholder="Número da casa"
-                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Bairro
-                  </label>
-
-                  <input
-                    value={tenantFormData.district}
-                    onChange={(event) =>
-                      updateTenantFormData("district", event.target.value)
-                    }
-                    placeholder="Bairro"
-                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Complemento
-                  </label>
-
-                  <input
-                    value={tenantFormData.complement}
-                    onChange={(event) =>
-                      updateTenantFormData("complement", event.target.value)
-                    }
-                    placeholder="Apartamento, bloco, referência..."
-                    className="h-14 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-semibold text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900 px-6 py-5 md:flex-row md:justify-end md:px-8">
-              <button
-                type="button"
-                onClick={closeTenantCreateModal}
-                className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-4 text-sm font-black text-slate-600 dark:text-slate-400 dark:text-slate-500 transition hover:bg-slate-200 dark:hover:bg-slate-700"
-              >
-                Cancelar
-              </button>
-
-              <button
-                type="button"
-                onClick={createTenantFromModal}
-                className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 dark:shadow-orange-950/30 transition hover:bg-orange-600"
-              >
-                Cadastrar pessoa
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-
-      {pendingContractPrintRequest && (
-        <div className={`fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
-          <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
-            <div className="p-6 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50 dark:bg-orange-950/30 text-3xl ring-1 ring-orange-100 dark:ring-orange-900/50">
-                📝
-              </div>
-
-              <h2 className="mt-5 text-xl font-black text-slate-950 dark:text-white">
-                Imprimir contrato agora?
-              </h2>
-
-              <p className="mt-2 text-sm font-medium leading-6 text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                As parcelas foram lançadas e o carnê foi aberto. Deseja abrir também o contrato vinculado antes de voltar para a tela de contratos?
+              <p>
+                Tipo:{" "}
+                {pendingContractPrintRequest.isTemporaryRental
+                  ? "Contrato temporário"
+                  : "Contrato padrão"}
               </p>
-
-              <div className="mt-5 rounded-2xl border border-orange-100 dark:border-orange-900/50 bg-orange-50 dark:bg-orange-950/30 p-4 text-left">
-                <p className="text-xs font-black uppercase tracking-wide text-orange-600">
-                  Contrato vinculado
-                </p>
-
-                <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-300">
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">Tipo:</span>{" "}
-                    {pendingContractPrintRequest.isTemporaryRental
-                      ? "Contrato temporário"
-                      : "Contrato padrão"}
-                  </p>
-
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">Início:</span>{" "}
-                    {formatContractDateForTemplate(pendingContractPrintRequest.startDate)}
-                  </p>
-
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">Fim:</span>{" "}
-                    {formatContractDateForTemplate(pendingContractPrintRequest.endDate)}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div
-              className={`flex flex-col-reverse gap-3 border-t p-5 md:flex-row md:justify-end ${
-                isBlackTheme
-                  ? "border-[#334155] bg-[#0f172a]"
-                  : "border-[#e2e8f0] bg-[#ffffff]"
-              }`}
-            >
-              <button
-                type="button"
-                onClick={closeContractPrintQuestion}
-                className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-3 text-sm font-black text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
-              >
-                Não, voltar para contratos
-              </button>
-
-              <button
-                type="button"
-                onClick={confirmContractPrintQuestion}
-                className="rounded-2xl bg-orange-500 px-6 py-3 text-sm font-black text-white shadow-lg shadow-orange-500/20 dark:shadow-orange-950/30 transition hover:bg-orange-600"
-              >
-                Sim, imprimir e voltar
-              </button>
-            </div>
-          </div>
-        </div>
+              <p>Início: {formatContractDateForTemplate(pendingContractPrintRequest.startDate)}</p>
+              <p>Fim: {formatContractDateForTemplate(pendingContractPrintRequest.endDate)}</p>
+            </>
+          }
+          confirmLabel="Imprimir e voltar"
+          cancelLabel="Voltar para contratos"
+          tone="orange"
+          onCancel={closeContractPrintQuestion}
+          onConfirm={confirmContractPrintQuestion}
+          isBlackTheme={isBlackTheme}
+          zIndex="z-[90]"
+        />
       )}
 
-    </AppShell>
+      <PersonCreateModal
+        open={isTenantCreateOpen}
+        companyId={companyId}
+        people={tenants.map((tenant) => ({
+          id: tenant.id,
+          document: tenant.document || tenant.cpf || "",
+        }))}
+        onClose={closeTenantCreateModal}
+        onCreated={handleTenantCreated}
+      />
+    </>
   );
 }
 
 function mapApiReceivableToCharge(account: ReceivableAccount): Charge {
   const amount = normalizeApiAmount(account.amount);
   const paidAmount = getReceivablePaidAmount(account);
-  const remainingAmount = Math.max(amount - paidAmount, 0);
+  const settlementAmount = getReceivableSettlementAmount(account);
+  const remainingAmount = Math.max(amount - settlementAmount, 0);
 
   return {
     id: account.id,
     contractId: account.contractId || null,
+    tenantId: account.tenantId || null,
     property: account.propertyName,
     tenant: account.tenantName,
     dueDate: account.dueDate,
@@ -6753,6 +6117,17 @@ function mapApiReceivableToPayments(account: ReceivableAccount): ChargePayment[]
 function getReceivablePaidAmount(account: ReceivableAccount) {
   return (account.payments || []).reduce(
     (total, payment) => total + normalizeApiAmount(payment.amountPaid),
+    0,
+  );
+}
+
+function getReceivableSettlementAmount(account: ReceivableAccount) {
+  return (account.payments || []).reduce(
+    (total, payment) =>
+      total +
+      normalizeApiAmount(payment.amountPaid) +
+      normalizeApiAmount(payment.discount) -
+      normalizeApiAmount(payment.interest),
     0,
   );
 }
@@ -6802,17 +6177,6 @@ function mapApiPersonToReceivableTenant(person: Person): Tenant {
     city: person.city || "",
     street: person.address || "",
   };
-}
-
-function buildPersonAddressFromTenantForm(formData: TenantFormData) {
-  return [
-    formData.street.trim(),
-    formData.number.trim(),
-    formData.district.trim(),
-    formData.complement.trim(),
-  ]
-    .filter(Boolean)
-    .join(", ");
 }
 
 function mapUiPaymentMethodToApi(method: PaymentMethod): ApiPaymentMethod {
@@ -6894,35 +6258,6 @@ function normalizeApiAmount(value: unknown) {
   return 0;
 }
 
-function isValidCnpj(value: string) {
-  const cnpj = value.replace(/\D/g, "");
-
-  if (cnpj.length !== 14) return false;
-  if (/^(\d)\1{13}$/.test(cnpj)) return false;
-
-  const calculateDigit = (base: string, weights: number[]) => {
-    const sum = weights.reduce(
-      (total, weight, index) => total + Number(base[index]) * weight,
-      0,
-    );
-
-    const rest = sum % 11;
-
-    return rest < 2 ? 0 : 11 - rest;
-  };
-
-  const firstWeights = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
-  const secondWeights = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
-
-  const firstCheckDigit = calculateDigit(cnpj.slice(0, 12), firstWeights);
-  const secondCheckDigit = calculateDigit(cnpj.slice(0, 13), secondWeights);
-
-  return (
-    firstCheckDigit === Number(cnpj[12]) &&
-    secondCheckDigit === Number(cnpj[13])
-  );
-}
-
 function Card({
   title,
   value,
@@ -6948,3 +6283,103 @@ function Card({
     </div>
   );
 }
+
+function ConfirmationModal({
+  icon,
+  title,
+  description,
+  itemLabel,
+  itemValue,
+  details,
+  confirmLabel,
+  cancelLabel = "Cancelar",
+  danger,
+  tone = "orange",
+  onCancel,
+  onConfirm,
+  isBlackTheme,
+  zIndex = "z-[80]",
+}: {
+  icon: string;
+  title: string;
+  description: string;
+  itemLabel: string;
+  itemValue: string;
+  details?: ReactNode;
+  confirmLabel: string;
+  cancelLabel?: string;
+  danger?: boolean;
+  tone?: "orange" | "emerald" | "amber";
+  onCancel: () => void;
+  onConfirm: () => void;
+  isBlackTheme?: boolean;
+  zIndex?: string;
+}) {
+  const toneClass =
+    tone === "emerald"
+      ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 shadow-emerald-500/10"
+      : tone === "amber"
+        ? "bg-amber-50 dark:bg-amber-950/30 text-amber-600 shadow-amber-500/10"
+        : "bg-orange-50 dark:bg-orange-950/30 text-orange-600 shadow-orange-500/10";
+  const confirmClass = danger
+    ? "bg-red-600 hover:bg-red-700"
+    : tone === "emerald"
+      ? "bg-emerald-600 hover:bg-emerald-700"
+      : tone === "amber"
+        ? "bg-amber-600 hover:bg-amber-700"
+        : "bg-orange-500 hover:bg-orange-600";
+
+  return (
+    <div className={`fixed inset-0 ${zIndex} flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
+      <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
+        <div className="p-6 text-center">
+          <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-2xl text-2xl shadow-lg ${danger ? "bg-red-50 text-red-600 shadow-red-500/10 dark:bg-red-950/30" : toneClass}`}>
+            {icon}
+          </div>
+
+          <h2 className="mt-4 text-xl font-black text-slate-900 dark:text-slate-100">
+            {title}
+          </h2>
+
+          <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+            {description}
+          </p>
+
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left dark:border-slate-700 dark:bg-slate-800">
+            <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">
+              {itemLabel}
+            </p>
+            <p className="mt-1 text-sm font-black text-slate-900 dark:text-slate-100">
+              {itemValue}
+            </p>
+            {details && (
+              <div className="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                {details}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white p-5 dark:border-slate-800 dark:bg-slate-900 md:flex-row md:justify-end">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+          >
+            {cancelLabel}
+          </button>
+
+          <button
+            type="button"
+            onClick={onConfirm}
+            className={`rounded-xl px-5 py-3 text-sm font-bold text-white shadow-sm transition ${confirmClass}`}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
