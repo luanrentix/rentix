@@ -27,6 +27,10 @@ table {
   max-width: 100%;
 }
 
+:root {
+  --contrx-mobile-nav-height: 6.5rem;
+}
+
 button,
 input,
 select,
@@ -153,8 +157,21 @@ textarea {
   }
 
   .contrx-mobile-bottom-nav {
+    min-height: var(--contrx-mobile-nav-height);
     padding-left: max(0.5rem, env(safe-area-inset-left));
     padding-right: max(0.5rem, env(safe-area-inset-right));
+  }
+
+  .contrx-app-main {
+    padding-bottom: calc(
+      var(--contrx-mobile-nav-height) + env(safe-area-inset-bottom) + 1.5rem
+    ) !important;
+  }
+
+  .contrx-minimized-modal {
+    bottom: calc(var(--contrx-mobile-nav-height) + env(safe-area-inset-bottom) + 0.75rem) !important;
+    right: 0.75rem !important;
+    width: calc(100vw - 1.5rem) !important;
   }
 
   .contrx-mobile-bottom-nav > div {

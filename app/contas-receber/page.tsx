@@ -23,6 +23,7 @@ import {
 } from "@/services/settings-cache";
 import {
   getCompanyStorageItem,
+  removeCompanyStorageItem,
   setCompanyStorageItem,
 } from "@/services/company-storage";
 
@@ -432,6 +433,7 @@ type ReceivableFromContractPayload = {
 };
 
 const MAX_INSTALLMENT_QUANTITY = 120;
+const RECEIVABLE_FROM_CONTRACT_STORAGE_KEY = "contrx_receivable_from_contract";
 
 type PaymentMethod =
   | "Cash"
@@ -786,7 +788,11 @@ export default function AccountsReceivablePage() {
       setIsSearchOpen(true);
     }
 
-    const contractChargeData = null;
+    const contractChargeData = getCompanyStorageItem(
+      companyId,
+      RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
+      RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
+    );
 
     if (contractChargeData) {
       try {
@@ -794,9 +800,11 @@ export default function AccountsReceivablePage() {
           contractChargeData,
         ) as ReceivableFromContractPayload;
 
+        removeCompanyStorageItem(companyId, RECEIVABLE_FROM_CONTRACT_STORAGE_KEY);
         openChargeFromContractPayload(parsedContractChargeData);
         return;
       } catch {
+        removeCompanyStorageItem(companyId, RECEIVABLE_FROM_CONTRACT_STORAGE_KEY);
         return;
       }
     }

@@ -895,7 +895,7 @@ export default function AppShell({ children }: AppShellProps) {
           onMouseLeave={() => {
             if (!isSidebarLocked) setIsSidebarExpanded(false);
           }}
-          className={`fixed left-0 top-0 z-50 flex h-dvh max-w-[86vw] flex-col overflow-hidden border-r border-orange-100 bg-white transition-[width,transform] duration-300 ease-in-out lg:z-30 lg:h-screen lg:max-w-none ${
+          className={`fixed left-0 top-0 z-50 hidden h-dvh max-w-[86vw] flex-col overflow-hidden border-r border-orange-100 bg-white transition-[width,transform] duration-300 ease-in-out lg:z-30 lg:flex lg:h-screen lg:max-w-none ${
             isSidebarOpen ? "lg:w-72" : "lg:w-20"
           } ${
             isMobileSidebarOpen
@@ -1005,13 +1005,6 @@ export default function AppShell({ children }: AppShellProps) {
         >
           <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-3 py-3 backdrop-blur sm:px-4 lg:h-24 lg:px-8 lg:py-0">
             <div className="flex min-w-0 items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setIsMobileSidebarOpen(true)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-orange-500 text-xl font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 lg:hidden"
-              >
-                ?              </button>
-
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-orange-600 lg:text-sm">
                   Bem-vindo
@@ -1096,7 +1089,7 @@ export default function AppShell({ children }: AppShellProps) {
             </div>
           </header>
 
-          <main className="min-w-0 flex-1 overflow-x-hidden px-3 pb-28 pt-4 sm:px-5 lg:px-8 lg:py-8">
+          <main className="contrx-app-main min-w-0 flex-1 overflow-x-hidden px-3 pb-32 pt-4 sm:px-5 lg:px-8 lg:py-8">
             {children}
           </main>
 
@@ -1117,7 +1110,7 @@ export default function AppShell({ children }: AppShellProps) {
                     key={item.href}
                     href={item.href}
                     prefetch={menuLinkPrefetch}
-                    className={`flex min-w-[4.75rem] flex-col items-center justify-center gap-1 rounded-2xl px-3 py-2 text-[11px] font-black transition ${
+                    className={`flex min-w-[5.25rem] flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-black transition ${
                       isActive
                         ? "bg-orange-500 text-white shadow-md shadow-orange-100"
                         : themeSettings.mode === "black"

@@ -56,6 +56,7 @@ const EXPIRING_CONTRACT_DAYS_LIMIT = 30;
 const DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME = "14:00";
 const DEFAULT_TEMPORARY_RENTAL_CHECK_OUT_TIME = "12:00";
 const TEMPORARY_RENTAL_TIME_DEFAULTS_STORAGE_KEY = "contrx_temporary_rental_time_defaults";
+const RECEIVABLE_FROM_CONTRACT_STORAGE_KEY = "contrx_receivable_from_contract";
 const LEGACY_SETTINGS_TEMPORARY_CONTRACT_CONTENT = `CONTRATO TEMPORÁRIO
 
 LOCADOR: {companyName}
@@ -1024,7 +1025,6 @@ export default function ContractsPage() {
       return;
     }
 
-    const installmentGroupId = `${contract.id}-installments`;
     const receivableSchedule = getContractReceivableSchedule(contract);
 
     if (receivableSchedule.length === 0) {
@@ -1037,34 +1037,32 @@ export default function ContractsPage() {
     );
 
     if (existingAccounts.length === 0) {
-      const createdAccounts = await Promise.all(
-        receivableSchedule.map((installment) =>
-          createReceivableAccount({
-            companyId,
-            contractId: String(contract.id),
-            tenantId: String(contract.tenantId),
-            property: contract.propertyName,
-            tenant: contract.tenantName,
-            issueDate: contract.startDate,
-            dueDate: installment.dueDate,
-            amount: installment.amount,
-            status: "PENDING",
-            manual: false,
-            installmentNumber: installment.installmentNumber,
-            installmentTotal: installment.installmentTotal,
-            installmentGroupId,
-            isDownPayment: false,
-          }),
-        ),
+      const monthlyAmount = Number(contract.rentValue || 0);
+      const totalAmount = receivableSchedule.reduce(
+        (total, installment) => total + Number(installment.amount || 0),
+        0,
       );
+      const firstInstallment = receivableSchedule[0];
 
-      setReceivableAccounts((currentAccounts) => [
-        ...createdAccounts,
-        ...currentAccounts,
-      ]);
+      setCompanyStorageItem(
+        companyId,
+        RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
+        JSON.stringify({
+          contractId: String(contract.id),
+          tenantId: String(contract.tenantId),
+          propertyId: String(contract.propertyId),
+          amount: monthlyAmount,
+          monthlyAmount,
+          totalAmount,
+          issueDate: contract.startDate,
+          dueDate: firstInstallment.dueDate,
+          endDate: contract.endDate,
+          installmentQuantity: receivableSchedule.length,
+        }),
+      );
     }
 
-    window.location.href = "/contas-receber";
+    window.location.href = "/contas-receber?fromContract=1";
   }
 
   async function syncOpenReceivableChargesFromContract(contract: Contract) {
