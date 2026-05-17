@@ -330,9 +330,7 @@ export class ContasReceberService {
     interest: unknown,
   ) {
     return (
-      Number(amountPaid || 0) +
-      Number(discount || 0) -
-      Number(interest || 0)
+      Number(amountPaid || 0) + Number(discount || 0) - Number(interest || 0)
     );
   }
 }

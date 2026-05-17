@@ -107,6 +107,8 @@ model Person {
   email String?
   phone String? @map("telefone")
 
+  isTenant Boolean @default(true) @map("inquilino")
+
   zipCode String? @map("cep")
   city    String? @map("cidade")
   state   String? @map("estado")

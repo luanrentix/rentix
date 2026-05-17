@@ -13,7 +13,7 @@ const supabaseEnvPath = resolve(process.cwd(), '.env.supabase');
 
 config({ path: defaultEnvPath });
 
-if (existsSync(supabaseEnvPath)) {
+if (process.env.CONTRX_USE_SUPABASE_ENV === 'true' && existsSync(supabaseEnvPath)) {
   config({ path: supabaseEnvPath, override: true });
 }
 

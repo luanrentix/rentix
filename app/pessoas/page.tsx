@@ -51,6 +51,7 @@ type Person = {
   city: string;
   state: string;
   address: string;
+  isTenant: boolean;
   status: PersonStatus;
   createdAt: string;
 };
@@ -70,6 +71,7 @@ type PersonFormData = {
   addressNumber: string;
   district: string;
   reference: string;
+  isTenant: boolean;
   status: PersonStatus;
 };
 
@@ -119,6 +121,7 @@ const emptyFormData: PersonFormData = {
   addressNumber: "",
   district: "",
   reference: "",
+  isTenant: true,
   status: "active",
 };
 
@@ -153,6 +156,7 @@ function mapApiPersonToPerson(apiPerson: ApiPerson): Person {
     city: toUpperText(apiPerson.city ?? ""),
     state: toUpperText(apiPerson.state ?? ""),
     address: toUpperText(apiPerson.address ?? ""),
+    isTenant: apiPerson.isTenant !== false,
     status: convertApiStatusToPersonStatus(apiPerson.status),
     createdAt: apiPerson.createdAt,
   };
@@ -445,6 +449,7 @@ export default function PeoplePage() {
       addressNumber: addressData.addressNumber,
       district: addressData.district,
       reference: addressData.reference,
+      isTenant: person.isTenant,
       status: person.status,
     });
     setPageError(null);
@@ -629,6 +634,7 @@ export default function PeoplePage() {
       city: toUpperText(formData.city).trim() || undefined,
       state: toUpperText(formData.state).trim() || undefined,
       address: buildPersonAddress(formData) || undefined,
+      isTenant: formData.isTenant,
     };
 
     try {
@@ -859,6 +865,7 @@ export default function PeoplePage() {
                   <th className="px-5 py-4 font-black">Telefone</th>
                   <th className="px-5 py-4 font-black">CPF/CNPJ</th>
                   <th className="px-5 py-4 font-black">Tipo</th>
+                  <th className="px-5 py-4 font-black">Uso</th>
                   <th className="px-5 py-4 font-black">Situação</th>
                   <th className="px-5 py-4 text-right font-black">Ações</th>
                 </tr>
@@ -881,6 +888,9 @@ export default function PeoplePage() {
                         </td>
                         <td className="px-5 py-5">
                           <div className="h-6 w-28 animate-pulse rounded-full bg-slate-100" />
+                        </td>
+                        <td className="px-5 py-5">
+                          <div className="h-6 w-20 animate-pulse rounded-full bg-slate-100" />
                         </td>
                         <td className="px-5 py-5">
                           <div className="h-6 w-20 animate-pulse rounded-full bg-slate-100" />
@@ -936,6 +946,18 @@ export default function PeoplePage() {
                       <td className="px-5 py-5">
                         <span
                           className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${
+                            person.isTenant
+                              ? "bg-orange-50 text-orange-700"
+                              : "bg-slate-100 text-slate-500"
+                          }`}
+                        >
+                          {person.isTenant ? "Inquilino" : "Não inquilino"}
+                        </span>
+                      </td>
+
+                      <td className="px-5 py-5">
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${
                             person.status === "active"
                               ? "bg-emerald-100 text-emerald-700"
                               : "bg-slate-100 text-slate-500"
@@ -971,7 +993,7 @@ export default function PeoplePage() {
 
                 {!isLoadingPeople && filteredPeople.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-5 py-14 text-center">
+                    <td colSpan={7} className="px-5 py-14 text-center">
                       <div className="text-base font-black text-slate-800">
                         Nenhuma pessoa encontrada
                       </div>
@@ -1403,6 +1425,31 @@ export default function PeoplePage() {
                       <option value="inactive">Inativo</option>
                     </select>
                   </FormField>
+
+                  <div className="md:col-span-2">
+                    <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-orange-200 hover:bg-orange-50">
+                      <input
+                        type="checkbox"
+                        checked={formData.isTenant}
+                        onChange={(event) =>
+                          setFormData((currentFormData) => ({
+                            ...currentFormData,
+                            isTenant: event.target.checked,
+                          }))
+                        }
+                        className="mt-1 h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                      />
+
+                      <span>
+                        <span className="block text-sm font-black text-slate-900">
+                          Marcar como inquilino
+                        </span>
+                        <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500">
+                          Marcado aparece para seleção em contratos. Desmarcado continua disponível para contas a receber, contas a pagar e exclusão quando não houver movimentações.
+                        </span>
+                      </span>
+                    </label>
+                  </div>
                 </div>
 
                 {cnpjError && (

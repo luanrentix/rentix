@@ -330,6 +330,9 @@ export default function AccountsPayablePage() {
           : null;
 
         const isBlackThemeSelected =
+          parsedThemeSettings?.mode === "graphite" ||
+          legacyTheme === "graphite" ||
+          legacyTheme === "grafite" ||
           parsedThemeSettings?.mode === "black" ||
           parsedThemeSettings?.mode === "dark" ||
           legacyTheme === "black" ||
@@ -340,7 +343,10 @@ export default function AccountsPayablePage() {
         setIsBlackTheme(isBlackThemeSelected);
       } catch {
         const isLegacyBlackTheme =
-          legacyTheme === "black" || legacyTheme === "dark";
+          legacyTheme === "graphite" ||
+          legacyTheme === "grafite" ||
+          legacyTheme === "black" ||
+          legacyTheme === "dark";
 
         document.documentElement.classList.toggle("dark", isLegacyBlackTheme);
         document.body.classList.toggle("dark", isLegacyBlackTheme);
@@ -351,9 +357,11 @@ export default function AccountsPayablePage() {
     applyStoredTheme();
 
     window.addEventListener("storage", applyStoredTheme);
+    window.addEventListener("contrx-theme-change", applyStoredTheme);
 
     return () => {
       window.removeEventListener("storage", applyStoredTheme);
+      window.removeEventListener("contrx-theme-change", applyStoredTheme);
     };
   }, [companyId]);
 
@@ -2425,6 +2433,7 @@ export default function AccountsPayablePage() {
                   <div>
                     <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                       Pessoa/Fornecedor
+                      <span className="ml-1 text-red-500">*</span>
                     </label>
 
                     <select
@@ -2471,6 +2480,7 @@ export default function AccountsPayablePage() {
                 <div>
                   <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Descrição
+                    <span className="ml-1 text-red-500">*</span>
                   </label>
 
                   <input
@@ -2520,6 +2530,7 @@ export default function AccountsPayablePage() {
                 <div>
                   <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Valor total
+                    <span className="ml-1 text-red-500">*</span>
                   </label>
 
                   <div className="relative">
@@ -2553,6 +2564,7 @@ export default function AccountsPayablePage() {
                 <div>
                   <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Data de lançamento
+                    <span className="ml-1 text-red-500">*</span>
                   </label>
 
                   <input
@@ -2574,6 +2586,7 @@ export default function AccountsPayablePage() {
                 <div>
                   <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Primeiro vencimento
+                    <span className="ml-1 text-red-500">*</span>
                   </label>
 
                   <input
@@ -2640,6 +2653,7 @@ export default function AccountsPayablePage() {
                     <div>
                       <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                         Quantidade de parcelas
+                        <span className="ml-1 text-red-500">*</span>
                       </label>
 
                       <input
@@ -3340,7 +3354,7 @@ function mapApiPersonToTenant(person: Person): Tenant {
     personType: person.type === "COMPANY" ? "Company" : "Individual",
     cpf: person.document,
     phone: person.phone || "",
-    isTenant: true,
+    isTenant: person.isTenant !== false,
     state: person.state || "",
     city: person.city || "",
     street: person.address || "",

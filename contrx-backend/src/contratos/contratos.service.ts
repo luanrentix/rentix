@@ -504,6 +504,12 @@ export class ContratosService {
     if (tenant.status !== 'ACTIVE') {
       throw new BadRequestException('Inquilino inativo nao pode ser usado.');
     }
+
+    if (!tenant.isTenant) {
+      throw new BadRequestException(
+        'Esta pessoa nao esta marcada como inquilino.',
+      );
+    }
   }
 
   private async ensurePropertyHasNoActiveContract(

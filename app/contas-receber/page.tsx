@@ -470,6 +470,11 @@ type ChargePayment = {
   note?: string;
 };
 
+type ReceiptPrintItem = {
+  charge: Charge;
+  paymentRecord: ChargePayment;
+};
+
 type PaymentMethodOption = {
   value: PaymentMethod;
   label: string;
@@ -578,6 +583,7 @@ export default function AccountsReceivablePage() {
   const [search, setSearch] = useState("");
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
+  const [selectedChargeIds, setSelectedChargeIds] = useState<string[]>([]);
   const [openActionMenuChargeId, setOpenActionMenuChargeId] = useState<string | null>(null);
   const [actionMenuPosition, setActionMenuPosition] =
     useState<ActionMenuPosition | null>(null);
@@ -606,6 +612,7 @@ export default function AccountsReceivablePage() {
     useState<Charge | null>(null);
   const [chargePendingPaymentReceipt, setChargePendingPaymentReceipt] =
     useState<Charge | null>(null);
+  const [paymentBatchCharges, setPaymentBatchCharges] = useState<Charge[]>([]);
   const [isPaymentConfirmationOpen, setIsPaymentConfirmationOpen] =
     useState(false);
   const [paymentInterest, setPaymentInterest] = useState("");
@@ -685,6 +692,9 @@ export default function AccountsReceivablePage() {
           : null;
 
         const isBlackThemeSelected =
+          parsedThemeSettings?.mode === "graphite" ||
+          legacyTheme === "graphite" ||
+          legacyTheme === "grafite" ||
           parsedThemeSettings?.mode === "black" ||
           parsedThemeSettings?.mode === "dark" ||
           legacyTheme === "black" ||
@@ -695,7 +705,10 @@ export default function AccountsReceivablePage() {
         setIsBlackTheme(isBlackThemeSelected);
       } catch {
         const isLegacyBlackTheme =
-          legacyTheme === "black" || legacyTheme === "dark";
+          legacyTheme === "graphite" ||
+          legacyTheme === "grafite" ||
+          legacyTheme === "black" ||
+          legacyTheme === "dark";
 
         document.documentElement.classList.toggle("dark", isLegacyBlackTheme);
         document.body.classList.toggle("dark", isLegacyBlackTheme);
@@ -706,9 +719,11 @@ export default function AccountsReceivablePage() {
     applyStoredTheme();
 
     window.addEventListener("storage", applyStoredTheme);
+    window.addEventListener("contrx-theme-change", applyStoredTheme);
 
     return () => {
       window.removeEventListener("storage", applyStoredTheme);
+      window.removeEventListener("contrx-theme-change", applyStoredTheme);
     };
   }, [companyId]);
 
@@ -960,6 +975,33 @@ export default function AccountsReceivablePage() {
     setActionMenuPosition(null);
   }
 
+  function toggleChargeSelection(chargeId: string) {
+    setSelectedChargeIds((currentChargeIds) =>
+      currentChargeIds.includes(chargeId)
+        ? currentChargeIds.filter((currentChargeId) => currentChargeId !== chargeId)
+        : [...currentChargeIds, chargeId],
+    );
+  }
+
+  function toggleAllVisibleChargeSelection() {
+    if (allVisibleChargesSelected) {
+      setSelectedChargeIds((currentChargeIds) =>
+        currentChargeIds.filter(
+          (currentChargeId) => !selectableChargeIds.includes(currentChargeId),
+        ),
+      );
+      return;
+    }
+
+    setSelectedChargeIds((currentChargeIds) =>
+      Array.from(new Set([...currentChargeIds, ...selectableChargeIds])),
+    );
+  }
+
+  function clearChargeSelection() {
+    setSelectedChargeIds([]);
+  }
+
   useEffect(() => {
     if (!openActionMenuChargeId) return;
 
@@ -1075,6 +1117,14 @@ export default function AccountsReceivablePage() {
     return result;
   }, [charges, selectedTenant, statusFilter]);
 
+  useEffect(() => {
+    const availableChargeIds = new Set(charges.map((charge) => String(charge.id)));
+
+    setSelectedChargeIds((currentChargeIds) =>
+      currentChargeIds.filter((chargeId) => availableChargeIds.has(String(chargeId))),
+    );
+  }, [charges]);
+
   const totalReceivable = useMemo(() => {
     return filteredCharges
       .filter((charge) => charge.status !== "Paid")
@@ -1092,6 +1142,25 @@ export default function AccountsReceivablePage() {
       .filter((charge) => charge.status === "Overdue")
       .reduce((total, charge) => total + getChargeRemainingAmount(charge), 0);
   }, [filteredCharges, getChargeRemainingAmount]);
+
+  const selectedCharges = useMemo(() => {
+    const selectedIds = new Set(selectedChargeIds.map(String));
+
+    return filteredCharges.filter((charge) => selectedIds.has(String(charge.id)));
+  }, [filteredCharges, selectedChargeIds]);
+
+  const selectableChargeIds = filteredCharges.map((charge) => String(charge.id));
+
+  const allVisibleChargesSelected =
+    selectableChargeIds.length > 0 &&
+    selectableChargeIds.every((chargeId) => selectedChargeIds.includes(chargeId));
+
+  const selectedPendingCharges = selectedCharges.filter(
+    (charge) => charge.status !== "Paid",
+  );
+  const selectedPaidCharges = selectedCharges.filter((charge) =>
+    Boolean(getChargePayment(charge.id)),
+  );
 
   const filteredTenants = useMemo(() => {
     return tenants.filter((tenant) =>
@@ -1320,18 +1389,6 @@ export default function AccountsReceivablePage() {
       return;
     }
 
-    if (difference < 0) {
-      const formattedDifference = formatAmountInput(Math.abs(difference));
-
-      setPaymentInterestMode("amount");
-      setPaymentDiscountMode("amount");
-      setPaymentInterestInput("");
-      setPaymentDiscountInput(formattedDifference);
-      setPaymentInterest("");
-      setPaymentDiscount(formattedDifference);
-      return;
-    }
-
     setPaymentInterestInput("");
     setPaymentDiscountInput("");
     setPaymentInterest("");
@@ -1383,8 +1440,25 @@ export default function AccountsReceivablePage() {
     setPaymentFormError("");
     setPaymentEntries((currentEntries) =>
       currentEntries.map((entry) =>
-        entry.id === entryId ? { ...entry, amount } : entry,
+        entry.id === entryId
+          ? { ...entry, amount: formatCurrencyInput(amount) }
+          : entry,
       ),
+    );
+  }
+
+  function normalizePaymentEntryAmount(entryId: string) {
+    setPaymentEntries((currentEntries) =>
+      currentEntries.map((entry) => {
+        if (entry.id !== entryId) return entry;
+
+        const amount = normalizeAmount(entry.amount);
+
+        return {
+          ...entry,
+          amount: amount > 0 ? formatAmountInput(amount) : "",
+        };
+      }),
     );
   }
 
@@ -1673,6 +1747,35 @@ export default function AccountsReceivablePage() {
       .slice(0, maxLength);
   }
 
+  function normalizePixKeyForPayload(value: string, pixKeyType: string) {
+    const cleanValue = value.trim();
+    const cleanPixKeyType = pixKeyType.toLowerCase();
+
+    if (cleanPixKeyType === "cpf" || cleanPixKeyType === "cnpj") {
+      return cleanValue.replace(/\D/g, "");
+    }
+
+    if (cleanPixKeyType === "phone") {
+      const digits = cleanValue.replace(/\D/g, "");
+
+      if (digits.startsWith("55")) {
+        return `+${digits}`;
+      }
+
+      if (digits.length === 10 || digits.length === 11) {
+        return `+55${digits}`;
+      }
+
+      return cleanValue;
+    }
+
+    if (cleanPixKeyType === "email") {
+      return cleanValue.toLowerCase();
+    }
+
+    return cleanValue;
+  }
+
   function formatEmvField(id: string, value: string) {
     const length = String(value.length).padStart(2, "0");
 
@@ -1701,13 +1804,14 @@ export default function AccountsReceivablePage() {
 
   function generatePixPayload(params: {
     pixKey: string;
+    pixKeyType: string;
     merchantName: string;
     merchantCity: string;
     amount: number;
     txId: string;
     description: string;
   }) {
-    const pixKey = params.pixKey.trim();
+    const pixKey = normalizePixKeyForPayload(params.pixKey, params.pixKeyType);
 
     if (!pixKey) {
       return "";
@@ -1797,6 +1901,7 @@ export default function AccountsReceivablePage() {
         }`;
         const pixPayload = generatePixPayload({
           pixKey: companySettings.pixKey || "",
+          pixKeyType,
           merchantName: companyName,
           merchantCity: companySettings.city || "Brasil",
           amount: charge.amount,
@@ -1878,45 +1983,51 @@ export default function AccountsReceivablePage() {
           <title>Carnê de Pagamento</title>
           <style>
             * { box-sizing: border-box; }
-            body { margin: 0; background: #f1f5f9; color: #0f172a; font-family: Arial, sans-serif; }
-            .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 10px; padding: 14px 24px; background: rgba(255, 255, 255, 0.96); border-bottom: 1px solid #e2e8f0; backdrop-filter: blur(10px); }
-            .toolbar button { border: 0; border-radius: 12px; padding: 11px 18px; font-size: 13px; font-weight: 800; cursor: pointer; }
-            .print-button { background: #059669; color: #ffffff; }
-            .close-button { background: #e2e8f0; color: #0f172a; }
-            @page { size: A4; margin: 10mm; }
-            .page { width: min(1240px, calc(100% - 40px)); margin: 24px auto; }
-            .voucher-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-            .summary { margin-bottom: 18px; border: 1px solid #e2e8f0; border-radius: 18px; background: #ffffff; padding: 24px; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.10); }
-            .summary-header { display: flex; justify-content: space-between; gap: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 16px; }
-            .brand { color: #ea580c; font-size: 12px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
-            h1, h2 { margin: 6px 0 0; }
-            .summary-meta { color: #64748b; font-size: 12px; line-height: 1.7; text-align: right; }
-            table { width: 100%; border-collapse: collapse; margin-top: 18px; }
-            th { background: #fff7ed; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
-            th, td { border: 1px solid #e2e8f0; padding: 9px; font-size: 12px; text-align: left; }
-            .voucher { break-inside: avoid; page-break-inside: avoid; border: 1px dashed #94a3b8; border-radius: 18px; background: #ffffff; padding: 18px; min-height: 318px; }
-            .voucher-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; }
-            .installment-badge { border-radius: 999px; background: #ecfdf5; color: #047857; padding: 8px 12px; font-size: 12px; font-weight: 900; white-space: nowrap; }
-            .voucher-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 14px; }
-            .field { border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; background: #f8fafc; }
+            body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 10px; padding: 14px 24px; background: rgba(255, 255, 255, 0.97); border-bottom: 1px solid #d1d5db; backdrop-filter: blur(10px); }
+            .toolbar button { border: 0; border-radius: 10px; padding: 11px 18px; font-size: 12px; font-weight: 900; cursor: pointer; }
+            .print-button { background: #f97316; color: #ffffff; }
+            .close-button { background: #f3f4f6; color: #111827; border: 1px solid #d1d5db !important; }
+            @page { size: A4; margin: 7mm; }
+            .page { width: min(1080px, calc(100% - 28px)); margin: 14px auto; }
+            .voucher-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+            .summary { margin-bottom: 10px; border: 1px solid #111827; border-radius: 0; background: #ffffff; padding: 12px 14px; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.10); }
+            .summary-header { display: grid; grid-template-columns: 1fr auto; gap: 14px; border-bottom: 2px solid #111827; padding-bottom: 8px; }
+            .brand { color: #c2410c; font-size: 10px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; }
+            h1, h2 { margin: 5px 0 0; color: #111827; letter-spacing: 0; }
+            h1 { font-size: 22px; text-transform: uppercase; }
+            h2 { font-size: 15px; }
+            .summary p { margin: 5px 0 0; font-size: 11px; }
+            .summary-meta { color: #374151; font-size: 11px; line-height: 1.55; text-align: right; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th { background: #111827; color: #ffffff; font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; }
+            th, td { border: 1px solid #d1d5db; padding: 5px 6px; font-size: 10px; text-align: left; }
+            tbody tr:nth-child(even) td { background: #f9fafb; }
+            .voucher { position: relative; break-inside: avoid; page-break-inside: avoid; border: 1px solid #111827; border-radius: 0; background: #ffffff; padding: 10px; min-height: 248px; }
+            .voucher::before { content: "Via do pagador"; position: absolute; top: 8px; right: 12px; color: #6b7280; font-size: 8px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; }
+            .voucher-header { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 10px; border-bottom: 2px solid #111827; padding-bottom: 7px; }
+            .voucher-header h2 { text-transform: uppercase; }
+            .installment-badge { min-width: 76px; border: 1px solid #111827; background: #fff7ed; color: #111827; padding: 7px 8px; font-size: 11px; font-weight: 900; text-align: center; white-space: nowrap; }
+            .voucher-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-top: 8px; }
+            .field { border: 1px solid #d1d5db; border-radius: 0; padding: 6px 7px; background: #ffffff; min-height: 40px; }
             .field.full { grid-column: 1 / -1; }
-            .field span { display: block; color: #64748b; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.04em; }
-            .field strong { display: block; margin-top: 5px; font-size: 14px; }
-            .field small { display: block; margin-top: 5px; color: #64748b; font-size: 11px; font-weight: 700; }
-            .pix-area { display: grid; grid-template-columns: minmax(0, 1fr) 132px; gap: 12px; margin-top: 12px; border: 1px solid #a7f3d0; border-radius: 14px; background: #ecfdf5; padding: 12px; }
-            .pix-info span, .pix-copy span { display: block; color: #047857; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.04em; }
-            .pix-info strong { display: block; margin-top: 5px; color: #0f172a; font-size: 14px; }
-            .pix-info small { display: block; margin-top: 4px; color: #475569; font-size: 11px; font-weight: 700; }
-            .pix-copy { margin-top: 8px; border-radius: 10px; background: #ffffff; padding: 8px; border: 1px dashed #6ee7b7; }
-            .pix-copy p { margin: 5px 0 0; color: #0f172a; font-size: 8px; line-height: 1.35; word-break: break-all; }
-            .pix-warning { margin-top: 8px; border-radius: 10px; background: #fff7ed; color: #c2410c; padding: 8px; font-size: 11px; font-weight: 800; }
-            .pix-qr { display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 12px; background: #ffffff; padding: 8px; border: 1px solid #d1fae5; }
-            .pix-qr img { width: 112px; height: 112px; object-fit: contain; }
-            .pix-qr span { margin-top: 5px; color: #047857; font-size: 10px; font-weight: 900; }
-            .instructions { margin-top: 12px; border: 1px solid #fed7aa; border-radius: 12px; background: #fff7ed; padding: 10px 12px; }
-            .instructions span { display: block; margin-bottom: 6px; color: #c2410c; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.04em; }
-            .instructions p { margin: 3px 0; color: #334155; font-size: 10px; line-height: 1.35; font-weight: 700; }
-            .voucher-footer { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; color: #64748b; font-size: 10px; font-weight: 700; }
+            .field span { display: block; color: #6b7280; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; }
+            .field strong { display: block; margin-top: 3px; font-size: 11px; line-height: 1.2; }
+            .field small { display: block; margin-top: 3px; color: #6b7280; font-size: 8px; font-weight: 700; }
+            .pix-area { display: grid; grid-template-columns: minmax(0, 1fr) 88px; gap: 7px; margin-top: 7px; border: 1px solid #111827; border-radius: 0; background: #f9fafb; padding: 7px; }
+            .pix-info span, .pix-copy span { display: block; color: #c2410c; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; }
+            .pix-info strong { display: block; margin-top: 3px; color: #111827; font-size: 11px; }
+            .pix-info small { display: block; margin-top: 3px; color: #4b5563; font-size: 8px; font-weight: 700; }
+            .pix-copy { margin-top: 5px; border-radius: 0; background: #ffffff; padding: 5px; border: 1px dashed #9ca3af; }
+            .pix-copy p { margin: 3px 0 0; color: #111827; font-size: 6.4px; line-height: 1.25; word-break: break-all; }
+            .pix-warning { margin-top: 5px; border: 1px solid #fed7aa; background: #fff7ed; color: #c2410c; padding: 5px; font-size: 8px; font-weight: 800; }
+            .pix-qr { display: flex; flex-direction: column; align-items: center; justify-content: center; background: #ffffff; padding: 4px; border: 1px solid #d1d5db; }
+            .pix-qr img { width: 78px; height: 78px; object-fit: contain; }
+            .pix-qr span { margin-top: 2px; color: #111827; font-size: 8px; font-weight: 900; }
+            .instructions { margin-top: 7px; border: 1px solid #d1d5db; border-left: 3px solid #f97316; border-radius: 0; background: #ffffff; padding: 6px 7px; }
+            .instructions span { display: block; margin-bottom: 3px; color: #c2410c; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; }
+            .instructions p { margin: 1px 0; color: #374151; font-size: 7.8px; line-height: 1.25; font-weight: 700; }
+            .voucher-footer { display: grid; grid-template-columns: 1fr; gap: 2px; margin-top: 7px; border-top: 1px solid #d1d5db; padding-top: 5px; color: #4b5563; font-size: 7.8px; font-weight: 700; }
             @media print {
               body { background: #ffffff; }
               .toolbar { display: none !important; }
@@ -2240,10 +2351,17 @@ export default function AccountsReceivablePage() {
     setIsCreateOpen(true);
   }
 
-  function openReceivePaymentModal(charge: Charge) {
-    const remainingAmount = getChargeRemainingAmount(charge);
+  function openReceivePaymentModal(charge: Charge, batchCharges: Charge[] = []) {
+    const normalizedBatchCharges = batchCharges.length > 0 ? batchCharges : [];
+    const remainingAmount = normalizedBatchCharges.length
+      ? normalizedBatchCharges.reduce(
+          (total, currentCharge) => total + getChargeRemainingAmount(currentCharge),
+          0,
+        )
+      : getChargeRemainingAmount(charge);
 
     setChargePendingPaymentReceipt(charge);
+    setPaymentBatchCharges(normalizedBatchCharges);
     setPaymentInterest("");
     setPaymentDiscount("");
     setPaymentInterestInput("");
@@ -2265,6 +2383,7 @@ export default function AccountsReceivablePage() {
 
   function closeReceivePaymentModal() {
     setChargePendingPaymentReceipt(null);
+    setPaymentBatchCharges([]);
     setIsPaymentConfirmationOpen(false);
     setPaymentInterest("");
     setPaymentDiscount("");
@@ -2286,6 +2405,12 @@ export default function AccountsReceivablePage() {
     const discount = normalizeAmount(paymentDiscount);
     const amountPaid = normalizeAmount(paymentFinalAmount);
     const paymentEntriesTotal = getPaymentEntriesTotal();
+    const remainingAmount = paymentBatchCharges.length
+      ? paymentBatchCharges.reduce(
+          (total, charge) => total + getChargeRemainingAmount(charge),
+          0,
+        )
+      : getChargeRemainingAmount(chargePendingPaymentReceipt);
 
     if (interest < 0 || discount < 0) {
       setPaymentFormError(
@@ -2296,6 +2421,13 @@ export default function AccountsReceivablePage() {
 
     if (amountPaid <= 0) {
       setPaymentFormError("O valor final recebido precisa ser maior que zero.");
+      return;
+    }
+
+    if (amountPaid - remainingAmount > 0.01) {
+      setPaymentFormError(
+        `O valor recebido não pode ser maior que o saldo em aberto de ${formatCurrency(remainingAmount)}.`,
+      );
       return;
     }
 
@@ -2336,6 +2468,11 @@ export default function AccountsReceivablePage() {
 
   async function finishReceivePayment() {
     if (!chargePendingPaymentReceipt) return;
+
+    if (paymentBatchCharges.length > 1) {
+      await finishBatchReceivePayment();
+      return;
+    }
 
     const interest = normalizeAmount(paymentInterest);
     const discount = normalizeAmount(paymentDiscount);
@@ -2442,6 +2579,190 @@ export default function AccountsReceivablePage() {
     }
 
     generatePaymentReceipt(chargePendingPaymentReceipt, paymentRecord);
+    closeReceivePaymentModal();
+  }
+
+  function distributeBatchPaymentAmount(
+    chargesToReceive: Charge[],
+    totalAmount: number,
+  ) {
+    const normalizedTotalInCents = Math.max(Math.round(totalAmount * 100), 0);
+    const totalRemainingInCents = chargesToReceive.reduce(
+      (total, charge) => total + Math.round(getChargeRemainingAmount(charge) * 100),
+      0,
+    );
+
+    if (normalizedTotalInCents <= 0 || totalRemainingInCents <= 0) {
+      return chargesToReceive.map(() => 0);
+    }
+
+    let distributedInCents = 0;
+
+    return chargesToReceive.map((charge, index) => {
+      if (index === chargesToReceive.length - 1) {
+        return Math.max((normalizedTotalInCents - distributedInCents) / 100, 0);
+      }
+
+      const remainingInCents = Math.round(getChargeRemainingAmount(charge) * 100);
+      const shareInCents = Math.min(
+        remainingInCents,
+        Math.round((normalizedTotalInCents * remainingInCents) / totalRemainingInCents),
+      );
+
+      distributedInCents += shareInCents;
+
+      return shareInCents / 100;
+    });
+  }
+
+  async function finishBatchReceivePayment() {
+    const chargesToReceive = paymentBatchCharges.filter(
+      (charge) => charge.status !== "Paid",
+    );
+
+    if (chargesToReceive.length === 0) return;
+
+    const amountPaid = normalizeAmount(paymentFinalAmount);
+    const interest = normalizeAmount(paymentInterest);
+    const discount = normalizeAmount(paymentDiscount);
+    const paidAt = formPaymentDate
+      ? new Date(`${formPaymentDate}T00:00:00`).toISOString()
+      : new Date().toISOString();
+    const amountDistribution = distributeBatchPaymentAmount(
+      chargesToReceive,
+      amountPaid,
+    );
+    const interestDistribution = distributeBatchPaymentAmount(
+      chargesToReceive,
+      interest,
+    );
+    const discountDistribution = distributeBatchPaymentAmount(
+      chargesToReceive,
+      discount,
+    );
+    const nextPaymentRecords: ChargePayment[] = [];
+    const nextReceivedCharges: Charge[] = [];
+
+    for (const [index, charge] of chargesToReceive.entries()) {
+      const distributedAmount = amountDistribution[index] || 0;
+      const distributedInterest = interestDistribution[index] || 0;
+      const distributedDiscount = discountDistribution[index] || 0;
+
+      if (distributedAmount <= 0) continue;
+
+      const paymentRecord: ChargePayment = {
+        id: createLocalId("payment"),
+        chargeId: charge.id,
+        paidAt,
+        method: paymentEntries[0]?.method || paymentMethod,
+        paymentItems: [
+          {
+            id: createLocalId("payment-entry"),
+            method: paymentEntries[0]?.method || paymentMethod,
+            amount: distributedAmount,
+          },
+        ],
+        interest: distributedInterest,
+        discount: distributedDiscount,
+        amountPaid: distributedAmount,
+        note: paymentNote.trim() || "Recebimento em lote",
+      };
+
+      if (companyId) {
+        try {
+          const receivedAccount = await receiveAccount(charge.id, {
+            paidAt: paymentRecord.paidAt,
+            method: mapUiPaymentMethodToApi(paymentRecord.method),
+            paymentItems: mapUiPaymentItemsToApi(paymentRecord.paymentItems || []),
+            interest: paymentRecord.interest,
+            discount: paymentRecord.discount,
+            amountPaid: paymentRecord.amountPaid,
+            note: paymentRecord.note,
+          });
+
+          nextReceivedCharges.push(mapApiReceivableToCharge(receivedAccount));
+          nextPaymentRecords.push(...mapApiReceivableToPayments(receivedAccount));
+        } catch (error) {
+          setPaymentFormError(
+            error instanceof Error
+              ? error.message
+              : "Não foi possível registrar o recebimento em lote no backend.",
+          );
+          return;
+        }
+      } else {
+        const nextSettlementAmount =
+          getChargeSettlementAmount(charge) +
+          distributedAmount +
+          distributedDiscount -
+          distributedInterest;
+        const shouldMarkAsPaid = nextSettlementAmount >= charge.amount;
+
+        nextReceivedCharges.push({
+          ...charge,
+          paidAmount: getChargePaidAmount(charge) + distributedAmount,
+          remainingAmount: Math.max(charge.amount - nextSettlementAmount, 0),
+          status: shouldMarkAsPaid ? "Paid" : "Pending",
+        });
+        nextPaymentRecords.push(paymentRecord);
+      }
+    }
+
+    if (nextPaymentRecords.length === 0) {
+      setPaymentFormError("Informe um valor válido para receber as contas selecionadas.");
+      return;
+    }
+
+    setManualCharges((currentCharges) => {
+      const receivedById = new Map(
+        nextReceivedCharges.map((charge) => [String(charge.id), charge]),
+      );
+
+      const updatedCharges = currentCharges.map((charge) =>
+        receivedById.get(String(charge.id)) || charge,
+      );
+      const existingIds = new Set(updatedCharges.map((charge) => String(charge.id)));
+      const missingReceivedCharges = nextReceivedCharges.filter(
+        (charge) => !existingIds.has(String(charge.id)),
+      );
+
+      return [...updatedCharges, ...missingReceivedCharges];
+    });
+
+    setPaid((currentPaid) => {
+      const nextPaid = currentPaid.filter(
+        (paidChargeId) =>
+          !nextReceivedCharges.some(
+            (charge) => String(charge.id) === String(paidChargeId),
+          ),
+      );
+
+      return [
+        ...nextPaid,
+        ...nextReceivedCharges
+          .filter((charge) => charge.status === "Paid")
+          .map((charge) => charge.id),
+      ];
+    });
+
+    setPaymentRecords((currentPaymentRecords) => [
+      ...currentPaymentRecords,
+      ...nextPaymentRecords,
+    ]);
+
+    generatePaymentReceiptBatch(
+      nextPaymentRecords.map((paymentRecord) => ({
+        charge:
+          nextReceivedCharges.find(
+            (charge) => String(charge.id) === String(paymentRecord.chargeId),
+          ) ||
+          chargesToReceive.find(
+            (charge) => String(charge.id) === String(paymentRecord.chargeId),
+          )!,
+        paymentRecord,
+      })),
+    );
+    clearChargeSelection();
     closeReceivePaymentModal();
   }
 
@@ -3271,6 +3592,228 @@ export default function AccountsReceivablePage() {
     generatePaymentReceipt(charge, paymentRecord);
   }
 
+  function printSelectedCarnets() {
+    const carnetCharges = selectedCharges.filter(
+      (charge) => !charge.isDownPayment,
+    );
+
+    if (carnetCharges.length === 0) {
+      window.alert("Selecione ao menos uma cobrança para imprimir o carnê.");
+      return;
+    }
+
+    generatePaymentCarnet(carnetCharges);
+  }
+
+  function printSelectedReceipts() {
+    const receiptItems = selectedCharges
+      .map((charge) => {
+        const paymentRecord = getChargePayment(charge.id);
+
+        return paymentRecord ? { charge, paymentRecord } : null;
+      })
+      .filter((item): item is ReceiptPrintItem => Boolean(item));
+
+    if (receiptItems.length === 0) {
+      window.alert("Selecione contas já recebidas para imprimir recibos.");
+      return;
+    }
+
+    if (receiptItems.length === 1) {
+      generatePaymentReceipt(receiptItems[0].charge, receiptItems[0].paymentRecord);
+      return;
+    }
+
+    generatePaymentReceiptBatch(receiptItems);
+  }
+
+  function receiveSelectedCharges() {
+    const chargesToReceive = selectedPendingCharges;
+
+    if (chargesToReceive.length === 0) {
+      window.alert("Selecione contas pendentes ou vencidas para receber.");
+      return;
+    }
+
+    openReceivePaymentModal(chargesToReceive[0], chargesToReceive);
+  }
+
+  function generatePaymentReceiptBatch(receiptItems: ReceiptPrintItem[]) {
+    if (receiptItems.length === 0) return;
+
+    const receiptWindow = window.open(
+      "",
+      "_blank",
+      `toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=${window.screen.width},height=${window.screen.height}`,
+    );
+
+    if (!receiptWindow) {
+      setPaymentFormError(
+        "Não foi possível abrir os recibos. Verifique se o navegador bloqueou pop-ups.",
+      );
+      return;
+    }
+
+    receiptWindow.document.open();
+
+    const companySettings = getCompanySettingsForCarnet();
+    const companyName =
+      companySettings.tradeName || companySettings.companyName || "Contrx";
+    const companyDocument = companySettings.document || "Não informado";
+    const companyPhone = companySettings.phone || "Não informado";
+    const companyEmail = companySettings.email || "Não informado";
+    const receipts = receiptItems
+      .map(({ charge, paymentRecord }) => {
+        const receiptNumber = String(paymentRecord.chargeId)
+          .replace(/[^a-zA-Z0-9]/g, "")
+          .slice(-8)
+          .toUpperCase();
+        const paymentMethods = paymentRecord.paymentItems?.length
+          ? paymentRecord.paymentItems
+              .map(
+                (paymentItem) =>
+                  `${getPaymentMethodLabel(paymentItem.method)} - ${formatCurrency(paymentItem.amount)}`,
+              )
+              .join(", ")
+          : getPaymentMethodLabel(paymentRecord.method);
+        const chargeLabel = charge.isDownPayment
+          ? "Entrada"
+          : charge.installmentNumber && charge.installmentTotal
+            ? `Parcela ${charge.installmentNumber}/${charge.installmentTotal}`
+            : "Cobrança";
+        const receiptDateTime = new Date(paymentRecord.paidAt).toLocaleString("pt-BR");
+        const receiptObservation = paymentRecord.note?.trim() || "";
+
+        return `
+          <section class="receipt">
+            <header class="top">
+              <div>
+                <h1 class="title">Recibo</h1>
+                <div class="subtitle">Comprovante de recebimento</div>
+              </div>
+              <div class="number">
+                Nº <strong>${escapeHtml(receiptNumber || "CONTRX")}</strong><br />
+                Emitido em: <strong>${escapeHtml(receiptDateTime)}</strong>
+              </div>
+            </header>
+
+            <div class="reference">
+              <div><span>Recebimento</span><strong>${formatDate(paymentRecord.paidAt)}</strong></div>
+              <div><span>Referência</span><strong>${escapeHtml(chargeLabel)}</strong></div>
+              <div><span>Vencimento</span><strong>${formatDate(charge.dueDate)}</strong></div>
+            </div>
+
+            <div class="amount-grid">
+              <div class="amount-card highlight"><span>Valor original</span><strong>${formatCurrency(charge.amount)}</strong></div>
+              <div class="amount-card"><span>Juros</span><strong>${formatCurrency(paymentRecord.interest)}</strong></div>
+              <div class="amount-card discount"><span>Desconto</span><strong>${formatCurrency(paymentRecord.discount)}</strong></div>
+            </div>
+
+            <div class="total-box">
+              <div><span>Total recebido</span><strong>${formatCurrency(paymentRecord.amountPaid)}</strong></div>
+              <div class="confirmed">Pagamento confirmado</div>
+            </div>
+
+            <div class="payment-box">
+              <div class="payment-row"><span>Forma(s) de pagamento</span><strong>${escapeHtml(paymentMethods)}</strong></div>
+              <div class="payment-row"><span>Pagador</span><strong>${escapeHtml(charge.tenant)}</strong></div>
+              <div class="payment-row"><span>Referência</span><strong>${escapeHtml(charge.property)}</strong></div>
+              ${receiptObservation ? `<div class="payment-row"><span>Observação</span><strong>${escapeHtml(receiptObservation)}</strong></div>` : ""}
+            </div>
+
+            <p class="declaration">
+              Declaramos o recebimento do valor acima descrito, referente à cobrança indicada neste comprovante.
+              Este recibo é válido após a confirmação do pagamento.
+            </p>
+
+            <div class="signature-area">
+              <div class="signature">${escapeHtml(companyName)}<small>Recebedor</small></div>
+              <div class="signature">Assinatura / Conferência<small>Pagador</small></div>
+            </div>
+
+            <div class="footer">
+              ${escapeHtml(companyName)} · Documento: ${escapeHtml(companyDocument)} · Telefone: ${escapeHtml(companyPhone)} · E-mail: ${escapeHtml(companyEmail)}
+            </div>
+          </section>
+        `;
+      })
+      .join("");
+
+    receiptWindow.document.write(`
+      <!doctype html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8" />
+          <title>Recibos de Recebimento</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 10px; padding: 12px 18px; background: rgba(255,255,255,.97); border-bottom: 1px solid #d1d5db; }
+            .toolbar button { border: 0; border-radius: 10px; padding: 10px 16px; font-size: 12px; font-weight: 900; cursor: pointer; }
+            .print-button { background: #f97316; color: #ffffff; }
+            .close-button { background: #f3f4f6; color: #111827; border: 1px solid #d1d5db !important; }
+            .page { width: 176mm; margin: 14px auto; }
+            .receipt { position: relative; background: #ffffff; border: 1px solid #111827; padding: 8mm 9mm 7mm; box-shadow: 0 18px 36px rgba(15,23,42,.16); break-inside: avoid; page-break-inside: avoid; margin-bottom: 12px; }
+            .receipt::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 4px; background: #f97316; }
+            .top { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: start; border-bottom: 2px solid #111827; padding-bottom: 8px; }
+            .title { margin: 0; font-size: 26px; line-height: 1; font-weight: 900; letter-spacing: 0; text-transform: uppercase; }
+            .subtitle { margin-top: 5px; color: #c2410c; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .1em; }
+            .number { min-width: 150px; border: 1px solid #111827; padding: 8px 10px; text-align: right; font-size: 10px; line-height: 1.45; }
+            .number strong { font-size: 12px; }
+            .reference { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; border-bottom: 1px solid #d1d5db; padding: 9px 0; }
+            .reference div { border: 1px solid #d1d5db; padding: 7px 8px; }
+            .reference span, .amount-card span { display: block; color: #6b7280; font-size: 9px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+            .reference strong { display: block; margin-top: 5px; font-size: 12px; line-height: 1.25; }
+            .amount-grid { display: grid; grid-template-columns: 1.35fr 1fr 1fr; margin-top: 9px; overflow: hidden; border: 1px solid #111827; }
+            .amount-card { min-height: 52px; padding: 8px 10px; border-right: 1px solid #111827; }
+            .amount-card:last-child { border-right: 0; }
+            .amount-card strong { display: block; margin-top: 5px; font-size: 16px; line-height: 1.15; }
+            .amount-card.highlight { background: #fff7ed; }
+            .amount-card.highlight strong { font-size: 22px; }
+            .amount-card.discount strong { color: #b91c1c; }
+            .total-box { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; margin-top: 9px; border: 2px solid #111827; background: #111827; color: #ffffff; padding: 9px 11px; }
+            .total-box span { display: block; color: #fed7aa; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+            .total-box strong { display: block; margin-top: 3px; font-size: 25px; line-height: 1; font-weight: 900; }
+            .confirmed { border: 1px solid #fed7aa; background: #ffffff; color: #c2410c; padding: 7px 10px; font-size: 10px; font-weight: 900; white-space: nowrap; }
+            .payment-box { margin-top: 9px; border: 1px solid #111827; }
+            .payment-row { display: grid; grid-template-columns: 190px 1fr; border-bottom: 1px solid #d1d5db; }
+            .payment-row:last-child { border-bottom: 0; }
+            .payment-row span, .payment-row strong { padding: 6px 8px; font-size: 10.5px; }
+            .payment-row span { background: #f9fafb; font-weight: 900; border-right: 1px solid #d1d5db; text-transform: uppercase; letter-spacing: .04em; }
+            .payment-row strong { text-align: right; font-weight: 800; }
+            .declaration { margin: 9px 0 0; color: #374151; font-size: 9.5px; line-height: 1.35; font-weight: 700; }
+            .signature-area { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 19px; }
+            .signature { border-top: 1px solid #111827; padding-top: 5px; text-align: center; font-size: 10px; font-weight: 800; }
+            .signature small { display: block; margin-top: 3px; color: #4b5563; font-weight: 700; }
+            .footer { margin-top: 9px; border-top: 1px solid #d1d5db; padding-top: 6px; color: #374151; font-size: 8.5px; line-height: 1.3; text-align: center; }
+            @page { size: A4 portrait; margin: 10mm; }
+            @media print {
+              body { background: #ffffff; }
+              .toolbar { display: none !important; }
+              .page { width: 100%; margin: 0; }
+              .receipt { width: 100%; border: 1px solid #111827; box-shadow: none; padding: 7mm 8mm 6mm; margin-bottom: 0; }
+              .receipt + .receipt { margin-top: 8mm; page-break-before: always; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="toolbar">
+            <button class="print-button" type="button" id="print-receipt-button">Imprimir recibos</button>
+            <button class="close-button" type="button" onclick="window.close()">Fechar</button>
+          </div>
+          <main class="page">${receipts}</main>
+          <script>
+            document.getElementById("print-receipt-button").addEventListener("click", function () {
+              window.print();
+            });
+          </script>
+        </body>
+      </html>
+    `);
+
+    receiptWindow.document.close();
+  }
+
   function generatePaymentReceipt(charge: Charge, paymentRecord: ChargePayment) {
     const receiptWindow = window.open(
       "",
@@ -3284,6 +3827,8 @@ export default function AccountsReceivablePage() {
       );
       return;
     }
+
+    receiptWindow.document.open();
 
     const companySettings = getCompanySettingsForCarnet();
     const companyName =
@@ -3322,53 +3867,58 @@ export default function AccountsReceivablePage() {
           <style>
             * { box-sizing: border-box; }
             body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; }
-            .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 10px; padding: 12px 18px; background: #ffffff; border-bottom: 1px solid #d1d5db; }
-            .toolbar button { border: 0; border-radius: 10px; padding: 10px 16px; font-size: 12px; font-weight: 800; cursor: pointer; }
-            .print-button { background: #111827; color: #ffffff; }
+            .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 10px; padding: 12px 18px; background: rgba(255,255,255,.97); border-bottom: 1px solid #d1d5db; }
+            .toolbar button { border: 0; border-radius: 10px; padding: 10px 16px; font-size: 12px; font-weight: 900; cursor: pointer; }
+            .print-button { background: #f97316; color: #ffffff; }
             .close-button { background: #f3f4f6; color: #111827; border: 1px solid #d1d5db !important; }
-            .page { width: 185mm; margin: 18px auto; }
-            .receipt { min-height: 112mm; background: #ffffff; border: 1px solid #111827; padding: 12mm 14mm 10mm; }
-            .top { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: start; border-bottom: 2px solid #111827; padding-bottom: 10px; }
-            .title { margin: 0; font-size: 30px; line-height: 1; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
-            .subtitle { margin-top: 5px; color: #374151; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
-            .number { text-align: right; font-size: 12px; line-height: 1.55; }
-            .number strong { font-size: 15px; }
-            .reference { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; border-bottom: 1px dashed #cbd5e1; padding: 14px 0; }
-            .reference span { display: block; color: #4b5563; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-            .reference strong { display: block; margin-top: 6px; font-size: 14px; line-height: 1.3; }
-            .amount-grid { display: grid; grid-template-columns: 1.3fr 1fr 1fr; margin-top: 16px; overflow: hidden; border: 1px solid #111827; }
-            .amount-card { min-height: 68px; padding: 11px 12px; border-right: 1px solid #111827; }
+            .page { width: 176mm; margin: 14px auto; }
+            .receipt { position: relative; background: #ffffff; border: 1px solid #111827; padding: 8mm 9mm 7mm; box-shadow: 0 18px 36px rgba(15,23,42,.16); break-inside: avoid; page-break-inside: avoid; }
+            .receipt::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 4px; background: #f97316; }
+            .top { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: start; border-bottom: 2px solid #111827; padding-bottom: 8px; }
+            .title { margin: 0; font-size: 26px; line-height: 1; font-weight: 900; letter-spacing: 0; text-transform: uppercase; }
+            .subtitle { margin-top: 5px; color: #c2410c; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .1em; }
+            .number { min-width: 150px; border: 1px solid #111827; padding: 8px 10px; text-align: right; font-size: 10px; line-height: 1.45; }
+            .number strong { font-size: 12px; }
+            .reference { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; border-bottom: 1px solid #d1d5db; padding: 9px 0; }
+            .reference div { border: 1px solid #d1d5db; padding: 7px 8px; }
+            .reference span { display: block; color: #6b7280; font-size: 9px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+            .reference strong { display: block; margin-top: 5px; font-size: 12px; line-height: 1.25; }
+            .amount-grid { display: grid; grid-template-columns: 1.35fr 1fr 1fr; margin-top: 9px; overflow: hidden; border: 1px solid #111827; }
+            .amount-card { min-height: 52px; padding: 8px 10px; border-right: 1px solid #111827; }
             .amount-card:last-child { border-right: 0; }
-            .amount-card span { display: block; color: #374151; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-            .amount-card strong { display: block; margin-top: 7px; font-size: 18px; line-height: 1.2; }
-            .amount-card.highlight strong { font-size: 24px; }
+            .amount-card span { display: block; color: #4b5563; font-size: 9px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+            .amount-card strong { display: block; margin-top: 5px; font-size: 16px; line-height: 1.15; }
+            .amount-card.highlight { background: #fff7ed; }
+            .amount-card.highlight strong { font-size: 22px; }
             .amount-card.discount strong { color: #b91c1c; }
-            .total-box { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; margin-top: 14px; border: 1px solid #111827; background: #f9fafb; padding: 13px 14px; }
-            .total-box span { display: block; color: #374151; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-            .total-box strong { display: block; margin-top: 4px; font-size: 30px; line-height: 1; font-weight: 900; }
-            .confirmed { border: 1px solid #bbf7d0; background: #ecfdf5; color: #047857; border-radius: 999px; padding: 9px 14px; font-size: 12px; font-weight: 900; white-space: nowrap; }
-            .payment-box { margin-top: 14px; border: 1px solid #111827; }
+            .total-box { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; margin-top: 9px; border: 2px solid #111827; background: #111827; color: #ffffff; padding: 9px 11px; }
+            .total-box span { display: block; color: #fed7aa; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+            .total-box strong { display: block; margin-top: 3px; font-size: 25px; line-height: 1; font-weight: 900; }
+            .confirmed { border: 1px solid #fed7aa; background: #ffffff; color: #c2410c; padding: 7px 10px; font-size: 10px; font-weight: 900; white-space: nowrap; }
+            .payment-box { margin-top: 9px; border: 1px solid #111827; }
             .payment-row { display: grid; grid-template-columns: 190px 1fr; border-bottom: 1px solid #d1d5db; }
             .payment-row:last-child { border-bottom: 0; }
-            .payment-row span, .payment-row strong { padding: 8px 10px; font-size: 12px; }
-            .payment-row span { background: #f9fafb; font-weight: 900; border-right: 1px solid #d1d5db; }
+            .payment-row span, .payment-row strong { padding: 6px 8px; font-size: 10.5px; }
+            .payment-row span { background: #f9fafb; font-weight: 900; border-right: 1px solid #d1d5db; text-transform: uppercase; letter-spacing: .04em; }
             .payment-row strong { text-align: right; font-weight: 800; }
-            .signature-area { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; margin-top: 28px; }
-            .signature { border-top: 1px solid #111827; padding-top: 6px; text-align: center; font-size: 11px; font-weight: 800; }
+            .declaration { margin: 9px 0 0; color: #374151; font-size: 9.5px; line-height: 1.35; font-weight: 700; }
+            .signature-area { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 19px; }
+            .signature { border-top: 1px solid #111827; padding-top: 5px; text-align: center; font-size: 10px; font-weight: 800; }
             .signature small { display: block; margin-top: 3px; color: #4b5563; font-weight: 700; }
-            .footer { margin-top: 13px; border-top: 1px solid #d1d5db; padding-top: 8px; color: #374151; font-size: 10px; line-height: 1.45; text-align: center; }
-            @page { size: A5 landscape; margin: 7mm; }
+            .footer { margin-top: 9px; border-top: 1px solid #d1d5db; padding-top: 6px; color: #374151; font-size: 8.5px; line-height: 1.3; text-align: center; }
+            @page { size: A4 portrait; margin: 10mm; }
             @media print {
               body { background: #ffffff; }
               .toolbar { display: none !important; }
               .page { width: 100%; margin: 0; }
-              .receipt { width: 100%; min-height: auto; border: 1px solid #111827; padding: 9mm 10mm 8mm; }
+              .receipt { width: 100%; border: 1px solid #111827; box-shadow: none; padding: 7mm 8mm 6mm; }
+              .receipt + .receipt { margin-top: 8mm; page-break-before: always; }
             }
           </style>
         </head>
         <body>
           <div class="toolbar">
-            <button class="print-button" type="button" onclick="window.print()">Imprimir recibo</button>
+            <button class="print-button" type="button" id="print-receipt-button">Imprimir recibo</button>
             <button class="close-button" type="button" onclick="window.close()">Fechar</button>
           </div>
 
@@ -3425,8 +3975,15 @@ export default function AccountsReceivablePage() {
 
               <div class="payment-box">
                 <div class="payment-row"><span>Forma(s) de pagamento</span><strong>${escapeHtml(paymentMethods)}</strong></div>
+                <div class="payment-row"><span>Pagador</span><strong>${escapeHtml(charge.tenant)}</strong></div>
+                <div class="payment-row"><span>Referência</span><strong>${escapeHtml(charge.property)}</strong></div>
                 ${hasObservation ? `<div class="payment-row"><span>Observação</span><strong>${escapeHtml(receiptObservation)}</strong></div>` : ""}
               </div>
+
+              <p class="declaration">
+                Declaramos o recebimento do valor acima descrito, referente à cobrança indicada neste comprovante.
+                Este recibo é válido após a confirmação do pagamento.
+              </p>
 
               <div class="signature-area">
                 <div class="signature">
@@ -3446,28 +4003,15 @@ export default function AccountsReceivablePage() {
           </main>
 
           <script>
-            window.onload = function () {
-              window.focus();
-              try {
-                window.moveTo(0, 0);
-                window.resizeTo(screen.availWidth, screen.availHeight);
-              } catch (error) {}
-              setTimeout(function () {
-                window.print();
-              }, 350);
-            };
+            document.getElementById("print-receipt-button").addEventListener("click", function () {
+              window.print();
+            });
           </script>
         </body>
       </html>
     `);
 
     receiptWindow.document.close();
-    receiptWindow.focus();
-
-    try {
-      receiptWindow.moveTo(0, 0);
-      receiptWindow.resizeTo(window.screen.availWidth, window.screen.availHeight);
-    } catch {}
   }
 
   async function saveManualCharge() {
@@ -3776,6 +4320,34 @@ export default function AccountsReceivablePage() {
 
     handleAfterContractCarnetGenerated(formContractId);
   }
+
+  const paymentModalCharges =
+    paymentBatchCharges.length > 0
+      ? paymentBatchCharges
+      : chargePendingPaymentReceipt
+        ? [chargePendingPaymentReceipt]
+        : [];
+  const isBatchPayment = paymentModalCharges.length > 1;
+  const paymentModalOriginalAmount = paymentModalCharges.reduce(
+    (total, charge) => total + charge.amount,
+    0,
+  );
+  const paymentModalRemainingAmount = paymentModalCharges.reduce(
+    (total, charge) => total + getChargeRemainingAmount(charge),
+    0,
+  );
+  const paymentModalReferenceCharge = chargePendingPaymentReceipt
+    ? {
+        ...chargePendingPaymentReceipt,
+        amount: paymentModalRemainingAmount,
+        remainingAmount: paymentModalRemainingAmount,
+      }
+    : null;
+  const paymentModalFinalAmount = normalizeAmount(paymentFinalAmount);
+  const paymentModalBalanceAfterPayment = Math.max(
+    paymentModalRemainingAmount - paymentModalFinalAmount,
+    0,
+  );
 
   return (
     <>
@@ -4370,16 +4942,74 @@ export default function AccountsReceivablePage() {
                   onClick={() => setIsSearchOpen(true)}
                   className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700"
                 >
-                  Buscar inquilino
+                  Buscar Por Pessoa
                 </button>
               </div>
             </div>
           </div>
 
+          {selectedCharges.length > 0 && (
+            <div className="border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-700 dark:bg-slate-800">
+              <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+                <div>
+                  <p className="text-sm font-black text-slate-900 dark:text-slate-100">
+                    {selectedCharges.length} conta(s) selecionada(s)
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    Pendentes para receber: {selectedPendingCharges.length} · Com recibo: {selectedPaidCharges.length}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={receiveSelectedCharges}
+                    disabled={selectedPendingCharges.length === 0}
+                    className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
+                  >
+                    Receber selecionadas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={printSelectedCarnets}
+                    className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-orange-600"
+                  >
+                    Imprimir carnês
+                  </button>
+                  <button
+                    type="button"
+                    onClick={printSelectedReceipts}
+                    disabled={selectedPaidCharges.length === 0}
+                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
+                  >
+                    Imprimir recibos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearChargeSelection}
+                    className="rounded-xl bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700"
+                  >
+                    Limpar seleção
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px]">
+            <table className="w-full min-w-[980px]">
               <thead className="bg-orange-50 dark:bg-orange-950/30">
                 <tr>
+                  <th className="w-12 px-5 py-4 text-left">
+                    <input
+                      type="checkbox"
+                      checked={allVisibleChargesSelected}
+                      onChange={toggleAllVisibleChargeSelection}
+                      aria-label="Selecionar todas as contas visíveis"
+                      className="h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+                    />
+                  </th>
+
                   <th className="px-5 py-4 text-left text-sm font-black text-slate-900 dark:text-slate-100">
                     Imóvel
                   </th>
@@ -4410,7 +5040,7 @@ export default function AccountsReceivablePage() {
                 {filteredCharges.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500"
                     >
                       Nenhuma conta a receber encontrada.
@@ -4422,6 +5052,16 @@ export default function AccountsReceivablePage() {
                       key={charge.id}
                       className="border-t border-slate-100 dark:border-slate-700 transition hover:bg-slate-50 dark:hover:bg-slate-800 dark:bg-slate-800"
                     >
+                      <td className="px-5 py-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedChargeIds.includes(String(charge.id))}
+                          onChange={() => toggleChargeSelection(String(charge.id))}
+                          aria-label={`Selecionar conta de ${charge.tenant}`}
+                          className="h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+                        />
+                      </td>
+
                       <td className="px-5 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
                         {charge.property}
                       </td>
@@ -4768,7 +5408,7 @@ export default function AccountsReceivablePage() {
                 className={`rounded-2xl border p-4 ${
                   isBlackTheme
                     ? "border-[#334155] bg-[#111827]"
-                    : "border-[#dbe4ef] bg-[#f8fafc]"
+                    : "border-[#dbe4ef] bg-[#ffffff]"
                 }`}
               >
                 <p className={`text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
@@ -5104,6 +5744,7 @@ export default function AccountsReceivablePage() {
                   <div>
                     <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                       Inquilino/Pessoa
+                      <span className="ml-1 text-red-500">*</span>
                     </label>
 
                     <select
@@ -5180,6 +5821,7 @@ export default function AccountsReceivablePage() {
                 <div>
                   <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Valor total
+                    <span className="ml-1 text-red-500">*</span>
                   </label>
 
                   <div className="relative">
@@ -5213,6 +5855,7 @@ export default function AccountsReceivablePage() {
                 <div>
                   <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Data de lançamento
+                    <span className="ml-1 text-red-500">*</span>
                   </label>
 
                   <input
@@ -5234,6 +5877,7 @@ export default function AccountsReceivablePage() {
                 <div>
                   <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                     Primeiro vencimento
+                    <span className="ml-1 text-red-500">*</span>
                   </label>
 
                   <input
@@ -5283,6 +5927,7 @@ export default function AccountsReceivablePage() {
                       <div>
                         <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
                           Quantidade de parcelas
+                          <span className="ml-1 text-red-500">*</span>
                         </label>
 
                         <input
@@ -5483,23 +6128,22 @@ export default function AccountsReceivablePage() {
       )}
 
       {chargePendingPaymentReceipt && (
-        <div className={`fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
-          <div className="flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
-            <div className="border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-950/40 dark:to-slate-900 p-6">
+        <div className={`fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-4 ${isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light"}`}>
+          <div className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
+            <div className="border-b border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
               <div className="flex items-start justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-xl shadow-lg shadow-emerald-600/20 dark:shadow-emerald-950/30">
-                    ðŸ’µ
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-lg font-black text-white shadow-sm">
+                    R$
                   </div>
 
-                  <div>
+                  <div className="min-w-0">
                     <h2 className={`text-xl font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
-                      Receber cobrança
+                      {isBatchPayment ? "Receber cobranças selecionadas" : "Receber cobrança"}
                     </h2>
 
-                    <p className={`mt-1 text-sm leading-6 ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
-                      Informe os dados do pagamento para confirmar o
-                      recebimento.
+                    <p className={`mt-1 text-sm ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
+                      Informe valor, forma de pagamento e confira o saldo antes de concluir.
                     </p>
                   </div>
                 </div>
@@ -5507,7 +6151,7 @@ export default function AccountsReceivablePage() {
                 <button
                   type="button"
                   onClick={closeReceivePaymentModal}
-                  className={`flex h-10 w-10 items-center justify-center rounded-xl shadow-sm ring-1 transition ${
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl shadow-sm ring-1 transition ${
                     isBlackTheme
                       ? "bg-[#1e293b] text-[#cbd5e1] ring-[#334155] hover:bg-[#334155] hover:text-[#ffffff]"
                       : "bg-[#ffffff] text-[#64748b] ring-[#dbe4ef] hover:bg-[#f8fafc] hover:text-[#0f172a]"
@@ -5519,19 +6163,21 @@ export default function AccountsReceivablePage() {
               </div>
             </div>
 
-            <div className={`flex-1 space-y-5 overflow-x-hidden overflow-y-auto p-6 ${isBlackTheme ? "bg-[#0f172a]" : "bg-[#ffffff]"}`}>
-              <div className="rounded-2xl border border-emerald-100 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 p-4">
+            <div className={`flex-1 space-y-4 overflow-x-hidden overflow-y-auto p-4 sm:p-5 ${isBlackTheme ? "bg-[#0f172a]" : "bg-[#f8fafc]"}`}>
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30">
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
-                    Cobrança selecionada
+                    {isBatchPayment ? "Cobranças selecionadas" : "Cobrança selecionada"}
                   </p>
 
                   <span
                     className={`inline-flex w-fit rounded-full border px-3 py-1 text-xs font-black uppercase tracking-wide ${getReceiptStatusClassName(
-                      chargePendingPaymentReceipt,
+                      paymentModalReferenceCharge || chargePendingPaymentReceipt,
                     )}`}
                   >
-                    {getReceiptStatusLabel(chargePendingPaymentReceipt)}
+                    {isBatchPayment
+                      ? `${paymentModalCharges.length} contas`
+                      : getReceiptStatusLabel(chargePendingPaymentReceipt)}
                   </span>
                 </div>
 
@@ -5540,32 +6186,67 @@ export default function AccountsReceivablePage() {
                     <span className="font-black text-slate-950 dark:text-white">
                       Inquilino:
                     </span>{" "}
-                    {chargePendingPaymentReceipt.tenant}
+                    {isBatchPayment ? "Vários selecionados" : chargePendingPaymentReceipt.tenant}
                   </p>
 
                   <p>
                     <span className="font-black text-slate-950 dark:text-white">Imóvel:</span>{" "}
-                    {chargePendingPaymentReceipt.property}
+                    {isBatchPayment ? "Vários imóveis" : chargePendingPaymentReceipt.property}
                   </p>
 
                   <p>
                     <span className="font-black text-slate-950 dark:text-white">
                       Vencimento:
                     </span>{" "}
-                    {formatDate(chargePendingPaymentReceipt.dueDate)}
+                    {isBatchPayment ? "Conforme contas selecionadas" : formatDate(chargePendingPaymentReceipt.dueDate)}
                   </p>
 
                   <p>
                     <span className="font-black text-slate-950 dark:text-white">
-                      Valor original:
+                      Saldo em aberto:
                     </span>{" "}
-                    {formatCurrency(chargePendingPaymentReceipt.amount)}
+                    {formatCurrency(paymentModalRemainingAmount)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Original
+                  </p>
+                  <p className="mt-2 text-lg font-black text-slate-950 dark:text-white">
+                    {formatCurrency(paymentModalOriginalAmount)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Em aberto
+                  </p>
+                  <p className="mt-2 text-lg font-black text-slate-950 dark:text-white">
+                    {formatCurrency(paymentModalRemainingAmount)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm dark:border-emerald-900/50 dark:bg-slate-900">
+                  <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
+                    Recebendo
+                  </p>
+                  <p className="mt-2 text-lg font-black text-emerald-700 dark:text-emerald-300">
+                    {formatCurrency(paymentModalFinalAmount)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    Restará
+                  </p>
+                  <p className="mt-2 text-lg font-black text-slate-950 dark:text-white">
+                    {formatCurrency(paymentModalBalanceAfterPayment)}
                   </p>
                 </div>
               </div>
 
               <div
-                className={`rounded-3xl border p-5 shadow-sm ${
+                className={`rounded-2xl border p-5 shadow-sm ${
                   isBlackTheme
                     ? "border-[#334155] bg-[#020617]"
                     : "border-[#dbe4ef] bg-[#ffffff]"
@@ -5574,10 +6255,10 @@ export default function AccountsReceivablePage() {
                 <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div>
                     <p className={`text-xs font-black uppercase tracking-[0.18em] ${isBlackTheme ? "text-[#94a3b8]" : "text-[#64748b]"}`}>
-                      Ajustes financeiros
+                      Valores do recebimento
                     </p>
                     <h3 className={`mt-1 text-base font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
-                      Juros, desconto e total recebido
+                      Juros, desconto e valor pago
                     </h3>
                   </div>
 
@@ -5586,11 +6267,11 @@ export default function AccountsReceivablePage() {
                       ? "bg-[#0f172a] text-[#f8fafc] ring-[#334155]"
                       : "bg-[#f8fafc] text-[#0f172a] ring-[#dbe4ef]"
                   }`}>
-                    Original: {formatCurrency(chargePendingPaymentReceipt.amount)}
+                    Em aberto: {formatCurrency(paymentModalRemainingAmount)}
                   </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-3">
                   <div>
                     <label className={`mb-2 block text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
                       Juros
@@ -5603,7 +6284,7 @@ export default function AccountsReceivablePage() {
                         value={paymentInterestInput}
                         onChange={(event) =>
                           updatePaymentInterestInput(
-                            chargePendingPaymentReceipt,
+                            paymentModalReferenceCharge || chargePendingPaymentReceipt,
                             event.target.value,
                           )
                         }
@@ -5611,7 +6292,7 @@ export default function AccountsReceivablePage() {
                       />
                       <button
                         type="button"
-                        onClick={() => changePaymentInterestMode(chargePendingPaymentReceipt, "amount")}
+                        onClick={() => changePaymentInterestMode(paymentModalReferenceCharge || chargePendingPaymentReceipt, "amount")}
                         className={`w-11 shrink-0 border-l text-xs font-black transition ${
                           paymentInterestMode === "amount"
                             ? "bg-[#0f172a] text-[#ffffff]"
@@ -5624,7 +6305,7 @@ export default function AccountsReceivablePage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => changePaymentInterestMode(chargePendingPaymentReceipt, "percentage")}
+                        onClick={() => changePaymentInterestMode(paymentModalReferenceCharge || chargePendingPaymentReceipt, "percentage")}
                         className={`w-11 shrink-0 border-l text-xs font-black transition ${
                           paymentInterestMode === "percentage"
                             ? "bg-[#0f172a] text-[#ffffff]"
@@ -5650,7 +6331,7 @@ export default function AccountsReceivablePage() {
                         value={paymentDiscountInput}
                         onChange={(event) =>
                           updatePaymentDiscountInput(
-                            chargePendingPaymentReceipt,
+                            paymentModalReferenceCharge || chargePendingPaymentReceipt,
                             event.target.value,
                           )
                         }
@@ -5658,7 +6339,7 @@ export default function AccountsReceivablePage() {
                       />
                       <button
                         type="button"
-                        onClick={() => changePaymentDiscountMode(chargePendingPaymentReceipt, "amount")}
+                        onClick={() => changePaymentDiscountMode(paymentModalReferenceCharge || chargePendingPaymentReceipt, "amount")}
                         className={`w-11 shrink-0 border-l text-xs font-black transition ${
                           paymentDiscountMode === "amount"
                             ? "bg-[#0f172a] text-[#ffffff]"
@@ -5671,7 +6352,7 @@ export default function AccountsReceivablePage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => changePaymentDiscountMode(chargePendingPaymentReceipt, "percentage")}
+                        onClick={() => changePaymentDiscountMode(paymentModalReferenceCharge || chargePendingPaymentReceipt, "percentage")}
                         className={`w-11 shrink-0 border-l text-xs font-black transition ${
                           paymentDiscountMode === "percentage"
                             ? "bg-[#0f172a] text-[#ffffff]"
@@ -5685,13 +6366,13 @@ export default function AccountsReceivablePage() {
                     </div>
                   </div>
 
-                  <div className="md:col-span-2">
+                  <div>
                     <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <label className={`block text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
                         Valor final
                       </label>
                       <span className={`text-xs font-bold ${isBlackTheme ? "text-[#94a3b8]" : "text-[#64748b]"}`}>
-                        Original + juros - desconto
+                        Pode ser parcial ou total
                       </span>
                     </div>
                     <input
@@ -5701,53 +6382,28 @@ export default function AccountsReceivablePage() {
                         const value = event.target.value;
 
                         setPaymentFormError("");
-                        setPaymentFinalAmount(value);
-                        updatePaymentEntriesFromFinalAmount(value);
+                        const formattedValue = formatCurrencyInput(value);
 
-                        if (chargePendingPaymentReceipt) {
+                        setPaymentFinalAmount(formattedValue);
+                        updatePaymentEntriesFromFinalAmount(formattedValue);
+
+                        if (paymentModalReferenceCharge) {
                           updatePaymentAdjustmentsFromFinalAmount(
-                            chargePendingPaymentReceipt,
-                            value,
+                            paymentModalReferenceCharge,
+                            formattedValue,
                           );
                         }
                       }}
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:ring-emerald-900/50"
+                      onBlur={() => {
+                        const amount = normalizeAmount(paymentFinalAmount);
+                        const formattedAmount = amount > 0 ? formatAmountInput(amount) : "";
+
+                        setPaymentFinalAmount(formattedAmount);
+                        updatePaymentEntriesFromFinalAmount(formattedAmount);
+                      }}
+                      className="h-11 w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-black text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-slate-100 dark:placeholder:text-slate-500 dark:ring-emerald-900/50"
                     />
                   </div>
-                </div>
-              </div>
-
-              <div
-                className={`rounded-3xl border p-5 shadow-sm ${
-                  isBlackTheme
-                    ? "border-[#334155] bg-[#020617]"
-                    : "border-[#dbe4ef] bg-[#ffffff]"
-                }`}
-              >
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className={`text-xs font-black uppercase tracking-[0.18em] ${isBlackTheme ? "text-[#94a3b8]" : "text-[#64748b]"}`}>
-                      Total a receber
-                    </p>
-                    <p className={`mt-2 text-3xl font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
-                      {formatCurrency(normalizeAmount(paymentFinalAmount))}
-                    </p>
-                  </div>
-
-                  <div className="grid gap-2 text-sm md:min-w-[260px]">
-                    <div className="flex items-center justify-between gap-6">
-                      <span className={isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}>Informado</span>
-                      <strong className={isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}>{formatCurrency(getPaymentEntriesTotal())}</strong>
-                    </div>
-                    <div className="flex items-center justify-between gap-6">
-                      <span className={isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}>Original</span>
-                      <strong className={isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}>{formatCurrency(chargePendingPaymentReceipt.amount)}</strong>
-                    </div>
-                  </div>
-                </div>
-
-                <div className={`mt-4 rounded-2xl border px-4 py-3 text-sm font-black ${getPaymentEntriesBalanceClassName()}`}>
-                  {getPaymentEntriesBalanceLabel()}
                 </div>
               </div>
 
@@ -5787,7 +6443,7 @@ export default function AccountsReceivablePage() {
                   {paymentEntries.map((entry, index) => (
                     <div
                       key={entry.id}
-                      className="grid gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 md:grid-cols-[1fr_180px_auto] md:items-end"
+                      className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-[1fr_180px_auto] md:items-end"
                     >
                       <div>
                         <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
@@ -5823,6 +6479,7 @@ export default function AccountsReceivablePage() {
                           onChange={(event) =>
                             updatePaymentEntryAmount(entry.id, event.target.value)
                           }
+                          onBlur={() => normalizePaymentEntryAmount(entry.id)}
                           className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-black text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50"
                         />
                       </div>
@@ -5840,56 +6497,12 @@ export default function AccountsReceivablePage() {
                 </div>
 
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  <div className="rounded-xl bg-white dark:bg-slate-900 px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-slate-700">
+                  <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700">
                     Total informado: {formatCurrency(getPaymentEntriesTotal())}
                   </div>
 
                   <div className={`rounded-xl border px-4 py-3 text-sm font-black ${getPaymentEntriesBalanceClassName()}`}>
                     {getPaymentEntriesBalanceLabel()}
-                  </div>
-                </div>
-              </div>
-
-              <div
-                className={`rounded-2xl border p-4 ${
-                  isBlackTheme
-                    ? "border-[#334155] bg-[#111827]"
-                    : "border-[#dbe4ef] bg-[#f8fafc]"
-                }`}
-              >
-                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <h3 className={`text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
-                      Resumo do recebimento
-                    </h3>
-                    <p className={`mt-1 text-xs font-semibold ${isBlackTheme ? "text-[#94a3b8]" : "text-[#64748b]"}`}>
-                      Conferência automática antes de finalizar a baixa financeira.
-                    </p>
-                  </div>
-
-                  <span className={`inline-flex w-fit rounded-full border px-3 py-1 text-xs font-black uppercase tracking-wide ${getReceiptStatusClassName(
-                    chargePendingPaymentReceipt,
-                  )}`}>
-                    {getReceiptStatusLabel(chargePendingPaymentReceipt)}
-                  </span>
-                </div>
-
-                <div className="mt-4 grid gap-3 md:grid-cols-4">
-                  <div className="rounded-xl bg-white dark:bg-slate-900 p-3 ring-1 ring-slate-200 dark:ring-slate-700">
-                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Original</p>
-                    <p className="mt-1 text-sm font-black text-slate-950 dark:text-white">{formatCurrency(chargePendingPaymentReceipt.amount)}</p>
-                  </div>
-                  <div className="rounded-xl bg-white dark:bg-slate-900 p-3 ring-1 ring-slate-200 dark:ring-slate-700">
-                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Juros</p>
-                    <p className="mt-1 text-sm font-black text-slate-950 dark:text-white">{formatCurrency(normalizeAmount(paymentInterest))}</p>
-                  </div>
-                  <div className="rounded-xl bg-white dark:bg-slate-900 p-3 ring-1 ring-slate-200 dark:ring-slate-700">
-                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Desconto</p>
-                    <p className="mt-1 text-sm font-black text-slate-950 dark:text-white">{formatCurrency(normalizeAmount(paymentDiscount))}</p>
-                  </div>
-                  <div className="rounded-xl bg-white dark:bg-slate-900 p-3 ring-1 ring-slate-200 dark:ring-slate-700">
-                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Final</p>
-                    <p className="mt-1 text-sm font-black text-slate-950 dark:text-white">{formatCurrency(normalizeAmount(paymentFinalAmount))}</p>
                   </div>
                 </div>
               </div>
@@ -5918,12 +6531,27 @@ export default function AccountsReceivablePage() {
             </div>
 
             <div
-              className={`flex flex-col-reverse gap-3 border-t p-5 md:flex-row md:justify-end ${
+              className={`flex flex-col gap-3 border-t p-4 sm:flex-row sm:items-center sm:justify-between ${
                 isBlackTheme
                   ? "border-[#334155] bg-[#0f172a]"
                   : "border-[#e2e8f0] bg-[#ffffff]"
               }`}
             >
+              <div className="text-sm">
+                <span className={isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}>
+                  Receber agora:
+                </span>{" "}
+                <strong className={isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}>
+                  {formatCurrency(paymentModalFinalAmount)}
+                </strong>
+                {paymentModalBalanceAfterPayment > 0.01 && (
+                  <span className={isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}>
+                    {" "}· restará {formatCurrency(paymentModalBalanceAfterPayment)}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={closeReceivePaymentModal}
@@ -5939,6 +6567,7 @@ export default function AccountsReceivablePage() {
               >
                 Confirmar recebimento
               </button>
+              </div>
             </div>
           </div>
         </div>
@@ -5948,14 +6577,29 @@ export default function AccountsReceivablePage() {
         <ConfirmationModal
           icon="OK"
           title="Confirmar recebimento?"
-          description="Confira os dados antes de concluir. Depois de confirmar, a cobrança será marcada como paga."
-          itemLabel="Cobrança selecionada"
-          itemValue={chargePendingPaymentReceipt.tenant}
+          description="Confira os dados antes de concluir. Se o valor for menor que o saldo, a cobrança ficará parcialmente recebida."
+          itemLabel={isBatchPayment ? "Contas selecionadas" : "Cobrança selecionada"}
+          itemValue={
+            isBatchPayment
+              ? `${paymentModalCharges.length} contas`
+              : chargePendingPaymentReceipt.tenant
+          }
           details={
             <>
-              <p>Imóvel: {chargePendingPaymentReceipt.property}</p>
-              <p>Vencimento: {formatDate(chargePendingPaymentReceipt.dueDate)}</p>
-              <p>Valor original: {formatCurrency(chargePendingPaymentReceipt.amount)}</p>
+              <p>
+                Imóvel:{" "}
+                {isBatchPayment
+                  ? "Vários imóveis"
+                  : chargePendingPaymentReceipt.property}
+              </p>
+              <p>
+                Vencimento:{" "}
+                {isBatchPayment
+                  ? "Conforme contas selecionadas"
+                  : formatDate(chargePendingPaymentReceipt.dueDate)}
+              </p>
+              <p>Valor original: {formatCurrency(paymentModalOriginalAmount)}</p>
+              <p>Saldo em aberto: {formatCurrency(paymentModalRemainingAmount)}</p>
               <p>Juros: {formatCurrency(normalizeAmount(paymentInterest))}</p>
               <p>Desconto: {formatCurrency(normalizeAmount(paymentDiscount))}</p>
               <p>Valor final: {formatCurrency(normalizeAmount(paymentFinalAmount))}</p>
@@ -6180,7 +6824,7 @@ function mapApiPersonToReceivableTenant(person: Person): Tenant {
     cpf: person.document,
     document: person.document,
     phone: person.phone || "",
-    isTenant: true,
+    isTenant: person.isTenant !== false,
     state: person.state || "",
     city: person.city || "",
     street: person.address || "",

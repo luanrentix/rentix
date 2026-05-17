@@ -281,6 +281,9 @@ export default function PropertiesPage() {
           : null;
 
         const isBlackTheme =
+          parsedThemeSettings?.mode === "graphite" ||
+          legacyTheme === "graphite" ||
+          legacyTheme === "grafite" ||
           parsedThemeSettings?.mode === "black" ||
           parsedThemeSettings?.mode === "dark" ||
           legacyTheme === "black" ||
@@ -290,7 +293,10 @@ export default function PropertiesPage() {
       } catch {
         document.documentElement.classList.toggle(
           "dark",
-          legacyTheme === "black" || legacyTheme === "dark"
+          legacyTheme === "graphite" ||
+            legacyTheme === "grafite" ||
+            legacyTheme === "black" ||
+            legacyTheme === "dark"
         );
       }
     }
@@ -298,9 +304,11 @@ export default function PropertiesPage() {
     applyStoredTheme();
 
     window.addEventListener("storage", applyStoredTheme);
+    window.addEventListener("contrx-theme-change", applyStoredTheme);
 
     return () => {
       window.removeEventListener("storage", applyStoredTheme);
+      window.removeEventListener("contrx-theme-change", applyStoredTheme);
     };
   }, []);
 
@@ -1827,7 +1835,7 @@ export default function PropertiesPage() {
                     />
                   </FormField>
 
-                  <FormField label="Tipo de imóvel">
+                  <FormField label="Tipo de imóvel" required>
                     <select
                       value={type}
                       onChange={(event) => setType(event.target.value as PropertyType)}
@@ -1889,7 +1897,7 @@ export default function PropertiesPage() {
                     </div>
                   </FormField>
 
-                  <FormField label="Nome do imóvel">
+                  <FormField label="Nome do imóvel" required>
                     <input
                       type="text"
                       value={name}
@@ -1899,7 +1907,7 @@ export default function PropertiesPage() {
                     />
                   </FormField>
 
-                  <FormField label="CEP">
+                  <FormField label="CEP" required>
                     <div className="space-y-2">
                       <div className="flex gap-2">
                         <input
@@ -1935,7 +1943,7 @@ export default function PropertiesPage() {
                     </div>
                   </FormField>
 
-                  <FormField label="Estado">
+                  <FormField label="Estado" required>
                     <input
                       type="text"
                       value={state}
@@ -1945,7 +1953,7 @@ export default function PropertiesPage() {
                     />
                   </FormField>
 
-                  <FormField label="Cidade">
+                  <FormField label="Cidade" required>
                     <input
                       type="text"
                       value={city}
@@ -1955,7 +1963,7 @@ export default function PropertiesPage() {
                     />
                   </FormField>
 
-                  <FormField label="Bairro">
+                  <FormField label="Bairro" required>
                     <input
                       type="text"
                       value={neighborhood}
@@ -1965,7 +1973,7 @@ export default function PropertiesPage() {
                     />
                   </FormField>
 
-                  <FormField label="Logradouro">
+                  <FormField label="Logradouro" required>
                     <input
                       type="text"
                       value={street}
@@ -1975,7 +1983,7 @@ export default function PropertiesPage() {
                     />
                   </FormField>
 
-                  <FormField label="Número">
+                  <FormField label="Número" required>
                     <input
                       type="text"
                       value={number}
@@ -1995,7 +2003,7 @@ export default function PropertiesPage() {
                     />
                   </FormField>
 
-                  <FormField label="Valor da locação mensal">
+                  <FormField label="Valor da locação mensal" required>
                     <input
                       type="text"
                       value={rentValue}
@@ -2123,13 +2131,15 @@ export default function PropertiesPage() {
 type FormFieldProps = {
   label: string;
   children: React.ReactNode;
+  required?: boolean;
 };
 
-function FormField({ label, children }: FormFieldProps) {
+function FormField({ label, children, required = false }: FormFieldProps) {
   return (
     <div>
       <label className="mb-2 block text-sm font-black text-slate-700">
         {label}
+        {required ? <span className="ml-1 text-red-500">*</span> : null}
       </label>
       {children}
     </div>

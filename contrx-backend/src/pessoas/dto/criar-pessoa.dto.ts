@@ -1,5 +1,6 @@
 import {
   IsEmail,
+  IsBoolean,
   IsIn,
   IsOptional,
   IsString,
@@ -41,6 +42,10 @@ export class CriarPessoaDto {
   @IsOptional()
   @IsString()
   phone?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isTenant?: boolean;
 
   @IsOptional()
   @IsString()

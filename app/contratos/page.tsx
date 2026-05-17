@@ -575,6 +575,9 @@ export default function ContractsPage() {
           : null;
 
         const isBlackThemeSelected =
+          parsedThemeSettings?.mode === "graphite" ||
+          legacyTheme === "graphite" ||
+          legacyTheme === "grafite" ||
           parsedThemeSettings?.mode === "black" ||
           parsedThemeSettings?.mode === "dark" ||
           legacyTheme === "black" ||
@@ -582,7 +585,11 @@ export default function ContractsPage() {
 
         setIsBlackTheme(isBlackThemeSelected);
       } catch {
-        const isLegacyBlackTheme = legacyTheme === "black" || legacyTheme === "dark";
+        const isLegacyBlackTheme =
+          legacyTheme === "graphite" ||
+          legacyTheme === "grafite" ||
+          legacyTheme === "black" ||
+          legacyTheme === "dark";
 
         setIsBlackTheme(isLegacyBlackTheme);
       }
@@ -591,9 +598,11 @@ export default function ContractsPage() {
     applyStoredTheme();
 
     window.addEventListener("storage", applyStoredTheme);
+    window.addEventListener("contrx-theme-change", applyStoredTheme);
 
     return () => {
       window.removeEventListener("storage", applyStoredTheme);
+      window.removeEventListener("contrx-theme-change", applyStoredTheme);
     };
   }, [companyId]);
 
@@ -2456,7 +2465,7 @@ export default function ContractsPage() {
               </div>
 
               <div className="mt-6 grid gap-5 md:grid-cols-2">
-                <FormField label="Nova data final">
+                <FormField label="Nova data final" required>
                   <input
                     type="date"
                     value={renewalEndDate}
@@ -2468,7 +2477,7 @@ export default function ContractsPage() {
                   />
                 </FormField>
 
-                <FormField label="Novo valor do aluguel">
+                <FormField label="Novo valor do aluguel" required>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -2551,6 +2560,7 @@ export default function ContractsPage() {
               <div className="mt-5">
                 <label className="mb-2 block text-sm font-black text-slate-700">
                   Motivo da finalização
+                  <span className="ml-1 text-red-500">*</span>
                 </label>
                 <textarea
                   value={finishReason}
@@ -2699,6 +2709,7 @@ export default function ContractsPage() {
               <div className="mt-5">
                 <label className="mb-2 block text-sm font-black text-slate-700">
                   Motivo
+                  <span className="ml-1 text-red-500">*</span>
                 </label>
                 <textarea
                   value={statusReason}
@@ -2892,7 +2903,7 @@ export default function ContractsPage() {
                   )}
 
                   <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                    <FormField label="Imóvel">
+                    <FormField label="Imóvel" required>
                       <select
                         value={propertyId}
                         onChange={(event) => handlePropertyChange(event.target.value)}
@@ -2909,7 +2920,7 @@ export default function ContractsPage() {
                       </select>
                     </FormField>
 
-                    <FormField label="Inquilino">
+                    <FormField label="Inquilino" required>
                       <select
                         value={tenantId}
                         onChange={(event) => {
@@ -2928,7 +2939,7 @@ export default function ContractsPage() {
                       </select>
                     </FormField>
 
-                    <FormField label="Valor aluguel">
+                    <FormField label="Valor aluguel" required>
                       <input
                         type="text"
                         inputMode="numeric"
@@ -2943,7 +2954,7 @@ export default function ContractsPage() {
                       />
                     </FormField>
 
-                    <FormField label="Data início">
+                    <FormField label="Data início" required>
                       <input
                         type="date"
                         value={startDate}
@@ -2956,7 +2967,7 @@ export default function ContractsPage() {
                       />
                     </FormField>
 
-                    <FormField label="Data fim">
+                    <FormField label="Data fim" required>
                       <input
                         type="date"
                         value={endDate}
@@ -3091,13 +3102,15 @@ export default function ContractsPage() {
 type FormFieldProps = {
   label: string;
   children: React.ReactNode;
+  required?: boolean;
 };
 
-function FormField({ label, children }: FormFieldProps) {
+function FormField({ label, children, required = false }: FormFieldProps) {
   return (
     <div>
       <label className="mb-2 block text-sm font-black text-slate-700">
         {label}
+        {required ? <span className="ml-1 text-red-500">*</span> : null}
       </label>
       {children}
     </div>
@@ -3417,7 +3430,7 @@ function mapApiPersonToTenant(apiPerson: ApiPerson): ContrxTenant {
   return {
     id: apiPerson.id,
     name: apiPerson.name,
-    isTenant: true,
+    isTenant: apiPerson.isTenant !== false,
     isActive: apiPerson.status === "ACTIVE",
     personType: apiPerson.type === "COMPANY" ? "Company" : "Individual",
     cpf: apiPerson.document,

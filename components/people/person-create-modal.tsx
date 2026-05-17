@@ -27,6 +27,7 @@ type PersonFormData = {
   addressNumber: string;
   district: string;
   reference: string;
+  isTenant: boolean;
   status: PersonStatus;
 };
 
@@ -79,6 +80,7 @@ const emptyFormData: PersonFormData = {
   addressNumber: "",
   district: "",
   reference: "",
+  isTenant: true,
   status: "active",
 };
 
@@ -271,6 +273,7 @@ export function PersonCreateModal({
       city: toUpperText(formData.city).trim() || undefined,
       state: toUpperText(formData.state).trim() || undefined,
       address: buildPersonAddress(formData) || undefined,
+      isTenant: formData.isTenant,
     };
 
     try {
@@ -505,6 +508,31 @@ export function PersonCreateModal({
                   <option value="inactive">Inativo</option>
                 </select>
               </PersonModalField>
+
+              <div className="md:col-span-2">
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-orange-200 hover:bg-orange-50">
+                  <input
+                    type="checkbox"
+                    checked={formData.isTenant}
+                    onChange={(event) =>
+                      setFormData((currentFormData) => ({
+                        ...currentFormData,
+                        isTenant: event.target.checked,
+                      }))
+                    }
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                  />
+
+                  <span>
+                    <span className="block text-sm font-black text-slate-900">
+                      Marcar como inquilino
+                    </span>
+                    <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500">
+                      Marcado aparece em contratos. Desmarcado continua disponível para lançamentos financeiros.
+                    </span>
+                  </span>
+                </label>
+              </div>
             </div>
 
             {cnpjError && (

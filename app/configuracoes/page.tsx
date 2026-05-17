@@ -76,7 +76,7 @@ type ViaCepResponse = {
 
 type SettingsTab = "company" | "user" | "print" | "appearance";
 
-type ThemeMode = "light" | "black";
+type ThemeMode = "light" | "black" | "graphite";
 
 type ThemeSettings = {
   mode: ThemeMode;
@@ -227,6 +227,59 @@ const defaultCompanySettings: CompanySettings = {
 const defaultThemeSettings: ThemeSettings = {
   mode: "light",
 };
+
+function normalizeThemeMode(value: unknown): ThemeMode {
+  const normalizedValue = String(value || "").toLowerCase();
+
+  if (normalizedValue === "graphite" || normalizedValue === "grafite") {
+    return "graphite";
+  }
+
+  return normalizedValue === "black" || normalizedValue === "dark"
+    ? "black"
+    : "light";
+}
+
+function normalizeThemeSettings(settings?: Partial<ThemeSettings> | null): ThemeSettings {
+  return {
+    ...defaultThemeSettings,
+    ...(settings || {}),
+    mode: normalizeThemeMode(settings?.mode),
+  };
+}
+
+function readThemeSettingsFromStorage(companyId?: string): ThemeSettings {
+  const storageKeys = [
+    "contrx_theme_settings",
+    "contrx_theme",
+    "contrx_current_theme",
+    "theme",
+  ];
+
+  for (const storageKey of storageKeys) {
+    const storedValue = getCompanyStorageItem(
+      companyId,
+      storageKey,
+      storageKey,
+    );
+
+    if (!storedValue) continue;
+
+    try {
+      const parsedValue = JSON.parse(storedValue) as Partial<ThemeSettings> | string;
+
+      if (typeof parsedValue === "string") {
+        return { mode: normalizeThemeMode(parsedValue) };
+      }
+
+      return normalizeThemeSettings(parsedValue);
+    } catch {
+      return { mode: normalizeThemeMode(storedValue) };
+    }
+  }
+
+  return defaultThemeSettings;
+}
 
 const legacyTemporaryContractTemplateContent = 'CONTRATO TEMPORÁRIO\n\nLOCADOR: {companyName}\nLOCATÁRIO: {personName}\nIMÓVEL: {propertyName}\nPERÍODO: {startDate} até {endDate}\nHORÁRIO: Entrada {entryTime} / Saída {exitTime}\n\nCLÁUSULAS E CONDIÇÕES:\n1. O presente contrato tem finalidade de locação temporária.\n2. O locatário declara estar ciente das regras de uso do imóvel.\n3. As informações financeiras e condições acordadas deverão constar no documento final.\n\n{contractDefaultNotes}\n\n{contractCity}, {currentDate}.\n\n__________________________________\nLOCADOR\n\n__________________________________\nLOCATÁRIO';
 
@@ -1145,12 +1198,6 @@ export default function ConfiguracoesPage() {
       "contrx_user_settings",
       "contrx_user_settings",
     );
-    const storedThemeSettings = getCompanyStorageItem(
-      companyId,
-      "contrx_theme_settings",
-      "contrx_theme_settings",
-    );
-
     if (storedUserSettings) {
       const parsedUserSettings = {
         ...defaultUserSettings,
@@ -1161,15 +1208,10 @@ export default function ConfiguracoesPage() {
       setInitialUserSettings(parsedUserSettings);
     }
 
-    if (storedThemeSettings) {
-      const parsedThemeSettings = {
-        ...defaultThemeSettings,
-        ...JSON.parse(storedThemeSettings),
-      };
+    const parsedThemeSettings = readThemeSettingsFromStorage(companyId);
 
-      setThemeSettings(parsedThemeSettings);
-      setInitialThemeSettings(parsedThemeSettings);
-    }
+    setThemeSettings(parsedThemeSettings);
+    setInitialThemeSettings(parsedThemeSettings);
   }, [companyId]);
 
   const loadSettings = useCallback(async (currentCompanyId: string) => {
@@ -1185,10 +1227,9 @@ export default function ConfiguracoesPage() {
         ...defaultCompanySettings,
         ...(settings.companySettings || {}),
       } as CompanySettings;
-      const nextThemeSettings = {
-        ...defaultThemeSettings,
-        ...(settings.themeSettings || {}),
-      } as ThemeSettings;
+      const nextThemeSettings = normalizeThemeSettings(
+        settings.themeSettings as Partial<ThemeSettings> | undefined,
+      );
       const nextPrintTemplates = normalizeStoredPrintTemplates(
         (settings.printTemplates || {}) as Partial<PrintTemplates>,
       );
@@ -1215,6 +1256,15 @@ export default function ConfiguracoesPage() {
 
     loadSettings(companyId);
   }, [companyId, loadSettings, loadSettingsFromLocalStorage]);
+
+  useEffect(() => {
+    const isDarkMode = themeSettings.mode !== "light";
+
+    document.documentElement.classList.toggle("dark", isDarkMode);
+    document.body.classList.toggle("dark", isDarkMode);
+    document.documentElement.dataset.contrxTheme = themeSettings.mode;
+    document.body.dataset.contrxTheme = themeSettings.mode;
+  }, [themeSettings.mode]);
 
   function handleOpenResetModal() {
     if (!isSystemOwner) {
@@ -1617,6 +1667,7 @@ export default function ConfiguracoesPage() {
       JSON.stringify(themeSettings),
     );
     setCachedAppSettings({ userSettings, companySettings, printTemplates, themeSettings });
+    window.dispatchEvent(new Event("contrx-theme-change"));
 
     if (passwordSettings.newPassword) {
       setCompanyStorageItem(companyId, "contrx_user_password_updated", "true");
@@ -1777,10 +1828,10 @@ export default function ConfiguracoesPage() {
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                     <label className="space-y-2">
                       <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                        Razão social
+                        Razão social *
                       </span>
                       <input
                         type="text"
@@ -1798,7 +1849,7 @@ export default function ConfiguracoesPage() {
 
                     <label className="space-y-2">
                       <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                        Nome fantasia
+                        Nome fantasia *
                       </span>
                       <input
                         type="text"
@@ -2381,6 +2432,38 @@ export default function ConfiguracoesPage() {
                         </span>
                       </div>
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setThemeSettings({ mode: "graphite" })}
+                      className={`rounded-3xl border p-5 text-left transition ${
+                        themeSettings.mode === "graphite"
+                          ? "border-orange-300 bg-zinc-800 shadow-md shadow-zinc-950/30"
+                          : "border-slate-200 bg-white hover:border-orange-200 hover:bg-orange-50/40"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-800 text-lg font-black text-orange-300 ring-1 ring-orange-400/50">
+                            G
+                          </div>
+                          <h3 className={`mt-4 text-lg font-black ${themeSettings.mode === "graphite" ? "text-white" : "text-slate-950"}`}>
+                            Tema grafite
+                          </h3>
+                          <p className={`mt-1 text-sm font-semibold leading-6 ${themeSettings.mode === "graphite" ? "text-zinc-200" : "text-slate-500"}`}>
+                            Usa cinzas profundos com contraste suave, mantendo o laranja como ponto de ação.
+                          </p>
+                        </div>
+
+                        <span className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs font-black ${
+                          themeSettings.mode === "graphite"
+                            ? "border-orange-500 bg-orange-500 text-white"
+                            : "border-slate-300 text-transparent"
+                        }`}>
+                          ✓
+                        </span>
+                      </div>
+                    </button>
                   </div>
 
                   <div className="rounded-3xl border border-orange-100 bg-orange-50 px-5 py-4">
@@ -2388,7 +2471,7 @@ export default function ConfiguracoesPage() {
                       Importante
                     </p>
                     <p className="mt-1 text-sm font-semibold leading-6 text-orange-700">
-                      A alteração será aplicada ao sistema depois de clicar em Salvar configurações. A identidade laranja do Contrx permanece nos dois temas.
+                      A alteração será aplicada ao sistema depois de clicar em Salvar configurações. A identidade laranja do Contrx permanece em todos os temas.
                     </p>
                   </div>
                 </div>

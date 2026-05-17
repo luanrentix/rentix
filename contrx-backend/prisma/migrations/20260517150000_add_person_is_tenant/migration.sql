@@ -1,0 +1,2 @@
+ALTER TABLE "pessoas"
+ADD COLUMN "inquilino" BOOLEAN NOT NULL DEFAULT true;

@@ -48,7 +48,7 @@ type StatementItem = {
   negative: boolean;
 };
 
-type ThemeMode = "light" | "black";
+type ThemeMode = "light" | "black" | "graphite";
 
 const contrxFinancialThemeStyle = `
   .contrx-financial-page {
@@ -223,6 +223,96 @@ const contrxFinancialThemeStyle = `
   .contrx-financial-page-black .hover\\:bg-slate-200:hover {
     background-color: #1e293b !important;
   }
+
+  .contrx-financial-page-graphite {
+    color: #f4f4f5;
+    color-scheme: dark;
+  }
+
+  .contrx-financial-page-graphite .bg-white {
+    background: linear-gradient(145deg, #27272a 0%, #1f1f23 100%) !important;
+  }
+
+  .contrx-financial-page-graphite .bg-slate-50,
+  .contrx-financial-page-graphite .bg-slate-100 {
+    background-color: #27272a !important;
+  }
+
+  .contrx-financial-page-graphite .bg-orange-50,
+  .contrx-financial-page-graphite .bg-orange-100 {
+    background-color: rgba(249, 115, 22, 0.18) !important;
+  }
+
+  .contrx-financial-page-graphite .bg-red-50,
+  .contrx-financial-page-graphite .bg-red-100 {
+    background-color: rgba(239, 68, 68, 0.16) !important;
+  }
+
+  .contrx-financial-page-graphite .bg-emerald-50,
+  .contrx-financial-page-graphite .bg-emerald-100 {
+    background-color: rgba(16, 185, 129, 0.16) !important;
+  }
+
+  .contrx-financial-page-graphite .text-slate-950,
+  .contrx-financial-page-graphite .text-slate-900,
+  .contrx-financial-page-graphite .text-slate-800,
+  .contrx-financial-page-graphite .text-slate-700 {
+    color: #f4f4f5 !important;
+  }
+
+  .contrx-financial-page-graphite .text-slate-600,
+  .contrx-financial-page-graphite .text-slate-500,
+  .contrx-financial-page-graphite .text-slate-400 {
+    color: #d4d4d8 !important;
+  }
+
+  .contrx-financial-page-graphite .text-orange-600,
+  .contrx-financial-page-graphite .text-orange-700 {
+    color: #fb923c !important;
+  }
+
+  .contrx-financial-page-graphite .text-red-600,
+  .contrx-financial-page-graphite .text-red-700 {
+    color: #f87171 !important;
+  }
+
+  .contrx-financial-page-graphite .text-emerald-600,
+  .contrx-financial-page-graphite .text-emerald-700 {
+    color: #34d399 !important;
+  }
+
+  .contrx-financial-page-graphite .border-orange-100,
+  .contrx-financial-page-graphite .border-orange-500\\/30,
+  .contrx-financial-page-graphite .border-red-100,
+  .contrx-financial-page-graphite .border-red-500\\/30,
+  .contrx-financial-page-graphite .border-slate-100,
+  .contrx-financial-page-graphite .border-slate-200,
+  .contrx-financial-page-graphite .border-slate-700 {
+    border-color: #52525b !important;
+  }
+
+  .contrx-financial-page-graphite input,
+  .contrx-financial-page-graphite select {
+    background-color: #18181b !important;
+    border-color: #52525b !important;
+    color: #f4f4f5 !important;
+  }
+
+  .contrx-financial-page-graphite option {
+    background-color: #18181b !important;
+    color: #f4f4f5 !important;
+  }
+
+  .contrx-financial-page-graphite .shadow-sm,
+  .contrx-financial-page-graphite .shadow-md {
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  .contrx-financial-page-graphite .hover\\:bg-slate-50:hover,
+  .contrx-financial-page-graphite .hover\\:bg-slate-100:hover,
+  .contrx-financial-page-graphite .hover\\:bg-slate-200:hover {
+    background-color: #3f3f46 !important;
+  }
 `;
 
 export default function FinancialPage() {
@@ -294,17 +384,25 @@ export default function FinancialPage() {
           : null;
 
         const nextTheme =
-          parsedThemeSettings?.mode === "black" ||
-          parsedThemeSettings?.mode === "dark" ||
-          legacyTheme === "black" ||
-          legacyTheme === "dark"
-            ? "black"
-            : "light";
+          parsedThemeSettings?.mode === "graphite" ||
+          legacyTheme === "graphite" ||
+          legacyTheme === "grafite"
+            ? "graphite"
+            : parsedThemeSettings?.mode === "black" ||
+                parsedThemeSettings?.mode === "dark" ||
+                legacyTheme === "black" ||
+                legacyTheme === "dark"
+              ? "black"
+              : "light";
 
         setFinancialTheme(nextTheme);
       } catch {
         setFinancialTheme(
-          legacyTheme === "black" || legacyTheme === "dark" ? "black" : "light",
+          legacyTheme === "graphite" || legacyTheme === "grafite"
+            ? "graphite"
+            : legacyTheme === "black" || legacyTheme === "dark"
+              ? "black"
+              : "light",
         );
       }
     }
@@ -459,7 +557,9 @@ export default function FinancialPage() {
         className={`contrx-financial-page space-y-6 ${
           financialTheme === "black"
             ? "contrx-financial-page-black"
-            : "contrx-financial-page-light"
+            : financialTheme === "graphite"
+              ? "contrx-financial-page-graphite"
+              : "contrx-financial-page-light"
         }`}
       >
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">

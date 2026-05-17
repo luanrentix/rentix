@@ -499,6 +499,9 @@ export default function AgendaPage() {
           ? (JSON.parse(storedThemeSettings) as { mode?: string })
           : null;
         const isBlackThemeSelected =
+          parsedThemeSettings?.mode === "graphite" ||
+          legacyTheme === "graphite" ||
+          legacyTheme === "grafite" ||
           parsedThemeSettings?.mode === "black" ||
           parsedThemeSettings?.mode === "dark" ||
           legacyTheme === "black" ||
@@ -508,7 +511,11 @@ export default function AgendaPage() {
         document.body.classList.toggle("dark", isBlackThemeSelected);
         setIsBlackTheme(isBlackThemeSelected);
       } catch {
-        const isLegacyBlackTheme = legacyTheme === "black" || legacyTheme === "dark";
+        const isLegacyBlackTheme =
+          legacyTheme === "graphite" ||
+          legacyTheme === "grafite" ||
+          legacyTheme === "black" ||
+          legacyTheme === "dark";
 
         document.documentElement.classList.toggle("dark", isLegacyBlackTheme);
         document.body.classList.toggle("dark", isLegacyBlackTheme);
@@ -1808,7 +1815,7 @@ export default function AgendaPage() {
               )}
 
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Título" isBlackTheme={isBlackTheme} className="md:col-span-2">
+                <Field label="Título" isBlackTheme={isBlackTheme} className="md:col-span-2" required>
                   <input
                     type="text"
                     value={formData.title}
@@ -1820,7 +1827,7 @@ export default function AgendaPage() {
                   />
                 </Field>
 
-                <Field label="Cliente / responsável" isBlackTheme={isBlackTheme}>
+                <Field label="Cliente / responsável" isBlackTheme={isBlackTheme} required>
                   <input
                     type="text"
                     value={formData.customerName}
@@ -1835,7 +1842,7 @@ export default function AgendaPage() {
                   />
                 </Field>
 
-                <Field label="Imóvel / referência" isBlackTheme={isBlackTheme}>
+                <Field label="Imóvel / referência" isBlackTheme={isBlackTheme} required>
                   <input
                     type="text"
                     value={formData.propertyName}
@@ -1850,7 +1857,7 @@ export default function AgendaPage() {
                   />
                 </Field>
 
-                <Field label="Data" isBlackTheme={isBlackTheme}>
+                <Field label="Data" isBlackTheme={isBlackTheme} required>
                   <input
                     type="date"
                     value={formData.date}
@@ -1861,7 +1868,7 @@ export default function AgendaPage() {
                   />
                 </Field>
 
-                <Field label="Horário" isBlackTheme={isBlackTheme}>
+                <Field label="Horário" isBlackTheme={isBlackTheme} required>
                   <input
                     type="time"
                     value={formData.time}
@@ -1888,7 +1895,7 @@ export default function AgendaPage() {
                   </select>
                 </Field>
 
-                <Field label="Responsável interno" isBlackTheme={isBlackTheme}>
+                <Field label="Responsável interno" isBlackTheme={isBlackTheme} required>
                   <select
                     value={formData.responsibleName}
                     onChange={(event) =>
@@ -2090,11 +2097,13 @@ function Field({
   className = "",
   isBlackTheme,
   label,
+  required = false,
 }: {
   children: ReactNode;
   className?: string;
   isBlackTheme: boolean;
   label: string;
+  required?: boolean;
 }) {
   return (
     <label className={`space-y-2 ${className}`}>
@@ -2104,6 +2113,7 @@ function Field({
         }`}
       >
         {label}
+        {required ? <span className="ml-1 text-red-500">*</span> : null}
       </span>
       {children}
     </label>

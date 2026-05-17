@@ -55,7 +55,7 @@ type CompanySettings = {
   state: string;
 };
 
-type ThemeMode = "light" | "black";
+type ThemeMode = "light" | "black" | "graphite";
 
 type ThemeSettings = {
   mode: ThemeMode;
@@ -472,7 +472,23 @@ const contrxThemeStyle = `
 `;
 
 function normalizeThemeMode(value: unknown): ThemeMode {
-  return String(value || "").toLowerCase() === "black" ? "black" : "light";
+  const normalizedValue = String(value || "").toLowerCase();
+
+  if (normalizedValue === "graphite" || normalizedValue === "grafite") {
+    return "graphite";
+  }
+
+  return normalizedValue === "black" || normalizedValue === "dark"
+    ? "black"
+    : "light";
+}
+
+function normalizeThemeSettings(settings?: Partial<ThemeSettings> | null): ThemeSettings {
+  return {
+    ...defaultThemeSettings,
+    ...(settings || {}),
+    mode: normalizeThemeMode(settings?.mode),
+  };
 }
 
 function readThemeSettingsFromStorage(companyId?: string): ThemeSettings {
@@ -501,10 +517,7 @@ function readThemeSettingsFromStorage(companyId?: string): ThemeSettings {
         return { mode: normalizeThemeMode(parsedValue) };
       }
 
-      return {
-        ...defaultThemeSettings,
-        mode: normalizeThemeMode(parsedValue.mode),
-      };
+      return normalizeThemeSettings(parsedValue);
     } catch {
       return { mode: normalizeThemeMode(storedValue) };
     }
@@ -591,10 +604,9 @@ export default function AppShell({ children }: AppShellProps) {
       }
 
       if (cachedThemeSettings) {
-        setThemeSettings({
-          ...defaultThemeSettings,
-          ...cachedThemeSettings,
-        } as ThemeSettings);
+        setThemeSettings(
+          normalizeThemeSettings(cachedThemeSettings as Partial<ThemeSettings>),
+        );
       }
 
       return;
@@ -613,10 +625,9 @@ export default function AppShell({ children }: AppShellProps) {
         ...defaultCompanySettings,
         ...(settings.companySettings || {}),
       } as CompanySettings);
-      setThemeSettings({
-        ...defaultThemeSettings,
-        ...(settings.themeSettings || {}),
-      } as ThemeSettings);
+      setThemeSettings(
+        normalizeThemeSettings(settings.themeSettings as Partial<ThemeSettings> | undefined),
+      );
     } catch {
       console.warn("Settings API unavailable. Local cached settings were loaded.");
 
@@ -636,10 +647,9 @@ export default function AppShell({ children }: AppShellProps) {
         }
 
         if (cachedThemeSettings) {
-          setThemeSettings({
-            ...defaultThemeSettings,
-            ...cachedThemeSettings,
-          } as ThemeSettings);
+          setThemeSettings(
+            normalizeThemeSettings(cachedThemeSettings as Partial<ThemeSettings>),
+          );
         }
 
         return;
@@ -673,10 +683,10 @@ export default function AppShell({ children }: AppShellProps) {
   }, [isSidebarLocked]);
 
   useEffect(() => {
-    const isBlackMode = themeSettings.mode === "black";
+    const isDarkMode = themeSettings.mode !== "light";
 
-    document.documentElement.classList.toggle("dark", isBlackMode);
-    document.body.classList.toggle("dark", isBlackMode);
+    document.documentElement.classList.toggle("dark", isDarkMode);
+    document.body.classList.toggle("dark", isDarkMode);
     document.documentElement.dataset.contrxTheme = themeSettings.mode;
     document.body.dataset.contrxTheme = themeSettings.mode;
   }, [themeSettings.mode]);
@@ -873,7 +883,7 @@ export default function AppShell({ children }: AppShellProps) {
       <div
         data-contrx-theme={themeSettings.mode}
         className={`min-h-screen lg:flex ${
-          themeSettings.mode === "black"
+          themeSettings.mode !== "light"
             ? "dark bg-slate-950 text-slate-100"
             : "bg-[#f8fafc] text-slate-900"
         }`}

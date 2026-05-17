@@ -26,6 +26,7 @@ export class PessoasService {
         identityNumber: data.identityNumber,
         email: data.email,
         phone: data.phone,
+        isTenant: data.isTenant ?? true,
         zipCode: data.zipCode,
         city: data.city,
         state: data.state,

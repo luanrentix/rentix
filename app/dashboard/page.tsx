@@ -83,7 +83,7 @@ type FinancialMovement = {
   status: "overdue" | "today" | "upcoming";
 };
 
-type ThemeMode = "light" | "black";
+type ThemeMode = "light" | "black" | "graphite";
 type DashboardFinancialPeriod = "CurrentMonth" | "CurrentYear" | "All";
 
 const chartColors = {
@@ -272,20 +272,54 @@ export default function DashboardPage() {
   }, [companyId, loadDashboardData]);
 
   useEffect(() => {
-    const storedThemeSettings = getCompanyStorageItem(
-      companyId,
-      "contrx_theme_settings",
-      "contrx_theme_settings",
-    );
+    function applyStoredTheme() {
+      const storedThemeSettings = getCompanyStorageItem(
+        companyId,
+        "contrx_theme_settings",
+        "contrx_theme_settings",
+      );
+      const legacyTheme = getCompanyStorageItem(
+        companyId,
+        "contrx_theme",
+        "contrx_theme",
+      );
 
-    if (storedThemeSettings) {
       try {
-        const parsedThemeSettings = JSON.parse(storedThemeSettings) as { mode?: ThemeMode };
-        setDashboardTheme(parsedThemeSettings.mode === "black" ? "black" : "light");
+        const parsedThemeSettings = storedThemeSettings
+          ? (JSON.parse(storedThemeSettings) as { mode?: ThemeMode | "dark" })
+          : null;
+        const nextTheme =
+          parsedThemeSettings?.mode === "graphite" ||
+          legacyTheme === "graphite" ||
+          legacyTheme === "grafite"
+            ? "graphite"
+            : parsedThemeSettings?.mode === "black" ||
+                parsedThemeSettings?.mode === "dark" ||
+                legacyTheme === "black" ||
+                legacyTheme === "dark"
+              ? "black"
+              : "light";
+
+        setDashboardTheme(nextTheme);
       } catch {
-        setDashboardTheme("light");
+        setDashboardTheme(
+          legacyTheme === "graphite" || legacyTheme === "grafite"
+            ? "graphite"
+            : legacyTheme === "black" || legacyTheme === "dark"
+              ? "black"
+              : "light",
+        );
       }
     }
+
+    applyStoredTheme();
+    window.addEventListener("storage", applyStoredTheme);
+    window.addEventListener("contrx-theme-change", applyStoredTheme);
+
+    return () => {
+      window.removeEventListener("storage", applyStoredTheme);
+      window.removeEventListener("contrx-theme-change", applyStoredTheme);
+    };
   }, [companyId]);
 
   function refreshDashboardData() {
