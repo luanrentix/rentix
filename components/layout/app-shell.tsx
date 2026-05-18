@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import AuthGuard from "@/components/auth/auth-guard";
 import { useAuth } from "@/context/AuthContext";
 import { changePasswordRequest } from "@/services/auth";
@@ -19,6 +19,7 @@ import {
   getCachedUserSettings,
   setCachedAppSettings,
 } from "@/services/settings-cache";
+import { canAccessTool } from "@/services/tool-permissions";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -94,8 +95,18 @@ const systemOwnerMenuItems = [
   { label: "Admin", href: "/admin", icon: "SYS" },
 ];
 
+const toolKeyByHref: Record<string, string> = {
+  "/dashboard": "dashboard",
+  "/imoveis": "properties",
+  "/pessoas": "people",
+  "/contratos": "contracts",
+  "/financeiro": "financial",
+  "/contas-receber": "accountsReceivable",
+  "/contas-pagar": "accountsPayable",
+  "/agenda": "schedule",
+};
+
 const menuLinkPrefetch = process.env.NODE_ENV === "production" ? null : false;
-const mobileMenuItems = menuItems;
 let loadedSettingsCompanyId: string | null = null;
 
 const pixKeyTypeOptions: { label: string; value: PixKeyType }[] = [
@@ -528,6 +539,7 @@ function readThemeSettingsFromStorage(companyId?: string): ThemeSettings {
 
 export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, logout } = useAuth();
   const companyId = user?.companyId;
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -555,13 +567,32 @@ export default function AppShell({ children }: AppShellProps) {
 
   const userInitials = useMemo(() => getInitialLetters(userSettings.name), [userSettings.name]);
   const visibleMenuItems = useMemo(
-    () =>
-      isSystemOwnerRole(user?.role)
-        ? [...menuItems, ...systemOwnerMenuItems]
-        : menuItems,
-    [user?.role],
+    () => {
+      const allowedMenuItems = menuItems.filter((item) =>
+        canAccessTool(user?.role, user?.permissions, toolKeyByHref[item.href]),
+      );
+
+      return isSystemOwnerRole(user?.role)
+        ? [...allowedMenuItems, ...systemOwnerMenuItems]
+        : allowedMenuItems;
+    },
+    [user?.permissions, user?.role],
   );
   const isSystemOwner = isSystemOwnerRole(user?.role);
+
+  useEffect(() => {
+    const currentToolKey = toolKeyByHref[pathname];
+
+    if (!currentToolKey) {
+      return;
+    }
+
+    if (canAccessTool(user?.role, user?.permissions, currentToolKey)) {
+      return;
+    }
+
+    router.replace(visibleMenuItems[0]?.href || "/configuracoes");
+  }, [pathname, router, user?.permissions, user?.role, visibleMenuItems]);
 
   const loadSettingsFromLocalStorage = useCallback(() => {
     const storedUserSettings = getCompanyStorageItem(
@@ -877,16 +908,38 @@ export default function AppShell({ children }: AppShellProps) {
   }
 
   const isSidebarOpen = isSidebarExpanded || isSidebarLocked;
+  const shellThemeClass =
+    themeSettings.mode === "black"
+      ? "dark bg-slate-950 text-slate-100"
+      : themeSettings.mode === "graphite"
+        ? "dark bg-zinc-900 text-zinc-100"
+        : "bg-[#f8fafc] text-slate-900";
+  const darkSurfaceClass =
+    themeSettings.mode === "black"
+      ? "border-slate-700 bg-slate-900 shadow-black/40"
+      : "border-zinc-700 bg-zinc-800 shadow-black/30";
+  const darkInsetSurfaceClass =
+    themeSettings.mode === "black"
+      ? "border border-slate-700 bg-slate-800"
+      : "border border-zinc-700 bg-zinc-900";
+  const darkMenuItemClass =
+    themeSettings.mode === "black"
+      ? "text-slate-200 hover:bg-slate-800 hover:text-orange-400"
+      : "text-zinc-200 hover:bg-zinc-700 hover:text-orange-300";
+  const darkMobileNavClass =
+    themeSettings.mode === "black"
+      ? "border-slate-800 bg-slate-950/95"
+      : "border-zinc-700 bg-zinc-900/95";
+  const darkMobileItemClass =
+    themeSettings.mode === "black"
+      ? "bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-orange-300"
+      : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-orange-300";
 
   return (
     <AuthGuard>
       <div
         data-contrx-theme={themeSettings.mode}
-        className={`min-h-screen lg:flex ${
-          themeSettings.mode !== "light"
-            ? "dark bg-slate-950 text-slate-100"
-            : "bg-[#f8fafc] text-slate-900"
-        }`}
+        className={`min-h-screen lg:flex ${shellThemeClass}`}
       >
         <style>{contrxThemeStyle}</style>
         {isMobileSidebarOpen && (
@@ -1042,28 +1095,28 @@ export default function AppShell({ children }: AppShellProps) {
               {isUserMenuOpen && (
                 <div
                   className={`absolute right-0 top-14 z-50 w-[calc(100vw-1rem)] max-w-72 rounded-3xl border p-3 shadow-2xl transition lg:top-16 ${
-                    themeSettings.mode === "black"
-                      ? "border-slate-700 bg-slate-900 shadow-black/40"
+                    themeSettings.mode !== "light"
+                      ? darkSurfaceClass
                       : "border-orange-100 bg-white shadow-xl"
                   }`}
                 >
                   <div
                     className={`mb-2 rounded-2xl px-4 py-3 ${
-                      themeSettings.mode === "black"
-                        ? "border border-slate-700 bg-slate-800"
+                      themeSettings.mode !== "light"
+                        ? darkInsetSurfaceClass
                         : "bg-orange-50"
                     }`}
                   >
                     <p
                       className={`text-sm font-black ${
-                        themeSettings.mode === "black" ? "text-white" : "text-slate-900"
+                        themeSettings.mode !== "light" ? "text-white" : "text-slate-900"
                       }`}
                     >
                       {userSettings.name}
                     </p>
                     <p
                       className={`text-xs ${
-                        themeSettings.mode === "black" ? "text-slate-400" : "text-slate-500"
+                        themeSettings.mode !== "light" ? "text-slate-400" : "text-slate-500"
                       }`}
                     >
                       {userSettings.email}
@@ -1075,8 +1128,8 @@ export default function AppShell({ children }: AppShellProps) {
                     prefetch={menuLinkPrefetch}
                     onClick={() => setIsUserMenuOpen(false)}
                     className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition ${
-                      themeSettings.mode === "black"
-                        ? "text-slate-200 hover:bg-slate-800 hover:text-orange-400"
+                      themeSettings.mode !== "light"
+                        ? darkMenuItemClass
                         : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
                     }`}
                   >
@@ -1087,7 +1140,7 @@ export default function AppShell({ children }: AppShellProps) {
                     type="button"
                     onClick={handleLogout}
                     className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition ${
-                      themeSettings.mode === "black"
+                      themeSettings.mode !== "light"
                         ? "text-red-300 hover:bg-red-950/40 hover:text-red-200"
                         : "text-slate-600 hover:bg-red-50 hover:text-red-600"
                     }`}
@@ -1104,15 +1157,15 @@ export default function AppShell({ children }: AppShellProps) {
           </main>
 
           <nav
-            className={`contrx-mobile-bottom-nav fixed inset-x-0 bottom-0 z-30 border-t px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 shadow-[0_-18px_45px_rgba(15,23,42,0.12)] backdrop-blur lg:hidden ${
-              themeSettings.mode === "black"
-                ? "border-slate-800 bg-slate-950/95"
+            className={`contrx-mobile-bottom-nav fixed inset-x-0 bottom-0 z-30 border-t px-2 pb-[calc(env(safe-area-inset-bottom)+0.45rem)] pt-1.5 shadow-[0_-18px_45px_rgba(15,23,42,0.12)] backdrop-blur lg:hidden ${
+              themeSettings.mode !== "light"
+                ? darkMobileNavClass
                 : "border-orange-100 bg-white/95"
             }`}
             aria-label="Navegação principal mobile"
           >
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {mobileMenuItems.map((item) => {
+            <div className="flex gap-1.5 overflow-x-auto pb-1">
+              {visibleMenuItems.map((item) => {
                 const isActive = isActiveRoute(item.href);
 
                 return (
@@ -1120,16 +1173,16 @@ export default function AppShell({ children }: AppShellProps) {
                     key={item.href}
                     href={item.href}
                     prefetch={menuLinkPrefetch}
-                    className={`flex min-w-[5.25rem] flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-black transition ${
+                    className={`flex min-w-[4.85rem] flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-black transition ${
                       isActive
                         ? "bg-orange-500 text-white shadow-md shadow-orange-100"
-                        : themeSettings.mode === "black"
-                          ? "bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-orange-300"
+                        : themeSettings.mode !== "light"
+                          ? darkMobileItemClass
                           : "bg-slate-50 text-slate-600 hover:bg-orange-50 hover:text-orange-600"
                     }`}
                   >
                     <span className="text-base leading-none">{item.icon}</span>
-                    <span className="max-w-[4.2rem] truncate">{item.label}</span>
+                    <span className="max-w-[4.6rem] text-center leading-tight">{item.label}</span>
                   </Link>
                 );
               })}
@@ -1139,7 +1192,7 @@ export default function AppShell({ children }: AppShellProps) {
 
         {isSettingsOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm">
-            <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
+            <div className="contrx-modal-panel flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
               <div className="border-b border-slate-100 bg-gradient-to-r from-orange-50 via-white to-white px-6 py-5 lg:px-8">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div>
@@ -1714,7 +1767,7 @@ export default function AppShell({ children }: AppShellProps) {
 
         {isResetModalOpen && isSystemOwner && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
-            <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-[2rem] border border-red-100 bg-white shadow-2xl">
+            <div className="contrx-modal-panel flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-[2rem] border border-red-100 bg-white shadow-2xl">
               <div className="border-b border-red-100 bg-gradient-to-r from-red-50 via-white to-white px-6 py-5">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-4">

@@ -4,8 +4,14 @@ const fs = require('fs');
 const path = require('path');
 const { Client } = require('pg');
 
+const databaseUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
+const isSupabaseConnection = databaseUrl?.includes('supabase.com');
+
 const client = new Client({
-  connectionString: process.env.DIRECT_URL || process.env.DATABASE_URL,
+  connectionString: isSupabaseConnection
+    ? databaseUrl.replace(/\?sslmode=require.*/, '')
+    : databaseUrl,
+  ssl: isSupabaseConnection ? { rejectUnauthorized: false } : undefined,
 });
 
 const migrationsDir = path.resolve(__dirname, '..', 'prisma', 'migrations');

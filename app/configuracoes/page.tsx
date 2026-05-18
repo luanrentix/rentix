@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { resetTestData, type ResetTestDataModule } from "@/services/admin.service";
 import { changePasswordRequest } from "@/services/auth";
+import {
+  createCompanyUser,
+  getCompanyUsers,
+  type CompanyUser,
+  type CompanyUserRole,
+  type UserToolPermission,
+} from "@/services/company-users.service";
 import {
   getCompanyStorageItem,
   removeCompanyStorageItem,
@@ -11,6 +19,7 @@ import {
 } from "@/services/company-storage";
 import { getAppSettings, saveAppSettings } from "@/services/settings.service";
 import { setCachedAppSettings } from "@/services/settings-cache";
+import { toolPermissionOptions } from "@/services/tool-permissions";
 
 type UserSettings = {
   name: string;
@@ -21,6 +30,14 @@ type PasswordSettings = {
   currentPassword: string;
   newPassword: string;
   confirmPassword: string;
+};
+
+type NewCompanyUserForm = {
+  name: string;
+  email: string;
+  password: string;
+  role: CompanyUserRole;
+  permissions: UserToolPermission[];
 };
 
 type SettingsValidationErrorKey =
@@ -82,7 +99,11 @@ type ThemeSettings = {
   mode: ThemeMode;
 };
 
-type PrintDocumentKey = "temporaryContract" | "standardContract" | "paymentBooklet";
+type PrintDocumentKey =
+  | "temporaryContract"
+  | "standardContract"
+  | "paymentBooklet"
+  | "accountsPayableReport";
 
 type PrintModalMode = "view" | "edit";
 type PrintEditorViewMode = "split" | "editor" | "preview";
@@ -109,13 +130,7 @@ type RestorePrintModalState = {
   documentKey: PrintDocumentKey | null;
 };
 
-type ResetModuleKey =
-  | "properties"
-  | "people"
-  | "contracts"
-  | "accountsReceivable"
-  | "accountsPayable"
-  | "schedule";
+type ResetModuleKey = ResetTestDataModule;
 
 type ResetOptions = Record<ResetModuleKey, boolean>;
 
@@ -126,6 +141,19 @@ type ResetModuleOption = {
   icon: string;
   storageKeys: string[];
 };
+
+function canResetTestDataRole(role?: string | null) {
+  return role === "SYSTEM_OWNER" || role === "DONO_SISTEMA";
+}
+
+function isCompanyAdminRole(role?: string | null) {
+  return (
+    role === "ADMIN" ||
+    role === "OWNER" ||
+    role === "SYSTEM_OWNER" ||
+    role === "DONO_SISTEMA"
+  );
+}
 
 const pixKeyTypeOptions: { label: string; value: PixKeyType }[] = [
   { label: "CPF", value: "cpf" },
@@ -182,6 +210,13 @@ const resetModuleOptions: ResetModuleOption[] = [
     icon: "📅",
     storageKeys: [],
   },
+  {
+    key: "masterPanel",
+    label: "Painel master",
+    description: "Remove usuarios do painel master, preservando adm@contrx.com e donos do sistema.",
+    icon: "🛡️",
+    storageKeys: [],
+  },
 ];
 
 const defaultResetOptions: ResetOptions = {
@@ -191,6 +226,7 @@ const defaultResetOptions: ResetOptions = {
   accountsReceivable: false,
   accountsPayable: false,
   schedule: false,
+  masterPanel: false,
 };
 
 const defaultUserSettings: UserSettings = {
@@ -202,6 +238,29 @@ const defaultPasswordSettings: PasswordSettings = {
   currentPassword: "",
   newPassword: "",
   confirmPassword: "",
+};
+
+const companyUserRoleOptions: { label: string; value: CompanyUserRole }[] = [
+  { label: "Administrador", value: "ADMIN" },
+  { label: "Gerente", value: "MANAGER" },
+  { label: "Usuário", value: "USER" },
+  { label: "Dono da empresa", value: "OWNER" },
+];
+
+const roleLabels: Record<string, string> = {
+  SYSTEM_OWNER: "Dono do sistema",
+  OWNER: "Dono da empresa",
+  ADMIN: "Administrador",
+  MANAGER: "Gerente",
+  USER: "Usuário",
+};
+
+const defaultNewCompanyUserForm: NewCompanyUserForm = {
+  name: "",
+  email: "",
+  password: "",
+  role: "USER",
+  permissions: ["dashboard"],
 };
 
 const defaultCompanySettings: CompanySettings = {
@@ -483,6 +542,23 @@ const defaultPaymentBookletTemplateContent = `1. Efetue o pagamento até a data 
 2. Após o vencimento, poderão ser aplicados multa e juros conforme contrato.
 3. Guarde este comprovante para controle financeiro.`;
 
+const defaultAccountsPayableReportTemplateContent = `RELATÓRIO DE CONTAS A PAGAR
+
+EMPRESA: {companyName}
+CATEGORIA: {reportCategory}
+STATUS: {reportStatus}
+VENCIMENTO: {reportDueFilter}
+PERÍODO: {reportStartDate} até {reportEndDate}
+
+RESUMO:
+Quantidade: {reportCount}
+Total geral: {reportTotal}
+Total pago: {reportPaidTotal}
+Total pendente: {reportPendingTotal}
+Total vencido: {reportOverdueTotal}
+
+GERADO EM: {currentDate}`;
+
 const defaultPrintTemplates: PrintTemplates = {
   temporaryContract: {
     title: "Contrato temporário",
@@ -506,7 +582,15 @@ const defaultPrintTemplates: PrintTemplates = {
     moduleName: "Contas a receber",
     icon: "💳",
     isEditable: true,
-    content: defaultPaymentBookletTemplateContent,
+    content: legacyPaymentBookletTemplateContent,
+  },
+  accountsPayableReport: {
+    title: "Relatório contas a pagar",
+    description: "Cabeçalho e resumo usados no relatório impresso de contas a pagar.",
+    moduleName: "Contas a pagar",
+    icon: "CP",
+    isEditable: true,
+    content: defaultAccountsPayableReportTemplateContent,
   },
 };
 
@@ -571,6 +655,21 @@ const printTemplateVariableGroups = [
       { label: "Vencimento", value: "{dueDate}" },
     ],
   },
+  {
+    title: "Relatórios financeiros",
+    variables: [
+      { label: "Categoria", value: "{reportCategory}" },
+      { label: "Status", value: "{reportStatus}" },
+      { label: "Filtro vencimento", value: "{reportDueFilter}" },
+      { label: "Data inicial", value: "{reportStartDate}" },
+      { label: "Data final", value: "{reportEndDate}" },
+      { label: "Quantidade", value: "{reportCount}" },
+      { label: "Total geral", value: "{reportTotal}" },
+      { label: "Total pago", value: "{reportPaidTotal}" },
+      { label: "Total pendente", value: "{reportPendingTotal}" },
+      { label: "Total vencido", value: "{reportOverdueTotal}" },
+    ],
+  },
 ];
 
 function extractPaymentBookletInstructions(content: string) {
@@ -605,6 +704,10 @@ function normalizeStoredPrintTemplates(storedTemplates: Partial<PrintTemplates>)
     ...defaultPrintTemplates.paymentBooklet,
     ...(storedTemplates.paymentBooklet || {}),
   };
+  const accountsPayableReport = {
+    ...defaultPrintTemplates.accountsPayableReport,
+    ...(storedTemplates.accountsPayableReport || {}),
+  };
 
   if (temporaryContract.content.trim() === legacyTemporaryContractTemplateContent.trim()) {
     temporaryContract.content = defaultTemporaryContractTemplateContent;
@@ -614,16 +717,15 @@ function normalizeStoredPrintTemplates(storedTemplates: Partial<PrintTemplates>)
     standardContract.content = defaultStandardContractTemplateContent;
   }
 
-  if (paymentBooklet.content.trim() === legacyPaymentBookletTemplateContent.trim()) {
-    paymentBooklet.content = defaultPaymentBookletTemplateContent;
+  if (!paymentBooklet.content.trim()) {
+    paymentBooklet.content = legacyPaymentBookletTemplateContent;
   }
-
-  paymentBooklet.content = extractPaymentBookletInstructions(paymentBooklet.content);
 
   return {
     temporaryContract,
     standardContract,
     paymentBooklet,
+    accountsPayableReport,
   };
 }
 
@@ -933,7 +1035,18 @@ function renderPrintTemplatePreview(content: string, documentKey: PrintDocumentK
     contractCity: "Rolim de Moura/RO",
     currentDate: "02 de maio de 2026",
     contractDefaultNotes: "Observações adicionais do contrato aparecerão neste espaço.",
+    reportCategory: "Aluguel / fornecedor",
+    reportStatus: "Pendentes",
+    reportDueFilter: "Próximos vencimentos",
+    reportStartDate: "01/05/2026",
+    reportEndDate: "31/05/2026",
+    reportCount: "8",
+    reportTotal: "R$ 7.800,00",
+    reportPaidTotal: "R$ 2.100,00",
+    reportPendingTotal: "R$ 4.900,00",
+    reportOverdueTotal: "R$ 800,00",
   };
+
 
   let previewContent = content;
 
@@ -942,6 +1055,10 @@ function renderPrintTemplatePreview(content: string, documentKey: PrintDocumentK
   });
 
   if (documentKey === "paymentBooklet") {
+    if (/CARN/i.test(previewContent)) {
+      return previewContent;
+    }
+
     return `CARNÊ DE PAGAMENTO\n\nEMPRESA: ${previewValues.companyName}\nCLIENTE: ${previewValues.personName}\nCONTRATO: ${previewValues.contractNumber}\nPARCELA: ${previewValues.installmentNumber}\nVENCIMENTO: ${previewValues.dueDate}\nVALOR: ${previewValues.amount}\nPIX: ${previewValues.pixKey}\n\nINSTRUÇÕES:\n${previewContent}`;
   }
 
@@ -1126,14 +1243,21 @@ export default function ConfiguracoesPage() {
   const [isDocumentLookupLoading, setIsDocumentLookupLoading] = useState(false);
   const [isZipCodeLookupLoading, setIsZipCodeLookupLoading] = useState(false);
   const [isSaveConfirmModalOpen, setIsSaveConfirmModalOpen] = useState(false);
+  const [isCloseConfirmModalOpen, setIsCloseConfirmModalOpen] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [resetOptions, setResetOptions] = useState<ResetOptions>(defaultResetOptions);
-  const [resetConfirmationText, setResetConfirmationText] = useState("");
+  const [isResettingData, setIsResettingData] = useState(false);
   const [resetError, setResetError] = useState("");
+  const [companyUsers, setCompanyUsers] = useState<CompanyUser[]>([]);
+  const [newCompanyUserForm, setNewCompanyUserForm] = useState<NewCompanyUserForm>(defaultNewCompanyUserForm);
+  const [isLoadingCompanyUsers, setIsLoadingCompanyUsers] = useState(false);
+  const [isCreatingCompanyUser, setIsCreatingCompanyUser] = useState(false);
+  const [companyUserError, setCompanyUserError] = useState("");
   const printTemplateTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const userInitials = useMemo(() => getInitialLetters(userSettings.name), [userSettings.name]);
-  const isSystemOwner = user?.role === "SYSTEM_OWNER";
+  const canResetTestData = canResetTestDataRole(user?.role);
+  const canManageCompanyUsers = isCompanyAdminRole(user?.role);
 
   const selectedPrintTemplate = printModalState.documentKey
     ? printTemplates[printModalState.documentKey]
@@ -1257,6 +1381,31 @@ export default function ConfiguracoesPage() {
     loadSettings(companyId);
   }, [companyId, loadSettings, loadSettingsFromLocalStorage]);
 
+  const loadCompanyUsers = useCallback(async () => {
+    if (!canManageCompanyUsers) {
+      setCompanyUsers([]);
+      return;
+    }
+
+    try {
+      setIsLoadingCompanyUsers(true);
+      setCompanyUserError("");
+      setCompanyUsers(await getCompanyUsers());
+    } catch (error) {
+      setCompanyUserError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível carregar os usuários da empresa.",
+      );
+    } finally {
+      setIsLoadingCompanyUsers(false);
+    }
+  }, [canManageCompanyUsers]);
+
+  useEffect(() => {
+    loadCompanyUsers();
+  }, [loadCompanyUsers]);
+
   useEffect(() => {
     const isDarkMode = themeSettings.mode !== "light";
 
@@ -1267,12 +1416,11 @@ export default function ConfiguracoesPage() {
   }, [themeSettings.mode]);
 
   function handleOpenResetModal() {
-    if (!isSystemOwner) {
+    if (!canResetTestData) {
       return;
     }
 
     setResetOptions(defaultResetOptions);
-    setResetConfirmationText("");
     setResetError("");
     setIsResetModalOpen(true);
   }
@@ -1280,7 +1428,6 @@ export default function ConfiguracoesPage() {
   function handleCloseResetModal() {
     setIsResetModalOpen(false);
     setResetOptions(defaultResetOptions);
-    setResetConfirmationText("");
     setResetError("");
   }
 
@@ -1309,8 +1456,8 @@ export default function ConfiguracoesPage() {
     setResetOptions(defaultResetOptions);
   }
 
-  function handleConfirmResetData() {
-    if (!isSystemOwner) {
+  async function handleConfirmResetData() {
+    if (!canResetTestData) {
       setResetError("Acesso restrito ao dono do sistema.");
       return;
     }
@@ -1324,19 +1471,95 @@ export default function ConfiguracoesPage() {
       return;
     }
 
-    if (resetConfirmationText.trim().toUpperCase() !== "CONFIRMAR") {
-      setResetError('Digite "CONFIRMAR" para liberar a limpeza dos dados selecionados.');
+    setIsResettingData(true);
+    setResetError("");
+
+    try {
+      await resetTestData(selectedModules.map((option) => option.key));
+
+      selectedModules.forEach((moduleOption) => {
+        moduleOption.storageKeys.forEach((storageKey) => {
+          removeCompanyStorageItem(companyId, storageKey);
+        });
+      });
+
+      handleCloseResetModal();
+      window.location.reload();
+    } catch (error) {
+      setResetError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível resetar os dados de teste agora.",
+      );
+    } finally {
+      setIsResettingData(false);
+    }
+  }
+
+  function handleToggleCompanyUserPermission(permission: UserToolPermission) {
+    setCompanyUserError("");
+    setNewCompanyUserForm((currentForm) => {
+      const currentPermissions = new Set(currentForm.permissions);
+
+      if (currentPermissions.has(permission)) {
+        currentPermissions.delete(permission);
+      } else {
+        currentPermissions.add(permission);
+      }
+
+      return {
+        ...currentForm,
+        permissions: Array.from(currentPermissions),
+      };
+    });
+  }
+
+  async function handleCreateCompanyUser() {
+    if (!canManageCompanyUsers) {
+      setCompanyUserError("Acesso restrito ao administrador.");
       return;
     }
 
-    selectedModules.forEach((moduleOption) => {
-      moduleOption.storageKeys.forEach((storageKey) => {
-        removeCompanyStorageItem(companyId, storageKey);
-      });
-    });
+    const name = newCompanyUserForm.name.trim();
+    const email = newCompanyUserForm.email.trim().toLowerCase();
 
-    handleCloseResetModal();
-    window.location.reload();
+    if (!name || !email || !newCompanyUserForm.password) {
+      setCompanyUserError("Preencha nome, e-mail e senha do novo usuário.");
+      return;
+    }
+
+    if (newCompanyUserForm.password.length < 6) {
+      setCompanyUserError("A senha precisa ter pelo menos 6 caracteres.");
+      return;
+    }
+
+    if (newCompanyUserForm.permissions.length === 0) {
+      setCompanyUserError("Selecione pelo menos uma ferramenta para o usuário.");
+      return;
+    }
+
+    try {
+      setIsCreatingCompanyUser(true);
+      setCompanyUserError("");
+
+      await createCompanyUser({
+        ...newCompanyUserForm,
+        name,
+        email,
+      });
+
+      setNewCompanyUserForm(defaultNewCompanyUserForm);
+      await loadCompanyUsers();
+      setSuccessMessage("Usuário criado com sucesso.");
+    } catch (error) {
+      setCompanyUserError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível criar o usuário agora.",
+      );
+    } finally {
+      setIsCreatingCompanyUser(false);
+    }
   }
 
   async function handleSearchCompanyDocument() {
@@ -1566,6 +1789,69 @@ export default function ConfiguracoesPage() {
     });
   }
 
+  function updateSelectedPrintTemplateText(
+    transformSelection: (selectedText: string) => string,
+    fallbackText = "",
+  ) {
+    if (!printModalState.documentKey) return;
+
+    const textareaElement = printTemplateTextareaRef.current;
+    const currentContent = selectedPrintTemplate?.content || "";
+    const startPosition = textareaElement?.selectionStart ?? currentContent.length;
+    const endPosition = textareaElement?.selectionEnd ?? currentContent.length;
+    const selectedText = currentContent.slice(startPosition, endPosition) || fallbackText;
+    const nextSelectedText = transformSelection(selectedText);
+    const nextContent = `${currentContent.slice(0, startPosition)}${nextSelectedText}${currentContent.slice(endPosition)}`;
+    const nextCursorPosition = startPosition + nextSelectedText.length;
+
+    handleUpdatePrintTemplateContent(printModalState.documentKey, nextContent);
+
+    window.requestAnimationFrame(() => {
+      if (!printTemplateTextareaRef.current) return;
+
+      printTemplateTextareaRef.current.focus();
+      printTemplateTextareaRef.current.setSelectionRange(nextCursorPosition, nextCursorPosition);
+    });
+  }
+
+  function insertPrintTemplateBlock(blockContent: string) {
+    updateSelectedPrintTemplateText(
+      (selectedText) => `${selectedText ? `${selectedText}\n\n` : ""}${blockContent}`,
+      blockContent,
+    );
+  }
+
+  function handlePrintEditorAction(action: "title" | "uppercase" | "numbered" | "signature" | "pageBreak") {
+    if (action === "title") {
+      updateSelectedPrintTemplateText(
+        (selectedText) => selectedText.toUpperCase(),
+        "NOVO TÍTULO",
+      );
+      return;
+    }
+
+    if (action === "uppercase") {
+      updateSelectedPrintTemplateText((selectedText) => selectedText.toUpperCase());
+      return;
+    }
+
+    if (action === "numbered") {
+      updateSelectedPrintTemplateText((selectedText) => {
+        const lines = selectedText.split(/\r\n|\r|\n/).filter((line) => line.trim());
+
+        return lines.map((line, index) => `${index + 1}. ${line.trim()}`).join("\n");
+      }, "1. Novo item");
+      return;
+    }
+
+    if (action === "signature") {
+      insertPrintTemplateBlock("__________________________________\n{tenantName}\n\n__________________________________\n{landlordName}");
+      return;
+    }
+
+    insertPrintTemplateBlock("\n\n--- QUEBRA DE PÁGINA ---\n\n");
+  }
+
   function handleOpenRestorePrintModal(documentKey: PrintDocumentKey) {
     setRestorePrintModalState({
       isOpen: true,
@@ -1600,6 +1886,15 @@ export default function ConfiguracoesPage() {
   }
 
   function handleBackToDashboard() {
+    setIsCloseConfirmModalOpen(true);
+  }
+
+  function handleCloseExitConfirmation() {
+    setIsCloseConfirmModalOpen(false);
+  }
+
+  function handleConfirmExitSettings() {
+    setIsCloseConfirmModalOpen(false);
     router.push("/dashboard");
   }
 
@@ -1693,17 +1988,32 @@ export default function ConfiguracoesPage() {
   return (
     <div
       data-contrx-theme={themeSettings.mode}
-      className="min-h-screen bg-slate-100 px-4 py-6 sm:px-6 lg:px-8"
+      className={`min-h-screen px-3 py-3 sm:px-6 sm:py-6 lg:px-8 ${
+        themeSettings.mode === "graphite"
+          ? "bg-zinc-900 text-zinc-100"
+          : themeSettings.mode === "black"
+            ? "bg-slate-950 text-slate-100"
+            : "bg-slate-100"
+      }`}
     >
       <style>{contrxThemeStyle}</style>
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="rounded-[2rem] border border-orange-100 bg-white shadow-sm">
-          <div className="border-b border-slate-100 bg-gradient-to-r from-orange-50 via-white to-white px-6 py-5 lg:px-8">
+          <div className="relative border-b border-slate-100 bg-gradient-to-r from-orange-50 via-white to-white px-4 py-4 pr-16 sm:px-6 sm:py-5 sm:pr-20 lg:px-8 lg:pr-24">
+            <button
+              type="button"
+              onClick={handleBackToDashboard}
+              className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-base font-black text-slate-500 shadow-sm transition hover:bg-orange-50 hover:text-orange-600 sm:right-6 sm:top-5 sm:h-11 sm:w-11 lg:right-8"
+              aria-label="Fechar configurações"
+              title="Fechar configurações"
+            >
+              X
+            </button>
             <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-orange-100 px-3 py-1 text-xs font-black uppercase tracking-wide text-orange-700">
-              ⚙️ Central de configuração
+              ⚙ Central de configuração
             </div>
 
-            <h1 className="text-2xl font-black text-slate-950">
+            <h1 className="text-xl font-black leading-tight text-slate-950 sm:text-2xl">
               Configurações do Contrx
             </h1>
 
@@ -1713,7 +2023,7 @@ export default function ConfiguracoesPage() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr]">
-            <aside className="flex flex-col border-b border-slate-100 bg-slate-50 p-4 lg:border-b-0 lg:border-r">
+            <aside className="flex flex-col border-b border-slate-100 bg-slate-50 p-3 sm:p-4 lg:border-b-0 lg:border-r">
               <div className="rounded-3xl bg-white p-4 shadow-sm">
                 <div className="flex items-center gap-3">
                   <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 text-xl font-black text-white">
@@ -1738,11 +2048,11 @@ export default function ConfiguracoesPage() {
                 </div>
               </div>
 
-              <div className="mt-4 space-y-2">
+              <div className="contrx-mobile-scroll-tabs mt-4 space-y-0 lg:block lg:space-y-2">
                 <button
                   type="button"
                   onClick={() => setActiveSettingsTab("company")}
-                  className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-black transition ${
+                  className={`flex w-full items-center justify-center gap-2 rounded-2xl px-3 py-3 text-center text-sm font-black transition lg:justify-start lg:gap-3 lg:px-4 lg:text-left ${
                     activeSettingsTab === "company"
                       ? "bg-orange-500 text-white shadow-md shadow-orange-100"
                       : "bg-white text-slate-600 hover:bg-orange-50 hover:text-orange-600"
@@ -1754,52 +2064,52 @@ export default function ConfiguracoesPage() {
                 <button
                   type="button"
                   onClick={() => setActiveSettingsTab("user")}
-                  className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-black transition ${
+                  className={`flex w-full items-center justify-center gap-2 rounded-2xl px-3 py-3 text-center text-sm font-black transition lg:justify-start lg:gap-3 lg:px-4 lg:text-left ${
                     activeSettingsTab === "user"
                       ? "bg-orange-500 text-white shadow-md shadow-orange-100"
                       : "bg-white text-slate-600 hover:bg-orange-50 hover:text-orange-600"
                   }`}
                 >
-                  👤 Dados do usuário
+                  Dados do usuário
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setActiveSettingsTab("print")}
-                  className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-black transition ${
+                  className={`flex w-full items-center justify-center gap-2 rounded-2xl px-3 py-3 text-center text-sm font-black transition lg:justify-start lg:gap-3 lg:px-4 lg:text-left ${
                     activeSettingsTab === "print"
                       ? "bg-orange-500 text-white shadow-md shadow-orange-100"
                       : "bg-white text-slate-600 hover:bg-orange-50 hover:text-orange-600"
                   }`}
                 >
-                  🖨️ Impresso
+                  Impressos
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setActiveSettingsTab("appearance")}
-                  className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-black transition ${
+                  className={`flex w-full items-center justify-center gap-2 rounded-2xl px-3 py-3 text-center text-sm font-black transition lg:justify-start lg:gap-3 lg:px-4 lg:text-left ${
                     activeSettingsTab === "appearance"
                       ? "bg-orange-500 text-white shadow-md shadow-orange-100"
                       : "bg-white text-slate-600 hover:bg-orange-50 hover:text-orange-600"
                   }`}
                 >
-                  🎨 Aparência
+                  Aparência
                 </button>
               </div>
 
-              {isSystemOwner && (
+              {canResetTestData && (
                 <button
                   type="button"
                   onClick={handleOpenResetModal}
                   className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600 lg:mt-auto"
                 >
-                  🗑️ Resetar dados de teste
+                  Resetar dados de teste
                 </button>
               )}
             </aside>
 
-            <section className="p-5 lg:p-8">
+            <section className="p-4 sm:p-5 lg:p-8">
               {successMessage && (
                 <div className="mb-5 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
                   {successMessage}
@@ -2224,6 +2534,7 @@ export default function ConfiguracoesPage() {
                       </label>
                     </div>
                   </div>
+
                 </div>
               )}
 
@@ -2238,7 +2549,7 @@ export default function ConfiguracoesPage() {
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <label className="space-y-2">
                       <span className="text-xs font-black uppercase tracking-wide text-slate-500">
                         Nome *
@@ -2354,6 +2665,161 @@ export default function ConfiguracoesPage() {
                       </label>
                     </div>
                   </div>
+
+                  {canManageCompanyUsers && (
+                    <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+                      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <h3 className="text-sm font-black uppercase tracking-wide text-slate-600">
+                            Usuários da empresa
+                          </h3>
+                          <p className="mt-1 text-sm font-medium text-slate-500">
+                            Cadastre novos usuários vinculados somente a esta empresa.
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={loadCompanyUsers}
+                          disabled={isLoadingCompanyUsers}
+                          className="rounded-2xl bg-slate-100 px-4 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isLoadingCompanyUsers ? "Atualizando..." : "Atualizar lista"}
+                        </button>
+                      </div>
+
+                      {companyUserError && (
+                        <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                          {companyUserError}
+                        </div>
+                      )}
+
+                      <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                        <label className="space-y-2">
+                          <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                            Nome do novo usuário
+                          </span>
+                          <input
+                            type="text"
+                            value={newCompanyUserForm.name}
+                            onChange={(event) =>
+                              setNewCompanyUserForm({
+                                ...newCompanyUserForm,
+                                name: event.target.value,
+                              })
+                            }
+                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                          />
+                        </label>
+
+                        <label className="space-y-2">
+                          <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                            E-mail de acesso
+                          </span>
+                          <input
+                            type="email"
+                            value={newCompanyUserForm.email}
+                            onChange={(event) =>
+                              setNewCompanyUserForm({
+                                ...newCompanyUserForm,
+                                email: event.target.value,
+                              })
+                            }
+                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                          />
+                        </label>
+
+                        <label className="space-y-2">
+                          <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                            Senha temporária
+                          </span>
+                          <input
+                            type="password"
+                            value={newCompanyUserForm.password}
+                            onChange={(event) =>
+                              setNewCompanyUserForm({
+                                ...newCompanyUserForm,
+                                password: event.target.value,
+                              })
+                            }
+                            placeholder="Mínimo 6 caracteres"
+                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                          />
+                        </label>
+
+                        <label className="space-y-2">
+                          <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                            Perfil
+                          </span>
+                          <select
+                            value={newCompanyUserForm.role}
+                            onChange={(event) =>
+                              setNewCompanyUserForm({
+                                ...newCompanyUserForm,
+                                role: event.target.value as CompanyUserRole,
+                              })
+                            }
+                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                          >
+                            {companyUserRoleOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+
+                      <div className="mt-5">
+                        <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                          Ferramentas disponíveis
+                        </p>
+                        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                          {toolPermissionOptions.map((tool) => {
+                            const isSelected = newCompanyUserForm.permissions.includes(tool.key);
+
+                            return (
+                              <button
+                                key={tool.key}
+                                type="button"
+                                onClick={() => handleToggleCompanyUserPermission(tool.key)}
+                                className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-sm font-black transition ${
+                                  isSelected
+                                    ? "border-orange-300 bg-orange-50 text-orange-800"
+                                    : "border-slate-200 bg-white text-slate-600 hover:border-orange-200 hover:bg-orange-50/40"
+                                }`}
+                              >
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <span>{tool.icon}</span>
+                                  <span className="truncate">{tool.label}</span>
+                                </span>
+                                <span
+                                  className={`flex h-5 w-5 items-center justify-center rounded-md border text-xs ${
+                                    isSelected
+                                      ? "border-orange-500 bg-orange-500 text-white"
+                                      : "border-slate-300 text-transparent"
+                                  }`}
+                                >
+                                  ✓
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="mt-5 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={handleCreateCompanyUser}
+                          disabled={isCreatingCompanyUser}
+                          className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isCreatingCompanyUser ? "Criando..." : "Criar usuário"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2372,7 +2838,7 @@ export default function ConfiguracoesPage() {
                     <button
                       type="button"
                       onClick={() => setThemeSettings({ mode: "light" })}
-                      className={`rounded-3xl border p-5 text-left transition ${
+                      className={`contrx-theme-choice rounded-3xl border p-5 text-left transition ${
                         themeSettings.mode === "light"
                           ? "border-orange-300 bg-orange-50 shadow-md shadow-orange-100"
                           : "border-slate-200 bg-white hover:border-orange-200 hover:bg-orange-50/40"
@@ -2380,8 +2846,8 @@ export default function ConfiguracoesPage() {
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl">
-                            ☀️
+                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-sm font-black text-orange-700">
+                            Claro
                           </div>
                           <h3 className="mt-4 text-lg font-black text-slate-950">
                             Tema claro
@@ -2404,7 +2870,7 @@ export default function ConfiguracoesPage() {
                     <button
                       type="button"
                       onClick={() => setThemeSettings({ mode: "black" })}
-                      className={`rounded-3xl border p-5 text-left transition ${
+                      className={`contrx-theme-choice rounded-3xl border p-5 text-left transition ${
                         themeSettings.mode === "black"
                           ? "border-orange-400 bg-slate-950 shadow-md shadow-orange-950/30"
                           : "border-slate-200 bg-white hover:border-orange-200 hover:bg-orange-50/40"
@@ -2412,8 +2878,8 @@ export default function ConfiguracoesPage() {
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-2xl ring-1 ring-orange-500/40">
-                            🌙
+                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-sm font-black text-orange-300 ring-1 ring-orange-500/40">
+                            Black
                           </div>
                           <h3 className={`mt-4 text-lg font-black ${themeSettings.mode === "black" ? "text-white" : "text-slate-950"}`}>
                             Tema black
@@ -2436,7 +2902,7 @@ export default function ConfiguracoesPage() {
                     <button
                       type="button"
                       onClick={() => setThemeSettings({ mode: "graphite" })}
-                      className={`rounded-3xl border p-5 text-left transition ${
+                      className={`contrx-theme-choice rounded-3xl border p-5 text-left transition ${
                         themeSettings.mode === "graphite"
                           ? "border-orange-300 bg-zinc-800 shadow-md shadow-zinc-950/30"
                           : "border-slate-200 bg-white hover:border-orange-200 hover:bg-orange-50/40"
@@ -2612,16 +3078,16 @@ export default function ConfiguracoesPage() {
             </section>
           </div>
 
-          <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white px-6 py-5 sm:flex-row sm:items-center sm:justify-between lg:px-8">
+          <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-5 lg:px-8">
             <p className="text-xs font-semibold text-slate-400">
               As configurações serão mantidas no navegador até integração com backend.
             </p>
 
-            <div className="flex justify-end gap-3">
+            <div className="contrx-mobile-actions flex justify-end gap-3">
               <button
                 type="button"
                 onClick={handleBackToDashboard}
-                className="rounded-2xl bg-slate-100 px-6 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200 sm:px-6"
               >
                 Voltar
               </button>
@@ -2629,7 +3095,7 @@ export default function ConfiguracoesPage() {
               <button
                 type="button"
                 onClick={handleOpenSaveConfirmModal}
-                className="rounded-2xl bg-orange-500 px-6 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 sm:px-6"
               >
                 Salvar configurações
               </button>
@@ -2639,11 +3105,11 @@ export default function ConfiguracoesPage() {
 
         {isSaveConfirmModalOpen && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
-            <div className="w-full max-w-lg overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
+            <div className="contrx-modal-panel w-full max-w-lg overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
               <div className="bg-gradient-to-r from-orange-50 via-white to-white px-6 py-6">
                 <div className="flex flex-col items-center text-center">
                   <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-100 text-3xl">
-                    ⚙️
+                    ⚙
                   </div>
 
                   <h2 className="mt-4 text-2xl font-black text-slate-950">
@@ -2705,9 +3171,72 @@ export default function ConfiguracoesPage() {
           </div>
         )}
 
+        {isCloseConfirmModalOpen && (
+          <div className="fixed inset-0 z-[75] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+            <div className="contrx-modal-panel w-full max-w-lg overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
+              <div className="bg-gradient-to-r from-orange-50 via-white to-white px-6 py-6">
+                <div className="flex flex-col items-center text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-100 text-3xl">
+                    X
+                  </div>
+
+                  <h2 className="mt-4 text-2xl font-black text-slate-950">
+                    Fechar configurações?
+                  </h2>
+
+                  <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
+                    {saveChangeSummary.length > 0
+                      ? "Existem alterações que ainda não foram salvas. Se sair agora, elas serão descartadas."
+                      : "Você será redirecionado para o Dashboard."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-100 bg-white px-6 py-5">
+                {saveChangeSummary.length > 0 && (
+                  <div className="rounded-3xl border border-orange-100 bg-orange-50 px-4 py-4">
+                    <p className="text-xs font-black uppercase tracking-wide text-orange-700">
+                      Alterações pendentes
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {saveChangeSummary.map((summaryItem) => (
+                        <div
+                          key={summaryItem}
+                          className="flex items-start gap-2 rounded-2xl bg-white px-3 py-2 text-xs font-bold text-slate-600"
+                        >
+                          <span className="mt-0.5 text-orange-600">!</span>
+                          <span>{summaryItem}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={handleCloseExitConfirmation}
+                    className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                  >
+                    Continuar editando
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleConfirmExitSettings}
+                    className="rounded-2xl bg-orange-500 px-6 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                  >
+                    {saveChangeSummary.length > 0 ? "Sair sem salvar" : "Fechar"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {printModalState.isOpen && selectedPrintTemplate && printModalState.documentKey && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
-            <div className="flex max-h-[96vh] w-full max-w-[96vw] flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
+            <div className="contrx-modal-panel flex max-h-[96vh] w-full max-w-[96vw] flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
               <div className="border-b border-slate-100 bg-gradient-to-r from-orange-50 via-white to-white px-6 py-5">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-4">
@@ -2733,7 +3262,7 @@ export default function ConfiguracoesPage() {
                     className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-xl font-black text-slate-500 shadow-sm transition hover:bg-orange-50 hover:text-orange-600"
                     aria-label="Fechar impresso"
                   >
-                    ×
+                    X
                   </button>
                 </div>
               </div>
@@ -2888,6 +3417,52 @@ export default function ConfiguracoesPage() {
                         </div>
                       </div>
 
+                      <div className="flex flex-wrap items-center gap-2 rounded-3xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                        <button
+                          type="button"
+                          onClick={() => handlePrintEditorAction("title")}
+                          className="rounded-2xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+                          title="Transformar seleção em título"
+                        >
+                          Título
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handlePrintEditorAction("uppercase")}
+                          className="rounded-2xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+                          title="Maiúsculas"
+                        >
+                          AA
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handlePrintEditorAction("numbered")}
+                          className="rounded-2xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+                          title="Lista numerada"
+                        >
+                          1. Lista
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handlePrintEditorAction("signature")}
+                          className="rounded-2xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+                          title="Bloco de assinaturas"
+                        >
+                          Assinaturas
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handlePrintEditorAction("pageBreak")}
+                          className="rounded-2xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+                          title="Inserir marca de quebra de página"
+                        >
+                          Quebra
+                        </button>
+                        <span className="ml-auto rounded-full bg-orange-50 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-orange-700">
+                          selecione um trecho e aplique
+                        </span>
+                      </div>
+
                       <div className={`grid gap-3 ${printEditorViewMode === "split" ? "xl:grid-cols-[minmax(0,1fr)_420px]" : "grid-cols-1"}`}>
                         {printEditorViewMode !== "preview" && (
                           <textarea
@@ -2949,11 +3524,11 @@ export default function ConfiguracoesPage() {
 
         {restorePrintModalState.isOpen && selectedRestorePrintTemplate && (
           <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
-            <div className="w-full max-w-lg overflow-hidden rounded-[2rem] border border-red-100 bg-white shadow-2xl">
+            <div className="contrx-modal-panel w-full max-w-lg overflow-hidden rounded-[2rem] border border-red-100 bg-white shadow-2xl">
               <div className="bg-gradient-to-r from-red-50 via-white to-white px-6 py-6">
                 <div className="flex flex-col items-center text-center">
                   <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-red-100 text-3xl">
-                    ↩️
+                    ↩
                   </div>
 
                   <h2 className="mt-4 text-2xl font-black text-slate-950">
@@ -3001,14 +3576,14 @@ export default function ConfiguracoesPage() {
           </div>
         )}
 
-        {isResetModalOpen && isSystemOwner && (
+        {isResetModalOpen && canResetTestData && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
-            <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-[2rem] border border-red-100 bg-white shadow-2xl">
+            <div className="contrx-modal-panel flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-[2rem] border border-red-100 bg-white shadow-2xl">
               <div className="border-b border-red-100 bg-gradient-to-r from-red-50 via-white to-white px-6 py-5">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-4">
                     <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-red-100 text-2xl">
-                      🗑️
+                      Reset
                     </div>
                     <div>
                       <div className="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-black uppercase tracking-wide text-red-700">
@@ -3018,7 +3593,7 @@ export default function ConfiguracoesPage() {
                         Resetar dados de teste
                       </h2>
                       <p className="mt-1 text-sm font-medium leading-6 text-slate-500">
-                        Selecione os módulos que deseja limpar. Essa ação remove os dados locais do navegador e não pode ser desfeita.
+                        Selecione os módulos que deseja limpar. Essa ação remove os dados da empresa atual no banco e também limpa filtros locais do navegador.
                       </p>
                     </div>
                   </div>
@@ -3029,7 +3604,7 @@ export default function ConfiguracoesPage() {
                     className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-xl font-black text-slate-500 shadow-sm transition hover:bg-red-50 hover:text-red-600"
                     aria-label="Fechar reset de dados"
                   >
-                    ×
+                    X
                   </button>
                 </div>
               </div>
@@ -3109,26 +3684,6 @@ export default function ConfiguracoesPage() {
                   ))}
                 </div>
 
-                <div className="mt-5 rounded-3xl border border-amber-100 bg-amber-50 px-4 py-4">
-                  <p className="text-sm font-black text-amber-800">
-                    Confirmação obrigatória
-                  </p>
-                  <p className="mt-1 text-sm font-semibold leading-6 text-amber-700">
-                    Para evitar exclusão acidental, digite <strong>CONFIRMAR</strong> no campo abaixo.
-                  </p>
-
-                  <input
-                    type="text"
-                    value={resetConfirmationText}
-                    onChange={(event) => {
-                      setResetConfirmationText(event.target.value);
-                      setResetError("");
-                    }}
-                    placeholder="Digite CONFIRMAR"
-                    className="mt-3 w-full rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-black uppercase outline-none transition placeholder:normal-case placeholder:font-semibold focus:border-red-400 focus:ring-4 focus:ring-red-100"
-                  />
-                </div>
-
                 {resetError && (
                   <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
                     {resetError}
@@ -3140,6 +3695,7 @@ export default function ConfiguracoesPage() {
                 <button
                   type="button"
                   onClick={handleCloseResetModal}
+                  disabled={isResettingData}
                   className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
                 >
                   Cancelar
@@ -3148,9 +3704,10 @@ export default function ConfiguracoesPage() {
                 <button
                   type="button"
                   onClick={handleConfirmResetData}
-                  className="rounded-2xl bg-red-500 px-6 py-3 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600"
+                  disabled={isResettingData}
+                  className="rounded-2xl bg-red-500 px-6 py-3 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Confirmar limpeza
+                  {isResettingData ? "Limpando..." : "Confirmar limpeza"}
                 </button>
               </div>
             </div>

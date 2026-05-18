@@ -42,6 +42,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         name: true,
         email: true,
         role: true,
+        permissions: true,
         isActive: true,
       },
     });
@@ -58,6 +59,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       name: user.name,
       email: user.email,
       role: user.role,
+      permissions: user.permissions,
     };
   }
 }

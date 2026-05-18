@@ -17,6 +17,11 @@ import { RegisterDto } from './dto/registro.dto';
 import { LoginDto } from './dto/login.dto';
 import { CriarContaDto } from './dto/criar-conta.dto';
 import { AlterarSenhaDto } from './dto/alterar-senha.dto';
+import {
+  CriarUsuarioEmpresaDto,
+  userToolPermissions,
+  type UserToolPermission,
+} from './dto/criar-usuario-empresa.dto';
 import { UsuarioAutenticado } from './types/usuario-autenticado.type';
 
 const DATABASE_AUTH_ERROR_MESSAGE =
@@ -27,6 +32,18 @@ const DATABASE_CONNECTION_ERROR_MESSAGE =
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+function normalizePermissions(permissions: string[]) {
+  const allowedPermissions = new Set<string>(userToolPermissions);
+
+  return Array.from(
+    new Set(
+      permissions.filter((permission): permission is UserToolPermission =>
+        allowedPermissions.has(permission),
+      ),
+    ),
+  );
 }
 
 function isDatabaseAuthError(error: unknown): boolean {
@@ -151,6 +168,7 @@ export class AutenticacaoService {
         email: user.email,
         companyId: user.companyId,
         role: user.role,
+        permissions: user.permissions,
       },
     };
   }
@@ -207,6 +225,7 @@ export class AutenticacaoService {
             email,
             passwordHash,
             role: 'ADMIN',
+            permissions: [...userToolPermissions],
           },
         });
 
@@ -259,8 +278,86 @@ export class AutenticacaoService {
         email: user.email,
         companyId: user.companyId,
         role: user.role,
+        permissions: user.permissions,
       },
     };
+  }
+
+  async findCompanyUsers(user: UsuarioAutenticado) {
+    return this.prisma.user.findMany({
+      where: {
+        companyId: user.companyId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+        permissions: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async createCompanyUser(
+    user: UsuarioAutenticado,
+    data: CriarUsuarioEmpresaDto,
+  ) {
+    const name = data.name?.trim();
+    const email = normalizeEmail(data.email || '');
+    const password = data.password;
+    const permissions = normalizePermissions(data.permissions || []);
+
+    if (!name || !email || !password) {
+      throw new BadRequestException('Preencha nome, e-mail e senha.');
+    }
+
+    if (permissions.length === 0) {
+      throw new BadRequestException('Selecione ao menos uma ferramenta.');
+    }
+
+    const userExists = await this.prisma.user.findUnique({
+      where: {
+        email,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (userExists) {
+      throw new ConflictException('Este e-mail ja possui uma conta no Contrx.');
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const createdUser = await this.prisma.user.create({
+      data: {
+        companyId: user.companyId,
+        name,
+        email,
+        passwordHash,
+        role: data.role,
+        permissions,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+        permissions: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return createdUser;
   }
 
   async changePassword(user: UsuarioAutenticado, data: AlterarSenhaDto) {

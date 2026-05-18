@@ -4,4 +4,5 @@ export type UsuarioAutenticado = {
   name: string;
   email: string;
   role: string;
+  permissions?: unknown;
 };

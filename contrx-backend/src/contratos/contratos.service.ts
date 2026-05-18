@@ -111,10 +111,16 @@ export class ContratosService {
       );
     }
 
-    return this.prisma.contract.update({
-      where: { id },
-      data: this.buildUpdateData(updateContractDto),
-      include: this.defaultInclude,
+    return this.prisma.$transaction(async (tx) => {
+      const contract = await tx.contract.update({
+        where: { id },
+        data: this.buildUpdateData(updateContractDto),
+        include: this.defaultInclude,
+      });
+
+      await this.syncRelatedRecordsAfterContractChange(tx, contract);
+
+      return contract;
     });
   }
 
@@ -125,7 +131,7 @@ export class ContratosService {
     return this.prisma.$transaction(async (tx) => {
       await this.deletePendingReceivablesFromContract(tx, id, companyId);
 
-      return tx.contract.update({
+      const contract = await tx.contract.update({
         where: { id },
         data: {
           status: ContractStatus.CANCELED,
@@ -136,6 +142,10 @@ export class ContratosService {
         },
         include: this.defaultInclude,
       });
+
+      await this.cancelContractDueScheduleItem(tx, contract);
+
+      return contract;
     });
   }
 
@@ -146,7 +156,7 @@ export class ContratosService {
     return this.prisma.$transaction(async (tx) => {
       await this.deletePendingReceivablesFromContract(tx, id, companyId);
 
-      return tx.contract.update({
+      const contract = await tx.contract.update({
         where: { id },
         data: {
           status: ContractStatus.DELETED,
@@ -157,6 +167,10 @@ export class ContratosService {
         },
         include: this.defaultInclude,
       });
+
+      await this.cancelContractDueScheduleItem(tx, contract);
+
+      return contract;
     });
   }
 
@@ -167,7 +181,7 @@ export class ContratosService {
     return this.prisma.$transaction(async (tx) => {
       await this.deleteFuturePendingReceivablesFromContract(tx, id, companyId);
 
-      return tx.contract.update({
+      const contract = await tx.contract.update({
         where: { id },
         data: {
           status: ContractStatus.FINISHED,
@@ -179,6 +193,10 @@ export class ContratosService {
         },
         include: this.defaultInclude,
       });
+
+      await this.completeContractDueScheduleItem(tx, contract);
+
+      return contract;
     });
   }
 
@@ -226,6 +244,7 @@ export class ContratosService {
       });
 
       await this.syncOpenReceivablesFromContract(tx, renewedContract);
+      await this.upsertContractDueScheduleItem(tx, renewedContract);
 
       return renewedContract;
     });
@@ -417,6 +436,177 @@ export class ContratosService {
         }),
       ),
     );
+  }
+
+  private async syncRelatedRecordsAfterContractChange(
+    tx: Prisma.TransactionClient,
+    contract: Contract,
+  ) {
+    if (contract.status === ContractStatus.CANCELED) {
+      await this.deletePendingReceivablesFromContract(
+        tx,
+        contract.id,
+        contract.companyId,
+      );
+      await this.cancelContractDueScheduleItem(tx, contract);
+      return;
+    }
+
+    if (contract.status === ContractStatus.DELETED) {
+      await this.deletePendingReceivablesFromContract(
+        tx,
+        contract.id,
+        contract.companyId,
+      );
+      await this.cancelContractDueScheduleItem(tx, contract);
+      return;
+    }
+
+    if (contract.status === ContractStatus.FINISHED) {
+      await this.deleteFuturePendingReceivablesFromContract(
+        tx,
+        contract.id,
+        contract.companyId,
+      );
+      await this.completeContractDueScheduleItem(tx, contract);
+      return;
+    }
+
+    if (contract.status === ContractStatus.ACTIVE) {
+      await this.syncOpenReceivablesFromContract(tx, contract);
+      await this.upsertContractDueScheduleItem(tx, contract);
+    }
+  }
+
+  private getContractDueScheduleMarker(contractId: string) {
+    return `contract-due:${contractId}`;
+  }
+
+  private async findContractDueScheduleItem(
+    tx: Prisma.TransactionClient,
+    contract: Contract,
+  ) {
+    const scheduleMarker = this.getContractDueScheduleMarker(contract.id);
+
+    return tx.scheduleItem.findFirst({
+      where: {
+        companyId: contract.companyId,
+        OR: [
+          { notes: { contains: scheduleMarker } },
+          {
+            title: 'Vencimento de contrato',
+            type: 'Contrato',
+            customerName: contract.tenantName || '',
+            propertyName: contract.propertyName || '',
+          },
+        ],
+      },
+    });
+  }
+
+  private async upsertContractDueScheduleItem(
+    tx: Prisma.TransactionClient,
+    contract: Contract,
+  ) {
+    const existingScheduleItem = await this.findContractDueScheduleItem(
+      tx,
+      contract,
+    );
+    const scheduleMarker = this.getContractDueScheduleMarker(contract.id);
+    const notes = [
+      `Contrato: ${contract.id}`,
+      `Vencimento em ${this.formatDateForDisplay(contract.endDate)}`,
+      scheduleMarker,
+    ].join('\n');
+    const data = {
+      title: 'Vencimento de contrato',
+      customerName: contract.tenantName || 'Inquilino nao informado',
+      propertyName: contract.propertyName || 'Imovel nao informado',
+      date: contract.endDate,
+      time: existingScheduleItem?.time || '08:00',
+      type: 'Contrato',
+      status: 'scheduled',
+      priority: 'high',
+      responsibleName:
+        existingScheduleItem?.responsibleName || 'Administrativo',
+      reminder: existingScheduleItem?.reminder || '1 dia antes',
+      notes,
+    };
+
+    if (existingScheduleItem) {
+      await tx.scheduleItem.update({
+        where: { id: existingScheduleItem.id },
+        data,
+      });
+      return;
+    }
+
+    await tx.scheduleItem.create({
+      data: {
+        companyId: contract.companyId,
+        ...data,
+      },
+    });
+  }
+
+  private async cancelContractDueScheduleItem(
+    tx: Prisma.TransactionClient,
+    contract: Contract,
+  ) {
+    const existingScheduleItem = await this.findContractDueScheduleItem(
+      tx,
+      contract,
+    );
+
+    if (!existingScheduleItem || existingScheduleItem.status === 'canceled') {
+      return;
+    }
+
+    await tx.scheduleItem.update({
+      where: { id: existingScheduleItem.id },
+      data: {
+        status: 'canceled',
+        notes: this.appendScheduleNote(
+          existingScheduleItem.notes,
+          `Contrato ${contract.status === ContractStatus.DELETED ? 'excluido' : 'cancelado'} em ${this.formatDateForDisplay(new Date())}.`,
+        ),
+      },
+    });
+  }
+
+  private async completeContractDueScheduleItem(
+    tx: Prisma.TransactionClient,
+    contract: Contract,
+  ) {
+    const existingScheduleItem = await this.findContractDueScheduleItem(
+      tx,
+      contract,
+    );
+
+    if (!existingScheduleItem || existingScheduleItem.status === 'completed') {
+      return;
+    }
+
+    await tx.scheduleItem.update({
+      where: { id: existingScheduleItem.id },
+      data: {
+        status: 'completed',
+        notes: this.appendScheduleNote(
+          existingScheduleItem.notes,
+          `Contrato finalizado em ${this.formatDateForDisplay(new Date())}.`,
+        ),
+      },
+    });
+  }
+
+  private appendScheduleNote(currentNotes: string | null, nextNote: string) {
+    const cleanCurrentNotes = currentNotes?.trim() || '';
+
+    if (cleanCurrentNotes.includes(nextNote)) {
+      return cleanCurrentNotes;
+    }
+
+    return [cleanCurrentNotes, nextNote].filter(Boolean).join('\n');
   }
 
   private getContractReceivableSchedule(contract: Contract) {
@@ -678,6 +868,14 @@ export class ContratosService {
     const day = String(value.getDate()).padStart(2, '0');
 
     return `${year}-${month}-${day}`;
+  }
+
+  private formatDateForDisplay(value: Date) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+
+    return `${day}/${month}/${year}`;
   }
 
   private getTodayStart() {

@@ -23,6 +23,7 @@ export type AuthUser = {
   name: string;
   email: string;
   role: string;
+  permissions?: string[] | null;
 };
 
 export type LoginResponse = {

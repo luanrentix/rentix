@@ -19,7 +19,9 @@ import {
   getCompanyStorageItem,
   setCompanyStorageItem,
 } from "@/services/company-storage";
+import { getCachedPrintTemplates } from "@/services/settings-cache";
 
+type ThemeMode = "light" | "black" | "graphite";
 type PersonType = "Individual" | "Company";
 
 type ExpenseStatus = "Pending" | "Paid" | "Overdue";
@@ -286,6 +288,7 @@ export default function AccountsPayablePage() {
   const [reportEndDate, setReportEndDate] = useState("");
   const [reportFormError, setReportFormError] = useState("");
 
+  const [themeMode, setThemeMode] = useState<ThemeMode>("light");
   const [isBlackTheme, setIsBlackTheme] = useState(false);
 
   useEffect(() => {
@@ -329,28 +332,36 @@ export default function AccountsPayablePage() {
           ? (JSON.parse(storedThemeSettings) as { mode?: string })
           : null;
 
-        const isBlackThemeSelected =
+        const nextTheme =
           parsedThemeSettings?.mode === "graphite" ||
           legacyTheme === "graphite" ||
-          legacyTheme === "grafite" ||
-          parsedThemeSettings?.mode === "black" ||
-          parsedThemeSettings?.mode === "dark" ||
-          legacyTheme === "black" ||
-          legacyTheme === "dark";
+          legacyTheme === "grafite"
+            ? "graphite"
+            : parsedThemeSettings?.mode === "black" ||
+                parsedThemeSettings?.mode === "dark" ||
+                legacyTheme === "black" ||
+                legacyTheme === "dark"
+              ? "black"
+              : "light";
+        const isDarkTheme = nextTheme !== "light";
 
-        document.documentElement.classList.toggle("dark", isBlackThemeSelected);
-        document.body.classList.toggle("dark", isBlackThemeSelected);
-        setIsBlackTheme(isBlackThemeSelected);
+        document.documentElement.classList.toggle("dark", isDarkTheme);
+        document.body.classList.toggle("dark", isDarkTheme);
+        setThemeMode(nextTheme);
+        setIsBlackTheme(isDarkTheme);
       } catch {
-        const isLegacyBlackTheme =
-          legacyTheme === "graphite" ||
-          legacyTheme === "grafite" ||
-          legacyTheme === "black" ||
-          legacyTheme === "dark";
+        const nextTheme =
+          legacyTheme === "graphite" || legacyTheme === "grafite"
+            ? "graphite"
+            : legacyTheme === "black" || legacyTheme === "dark"
+              ? "black"
+              : "light";
+        const isDarkTheme = nextTheme !== "light";
 
-        document.documentElement.classList.toggle("dark", isLegacyBlackTheme);
-        document.body.classList.toggle("dark", isLegacyBlackTheme);
-        setIsBlackTheme(isLegacyBlackTheme);
+        document.documentElement.classList.toggle("dark", isDarkTheme);
+        document.body.classList.toggle("dark", isDarkTheme);
+        setThemeMode(nextTheme);
+        setIsBlackTheme(isDarkTheme);
       }
     }
 
@@ -1637,6 +1648,37 @@ export default function AccountsPayablePage() {
       .replace(/'/g, "&#039;");
   }
 
+  function getAccountsPayableReportHeader(templateData: Record<string, string>) {
+    const defaultTemplate = `RELATÃ“RIO DE CONTAS A PAGAR
+
+EMPRESA: {companyName}
+CATEGORIA: {reportCategory}
+STATUS: {reportStatus}
+VENCIMENTO: {reportDueFilter}
+PERÃODO: {reportStartDate} atÃ© {reportEndDate}
+
+RESUMO:
+Quantidade: {reportCount}
+Total geral: {reportTotal}
+Total pago: {reportPaidTotal}
+Total pendente: {reportPendingTotal}
+Total vencido: {reportOverdueTotal}
+
+GERADO EM: {currentDate}`;
+    const configuredTemplate = getCachedPrintTemplates()?.accountsPayableReport;
+    const templateContent =
+      configuredTemplate &&
+      typeof configuredTemplate === "object" &&
+      !Array.isArray(configuredTemplate) &&
+      typeof (configuredTemplate as { content?: unknown }).content === "string"
+        ? (configuredTemplate as { content: string }).content
+        : defaultTemplate;
+
+    return Object.entries(templateData).reduce((content, [key, value]) => {
+      return content.replace(new RegExp(`{${key}}`, "g"), value);
+    }, templateContent);
+  }
+
   function openAccountsPayableReport(shouldPrint: boolean) {
     setReportFormError("");
 
@@ -1685,6 +1727,27 @@ export default function AccountsPayablePage() {
     ]
       .filter(Boolean)
       .join(" · ");
+
+    const configuredReportHeader = getAccountsPayableReportHeader({
+      companyName: "Contrx",
+      reportCategory: reportCategory || "Todas",
+      reportStatus: getStatusFilterLabel(reportStatusFilter),
+      reportDueFilter: getReportDueFilterLabel(reportDueFilter),
+      reportStartDate:
+        reportDueFilter === "DateRange" && reportStartDate
+          ? formatDate(`${reportStartDate}T00:00:00`)
+          : "Todos",
+      reportEndDate:
+        reportDueFilter === "DateRange" && reportEndDate
+          ? formatDate(`${reportEndDate}T00:00:00`)
+          : "Todos",
+      reportCount: String(reportExpenses.length),
+      reportTotal: formatCurrency(grandTotal),
+      reportPaidTotal: formatCurrency(paidTotal),
+      reportPendingTotal: formatCurrency(pendingTotal),
+      reportOverdueTotal: formatCurrency(overdueTotal),
+      currentDate: new Date().toLocaleString("pt-BR"),
+    });
 
     const rows = reportExpenses
       .map((expense) => {
@@ -1758,6 +1821,7 @@ export default function AccountsPayablePage() {
             th { background: #fff7ed; color: #0f172a; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
             th, td { border: 1px solid #e2e8f0; padding: 9px; font-size: 12px; vertical-align: top; }
             tr:nth-child(even) td { background: #f8fafc; }
+            .configured-header { white-space: pre-wrap; border: 1px solid #fed7aa; background: #fff7ed; border-radius: 14px; padding: 16px; margin: 20px 0; font-size: 12px; line-height: 1.6; font-weight: 700; }
             .footer { margin-top: 24px; font-size: 11px; color: #64748b; text-align: center; }
             @media print {
               body { margin: 0; background: #ffffff; }
@@ -1800,6 +1864,8 @@ export default function AccountsPayablePage() {
               <div class="card"><span>Categoria</span><strong>${escapeHtml(reportCategory || "Todas")}</strong></div>
             </div>
 
+            <div class="configured-header">${escapeHtml(configuredReportHeader)}</div>
+
             <table>
               <thead>
                 <tr>
@@ -1841,6 +1907,13 @@ export default function AccountsPayablePage() {
   function generateAccountsPayablePdf() {
     openAccountsPayableReport(true);
   }
+
+  const accountsPayableThemeClass =
+    themeMode === "graphite"
+      ? "contrx-accounts-payable-page-graphite"
+      : isBlackTheme
+        ? "contrx-accounts-payable-page-black"
+        : "contrx-accounts-payable-page-light";
 
   return (
     <>
@@ -2036,15 +2109,59 @@ export default function AccountsPayablePage() {
         .contrx-accounts-payable-page-black tbody tr:hover {
           background-color: #1e293b !important;
         }
+
+        .contrx-accounts-payable-page-graphite,
+        .contrx-accounts-payable-page-graphite * {
+          color-scheme: dark !important;
+        }
+
+        .contrx-accounts-payable-page-graphite .bg-white,
+        .contrx-accounts-payable-page-graphite .bg-slate-50,
+        .contrx-accounts-payable-page-graphite .bg-slate-100,
+        .contrx-accounts-payable-page-graphite table,
+        .contrx-accounts-payable-page-graphite tbody,
+        .contrx-accounts-payable-page-graphite tbody tr {
+          background-color: #27272a !important;
+        }
+
+        .contrx-accounts-payable-page-graphite .bg-gradient-to-r {
+          background-image: linear-gradient(to right, #27272a, #3f3f46) !important;
+        }
+
+        .contrx-accounts-payable-page-graphite .text-slate-950,
+        .contrx-accounts-payable-page-graphite .text-slate-900,
+        .contrx-accounts-payable-page-graphite .text-slate-800,
+        .contrx-accounts-payable-page-graphite .text-slate-700 {
+          color: #f4f4f5 !important;
+        }
+
+        .contrx-accounts-payable-page-graphite .text-slate-600,
+        .contrx-accounts-payable-page-graphite .text-slate-500,
+        .contrx-accounts-payable-page-graphite .text-slate-400 {
+          color: #d4d4d8 !important;
+        }
+
+        .contrx-accounts-payable-page-graphite input,
+        .contrx-accounts-payable-page-graphite select,
+        .contrx-accounts-payable-page-graphite textarea {
+          background-color: #18181b !important;
+          border-color: #52525b !important;
+          color: #f4f4f5 !important;
+          color-scheme: dark !important;
+        }
+
+        .contrx-accounts-payable-page-graphite thead {
+          background-color: rgba(249, 115, 22, 0.18) !important;
+        }
+
+        .contrx-accounts-payable-page-graphite tbody tr:hover {
+          background-color: #3f3f46 !important;
+        }
       `}</style>
 
       <div
-        data-contrx-theme={isBlackTheme ? "black" : "light"}
-        className={
-          isBlackTheme
-            ? "contrx-accounts-payable-page-black space-y-8"
-            : "contrx-accounts-payable-page-light space-y-8"
-        }
+        data-contrx-theme={themeMode}
+        className={`${accountsPayableThemeClass} space-y-8`}
       >
         <div>
           <p className="text-sm font-semibold text-orange-600">Financeiro</p>
@@ -2331,7 +2448,7 @@ export default function AccountsPayablePage() {
       )}
 
       {isCreateOpen && (
-        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-payable-page-black" : "contrx-accounts-payable-page-light"}`}>
+        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${accountsPayableThemeClass}`}>
           <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-orange-50 to-white dark:from-orange-950/40 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
@@ -2822,7 +2939,7 @@ export default function AccountsPayablePage() {
         onCreated={handleTenantCreated}
       />
       {expensePendingPaymentReceipt && (
-        <div className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-payable-page-black" : "contrx-accounts-payable-page-light"}`}>
+        <div className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${accountsPayableThemeClass}`}>
           <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="border-b border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-gradient-to-r from-orange-50 to-white dark:from-orange-950/30 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
@@ -3063,6 +3180,7 @@ export default function AccountsPayablePage() {
           onCancel={() => setIsPaymentConfirmationOpen(false)}
           onConfirm={finishPayExpense}
           isBlackTheme={isBlackTheme}
+          themeClass={accountsPayableThemeClass}
         />
       )}
 
@@ -3078,6 +3196,7 @@ export default function AccountsPayablePage() {
           onCancel={closeDeleteExpenseConfirmation}
           onConfirm={confirmDeleteExpense}
           isBlackTheme={isBlackTheme}
+          themeClass={accountsPayableThemeClass}
         />
       )}
 
@@ -3092,11 +3211,12 @@ export default function AccountsPayablePage() {
           onCancel={closePaymentReversalConfirmation}
           onConfirm={confirmPaymentReversal}
           isBlackTheme={isBlackTheme}
+          themeClass={accountsPayableThemeClass}
         />
       )}
 
       {isReportOpen && (
-        <div className={`fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-payable-page-black" : "contrx-accounts-payable-page-light"}`}>
+        <div className={`fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${accountsPayableThemeClass}`}>
           <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
             <div className="border-b border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-gradient-to-r from-slate-50 to-white dark:from-slate-800 dark:to-slate-900 p-6">
               <div className="flex items-start justify-between gap-4">
@@ -3483,6 +3603,7 @@ function ConfirmationModal({
   onCancel,
   onConfirm,
   isBlackTheme,
+  themeClass,
 }: {
   icon: string;
   title: string;
@@ -3494,9 +3615,10 @@ function ConfirmationModal({
   onCancel: () => void;
   onConfirm: () => void;
   isBlackTheme?: boolean;
+  themeClass?: string;
 }) {
   return (
-    <div className={`fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${isBlackTheme ? "contrx-accounts-payable-page-black" : "contrx-accounts-payable-page-light"}`}>
+    <div className={`fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${themeClass ?? (isBlackTheme ? "contrx-accounts-payable-page-black" : "contrx-accounts-payable-page-light")}`}>
       <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
         <div className="p-6 text-center">
           <div

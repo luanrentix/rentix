@@ -38,6 +38,7 @@ import {
 type ScheduleStatus = "scheduled" | "completed" | "canceled";
 type SchedulePriority = "low" | "medium" | "high";
 type CalendarViewMode = "month" | "week" | "day";
+type ThemeMode = "light" | "black" | "graphite";
 
 type ScheduleItem = {
   id: string;
@@ -318,6 +319,7 @@ export default function AgendaPage() {
   const [responsibleFilter, setResponsibleFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState<SchedulePriority | "all">("all");
   const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
+  const [themeMode, setThemeMode] = useState<ThemeMode>("light");
   const [isBlackTheme, setIsBlackTheme] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
@@ -448,21 +450,41 @@ export default function AgendaPage() {
       : null;
   }, [scheduleItems, openActionMenuScheduleId]);
 
-  const pageThemeClass = isBlackTheme
-    ? "contrx-agenda-page-black"
-    : "contrx-agenda-page-light";
-  const cardClass = isBlackTheme
-    ? "border-[#334155] bg-[#0f172a] text-[#f8fafc]"
-    : "border-[#e2e8f0] bg-[#ffffff] text-[#0f172a]";
-  const mutedTextClass = isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]";
-  const strongTextClass = isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]";
-  const inputClass = isBlackTheme
-    ? "h-12 w-full rounded-xl border border-[#334155] bg-[#020617] px-4 text-sm font-bold text-[#f8fafc] outline-none transition placeholder:text-[#64748b] focus:border-[#64748b] focus:ring-4 focus:ring-[#334155]/40"
-    : "h-12 w-full rounded-xl border border-[#cbd5e1] bg-[#ffffff] px-4 text-sm font-bold text-[#0f172a] outline-none transition placeholder:text-[#94a3b8] focus:border-[#0f172a] focus:ring-4 focus:ring-[#e2e8f0]";
+  const pageThemeClass =
+    themeMode === "graphite"
+      ? "contrx-agenda-page-graphite"
+      : isBlackTheme
+        ? "contrx-agenda-page-black"
+        : "contrx-agenda-page-light";
+  const cardClass =
+    themeMode === "graphite"
+      ? "border-[#52525b] bg-[#27272a] text-[#f4f4f5]"
+      : isBlackTheme
+        ? "border-[#334155] bg-[#0f172a] text-[#f8fafc]"
+        : "border-[#e2e8f0] bg-[#ffffff] text-[#0f172a]";
+  const mutedTextClass = isBlackTheme
+    ? themeMode === "graphite"
+      ? "text-[#d4d4d8]"
+      : "text-[#cbd5e1]"
+    : "text-[#64748b]";
+  const strongTextClass = isBlackTheme
+    ? themeMode === "graphite"
+      ? "text-[#f4f4f5]"
+      : "text-[#f8fafc]"
+    : "text-[#0f172a]";
+  const inputClass =
+    themeMode === "graphite"
+      ? "h-12 w-full rounded-xl border border-[#52525b] bg-[#18181b] px-4 text-sm font-bold text-[#f4f4f5] outline-none transition placeholder:text-[#a1a1aa] focus:border-[#71717a] focus:ring-4 focus:ring-[#52525b]/40"
+      : isBlackTheme
+        ? "h-12 w-full rounded-xl border border-[#334155] bg-[#020617] px-4 text-sm font-bold text-[#f8fafc] outline-none transition placeholder:text-[#64748b] focus:border-[#64748b] focus:ring-4 focus:ring-[#334155]/40"
+        : "h-12 w-full rounded-xl border border-[#cbd5e1] bg-[#ffffff] px-4 text-sm font-bold text-[#0f172a] outline-none transition placeholder:text-[#94a3b8] focus:border-[#0f172a] focus:ring-4 focus:ring-[#e2e8f0]";
   const textareaClass = inputClass.replace("h-12", "min-h-28 py-3");
-  const secondaryButtonClass = isBlackTheme
-    ? "rounded-xl bg-[#1e293b] px-4 py-3 text-sm font-bold text-[#cbd5e1] transition hover:bg-[#334155] hover:text-[#ffffff]"
-    : "rounded-xl bg-[#f1f5f9] px-4 py-3 text-sm font-bold text-[#475569] transition hover:bg-[#e2e8f0] hover:text-[#0f172a]";
+  const secondaryButtonClass =
+    themeMode === "graphite"
+      ? "rounded-xl bg-[#3f3f46] px-4 py-3 text-sm font-bold text-[#d4d4d8] transition hover:bg-[#52525b] hover:text-[#ffffff]"
+      : isBlackTheme
+        ? "rounded-xl bg-[#1e293b] px-4 py-3 text-sm font-bold text-[#cbd5e1] transition hover:bg-[#334155] hover:text-[#ffffff]"
+        : "rounded-xl bg-[#f1f5f9] px-4 py-3 text-sm font-bold text-[#475569] transition hover:bg-[#e2e8f0] hover:text-[#0f172a]";
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -498,28 +520,36 @@ export default function AgendaPage() {
         const parsedThemeSettings = storedThemeSettings
           ? (JSON.parse(storedThemeSettings) as { mode?: string })
           : null;
-        const isBlackThemeSelected =
+        const nextTheme =
           parsedThemeSettings?.mode === "graphite" ||
           legacyTheme === "graphite" ||
-          legacyTheme === "grafite" ||
-          parsedThemeSettings?.mode === "black" ||
-          parsedThemeSettings?.mode === "dark" ||
-          legacyTheme === "black" ||
-          legacyTheme === "dark";
+          legacyTheme === "grafite"
+            ? "graphite"
+            : parsedThemeSettings?.mode === "black" ||
+                parsedThemeSettings?.mode === "dark" ||
+                legacyTheme === "black" ||
+                legacyTheme === "dark"
+              ? "black"
+              : "light";
+        const isDarkTheme = nextTheme !== "light";
 
-        document.documentElement.classList.toggle("dark", isBlackThemeSelected);
-        document.body.classList.toggle("dark", isBlackThemeSelected);
-        setIsBlackTheme(isBlackThemeSelected);
+        document.documentElement.classList.toggle("dark", isDarkTheme);
+        document.body.classList.toggle("dark", isDarkTheme);
+        setThemeMode(nextTheme);
+        setIsBlackTheme(isDarkTheme);
       } catch {
-        const isLegacyBlackTheme =
-          legacyTheme === "graphite" ||
-          legacyTheme === "grafite" ||
-          legacyTheme === "black" ||
-          legacyTheme === "dark";
+        const nextTheme =
+          legacyTheme === "graphite" || legacyTheme === "grafite"
+            ? "graphite"
+            : legacyTheme === "black" || legacyTheme === "dark"
+              ? "black"
+              : "light";
+        const isDarkTheme = nextTheme !== "light";
 
-        document.documentElement.classList.toggle("dark", isLegacyBlackTheme);
-        document.body.classList.toggle("dark", isLegacyBlackTheme);
-        setIsBlackTheme(isLegacyBlackTheme);
+        document.documentElement.classList.toggle("dark", isDarkTheme);
+        document.body.classList.toggle("dark", isDarkTheme);
+        setThemeMode(nextTheme);
+        setIsBlackTheme(isDarkTheme);
       }
     }
 
@@ -1083,10 +1113,42 @@ export default function AgendaPage() {
           border-color: #334155 !important;
           color: #f8fafc !important;
         }
+
+        .contrx-agenda-page-graphite,
+        .contrx-agenda-page-graphite * {
+          color-scheme: dark;
+        }
+
+        .contrx-agenda-page-graphite .bg-white,
+        .contrx-agenda-page-graphite .bg-slate-50,
+        .contrx-agenda-page-graphite .bg-slate-100 {
+          background-color: #27272a !important;
+        }
+
+        .contrx-agenda-page-graphite .text-slate-950,
+        .contrx-agenda-page-graphite .text-slate-900,
+        .contrx-agenda-page-graphite .text-slate-800,
+        .contrx-agenda-page-graphite .text-slate-700 {
+          color: #f4f4f5 !important;
+        }
+
+        .contrx-agenda-page-graphite .text-slate-600,
+        .contrx-agenda-page-graphite .text-slate-500,
+        .contrx-agenda-page-graphite .text-slate-400 {
+          color: #d4d4d8 !important;
+        }
+
+        .contrx-agenda-page-graphite input,
+        .contrx-agenda-page-graphite select,
+        .contrx-agenda-page-graphite textarea {
+          background-color: #18181b !important;
+          border-color: #52525b !important;
+          color: #f4f4f5 !important;
+        }
       `}</style>
 
       <div
-        data-contrx-theme={isBlackTheme ? "black" : "light"}
+        data-contrx-theme={themeMode}
         className={`${pageThemeClass} space-y-6`}
       >
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">

@@ -41,6 +41,11 @@ describe('ContratosService', () => {
       pagamentoRecebido: {
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
+      scheduleItem: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        update: jest.fn(),
+        create: jest.fn(),
+      },
       contract: {
         update: jest.fn().mockResolvedValue({
           ...contract,

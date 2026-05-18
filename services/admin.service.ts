@@ -49,6 +49,17 @@ export type AdminCompany = {
   };
 };
 
+export type AdminUserRole = 'SYSTEM_OWNER' | 'OWNER' | 'ADMIN' | 'MANAGER' | 'USER';
+
+export type ResetTestDataModule =
+  | 'properties'
+  | 'people'
+  | 'contracts'
+  | 'accountsReceivable'
+  | 'accountsPayable'
+  | 'schedule'
+  | 'masterPanel';
+
 export async function getAdminSummary() {
   return apiFetch<AdminSummary>('/admin/resumo');
 }
@@ -59,4 +70,34 @@ export async function getAdminUsers() {
 
 export async function getAdminCompanies() {
   return apiFetch<AdminCompany[]>('/admin/empresas');
+}
+
+export async function updateAdminUser(
+  userId: string,
+  data: { role?: AdminUserRole; isActive?: boolean },
+) {
+  return apiFetch<AdminUser>(`/admin/usuarios/${userId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateAdminCompany(
+  companyId: string,
+  data: { isActive: boolean },
+) {
+  return apiFetch<AdminCompany>(`/admin/empresas/${companyId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function resetTestData(modules: ResetTestDataModule[]) {
+  return apiFetch<{ success: boolean; modules: ResetTestDataModule[] }>(
+    '/admin/reset-test-data',
+    {
+      method: 'POST',
+      body: JSON.stringify({ modules }),
+    },
+  );
 }

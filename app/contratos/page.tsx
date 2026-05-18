@@ -51,6 +51,14 @@ import {
   getCompanyStorageItem,
   setCompanyStorageItem,
 } from "@/services/company-storage";
+import {
+  createScheduleItem,
+  getScheduleItems,
+  updateScheduleItem,
+  type ScheduleItem,
+} from "@/services/schedule.service";
+
+type ThemeMode = "light" | "black" | "graphite";
 
 const EXPIRING_CONTRACT_DAYS_LIMIT = 30;
 const DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME = "14:00";
@@ -507,6 +515,7 @@ export default function ContractsPage() {
   const [receivableAccounts, setReceivableAccounts] = useState<ReceivableAccount[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [isLoadingPageData, setIsLoadingPageData] = useState(true);
+  const [themeMode, setThemeMode] = useState<ThemeMode>("light");
   const [isBlackTheme, setIsBlackTheme] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isFormMinimized, setIsFormMinimized] = useState(false);
@@ -574,24 +583,30 @@ export default function ContractsPage() {
           ? (JSON.parse(storedThemeSettings) as { mode?: string })
           : null;
 
-        const isBlackThemeSelected =
+        const nextTheme =
           parsedThemeSettings?.mode === "graphite" ||
           legacyTheme === "graphite" ||
-          legacyTheme === "grafite" ||
-          parsedThemeSettings?.mode === "black" ||
-          parsedThemeSettings?.mode === "dark" ||
-          legacyTheme === "black" ||
-          legacyTheme === "dark";
+          legacyTheme === "grafite"
+            ? "graphite"
+            : parsedThemeSettings?.mode === "black" ||
+                parsedThemeSettings?.mode === "dark" ||
+                legacyTheme === "black" ||
+                legacyTheme === "dark"
+              ? "black"
+              : "light";
 
-        setIsBlackTheme(isBlackThemeSelected);
+        setThemeMode(nextTheme);
+        setIsBlackTheme(nextTheme !== "light");
       } catch {
-        const isLegacyBlackTheme =
-          legacyTheme === "graphite" ||
-          legacyTheme === "grafite" ||
-          legacyTheme === "black" ||
-          legacyTheme === "dark";
+        const nextTheme =
+          legacyTheme === "graphite" || legacyTheme === "grafite"
+            ? "graphite"
+            : legacyTheme === "black" || legacyTheme === "dark"
+              ? "black"
+              : "light";
 
-        setIsBlackTheme(isLegacyBlackTheme);
+        setThemeMode(nextTheme);
+        setIsBlackTheme(nextTheme !== "light");
       }
     }
 
@@ -1041,9 +1056,19 @@ export default function ContractsPage() {
       return;
     }
 
-    const existingAccounts = receivableAccounts.filter(
+    let existingAccounts = receivableAccounts.filter(
       (account) => String(account.contractId || "") === String(contract.id),
     );
+
+    try {
+      const backendAccounts = await getReceivableAccounts(companyId);
+      existingAccounts = backendAccounts.filter(
+        (account) => String(account.contractId || "") === String(contract.id),
+      );
+      setReceivableAccounts(backendAccounts);
+    } catch (error) {
+      console.warn("Nao foi possivel conferir parcelas do contrato no backend.", error);
+    }
 
     if (existingAccounts.length === 0) {
       const monthlyAmount = Number(contract.rentValue || 0);
@@ -1059,7 +1084,15 @@ export default function ContractsPage() {
         JSON.stringify({
           contractId: String(contract.id),
           tenantId: String(contract.tenantId),
+          tenantName:
+            contract.tenantName ||
+            tenants.find((tenant) => String(tenant.id) === String(contract.tenantId))?.name ||
+            "",
           propertyId: String(contract.propertyId),
+          propertyName:
+            contract.propertyName ||
+            properties.find((property) => String(property.id) === String(contract.propertyId))?.name ||
+            "",
           amount: monthlyAmount,
           monthlyAmount,
           totalAmount,
@@ -1071,7 +1104,9 @@ export default function ContractsPage() {
       );
     }
 
-    window.location.href = "/contas-receber?fromContract=1";
+    window.location.href = `/contas-receber?fromContract=1&contractId=${encodeURIComponent(
+      String(contract.id),
+    )}`;
   }
 
   async function syncOpenReceivableChargesFromContract(contract: Contract) {
@@ -1487,6 +1522,99 @@ export default function ContractsPage() {
     return displayStatus !== "Deleted";
   }
 
+  function getContractScheduleMarker(contractId: string | number) {
+    return `contract-due:${String(contractId)}`;
+  }
+
+  function findContractDueScheduleItem(
+    scheduleItems: ScheduleItem[],
+    contract: Contract,
+  ) {
+    const scheduleMarker = getContractScheduleMarker(contract.id);
+
+    return (
+      scheduleItems.find((item) => item.notes?.includes(scheduleMarker)) ||
+      scheduleItems.find(
+        (item) =>
+          item.type === "Contrato" &&
+          item.title === "Vencimento de contrato" &&
+          item.customerName === contract.tenantName &&
+          item.propertyName === contract.propertyName,
+      ) ||
+      null
+    );
+  }
+
+  async function upsertContractDueScheduleItem(contract: Contract) {
+    if (!contract.endDate) return;
+
+    const scheduleMarker = getContractScheduleMarker(contract.id);
+    const scheduleItems = await getScheduleItems();
+    const existingScheduleItem = findContractDueScheduleItem(scheduleItems, contract);
+    const notes = [
+      `Contrato: ${contract.id}`,
+      `Vencimento em ${formatDate(contract.endDate)}`,
+      scheduleMarker,
+    ].join("\n");
+    const schedulePayload = {
+      title: "Vencimento de contrato",
+      customerName: contract.tenantName || "Inquilino nao informado",
+      propertyName: contract.propertyName || "Imovel nao informado",
+      date: contract.endDate,
+      time: existingScheduleItem?.time || "08:00",
+      type: "Contrato",
+      status: "scheduled" as const,
+      priority: "high" as const,
+      responsibleName: existingScheduleItem?.responsibleName || "Administrativo",
+      reminder: existingScheduleItem?.reminder || "1 dia antes",
+      notes,
+    };
+
+    if (existingScheduleItem) {
+      await updateScheduleItem(existingScheduleItem.id, schedulePayload);
+      return;
+    }
+
+    await createScheduleItem(schedulePayload);
+  }
+
+  async function completeContractDueScheduleItem(contract: Contract) {
+    const scheduleItems = await getScheduleItems();
+    const existingScheduleItem = findContractDueScheduleItem(scheduleItems, contract);
+
+    if (!existingScheduleItem || existingScheduleItem.status === "completed") {
+      return;
+    }
+
+    const currentNotes = existingScheduleItem.notes || "";
+    const finishedNote = `Contrato finalizado em ${formatDate(
+      getDateInputValue(new Date()),
+    )}.`;
+
+    await updateScheduleItem(existingScheduleItem.id, {
+      status: "completed",
+      notes: currentNotes.includes(finishedNote)
+        ? currentNotes
+        : [currentNotes, finishedNote].filter(Boolean).join("\n"),
+    });
+  }
+
+  async function trySyncContractDueSchedule(
+    action: "renew" | "finish",
+    contract: Contract,
+  ) {
+    try {
+      if (action === "renew") {
+        await upsertContractDueScheduleItem(contract);
+        return;
+      }
+
+      await completeContractDueScheduleItem(contract);
+    } catch (error) {
+      console.warn("Nao foi possivel sincronizar a agenda do contrato.", error);
+    }
+  }
+
   function handleOpenStatusReasonModal(contract: Contract, nextStatus: "Canceled" | "Deleted") {
     setPendingStatusChange({
       contract: {
@@ -1557,6 +1685,8 @@ export default function ContractsPage() {
         setReceivableAccounts(await getReceivableAccounts(companyId));
       }
 
+      await trySyncContractDueSchedule("renew", renewedContract);
+
       registerPropertyMovementFromContract(
         renewedContract,
         "ContractRenewed",
@@ -1608,6 +1738,8 @@ export default function ContractsPage() {
         setReceivableAccounts(await getReceivableAccounts(companyId));
       }
 
+      await trySyncContractDueSchedule("finish", finishedContract);
+
       registerPropertyMovementFromContract(
         finishedContract,
         "ContractFinished",
@@ -1654,6 +1786,13 @@ export default function ContractsPage() {
     printableFrameWindow.focus();
     printableFrameWindow.print();
   }
+
+  const contractsThemeClass =
+    themeMode === "graphite"
+      ? "contrx-graphite-theme"
+      : isBlackTheme
+        ? "contrx-black-theme"
+        : "contrx-force-light";
 
   return (
     <>
@@ -1775,6 +1914,67 @@ export default function ContractsPage() {
 
         .contrx-contracts-page.contrx-black-theme tbody tr:hover {
           background-color: #1e293b !important;
+        }
+
+        .contrx-contracts-page.contrx-graphite-theme {
+          color: #f4f4f5;
+        }
+
+        .contrx-contracts-page.contrx-graphite-theme .bg-white,
+        .contrx-contracts-page.contrx-graphite-theme .bg-slate-50,
+        .contrx-contracts-page.contrx-graphite-theme .bg-slate-100,
+        .contrx-contracts-page.contrx-graphite-theme table,
+        .contrx-contracts-page.contrx-graphite-theme tbody,
+        .contrx-contracts-page.contrx-graphite-theme tr {
+          background-color: #27272a !important;
+        }
+
+        .contrx-contracts-page.contrx-graphite-theme .bg-orange-50,
+        .contrx-contracts-page.contrx-graphite-theme .bg-orange-100,
+        .contrx-contracts-page.contrx-graphite-theme .bg-orange-50\/50,
+        .contrx-contracts-page.contrx-graphite-theme .bg-orange-50\/60,
+        .contrx-contracts-page.contrx-graphite-theme .bg-orange-50\/40 {
+          background-color: rgba(249, 115, 22, 0.18) !important;
+        }
+
+        .contrx-contracts-page.contrx-graphite-theme .text-slate-950,
+        .contrx-contracts-page.contrx-graphite-theme .text-slate-900,
+        .contrx-contracts-page.contrx-graphite-theme .text-slate-800,
+        .contrx-contracts-page.contrx-graphite-theme .text-slate-700 {
+          color: #f4f4f5 !important;
+        }
+
+        .contrx-contracts-page.contrx-graphite-theme .text-slate-600,
+        .contrx-contracts-page.contrx-graphite-theme .text-slate-500,
+        .contrx-contracts-page.contrx-graphite-theme .text-slate-400 {
+          color: #d4d4d8 !important;
+        }
+
+        .contrx-contracts-page.contrx-graphite-theme .border-orange-100,
+        .contrx-contracts-page.contrx-graphite-theme .border-orange-200,
+        .contrx-contracts-page.contrx-graphite-theme .border-red-100,
+        .contrx-contracts-page.contrx-graphite-theme .border-red-200,
+        .contrx-contracts-page.contrx-graphite-theme .border-emerald-200,
+        .contrx-contracts-page.contrx-graphite-theme .border-slate-100,
+        .contrx-contracts-page.contrx-graphite-theme .border-slate-200,
+        .contrx-contracts-page.contrx-graphite-theme .border-slate-300 {
+          border-color: #52525b !important;
+        }
+
+        .contrx-contracts-page.contrx-graphite-theme input,
+        .contrx-contracts-page.contrx-graphite-theme select,
+        .contrx-contracts-page.contrx-graphite-theme textarea {
+          background-color: #18181b !important;
+          border-color: #52525b !important;
+          color: #f4f4f5 !important;
+        }
+
+        .contrx-contracts-page.contrx-graphite-theme thead {
+          background-color: rgba(249, 115, 22, 0.18) !important;
+        }
+
+        .contrx-contracts-page.contrx-graphite-theme tbody tr:hover {
+          background-color: #3f3f46 !important;
         }
 
         .contrx-contracts-page.contrx-force-light,
@@ -1971,7 +2171,7 @@ export default function ContractsPage() {
           background-color: #dc2626 !important;
         }
       `}</style>
-      <div className={`contrx-contracts-page space-y-8 ${isBlackTheme ? "contrx-black-theme" : "contrx-force-light"}`}>
+      <div data-contrx-theme={themeMode} className={`contrx-contracts-page space-y-8 ${contractsThemeClass}`}>
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h1 className="text-4xl font-black tracking-tight text-slate-950">
@@ -2212,7 +2412,7 @@ export default function ContractsPage() {
 
           return (
             <div className="fixed inset-0 z-[72] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
-              <div className={`flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl ${isBlackTheme ? "contrx-black-theme" : "contrx-force-light"}`}>
+              <div className={`flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl ${contractsThemeClass}`}>
                 <div className="border-b border-slate-100 bg-white px-6 py-5">
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div>
@@ -2441,7 +2641,7 @@ export default function ContractsPage() {
 
         {renewalContract && (
           <div className="fixed inset-0 z-[68] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
-            <div className={`w-full max-w-2xl rounded-[2rem] border border-emerald-100 bg-white p-8 shadow-2xl ${isBlackTheme ? "contrx-black-theme" : "contrx-force-light"}`}>
+            <div className={`w-full max-w-2xl rounded-[2rem] border border-emerald-100 bg-white p-8 shadow-2xl ${contractsThemeClass}`}>
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-50 text-emerald-600">
                 <RefreshCw className="h-8 w-8" />
               </div>
@@ -2534,7 +2734,7 @@ export default function ContractsPage() {
 
         {finishContract && (
           <div className="fixed inset-0 z-[68] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
-            <div className={`w-full max-w-lg rounded-[2rem] border border-red-100 bg-white p-8 shadow-2xl ${isBlackTheme ? "contrx-black-theme" : "contrx-force-light"}`}>
+            <div className={`w-full max-w-lg rounded-[2rem] border border-red-100 bg-white p-8 shadow-2xl ${contractsThemeClass}`}>
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 text-red-600">
                 <CheckCircle className="h-8 w-8" />
               </div>
@@ -2603,7 +2803,7 @@ export default function ContractsPage() {
 
         {printableContract && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
-            <div className={`flex max-h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl ${isBlackTheme ? "contrx-black-theme" : "contrx-force-light"}`}>
+            <div className={`flex max-h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl ${contractsThemeClass}`}>
               <div className="flex flex-col gap-4 border-b border-slate-100 bg-white px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-500">
@@ -2676,7 +2876,7 @@ export default function ContractsPage() {
 
         {pendingStatusChange && (
           <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
-            <div className={`w-full max-w-lg rounded-[2rem] border border-red-100 bg-white p-8 shadow-2xl ${isBlackTheme ? "contrx-black-theme" : "contrx-force-light"}`}>
+            <div className={`w-full max-w-lg rounded-[2rem] border border-red-100 bg-white p-8 shadow-2xl ${contractsThemeClass}`}>
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 text-red-600">
                 {pendingStatusChange.nextStatus === "Deleted" ? (
                   <Trash2 className="h-8 w-8" />
@@ -2757,7 +2957,7 @@ export default function ContractsPage() {
 
         {isDefaultTimeModalOpen && (
           <div className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
-            <div className={`w-full max-w-lg rounded-[2rem] border border-orange-100 bg-white p-8 shadow-2xl ${isBlackTheme ? "contrx-black-theme" : "contrx-force-light"}`}>
+            <div className={`w-full max-w-lg rounded-[2rem] border border-orange-100 bg-white p-8 shadow-2xl ${contractsThemeClass}`}>
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 text-orange-600">
                 <Pencil className="h-8 w-8" />
               </div>
@@ -2860,7 +3060,7 @@ export default function ContractsPage() {
 
         {isFormOpen && !isFormMinimized && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
-            <div className={`max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 bg-white shadow-2xl ${isBlackTheme ? "contrx-black-theme" : "contrx-force-light"}`}>
+            <div className={`max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 bg-white shadow-2xl ${contractsThemeClass}`}>
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-8 py-6">
                 <div>
                   <h2 className="text-2xl font-black text-slate-950">
@@ -4085,10 +4285,13 @@ function formatDocumentForPrint(value: string) {
 }
 
 function getContractDurationInDays(startDateValue: string, endDateValue: string) {
-  if (!startDateValue || !endDateValue) return 1;
+  const startDate = normalizeDateInputValue(startDateValue);
+  const endDate = normalizeDateInputValue(endDateValue);
 
-  const start = new Date(`${startDateValue}T00:00:00`);
-  const end = new Date(`${endDateValue}T00:00:00`);
+  if (!startDate || !endDate) return 1;
+
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
 
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 1;
 
@@ -4098,10 +4301,13 @@ function getContractDurationInDays(startDateValue: string, endDateValue: string)
 }
 
 function getContractDurationInMonths(startDateValue: string, endDateValue: string) {
-  if (!startDateValue || !endDateValue) return 1;
+  const startDate = normalizeDateInputValue(startDateValue);
+  const endDate = normalizeDateInputValue(endDateValue);
 
-  const start = new Date(`${startDateValue}T00:00:00`);
-  const end = new Date(`${endDateValue}T00:00:00`);
+  if (!startDate || !endDate) return 1;
+
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
 
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
     return 1;
@@ -4109,15 +4315,18 @@ function getContractDurationInMonths(startDateValue: string, endDateValue: strin
 
   const monthDifference =
     (end.getFullYear() - start.getFullYear()) * 12 +
-    (end.getMonth() - start.getMonth());
+    (end.getMonth() - start.getMonth()) +
+    1;
 
   return Math.max(monthDifference, 1);
 }
 
 function getContractRentDueDay(startDateValue: string) {
-  if (!startDateValue) return "____";
+  const startDate = normalizeDateInputValue(startDateValue);
 
-  const [, , day] = startDateValue.split("-");
+  if (!startDate) return "____";
+
+  const [, , day] = startDate.split("-");
 
   return day || "____";
 }
@@ -4178,10 +4387,38 @@ function formatCurrencyInput(value: string | number) {
   return formatCurrency(parseCurrencyInput(value));
 }
 
-function formatDate(value: string) {
-  if (!value) return "-";
+function getDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
 
-  const [year, month, day] = value.split("-");
+  return `${year}-${month}-${day}`;
+}
+
+function formatDate(value: string) {
+  const normalizedDate = normalizeDateInputValue(value);
+
+  if (!normalizedDate) return "-";
+
+  const [year, month, day] = normalizedDate.split("-");
 
   return `${day}/${month}/${year}`;
+}
+
+function normalizeDateInputValue(value?: string | null) {
+  if (!value) return "";
+
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return value.slice(0, 10);
+  }
+
+  const parsedDate = new Date(value);
+
+  if (Number.isNaN(parsedDate.getTime())) return "";
+
+  const year = parsedDate.getFullYear();
+  const month = String(parsedDate.getMonth() + 1).padStart(2, "0");
+  const day = String(parsedDate.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }

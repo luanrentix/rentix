@@ -27,9 +27,12 @@ import {
   getAdminCompanies,
   getAdminSummary,
   getAdminUsers,
+  updateAdminCompany,
+  updateAdminUser,
   type AdminCompany,
   type AdminSummary,
   type AdminUser,
+  type AdminUserRole,
 } from "@/services/admin.service";
 
 const roleLabels: Record<string, string> = {
@@ -39,6 +42,14 @@ const roleLabels: Record<string, string> = {
   MANAGER: "Gerente",
   USER: "Usuário",
 };
+
+const adminRoleOptions: AdminUserRole[] = [
+  "SYSTEM_OWNER",
+  "OWNER",
+  "ADMIN",
+  "MANAGER",
+  "USER",
+];
 
 type StatusFilter = "all" | "active" | "inactive";
 
@@ -83,6 +94,9 @@ export default function AdminPage() {
   const [companies, setCompanies] = useState<AdminCompany[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [updatingUserId, setUpdatingUserId] = useState("");
+  const [updatingCompanyId, setUpdatingCompanyId] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -129,8 +143,98 @@ export default function AdminPage() {
     }
   }
 
+  async function refreshAdminDataAfterChange(message: string) {
+    setSuccessMessage(message);
+    await loadAdminData();
+  }
+
+  async function handleUpdateUserRole(userId: string, role: AdminUserRole) {
+    try {
+      setUpdatingUserId(userId);
+      setErrorMessage("");
+      const updatedUser = await updateAdminUser(userId, { role });
+      setUsers((currentUsers) =>
+        currentUsers.map((item) => (item.id === userId ? updatedUser : item)),
+      );
+      await refreshAdminDataAfterChange("Perfil do usuário atualizado.");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar o perfil do usuário.",
+      );
+    } finally {
+      setUpdatingUserId("");
+    }
+  }
+
+  async function handleToggleUserStatus(userToUpdate: AdminUser) {
+    try {
+      setUpdatingUserId(userToUpdate.id);
+      setErrorMessage("");
+      const updatedUser = await updateAdminUser(userToUpdate.id, {
+        isActive: !userToUpdate.isActive,
+      });
+      setUsers((currentUsers) =>
+        currentUsers.map((item) =>
+          item.id === userToUpdate.id ? updatedUser : item,
+        ),
+      );
+      await refreshAdminDataAfterChange(
+        updatedUser.isActive ? "Usuário ativado." : "Usuário inativado.",
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível alterar o status do usuário.",
+      );
+    } finally {
+      setUpdatingUserId("");
+    }
+  }
+
+  async function handleToggleCompanyStatus(companyToUpdate: AdminCompany) {
+    try {
+      setUpdatingCompanyId(companyToUpdate.id);
+      setErrorMessage("");
+      const updatedCompany = await updateAdminCompany(companyToUpdate.id, {
+        isActive: !companyToUpdate.isActive,
+      });
+      setCompanies((currentCompanies) =>
+        currentCompanies.map((company) =>
+          company.id === companyToUpdate.id ? updatedCompany : company,
+        ),
+      );
+      setUsers((currentUsers) =>
+        currentUsers.map((item) =>
+          item.company.id === updatedCompany.id
+            ? {
+                ...item,
+                company: {
+                  ...item.company,
+                  isActive: updatedCompany.isActive,
+                },
+              }
+            : item,
+        ),
+      );
+      await refreshAdminDataAfterChange(
+        updatedCompany.isActive ? "Empresa ativada." : "Empresa inativada.",
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível alterar o status da empresa.",
+      );
+    } finally {
+      setUpdatingCompanyId("");
+    }
+  }
+
   const roleOptions = useMemo(() => {
-    const roles = new Set<string>();
+    const roles = new Set<string>(adminRoleOptions);
 
     summary?.usersByRole.forEach((item) => roles.add(item.role));
     users.forEach((item) => roles.add(item.role));
@@ -282,6 +386,12 @@ export default function AdminPage() {
               </section>
             )}
 
+            {successMessage && (
+              <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
+                {successMessage}
+              </section>
+            )}
+
             <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <MetricCard
                 icon={<UsersRound className="h-5 w-5" />}
@@ -388,7 +498,12 @@ export default function AdminPage() {
                     <EmptyPanel message="Nenhuma empresa encontrada." />
                   ) : (
                     topCompanies.map((company) => (
-                      <CompanyCard key={company.id} company={company} />
+                      <CompanyCard
+                        key={company.id}
+                        company={company}
+                        isUpdating={updatingCompanyId === company.id}
+                        onToggleStatus={handleToggleCompanyStatus}
+                      />
                     ))
                   )}
                 </div>
@@ -451,13 +566,14 @@ export default function AdminPage() {
                       <th className="px-5 py-3">Perfil</th>
                       <th className="px-5 py-3">Criado em</th>
                       <th className="px-5 py-3">Status</th>
+                      <th className="px-5 py-3">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {isLoading ? (
-                      <TableState colSpan={5} message="Carregando usuários..." />
+                      <TableState colSpan={6} message="Carregando usuários..." />
                     ) : filteredUsers.length === 0 ? (
-                      <TableState colSpan={5} message="Nenhum usuário encontrado." />
+                      <TableState colSpan={6} message="Nenhum usuário encontrado." />
                     ) : (
                       filteredUsers.map((item) => (
                         <tr key={item.id} className="bg-white transition hover:bg-slate-50">
@@ -471,13 +587,47 @@ export default function AdminPage() {
                             {getCompanyName(item.company)}
                           </td>
                           <td className="px-5 py-4">
-                            <RoleBadge role={item.role} />
+                            <select
+                              value={item.role}
+                              onChange={(event) =>
+                                handleUpdateUserRole(
+                                  item.id,
+                                  event.target.value as AdminUserRole,
+                                )
+                              }
+                              disabled={updatingUserId === item.id}
+                              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {adminRoleOptions.map((role) => (
+                                <option key={role} value={role}>
+                                  {roleLabels[role] || role}
+                                </option>
+                              ))}
+                            </select>
                           </td>
                           <td className="px-5 py-4 font-bold text-slate-500">
                             {formatDate(item.createdAt)}
                           </td>
                           <td className="px-5 py-4">
                             <StatusBadge active={item.isActive} />
+                          </td>
+                          <td className="px-5 py-4">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleUserStatus(item)}
+                              disabled={updatingUserId === item.id}
+                              className={`inline-flex h-10 items-center justify-center rounded-xl px-4 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                                item.isActive
+                                  ? "bg-red-50 text-red-700 hover:bg-red-100"
+                                  : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                              }`}
+                            >
+                              {updatingUserId === item.id
+                                ? "Salvando..."
+                                : item.isActive
+                                  ? "Inativar"
+                                  : "Ativar"}
+                            </button>
                           </td>
                         </tr>
                       ))
@@ -644,7 +794,15 @@ function EmptyPanel({ message }: { message: string }) {
   );
 }
 
-function CompanyCard({ company }: { company: AdminCompany }) {
+function CompanyCard({
+  company,
+  isUpdating,
+  onToggleStatus,
+}: {
+  company: AdminCompany;
+  isUpdating: boolean;
+  onToggleStatus: (company: AdminCompany) => void;
+}) {
   const totalRecords = getTotalCompanyRecords(company);
 
   return (
@@ -658,7 +816,21 @@ function CompanyCard({ company }: { company: AdminCompany }) {
             {company.companyName || "Razão social não informada"}
           </p>
         </div>
-        <StatusBadge active={company.isActive} />
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <StatusBadge active={company.isActive} />
+          <button
+            type="button"
+            onClick={() => onToggleStatus(company)}
+            disabled={isUpdating}
+            className={`rounded-lg px-3 py-1.5 text-[11px] font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${
+              company.isActive
+                ? "bg-red-50 text-red-700 hover:bg-red-100"
+                : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+            }`}
+          >
+            {isUpdating ? "Salvando..." : company.isActive ? "Inativar" : "Ativar"}
+          </button>
+        </div>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2 text-xs font-bold text-slate-500">
