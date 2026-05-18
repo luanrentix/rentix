@@ -3,6 +3,28 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 
+function isSupabaseDatabaseUrl(databaseUrl: string): boolean {
+  try {
+    const { hostname } = new URL(databaseUrl);
+
+    return hostname.includes('supabase.');
+  } catch {
+    return databaseUrl.includes('supabase.');
+  }
+}
+
+function removeSslMode(databaseUrl: string): string {
+  try {
+    const url = new URL(databaseUrl);
+
+    url.searchParams.delete('sslmode');
+
+    return url.toString();
+  } catch {
+    return databaseUrl.replace(/[?&]sslmode=require\b/, '');
+  }
+}
+
 @Injectable()
 export class PrismaService
   extends PrismaClient
@@ -15,10 +37,10 @@ export class PrismaService
       throw new Error('DATABASE_URL environment variable is not defined.');
     }
 
-    const isSupabaseConnection = databaseUrl.includes('supabase.com');
+    const isSupabaseConnection = isSupabaseDatabaseUrl(databaseUrl);
     const pool = new Pool({
       connectionString: isSupabaseConnection
-        ? databaseUrl.replace(/\?sslmode=require.*/, '')
+        ? removeSslMode(databaseUrl)
         : databaseUrl,
       ssl: isSupabaseConnection ? { rejectUnauthorized: false } : undefined,
     });

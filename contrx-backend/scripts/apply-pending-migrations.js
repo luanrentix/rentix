@@ -5,11 +5,32 @@ const path = require('path');
 const { Client } = require('pg');
 
 const databaseUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
-const isSupabaseConnection = databaseUrl?.includes('supabase.com');
+
+function isSupabaseDatabaseUrl(url) {
+  try {
+    return new URL(url).hostname.includes('supabase.');
+  } catch {
+    return url?.includes('supabase.');
+  }
+}
+
+function removeSslMode(url) {
+  try {
+    const parsedUrl = new URL(url);
+
+    parsedUrl.searchParams.delete('sslmode');
+
+    return parsedUrl.toString();
+  } catch {
+    return url.replace(/[?&]sslmode=require\b/, '');
+  }
+}
+
+const isSupabaseConnection = isSupabaseDatabaseUrl(databaseUrl);
 
 const client = new Client({
   connectionString: isSupabaseConnection
-    ? databaseUrl.replace(/\?sslmode=require.*/, '')
+    ? removeSslMode(databaseUrl)
     : databaseUrl,
   ssl: isSupabaseConnection ? { rejectUnauthorized: false } : undefined,
 });
