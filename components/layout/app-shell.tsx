@@ -41,6 +41,7 @@ type PixKeyType = "cpf" | "cnpj" | "email" | "phone" | "random";
 type CompanySettings = {
   companyName: string;
   tradeName: string;
+  logo: string;
   document: string;
   stateRegistration: string;
   municipalRegistration: string;
@@ -190,6 +191,7 @@ const defaultPasswordSettings: PasswordSettings = {
 const defaultCompanySettings: CompanySettings = {
   companyName: "",
   tradeName: "",
+  logo: "",
   document: "",
   stateRegistration: "",
   municipalRegistration: "",
@@ -566,8 +568,12 @@ export default function AppShell({ children }: AppShellProps) {
   const [resetConfirmationText, setResetConfirmationText] = useState("");
   const [resetError, setResetError] = useState("");
 
-  const userInitials = useMemo(() => getInitialLetters(userSettings.name), [userSettings.name]);
   const lockedUserEmail = user?.email || userSettings.email;
+  const companyDisplayName =
+    companySettings.tradeName || companySettings.companyName || "Empresa não cadastrada";
+  const companyLogoFallbackText = getInitialLetters(
+    companySettings.tradeName || companySettings.companyName || userSettings.name,
+  );
   const visibleMenuItems = useMemo(
     () => {
       const allowedMenuItems = menuItems.filter((item) =>
@@ -632,9 +638,17 @@ export default function AppShell({ children }: AppShellProps) {
       }
 
       if (cachedCompanySettings) {
+        const normalizedCachedCompanySettings = cachedCompanySettings as Record<string, unknown>;
         setCompanySettings({
           ...defaultCompanySettings,
-          ...cachedCompanySettings,
+          ...normalizedCachedCompanySettings,
+          logo: String(
+            normalizedCachedCompanySettings.logo ||
+              normalizedCachedCompanySettings.logoUrl ||
+              normalizedCachedCompanySettings.logoBase64 ||
+              normalizedCachedCompanySettings.companyLogo ||
+              "",
+          ),
         } as CompanySettings);
       }
 
@@ -657,9 +671,17 @@ export default function AppShell({ children }: AppShellProps) {
         ...(settings.userSettings || {}),
         email: user?.email || defaultUserSettings.email,
       } as UserSettings);
+      const storedCompanySettings = (settings.companySettings || {}) as Record<string, unknown>;
       setCompanySettings({
         ...defaultCompanySettings,
-        ...(settings.companySettings || {}),
+        ...storedCompanySettings,
+        logo: String(
+          storedCompanySettings.logo ||
+            storedCompanySettings.logoUrl ||
+            storedCompanySettings.logoBase64 ||
+            storedCompanySettings.companyLogo ||
+            "",
+        ),
       } as CompanySettings);
       setThemeSettings(
         normalizeThemeSettings(settings.themeSettings as Partial<ThemeSettings> | undefined),
@@ -677,9 +699,17 @@ export default function AppShell({ children }: AppShellProps) {
         }
 
         if (cachedCompanySettings) {
+          const normalizedCachedCompanySettings = cachedCompanySettings as Record<string, unknown>;
           setCompanySettings({
             ...defaultCompanySettings,
-            ...cachedCompanySettings,
+            ...normalizedCachedCompanySettings,
+            logo: String(
+              normalizedCachedCompanySettings.logo ||
+                normalizedCachedCompanySettings.logoUrl ||
+                normalizedCachedCompanySettings.logoBase64 ||
+                normalizedCachedCompanySettings.companyLogo ||
+                "",
+            ),
           } as CompanySettings);
         }
 
@@ -1108,9 +1138,18 @@ export default function AppShell({ children }: AppShellProps) {
               <button
                 type="button"
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 text-lg font-black text-white shadow-md transition hover:scale-105 lg:h-12 lg:w-12"
+                className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 text-lg font-black text-white shadow-md transition hover:scale-105 lg:h-12 lg:w-12"
               >
-                {userInitials}
+                {companySettings.logo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={companySettings.logo}
+                    alt={`Logo ${companyDisplayName}`}
+                    className="h-full w-full bg-white object-contain p-1.5"
+                  />
+                ) : (
+                  companyLogoFallbackText
+                )}
               </button>
 
               {isUserMenuOpen && (
@@ -1245,8 +1284,17 @@ export default function AppShell({ children }: AppShellProps) {
                 <aside className="border-b border-slate-100 bg-slate-50 p-4 lg:border-b-0 lg:border-r">
                   <div className="rounded-3xl bg-white p-4 shadow-sm">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 text-xl font-black text-white">
-                        {userInitials}
+                      <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 text-xl font-black text-white">
+                        {companySettings.logo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={companySettings.logo}
+                            alt={`Logo ${companyDisplayName}`}
+                            className="h-full w-full bg-white object-contain p-1.5"
+                          />
+                        ) : (
+                          companyLogoFallbackText
+                        )}
                       </div>
                       <div>
                         <p className="text-sm font-black text-slate-900">

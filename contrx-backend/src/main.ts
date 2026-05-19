@@ -14,7 +14,23 @@ const supabaseEnvPath = resolve(process.cwd(), '.env.supabase');
 
 config({ path: defaultEnvPath });
 
-if (process.env.CONTRX_USE_SUPABASE_ENV === 'true' && existsSync(supabaseEnvPath)) {
+function isPlaceholderDatabaseUrl(value: string | undefined) {
+  if (!value) return true;
+
+  return (
+    value.includes('USER:PASSWORD') ||
+    value.includes('HOST:PORT') ||
+    value.includes('PROJECT_REF') ||
+    value.includes('SENHA_DO_BANCO') ||
+    value.includes('HOST_DO_SUPABASE')
+  );
+}
+
+if (
+  existsSync(supabaseEnvPath) &&
+  (process.env.CONTRX_USE_SUPABASE_ENV === 'true' ||
+    isPlaceholderDatabaseUrl(process.env.DATABASE_URL))
+) {
   config({ path: supabaseEnvPath, override: true });
 }
 

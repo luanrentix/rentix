@@ -353,6 +353,41 @@ textarea {
   min-width: 0;
 }
 
+@media (max-width: 1023px) {
+  :root {
+    --contrx-mobile-nav-height: 5.85rem;
+    --contrx-mobile-safe-bottom: calc(
+      var(--contrx-mobile-nav-height) + env(safe-area-inset-bottom) + 1.5rem
+    );
+  }
+
+  html {
+    scroll-padding-bottom: var(--contrx-mobile-safe-bottom);
+  }
+
+  .contrx-app-main {
+    padding-bottom: var(--contrx-mobile-safe-bottom) !important;
+  }
+
+  .contrx-mobile-bottom-nav {
+    min-height: var(--contrx-mobile-nav-height);
+    padding-left: max(0.5rem, env(safe-area-inset-left));
+    padding-right: max(0.5rem, env(safe-area-inset-right));
+  }
+
+  .contrx-minimized-modal {
+    bottom: calc(var(--contrx-mobile-safe-bottom) - 0.75rem) !important;
+  }
+
+  .contrx-mobile-safe-bottom {
+    padding-bottom: var(--contrx-mobile-safe-bottom) !important;
+  }
+
+  .contrx-sticky-safe-bottom {
+    bottom: var(--contrx-mobile-nav-height) !important;
+  }
+}
+
 .contrx-auth-input:-webkit-autofill,
 .contrx-auth-input:-webkit-autofill:hover,
 .contrx-auth-input:-webkit-autofill:focus,
@@ -482,18 +517,6 @@ textarea {
   select,
   textarea {
     touch-action: manipulation;
-  }
-
-  .contrx-mobile-bottom-nav {
-    min-height: var(--contrx-mobile-nav-height);
-    padding-left: max(0.5rem, env(safe-area-inset-left));
-    padding-right: max(0.5rem, env(safe-area-inset-right));
-  }
-
-  .contrx-app-main {
-    padding-bottom: calc(
-      var(--contrx-mobile-nav-height) + env(safe-area-inset-bottom) + 1.5rem
-    ) !important;
   }
 
   .contrx-minimized-modal {

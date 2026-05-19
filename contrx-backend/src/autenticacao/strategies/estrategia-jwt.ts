@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
@@ -12,6 +16,48 @@ type JwtPayload = {
   role: string;
   sessionId?: string;
 };
+
+const DATABASE_CONNECTION_ERROR_MESSAGE =
+  'Banco de dados indisponivel. Verifique se DATABASE_URL/DIRECT_URL estao corretas e se o banco esta online.';
+
+const DATABASE_AUTH_ERROR_MESSAGE =
+  'Credenciais do banco de dados invalidas. Atualize DATABASE_URL e DIRECT_URL no arquivo contrx-backend/.env e reinicie o backend.';
+
+function isDatabaseAuthError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const candidate = error as {
+    code?: string;
+    message?: string;
+    meta?: {
+      driverAdapterError?: {
+        cause?: {
+          code?: string;
+        };
+      };
+    };
+  };
+
+  const message = candidate.message?.toLowerCase() || '';
+  const causeCode = candidate.meta?.driverAdapterError?.cause?.code;
+
+  return (
+    candidate.code === 'P1000' ||
+    causeCode === '28P01' ||
+    message.includes('authentication failed') ||
+    message.includes('password authentication failed')
+  );
+}
+
+function throwDatabaseUnavailable(error: unknown): never {
+  if (isDatabaseAuthError(error)) {
+    throw new ServiceUnavailableException(DATABASE_AUTH_ERROR_MESSAGE);
+  }
+
+  throw new ServiceUnavailableException(DATABASE_CONNECTION_ERROR_MESSAGE);
+}
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
@@ -33,21 +79,37 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   async validate(payload: JwtPayload): Promise<UsuarioAutenticado> {
-    const user = await this.prisma.user.findUnique({
-      where: {
-        id: payload.sub,
-      },
-      select: {
-        id: true,
-        companyId: true,
-        name: true,
-        email: true,
-        role: true,
-        permissions: true,
-        isActive: true,
-        activeSessionId: true,
-      },
-    });
+    let user: {
+      id: string;
+      companyId: string;
+      name: string;
+      email: string;
+      role: string;
+      permissions: unknown;
+      isActive: boolean;
+      activeSessionId: string | null;
+    } | null;
+
+    try {
+      user = await this.prisma.user.findUnique({
+        where: {
+          id: payload.sub,
+        },
+        select: {
+          id: true,
+          companyId: true,
+          name: true,
+          email: true,
+          role: true,
+          permissions: true,
+          isActive: true,
+          activeSessionId: true,
+        },
+      });
+    } catch (error) {
+      console.error('Falha ao validar token no banco.', error);
+      throwDatabaseUnavailable(error);
+    }
 
     if (!user || !user.isActive) {
       throw new UnauthorizedException(

@@ -201,6 +201,7 @@ export default function DashboardPage() {
   const [payables, setPayables] = useState<FinancialPayable[]>([]);
   const [isDashboardLoading, setIsDashboardLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState("");
+  const [financialSummaryError, setFinancialSummaryError] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [financialPeriod, setFinancialPeriod] =
     useState<DashboardFinancialPeriod>("CurrentMonth");
@@ -214,16 +215,28 @@ export default function DashboardPage() {
   const loadDashboardData = useCallback(async (currentCompanyId: string) => {
     setIsDashboardLoading(true);
     setDashboardError("");
+    setFinancialSummaryError("");
 
     try {
-      const [apiProperties, apiContracts, financialSummary] = await Promise.all([
+      const [apiProperties, apiContracts] = await Promise.all([
         getProperties(currentCompanyId),
         getContracts(currentCompanyId),
-        getFinancialSummary(
-          currentCompanyId,
-          getFinancialSummaryFilters(financialPeriod),
-        ),
       ]);
+      const financialSummary = await getFinancialSummary(
+        currentCompanyId,
+        getFinancialSummaryFilters(financialPeriod),
+      ).catch((error) => {
+        setFinancialSummaryError(
+          error instanceof Error
+            ? error.message
+            : "Nao foi possivel carregar o resumo financeiro.",
+        );
+
+        return {
+          receivables: [],
+          payables: [],
+        };
+      });
 
       const normalizedContracts = apiContracts.map(mapApiContractToDashboardContract);
       const activePropertyIds = new Set(
@@ -254,7 +267,6 @@ export default function DashboardPage() {
       );
       setLastUpdatedAt(new Date());
     } catch (error) {
-      console.error("Não foi possível carregar o dashboard.", error);
       setDashboardError(
         error instanceof Error
           ? error.message
@@ -793,6 +805,12 @@ export default function DashboardPage() {
           {dashboardError && (
             <div className="rounded-3xl border border-red-100 bg-red-50 p-5 text-sm font-bold text-red-700 shadow-sm">
               {dashboardError}
+            </div>
+          )}
+
+          {!dashboardError && financialSummaryError && (
+            <div className="rounded-3xl border border-orange-100 bg-orange-50 p-5 text-sm font-bold text-orange-700 shadow-sm">
+              Resumo financeiro indisponivel no momento: {financialSummaryError}
             </div>
           )}
 

@@ -2235,7 +2235,14 @@ export default function ConfiguracoesPage() {
     setInitialThemeSettings(themeSettings);
     setValidationErrors({});
     setSuccessMessage("Configurações salvas com sucesso.");
+    setCompanyStorageItem(
+      companyId,
+      "contrx_dashboard_success_message",
+      "Configurações salvas com sucesso.",
+    );
     setIsSaveConfirmModalOpen(false);
+
+    router.push("/dashboard");
   }
 
   return (
@@ -3864,7 +3871,7 @@ export default function ConfiguracoesPage() {
                   </div>
 
                   <p className="mt-3 text-xs font-semibold text-slate-500">
-                    As informações serão salvas e você continuará nesta tela para conferir o resultado.
+                    As informações serão salvas e você será redirecionado para o Dashboard.
                   </p>
                 </div>
 
