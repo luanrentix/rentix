@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: contrx-backend
+    env: node
+    rootDir: contrx-backend
+    buildCommand: npm ci && npm run build && node scripts/apply-pending-migrations.js
+    startCommand: npm run start:prod
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false

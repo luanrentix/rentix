@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
@@ -41,18 +41,18 @@ function createLocalId(prefix: string) {
   return `${prefix}-${randomId}`;
 }
 
-const LEGACY_SETTINGS_TEMPORARY_CONTRACT_CONTENT = `CONTRATO TEMPORÃRIO
+const LEGACY_SETTINGS_TEMPORARY_CONTRACT_CONTENT = `CONTRATO TEMPORÁRIO
 
 LOCADOR: {companyName}
-LOCATÃRIO: {personName}
-IMÃ“VEL: {propertyName}
-PERÃODO: {startDate} atÃ© {endDate}
-HORÃRIO: Entrada {entryTime} / SaÃ­da {exitTime}
+LOCATÁRIO: {personName}
+IMÓVEL: {propertyName}
+PERÍODO: {startDate} até {endDate}
+HORÁRIO: Entrada {entryTime} / Saída {exitTime}
 
-CLÃUSULAS E CONDIÃ‡Ã•ES:
-1. O presente contrato tem finalidade de locaÃ§Ã£o temporÃ¡ria.
-2. O locatÃ¡rio declara estar ciente das regras de uso do imÃ³vel.
-3. As informaÃ§Ãµes financeiras e condiÃ§Ãµes acordadas deverÃ£o constar no documento final.
+CLÁUSULAS E CONDIÇÕES:
+1. O presente contrato tem finalidade de locação temporária.
+2. O locatário declara estar ciente das regras de uso do imóvel.
+3. As informações financeiras e condições acordadas deverão constar no documento final.
 
 {contractDefaultNotes}
 
@@ -62,96 +62,96 @@ __________________________________
 LOCADOR
 
 __________________________________
-LOCATÃRIO`;
+LOCATÁRIO`;
 
-const DEFAULT_SETTINGS_TEMPORARY_CONTRACT_CONTENT = `INSTRUMENTO PARTICULAR DE CONTRATO DE LOCAÃ‡ÃƒO IMOBILIÃRIA TEMPORÃRIA
+const DEFAULT_SETTINGS_TEMPORARY_CONTRACT_CONTENT = `INSTRUMENTO PARTICULAR DE CONTRATO DE LOCAÇÃO IMOBILIÁRIA TEMPORÁRIA
 
 I - LOCADOR:
-{landlordName}, pessoa jurÃ­dica de direito privado, inscrita no CPF/CNPJ nÂº {landlordDocument}, com endereÃ§o em {landlordAddress}, doravante denominada LOCADOR.
+{landlordName}, pessoa jurídica de direito privado, inscrita no CPF/CNPJ nº {landlordDocument}, com endereço em {landlordAddress}, doravante denominada LOCADOR.
 E-mail: {companyEmail}
 Telefone: {companyPhone}
 
-II - LOCATÃRIO:
-{tenantName}, brasileiro(a), estado civil nÃ£o informado, profissÃ£o nÃ£o informada, inscrito(a) no CPF/CNPJ nÂº {tenantDocument}, Carteira de Identidade nÂº __________, residente e domiciliado(a) em {tenantAddress}, doravante denominado(a) LOCATÃRIO.
+II - LOCATÁRIO:
+{tenantName}, brasileiro(a), estado civil não informado, profissão não informada, inscrito(a) no CPF/CNPJ nº {tenantDocument}, Carteira de Identidade nº __________, residente e domiciliado(a) em {tenantAddress}, doravante denominado(a) LOCATÁRIO.
 E-mail: {tenantEmail}
 
-III - OBJETO DA LOCAÃ‡ÃƒO:
+III - OBJETO DA LOCAÇÃO:
 {propertyName}, localizado em {propertyAddress}.
 
-IV - PRAZO DE VIGÃŠNCIA:
-O prazo de locaÃ§Ã£o Ã© de {contractDays} dia(s), com entrada (check-in) em {startDate} Ã s {entryTime} e saÃ­da (check-out) em {endDate} Ã s {exitTime}, sem prorrogaÃ§Ã£o automÃ¡tica.
+IV - PRAZO DE VIGÊNCIA:
+O prazo de locação é de {contractDays} dia(s), com entrada (check-in) em {startDate} às {entryTime} e saída (check-out) em {endDate} às {exitTime}, sem prorrogação automática.
 
-V - ATIVIDADE OBRIGATÃ“RIA:
-Durante o perÃ­odo de locaÃ§Ã£o, o locatÃ¡rio compromete-se a utilizar o imÃ³vel exclusivamente para fins recreativos e de lazer, respeitando todas as normas legais e regulamentaÃ§Ãµes aplicÃ¡veis. O locatÃ¡rio deverÃ¡ zelar pela conservaÃ§Ã£o do imÃ³vel e de suas instalaÃ§Ãµes, garantindo sua limpeza e manutenÃ§Ã£o adequadas. Qualquer dano causado durante o perÃ­odo de locaÃ§Ã£o serÃ¡ de responsabilidade do locatÃ¡rio, que se compromete a ressarcir integralmente o locador pelos prejuÃ­zos decorrentes.
+V - ATIVIDADE OBRIGATÓRIA:
+Durante o período de locação, o locatário compromete-se a utilizar o imóvel exclusivamente para fins recreativos e de lazer, respeitando todas as normas legais e regulamentações aplicáveis. O locatário deverá zelar pela conservação do imóvel e de suas instalações, garantindo sua limpeza e manutenção adequadas. Qualquer dano causado durante o período de locação será de responsabilidade do locatário, que se compromete a ressarcir integralmente o locador pelos prejuízos decorrentes.
 
-VI - ALUGUEL PELO PERÃODO:
+VI - ALUGUEL PELO PERÍODO:
 Igual a {amount}.
 
 VII - PAGAMENTO DO ALUGUEL:
-Pela execuÃ§Ã£o do objeto deste contrato, o LOCATÃRIO pagarÃ¡ ao LOCADOR o valor total de {amount}, conforme forma de pagamento acordada entre as partes.
-A liberaÃ§Ã£o das chaves estÃ¡ condicionada Ã  quitaÃ§Ã£o integral de todas as parcelas.
-ParÃ¡grafo Segundo: O pagamento serÃ¡ efetuado por meio de [PIX/DINHEIRO/TRANSFERÃŠNCIA], conforme dados a serem informados pelo LOCADOR.
+Pela execução do objeto deste contrato, o LOCATÁRIO pagará ao LOCADOR o valor total de {amount}, conforme forma de pagamento acordada entre as partes.
+A liberação das chaves está condicionada à quitação integral de todas as parcelas.
+Parágrafo Segundo: O pagamento será efetuado por meio de [PIX/DINHEIRO/TRANSFERÊNCIA], conforme dados a serem informados pelo LOCADOR.
 
-VIII - CONDIÃ‡Ã•ES ESPECIAIS:
-NÃ£o hÃ¡.
+VIII - CONDIÇÕES ESPECIAIS:
+Não há.
 
-Pelo presente instrumento, as partes acima identificadas e qualificadas tÃªm entre si justas e acertadas o presente INSTRUMENTO PARTICULAR DE CONTRATO DE LOCAÃ‡ÃƒO, que se regerÃ¡ pelas clÃ¡usulas e condiÃ§Ãµes abaixo pactuadas.
+Pelo presente instrumento, as partes acima identificadas e qualificadas têm entre si justas e acertadas o presente INSTRUMENTO PARTICULAR DE CONTRATO DE LOCAÇÃO, que se regerá pelas cláusulas e condições abaixo pactuadas.
 
-ClÃ¡usula Primeira - Da Vistoria e ConservaÃ§Ã£o
-1.1. O imÃ³vel Ã© entregue em perfeitas condiÃ§Ãµes de higiene e conservaÃ§Ã£o.
-1.2. O LOCATÃRIO tem o prazo de 2 (duas) horas apÃ³s a entrada para conferir o local e reportar qualquer dano preexistente por escrito, com fotos ou vÃ­deos.
-1.3. Caso nÃ£o haja manifestaÃ§Ã£o no prazo acima, entende-se que o imÃ³vel e seus utensÃ­lios foram recebidos em perfeito estado.
-1.4. O LOCATÃRIO deverÃ¡ restituir o imÃ³vel nas mesmas condiÃ§Ãµes em que o recebeu, sob pena de arcar com os custos de reparo ou reposiÃ§Ã£o de itens danificados.
+Cláusula Primeira - Da Vistoria e Conservação
+1.1. O imóvel é entregue em perfeitas condições de higiene e conservação.
+1.2. O LOCATÁRIO tem o prazo de 2 (duas) horas após a entrada para conferir o local e reportar qualquer dano preexistente por escrito, com fotos ou vídeos.
+1.3. Caso não haja manifestação no prazo acima, entende-se que o imóvel e seus utensílios foram recebidos em perfeito estado.
+1.4. O LOCATÁRIO deverá restituir o imóvel nas mesmas condições em que o recebeu, sob pena de arcar com os custos de reparo ou reposição de itens danificados.
 
-ClÃ¡usula Segunda - Do Objeto e DestinaÃ§Ã£o
-2.1. O objeto deste contrato Ã© a locaÃ§Ã£o temporÃ¡ria do imÃ³vel identificado neste instrumento.
-2.2. O imÃ³vel destina-se exclusivamente para fins recreativos e de lazer, conforme detalhado no preÃ¢mbulo.
-2.3. Ã‰ proibido ao LOCATÃRIO sublocar, ceder, emprestar ou transferir a locaÃ§Ã£o a terceiros, total ou parcialmente, sem autorizaÃ§Ã£o prÃ©via e por escrito do LOCADOR.
-2.4. ApÃ³s o recebimento das chaves, o LOCATÃRIO assume a posse temporÃ¡ria e a responsabilidade total pela guarda e conservaÃ§Ã£o do imÃ³vel e seus bens.
+Cláusula Segunda - Do Objeto e Destinação
+2.1. O objeto deste contrato é a locação temporária do imóvel identificado neste instrumento.
+2.2. O imóvel destina-se exclusivamente para fins recreativos e de lazer, conforme detalhado no preâmbulo.
+2.3. É proibido ao LOCATÁRIO sublocar, ceder, emprestar ou transferir a locação a terceiros, total ou parcialmente, sem autorização prévia e por escrito do LOCADOR.
+2.4. Após o recebimento das chaves, o LOCATÁRIO assume a posse temporária e a responsabilidade total pela guarda e conservação do imóvel e seus bens.
 
-ClÃ¡usula Terceira - Da UtilizaÃ§Ã£o e Finalidade
-3.1. O imÃ³vel deve ser utilizado exclusivamente para fins recreativos e de lazer.
-3.2. Ã‰ proibida a realizaÃ§Ã£o de eventos com venda de ingressos, atividades comerciais ou festas abertas ao pÃºblico sem autorizaÃ§Ã£o prÃ©via por escrito do LOCADOR.
+Cláusula Terceira - Da Utilização e Finalidade
+3.1. O imóvel deve ser utilizado exclusivamente para fins recreativos e de lazer.
+3.2. É proibida a realização de eventos com venda de ingressos, atividades comerciais ou festas abertas ao público sem autorização prévia por escrito do LOCADOR.
 
-ClÃ¡usula Quarta - Do Prazo e da DesocupaÃ§Ã£o
-4.1. A locaÃ§Ã£o Ã© firmada por curto prazo, com inÃ­cio em {startDate} Ã s {entryTime} e tÃ©rmino em {endDate} Ã s {exitTime}.
-4.2. Findo o prazo estipulado, o contrato se encerra automaticamente, devendo o LOCATÃRIO desocupar o imÃ³vel e entregar as chaves, independente de aviso prÃ©vio.
-4.3. Caso o LOCATÃRIO deseje prorrogar a estadia, deverÃ¡ consultar a disponibilidade e valores com o LOCADOR com antecedÃªncia, sendo necessÃ¡ria a formalizaÃ§Ã£o de novo ajuste por escrito.
-4.4. O atraso na desocupaÃ§Ã£o do imÃ³vel apÃ³s o horÃ¡rio de tÃ©rmino sujeitarÃ¡ o LOCATÃRIO Ã  multa por hora excedente, sem prejuÃ­zo das demais penalidades.
+Cláusula Quarta - Do Prazo e da Desocupação
+4.1. A locação é firmada por curto prazo, com início em {startDate} às {entryTime} e término em {endDate} às {exitTime}.
+4.2. Findo o prazo estipulado, o contrato se encerra automaticamente, devendo o LOCATÁRIO desocupar o imóvel e entregar as chaves, independente de aviso prévio.
+4.3. Caso o LOCATÁRIO deseje prorrogar a estadia, deverá consultar a disponibilidade e valores com o LOCADOR com antecedência, sendo necessária a formalização de novo ajuste por escrito.
+4.4. O atraso na desocupação do imóvel após o horário de término sujeitará o LOCATÁRIO à multa por hora excedente, sem prejuízo das demais penalidades.
 
-ClÃ¡usula Quinta - Do Valor e Pacote Escolhido
-5.1. O valor da locaÃ§Ã£o temporÃ¡ria Ã© de {amount}, referente ao perÃ­odo contratado.
+Cláusula Quinta - Do Valor e Pacote Escolhido
+5.1. O valor da locação temporária é de {amount}, referente ao período contratado.
 
-ClÃ¡usula Sexta - Das ObrigaÃ§Ãµes e Regras de ConvivÃªncia
-6.1. O LOCADOR deverÃ¡ entregar o imÃ³vel em bom estado de conservaÃ§Ã£o e limpeza.
-6.2. O LOCATÃRIO deverÃ¡ utilizar o imÃ³vel apenas para os fins contratados, responsabilizando-se por danos ocorridos durante a locaÃ§Ã£o, exceto desgaste natural de uso.
-6.3. O LOCATÃRIO deverÃ¡ respeitar os limites de hÃ³spedes e convidados definidos previamente pelas partes.
-6.4. Animais de estimaÃ§Ã£o somente serÃ£o permitidos mediante autorizaÃ§Ã£o do LOCADOR, respondendo o LOCATÃRIO por higiene e eventuais danos.
-6.5. O LOCATÃRIO deve respeitar o sossego dos vizinhos, sendo proibidos ruÃ­dos excessivos, especialmente em horÃ¡rio noturno.
+Cláusula Sexta - Das Obrigações e Regras de Convivência
+6.1. O LOCADOR deverá entregar o imóvel em bom estado de conservação e limpeza.
+6.2. O LOCATÁRIO deverá utilizar o imóvel apenas para os fins contratados, responsabilizando-se por danos ocorridos durante a locação, exceto desgaste natural de uso.
+6.3. O LOCATÁRIO deverá respeitar os limites de hóspedes e convidados definidos previamente pelas partes.
+6.4. Animais de estimação somente serão permitidos mediante autorização do LOCADOR, respondendo o LOCATÁRIO por higiene e eventuais danos.
+6.5. O LOCATÁRIO deve respeitar o sossego dos vizinhos, sendo proibidos ruídos excessivos, especialmente em horário noturno.
 
-ClÃ¡usula SÃ©tima - Das ComunicaÃ§Ãµes e NotificaÃ§Ãµes
-7.1. As partes concordam que comunicaÃ§Ãµes urgentes poderÃ£o ser realizadas por WhatsApp ou e-mail, utilizando os contatos fornecidos neste contrato.
-7.2. Para notificaÃ§Ãµes formais, as partes elegem os endereÃ§os declarados neste instrumento.
+Cláusula Sétima - Das Comunicações e Notificações
+7.1. As partes concordam que comunicações urgentes poderão ser realizadas por WhatsApp ou e-mail, utilizando os contatos fornecidos neste contrato.
+7.2. Para notificações formais, as partes elegem os endereços declarados neste instrumento.
 
-ClÃ¡usula Oitava - Da AusÃªncia de Garantia e CondiÃ§Ã£o de Acesso
-8.1. Esta locaÃ§Ã£o Ã© celebrada sem as modalidades de garantia previstas na Lei 8.245/91.
-8.2. O acesso ao imÃ³vel e a entrega das chaves sÃ³ ocorrerÃ£o mediante a quitaÃ§Ã£o integral do valor total da locaÃ§Ã£o e eventuais taxas acordadas.
+Cláusula Oitava - Da Ausência de Garantia e Condição de Acesso
+8.1. Esta locação é celebrada sem as modalidades de garantia previstas na Lei 8.245/91.
+8.2. O acesso ao imóvel e a entrega das chaves só ocorrerão mediante a quitação integral do valor total da locação e eventuais taxas acordadas.
 
-ClÃ¡usula Nona - Do Inadimplemento, Cancelamento e Multas
-9.1. O descumprimento de qualquer clÃ¡usula deste contrato sujeitarÃ¡ o infrator Ã  multa de 20% sobre o valor total do contrato, sem prejuÃ­zo da responsabilidade por eventuais danos materiais comprovados.
-9.2. O atraso no pagamento sujeitarÃ¡ o LOCATÃRIO Ã  multa moratÃ³ria, juros e eventual cancelamento da reserva.
-9.3. Em caso de desistÃªncia por iniciativa do LOCATÃRIO apÃ³s a assinatura, nÃ£o haverÃ¡ devoluÃ§Ã£o de valor jÃ¡ pago, salvo acordo escrito entre as partes.
+Cláusula Nona - Do Inadimplemento, Cancelamento e Multas
+9.1. O descumprimento de qualquer cláusula deste contrato sujeitará o infrator à multa de 20% sobre o valor total do contrato, sem prejuízo da responsabilidade por eventuais danos materiais comprovados.
+9.2. O atraso no pagamento sujeitará o LOCATÁRIO à multa moratória, juros e eventual cancelamento da reserva.
+9.3. Em caso de desistência por iniciativa do LOCATÁRIO após a assinatura, não haverá devolução de valor já pago, salvo acordo escrito entre as partes.
 
-ClÃ¡usula DÃ©cima - Da RescisÃ£o
-10.1. O descumprimento de clÃ¡usula contratual autoriza a rescisÃ£o imediata do instrumento, sem prejuÃ­zo da cobranÃ§a de perdas e danos.
-10.2. Caso o LOCATÃRIO encerre a locaÃ§Ã£o antes do horÃ¡rio previsto, nÃ£o haverÃ¡ reembolso proporcional do valor contratado.
+Cláusula Décima - Da Rescisão
+10.1. O descumprimento de cláusula contratual autoriza a rescisão imediata do instrumento, sem prejuízo da cobrança de perdas e danos.
+10.2. Caso o LOCATÁRIO encerre a locação antes do horário previsto, não haverá reembolso proporcional do valor contratado.
 
-ClÃ¡usula DÃ©cima Primeira - Da Assinatura EletrÃ´nica e ComunicaÃ§Ãµes Digitais
-11.1. As partes reconhecem como vÃ¡lida a assinatura deste contrato em formato eletrÃ´nico, conforme legislaÃ§Ã£o vigente.
-11.2. Os e-mails e nÃºmeros de WhatsApp informados sÃ£o considerados canais oficiais de comunicaÃ§Ã£o.
+Cláusula Décima Primeira - Da Assinatura Eletrônica e Comunicações Digitais
+11.1. As partes reconhecem como válida a assinatura deste contrato em formato eletrônico, conforme legislação vigente.
+11.2. Os e-mails e números de WhatsApp informados são considerados canais oficiais de comunicação.
 
-ClÃ¡usula DÃ©cima Segunda - Foro
-12.1. As partes elegem o foro da comarca do local do imÃ³vel para dirimir dÃºvidas ou litÃ­gios oriundos deste contrato, renunciando a qualquer outro, por mais privilegiado que seja.
+Cláusula Décima Segunda - Foro
+12.1. As partes elegem o foro da comarca do local do imóvel para dirimir dúvidas ou litígios oriundos deste contrato, renunciando a qualquer outro, por mais privilegiado que seja.
 
 {contractCity}, {currentDate}.
 
@@ -159,7 +159,7 @@ LOCADOR:
 __________________________________
 {landlordName}
 
-LOCATÃRIO:
+LOCATÁRIO:
 __________________________________
 {tenantName}
 
@@ -170,61 +170,61 @@ CPF: ______________________________
 Email: ______________________________`;
 
 
-const LEGACY_SETTINGS_STANDARD_CONTRACT_CONTENT = `CONTRATO DE LOCAÃ‡ÃƒO RESIDENCIAL
+const LEGACY_SETTINGS_STANDARD_CONTRACT_CONTENT = `CONTRATO DE LOCAÇÃO RESIDENCIAL
 
 I - LOCADOR:
-{landlordName}, inscrito(a) no CPF/CNPJ nÂº {landlordDocument}, com endereÃ§o em {landlordAddress}, telefone {companyPhone}, e-mail {companyEmail}, a seguir denominado(a) LOCADOR.
+{landlordName}, inscrito(a) no CPF/CNPJ nº {landlordDocument}, com endereço em {landlordAddress}, telefone {companyPhone}, e-mail {companyEmail}, a seguir denominado(a) LOCADOR.
 
-II - LOCATÃRIO:
-{tenantName}, inscrito(a) no CPF/CNPJ nÂº {tenantDocument}, residente e domiciliado(a) em {tenantAddress}, telefone {tenantPhone}, e-mail {tenantEmail}, a seguir denominado(a) LOCATÃRIO.
+II - LOCATÁRIO:
+{tenantName}, inscrito(a) no CPF/CNPJ nº {tenantDocument}, residente e domiciliado(a) em {tenantAddress}, telefone {tenantPhone}, e-mail {tenantEmail}, a seguir denominado(a) LOCATÁRIO.
 
-CLÃUSULA PRIMEIRA - DO IMÃ“VEL E DO PRAZO
-O LOCADOR dÃ¡ em locaÃ§Ã£o ao LOCATÃRIO o imÃ³vel denominado {propertyName}, localizado em {propertyAddress}, pelo prazo de {contractMonths} mÃªs(es), com inÃ­cio em {startDate} e tÃ©rmino em {endDate}. Ao receber o imÃ³vel, o LOCATÃRIO declara tÃª-lo vistoriado e aceito nas condiÃ§Ãµes em que se encontra, obrigando-se a devolvÃª-lo livre, desocupado e em perfeito estado de conservaÃ§Ã£o, com contas de Ã¡gua, energia e demais encargos quitados.
+CLÁUSULA PRIMEIRA - DO IMÓVEL E DO PRAZO
+O LOCADOR dá em locação ao LOCATÁRIO o imóvel denominado {propertyName}, localizado em {propertyAddress}, pelo prazo de {contractMonths} mês(es), com início em {startDate} e término em {endDate}. Ao receber o imóvel, o LOCATÁRIO declara tê-lo vistoriado e aceito nas condições em que se encontra, obrigando-se a devolvê-lo livre, desocupado e em perfeito estado de conservação, com contas de água, energia e demais encargos quitados.
 
-ParÃ¡grafo Primeiro - Antes do vencimento do prazo ajustado, o LOCADOR nÃ£o poderÃ¡ retomar o imÃ³vel, salvo por infraÃ§Ã£o contratual. Caso o LOCATÃRIO devolva o imÃ³vel antes do prazo, ficarÃ¡ sujeito Ã  multa contratual prevista neste instrumento.
+Parágrafo Primeiro - Antes do vencimento do prazo ajustado, o LOCADOR não poderá retomar o imóvel, salvo por infração contratual. Caso o LOCATÁRIO devolva o imóvel antes do prazo, ficará sujeito à multa contratual prevista neste instrumento.
 
-ParÃ¡grafo Segundo - Na devoluÃ§Ã£o das chaves, o LOCATÃRIO deverÃ¡ apresentar comprovantes de quitaÃ§Ã£o das contas de Ã¡gua, energia e demais despesas relacionadas ao imÃ³vel.
+Parágrafo Segundo - Na devolução das chaves, o LOCATÁRIO deverá apresentar comprovantes de quitação das contas de água, energia e demais despesas relacionadas ao imóvel.
 
-CLÃUSULA SEGUNDA - DO ALUGUEL E FORMA DE PAGAMENTO
-O aluguel mensal serÃ¡ de {amount}, com vencimento conforme acordado entre as partes. O pagamento deverÃ¡ ser realizado por meio de depÃ³sito, transferÃªncia, dinheiro ou Pix, utilizando a chave {pixKey}, salvo outra forma expressamente acordada.
+CLÁUSULA SEGUNDA - DO ALUGUEL E FORMA DE PAGAMENTO
+O aluguel mensal será de {amount}, com vencimento conforme acordado entre as partes. O pagamento deverá ser realizado por meio de depósito, transferência, dinheiro ou Pix, utilizando a chave {pixKey}, salvo outra forma expressamente acordada.
 
-ParÃ¡grafo Primeiro - O atraso no pagamento autoriza a cobranÃ§a de multa, juros, correÃ§Ã£o monetÃ¡ria e demais despesas necessÃ¡rias Ã  cobranÃ§a, sem prejuÃ­zo da rescisÃ£o contratual.
+Parágrafo Primeiro - O atraso no pagamento autoriza a cobrança de multa, juros, correção monetária e demais despesas necessárias à cobrança, sem prejuízo da rescisão contratual.
 
-ParÃ¡grafo Segundo - Decorridos 30 (trinta) dias do vencimento sem pagamento, o dÃ©bito poderÃ¡ ser encaminhado para cobranÃ§a administrativa, extrajudicial ou judicial.
+Parágrafo Segundo - Decorridos 30 (trinta) dias do vencimento sem pagamento, o débito poderá ser encaminhado para cobrança administrativa, extrajudicial ou judicial.
 
-CLÃUSULA TERCEIRA - DO REAJUSTE
-O valor do aluguel poderÃ¡ ser reajustado ao final do prazo contratual ou em eventual renovaÃ§Ã£o, mediante acordo entre as partes e observando a legislaÃ§Ã£o aplicÃ¡vel.
+CLÁUSULA TERCEIRA - DO REAJUSTE
+O valor do aluguel poderá ser reajustado ao final do prazo contratual ou em eventual renovação, mediante acordo entre as partes e observando a legislação aplicável.
 
-CLÃUSULA QUARTA - DA CONSERVAÃ‡ÃƒO E VISTORIA
-O LOCATÃRIO declara haver visitado e examinado o imÃ³vel locado, obrigando-se a zelar por sua conservaÃ§Ã£o, limpeza, instalaÃ§Ãµes, pintura, telhado, portas, janelas, vidros, fechaduras, torneiras, instalaÃ§Ãµes elÃ©tricas, hidrÃ¡ulicas e demais acessÃ³rios, devolvendo-o ao final da locaÃ§Ã£o no mesmo estado em que recebeu, salvo desgaste natural de uso.
+CLÁUSULA QUARTA - DA CONSERVAÇÃO E VISTORIA
+O LOCATÁRIO declara haver visitado e examinado o imóvel locado, obrigando-se a zelar por sua conservação, limpeza, instalações, pintura, telhado, portas, janelas, vidros, fechaduras, torneiras, instalações elétricas, hidráulicas e demais acessórios, devolvendo-o ao final da locação no mesmo estado em que recebeu, salvo desgaste natural de uso.
 
-ParÃ¡grafo Primeiro - Fica assegurado ao LOCADOR o direito de vistoriar o imÃ³vel sempre que necessÃ¡rio, mediante aviso prÃ©vio ao LOCATÃRIO.
+Parágrafo Primeiro - Fica assegurado ao LOCADOR o direito de vistoriar o imóvel sempre que necessário, mediante aviso prévio ao LOCATÁRIO.
 
-ParÃ¡grafo Segundo - Qualquer alteraÃ§Ã£o, reforma ou benfeitoria no imÃ³vel dependerÃ¡ de autorizaÃ§Ã£o prÃ©via e por escrito do LOCADOR.
+Parágrafo Segundo - Qualquer alteração, reforma ou benfeitoria no imóvel dependerá de autorização prévia e por escrito do LOCADOR.
 
-CLÃUSULA QUINTA - DOS ENCARGOS
-AlÃ©m do aluguel, competem ao LOCATÃRIO as despesas ordinÃ¡rias de consumo de Ã¡gua, energia elÃ©trica, esgoto, saneamento, taxa de lixo, condomÃ­nio quando houver e demais encargos relacionados ao uso do imÃ³vel durante a vigÃªncia do contrato.
+CLÁUSULA QUINTA - DOS ENCARGOS
+Além do aluguel, competem ao LOCATÁRIO as despesas ordinárias de consumo de água, energia elétrica, esgoto, saneamento, taxa de lixo, condomínio quando houver e demais encargos relacionados ao uso do imóvel durante a vigência do contrato.
 
-ParÃ¡grafo Ãšnico - Caso o LOCADOR efetue o pagamento de qualquer despesa de responsabilidade do LOCATÃRIO, este deverÃ¡ reembolsar integralmente o valor, acrescido de multa, juros e correÃ§Ã£o quando aplicÃ¡veis.
+Parágrafo Único - Caso o LOCADOR efetue o pagamento de qualquer despesa de responsabilidade do LOCATÁRIO, este deverá reembolsar integralmente o valor, acrescido de multa, juros e correção quando aplicáveis.
 
-CLÃUSULA SEXTA - DA DESTINAÃ‡ÃƒO DO IMÃ“VEL
-O imÃ³vel objeto deste contrato destina-se exclusivamente para fim residencial, ficando o LOCATÃRIO proibido de alterar sua destinaÃ§Ã£o, ceder, transferir, sublocar ou emprestar o imÃ³vel, no todo ou em parte, sem autorizaÃ§Ã£o expressa do LOCADOR.
+CLÁUSULA SEXTA - DA DESTINAÇÃO DO IMÓVEL
+O imóvel objeto deste contrato destina-se exclusivamente para fim residencial, ficando o LOCATÁRIO proibido de alterar sua destinação, ceder, transferir, sublocar ou emprestar o imóvel, no todo ou em parte, sem autorização expressa do LOCADOR.
 
-CLÃUSULA SÃ‰TIMA - DAS PROIBIÃ‡Ã•ES E RESPONSABILIDADES
-O LOCATÃRIO obriga-se a nÃ£o depositar no imÃ³vel materiais inflamÃ¡veis, explosivos, corrosivos ou quaisquer objetos que possam comprometer a seguranÃ§a do imÃ³vel, dos vizinhos ou de terceiros.
+CLÁUSULA SÉTIMA - DAS PROIBIÇÕES E RESPONSABILIDADES
+O LOCATÁRIO obriga-se a não depositar no imóvel materiais inflamáveis, explosivos, corrosivos ou quaisquer objetos que possam comprometer a segurança do imóvel, dos vizinhos ou de terceiros.
 
-CLÃUSULA OITAVA - DA INADIMPLÃŠNCIA E RESCISÃƒO
-O descumprimento de qualquer clÃ¡usula deste contrato poderÃ¡ acarretar a rescisÃ£o da locaÃ§Ã£o, cobranÃ§a dos valores devidos, perdas e danos, alÃ©m das medidas judiciais cabÃ­veis.
+CLÁUSULA OITAVA - DA INADIMPLÊNCIA E RESCISÃO
+O descumprimento de qualquer cláusula deste contrato poderá acarretar a rescisão da locação, cobrança dos valores devidos, perdas e danos, além das medidas judiciais cabíveis.
 
-CLÃUSULA NONA - DA MULTA CONTRATUAL
-Fica estipulada multa equivalente a 03 (trÃªs) meses de aluguel vigente na data da infraÃ§Ã£o, na qual incorrerÃ¡ a parte que infringir quaisquer clÃ¡usulas deste contrato, facultando Ã  parte inocente considerar rescindida a locaÃ§Ã£o.
+CLÁUSULA NONA - DA MULTA CONTRATUAL
+Fica estipulada multa equivalente a 03 (três) meses de aluguel vigente na data da infração, na qual incorrerá a parte que infringir quaisquer cláusulas deste contrato, facultando à parte inocente considerar rescindida a locação.
 
-CLÃUSULA DÃ‰CIMA - DO FORO
-As partes elegem o foro da comarca de {contractCity} para dirimir quaisquer dÃºvidas ou questÃµes oriundas deste contrato, com renÃºncia de qualquer outro, por mais privilegiado que seja.
+CLÁUSULA DÉCIMA - DO FORO
+As partes elegem o foro da comarca de {contractCity} para dirimir quaisquer dúvidas ou questões oriundas deste contrato, com renúncia de qualquer outro, por mais privilegiado que seja.
 
 {contractDefaultNotes}
 
-E assim, por estarem justas e convencionadas, as partes assinam o presente instrumento particular de CONTRATO DE LOCAÃ‡ÃƒO RESIDENCIAL, em 2 (duas) vias de igual teor, juntamente com as testemunhas abaixo.
+E assim, por estarem justas e convencionadas, as partes assinam o presente instrumento particular de CONTRATO DE LOCAÇÃO RESIDENCIAL, em 2 (duas) vias de igual teor, juntamente com as testemunhas abaixo.
 
 {contractCity}, {currentDate}.
 
@@ -232,7 +232,7 @@ LOCADOR:
 __________________________________
 {landlordName}
 
-LOCATÃRIO:
+LOCATÁRIO:
 __________________________________
 {tenantName}
 
@@ -246,77 +246,77 @@ __________________________________
 Nome: ______________________________
 CPF: ______________________________`;
 
-const ORIGINAL_STANDARD_RESIDENTIAL_CONTRACT_TEMPLATE = `CONTRATO DE LOCAÃ‡ÃƒO RESIDENCIAL
+const ORIGINAL_STANDARD_RESIDENTIAL_CONTRACT_TEMPLATE = `CONTRATO DE LOCAÇÃO RESIDENCIAL
 
-{landlordName}, inscrito(a) no CPF/CNPJ nÂº {landlordDocument}, telefone {companyPhone}, residente e domiciliado(a) em {landlordAddress}, a seguir denominado(a) LOCADOR, e de outro lado, {tenantName}, inscrito(a) no CPF/CNPJ nÂº {tenantDocument}, telefone {tenantPhone}, residente e domiciliado(a) em {tenantAddress}, denominado(a) LOCATÃRIO.
+{landlordName}, inscrito(a) no CPF/CNPJ nº {landlordDocument}, telefone {companyPhone}, residente e domiciliado(a) em {landlordAddress}, a seguir denominado(a) LOCADOR, e de outro lado, {tenantName}, inscrito(a) no CPF/CNPJ nº {tenantDocument}, telefone {tenantPhone}, residente e domiciliado(a) em {tenantAddress}, denominado(a) LOCATÁRIO.
 
-CLÃUSULA PRIMEIRA - O LOCADOR dÃ¡ em locaÃ§Ã£o o imÃ³vel situado em {propertyAddress}, denominado {propertyName}, pelo prazo de {contractMonths} mÃªs(es), ao iniciar em {startDate} e para terminar em {endDate}, data em que o LOCATÃRIO, apÃ³s vistoria do mesmo, o aceita nas condiÃ§Ãµes em que se encontra, e se obriga a restituir o imÃ³vel locado em perfeito estado de conservaÃ§Ã£o, inteiramente livre e desocupado, com conta de luz, Ã¡gua e demais encargos pagos e desligados quando aplicÃ¡vel, sob pena de acrescentar-se a obrigaÃ§Ã£o de fazer e a multa contratual prevista na CLÃUSULA DÃ‰CIMA SEXTA.
+CLÁUSULA PRIMEIRA - O LOCADOR dá em locação o imóvel situado em {propertyAddress}, denominado {propertyName}, pelo prazo de {contractMonths} mês(es), ao iniciar em {startDate} e para terminar em {endDate}, data em que o LOCATÁRIO, após vistoria do mesmo, o aceita nas condições em que se encontra, e se obriga a restituir o imóvel locado em perfeito estado de conservação, inteiramente livre e desocupado, com conta de luz, água e demais encargos pagos e desligados quando aplicável, sob pena de acrescentar-se a obrigação de fazer e a multa contratual prevista na CLÁUSULA DÉCIMA SEXTA.
 
-ParÃ¡grafo Primeiro - Antes do vencimento do prazo ajustado nesta clÃ¡usula, nÃ£o poderÃ¡ o LOCADOR retomar o imÃ³vel, salvo se motivado por infraÃ§Ã£o contratual do LOCATÃRIO. No caso de devoluÃ§Ã£o do imÃ³vel ao LOCADOR antes do prazo, deverÃ¡ o LOCATÃRIO pagar a multa prevista na CLÃUSULA DÃ‰CIMA SEXTA.
+Parágrafo Primeiro - Antes do vencimento do prazo ajustado nesta cláusula, não poderá o LOCADOR retomar o imóvel, salvo se motivado por infração contratual do LOCATÁRIO. No caso de devolução do imóvel ao LOCADOR antes do prazo, deverá o LOCATÁRIO pagar a multa prevista na CLÁUSULA DÉCIMA SEXTA.
 
-ParÃ¡grafo Segundo - Quando da devoluÃ§Ã£o das chaves ao final do contrato, o LOCATÃRIO deverÃ¡ apresentar contas de Ã¡gua e luz pagas durante o tempo em que estiver no imÃ³vel e, quando cabÃ­vel, comprovar seu desligamento ou transferÃªncia.
+Parágrafo Segundo - Quando da devolução das chaves ao final do contrato, o LOCATÁRIO deverá apresentar contas de água e luz pagas durante o tempo em que estiver no imóvel e, quando cabível, comprovar seu desligamento ou transferência.
 
-ParÃ¡grafo Terceiro - Na hipÃ³tese do LOCATÃRIO abandonar o imÃ³vel, fica o LOCADOR autorizado a tomar as medidas necessÃ¡rias para resguardar a posse, conservaÃ§Ã£o e seguranÃ§a do imÃ³vel, evitando depredaÃ§Ã£o ou invasÃ£o.
+Parágrafo Terceiro - Na hipótese do LOCATÁRIO abandonar o imóvel, fica o LOCADOR autorizado a tomar as medidas necessárias para resguardar a posse, conservação e segurança do imóvel, evitando depredação ou invasão.
 
-ParÃ¡grafo Quarto - No caso de falecimento do LOCATÃRIO, ficarÃ£o sub-rogados nos seus direitos e obrigaÃ§Ãµes o cÃ´njuge ou companheiro e, sucessivamente, os herdeiros, nos termos da legislaÃ§Ã£o aplicÃ¡vel.
+Parágrafo Quarto - No caso de falecimento do LOCATÁRIO, ficarão sub-rogados nos seus direitos e obrigações o cônjuge ou companheiro e, sucessivamente, os herdeiros, nos termos da legislação aplicável.
 
-CLÃUSULA SEGUNDA - O valor mensal do aluguel serÃ¡ de {amount}, a ser pago pelo LOCATÃRIO ao LOCADOR atÃ© o dia {dueDay} de cada mÃªs, por depÃ³sito bancÃ¡rio, transferÃªncia, dinheiro ou Pix, utilizando a chave {pixKey}, ou por outro meio formalmente acordado entre as partes.
+CLÁUSULA SEGUNDA - O valor mensal do aluguel será de {amount}, a ser pago pelo LOCATÁRIO ao LOCADOR até o dia {dueDay} de cada mês, por depósito bancário, transferência, dinheiro ou Pix, utilizando a chave {pixKey}, ou por outro meio formalmente acordado entre as partes.
 
-ParÃ¡grafo Primeiro - Decorrido o prazo de 30 (trinta) dias do vencimento, o dÃ©bito poderÃ¡ ser encaminhado para cobranÃ§a amigÃ¡vel ou judicial, ficando o LOCATÃRIO responsÃ¡vel pelos encargos, honorÃ¡rios, custas e demais despesas decorrentes da cobranÃ§a.
+Parágrafo Primeiro - Decorrido o prazo de 30 (trinta) dias do vencimento, o débito poderá ser encaminhado para cobrança amigável ou judicial, ficando o LOCATÁRIO responsável pelos encargos, honorários, custas e demais despesas decorrentes da cobrança.
 
-ParÃ¡grafo Segundo - Os encargos constantes da CLÃUSULA SEXTA, incluindo taxa de lixo quando houver, deverÃ£o ser pagos juntamente com o aluguel ou diretamente aos Ã³rgÃ£os responsÃ¡veis, conforme a natureza da cobranÃ§a.
+Parágrafo Segundo - Os encargos constantes da CLÁUSULA SEXTA, incluindo taxa de lixo quando houver, deverão ser pagos juntamente com o aluguel ou diretamente aos órgãos responsáveis, conforme a natureza da cobrança.
 
-ParÃ¡grafo Terceiro - O nÃ£o cumprimento das obrigaÃ§Ãµes pecuniÃ¡rias expressas neste contrato pelo LOCATÃRIO faculta ao LOCADOR adotar medidas de cobranÃ§a, inclusive protesto ou inclusÃ£o em cadastros de proteÃ§Ã£o ao crÃ©dito, quando legalmente permitido.
+Parágrafo Terceiro - O não cumprimento das obrigações pecuniárias expressas neste contrato pelo LOCATÁRIO faculta ao LOCADOR adotar medidas de cobrança, inclusive protesto ou inclusão em cadastros de proteção ao crédito, quando legalmente permitido.
 
-CLÃUSULA TERCEIRA - O aluguel mensal pactuado na CLÃUSULA SEGUNDA poderÃ¡ ser reajustado ao final do prazo contratual ou em eventual renovaÃ§Ã£o, mediante acordo entre as partes e observada a legislaÃ§Ã£o vigente.
+CLÁUSULA TERCEIRA - O aluguel mensal pactuado na CLÁUSULA SEGUNDA poderá ser reajustado ao final do prazo contratual ou em eventual renovação, mediante acordo entre as partes e observada a legislação vigente.
 
-CLÃUSULA QUARTA - Se necessÃ¡ria a propositura de aÃ§Ã£o de despejo, consignaÃ§Ã£o em pagamento de aluguÃ©is ou acessÃ³rios da locaÃ§Ã£o, cobranÃ§as, citaÃ§Ãµes, intimaÃ§Ãµes e notificaÃ§Ãµes poderÃ£o ser realizadas pelas formas previstas em lei, inclusive correspondÃªncia com aviso de recebimento, quando admitido.
+CLÁUSULA QUARTA - Se necessária a propositura de ação de despejo, consignação em pagamento de aluguéis ou acessórios da locação, cobranças, citações, intimações e notificações poderão ser realizadas pelas formas previstas em lei, inclusive correspondência com aviso de recebimento, quando admitido.
 
-CLÃUSULA QUINTA - O LOCATÃRIO declara haver visitado e examinado o imÃ³vel locado, aceitando-o nas condiÃ§Ãµes em que se encontra, obrigando-se a zelar por tudo o que nele houver e realizar, por sua conta, os reparos decorrentes do uso normal durante a locaÃ§Ã£o, especialmente os relativos a limpeza, conservaÃ§Ã£o, instalaÃ§Ãµes elÃ©tricas, hidrÃ¡ulicas, pintura, telhado, vidraÃ§aria, fechaduras, torneiras, pias, banheiros, ralos e demais acessÃ³rios.
+CLÁUSULA QUINTA - O LOCATÁRIO declara haver visitado e examinado o imóvel locado, aceitando-o nas condições em que se encontra, obrigando-se a zelar por tudo o que nele houver e realizar, por sua conta, os reparos decorrentes do uso normal durante a locação, especialmente os relativos a limpeza, conservação, instalações elétricas, hidráulicas, pintura, telhado, vidraçaria, fechaduras, torneiras, pias, banheiros, ralos e demais acessórios.
 
-ParÃ¡grafo Primeiro - Ã‰ assegurado ao LOCADOR o direito de vistoriar o imÃ³vel sempre que julgar conveniente, mediante prÃ©via comunicaÃ§Ã£o ao LOCATÃRIO, respeitada a legislaÃ§Ã£o aplicÃ¡vel.
+Parágrafo Primeiro - É assegurado ao LOCADOR o direito de vistoriar o imóvel sempre que julgar conveniente, mediante prévia comunicação ao LOCATÁRIO, respeitada a legislação aplicável.
 
-ParÃ¡grafo Segundo - O LOCATÃRIO deverÃ¡ entregar imediatamente ao LOCADOR toda e qualquer correspondÃªncia, intimaÃ§Ã£o, documento de cobranÃ§a, carnÃª ou comunicaÃ§Ã£o relativa ao imÃ³vel, ainda que dirigida ao LOCATÃRIO.
+Parágrafo Segundo - O LOCATÁRIO deverá entregar imediatamente ao LOCADOR toda e qualquer correspondência, intimação, documento de cobrança, carnê ou comunicação relativa ao imóvel, ainda que dirigida ao LOCATÁRIO.
 
-ParÃ¡grafo Terceiro - Rescindida a contrataÃ§Ã£o, amigÃ¡vel ou judicialmente, deverÃ¡ o LOCATÃRIO entregar o imÃ³vel em perfeito estado de conservaÃ§Ã£o e limpeza, respondendo por danos comprovados mediante recibos, orÃ§amentos ou documentos hÃ¡beis.
+Parágrafo Terceiro - Rescindida a contratação, amigável ou judicialmente, deverá o LOCATÁRIO entregar o imóvel em perfeito estado de conservação e limpeza, respondendo por danos comprovados mediante recibos, orçamentos ou documentos hábeis.
 
-ParÃ¡grafo Quarto - Fica expressamente proibida toda e qualquer alteraÃ§Ã£o no imÃ³vel sem prÃ©via autorizaÃ§Ã£o por escrito do LOCADOR.
+Parágrafo Quarto - Fica expressamente proibida toda e qualquer alteração no imóvel sem prévia autorização por escrito do LOCADOR.
 
-CLÃUSULA SEXTA - AlÃ©m do aluguel, compete ao LOCATÃRIO o pagamento das despesas ordinÃ¡rias de consumo de Ã¡gua, energia elÃ©trica, taxas de esgoto, saneamento, taxa de lixo, condomÃ­nio quando houver e demais encargos relacionados ao uso do imÃ³vel. Cabe ao LOCATÃRIO solicitar contrataÃ§Ã£o, transferÃªncia ou regularizaÃ§Ã£o dos serviÃ§os em seu nome quando aplicÃ¡vel, respondendo civil e criminalmente por uso irregular.
+CLÁUSULA SEXTA - Além do aluguel, compete ao LOCATÁRIO o pagamento das despesas ordinárias de consumo de água, energia elétrica, taxas de esgoto, saneamento, taxa de lixo, condomínio quando houver e demais encargos relacionados ao uso do imóvel. Cabe ao LOCATÁRIO solicitar contratação, transferência ou regularização dos serviços em seu nome quando aplicável, respondendo civil e criminalmente por uso irregular.
 
-ParÃ¡grafo Primeiro - As taxas e despesas ordinÃ¡rias de condomÃ­nio que incidam ou venham a incidir sobre o imÃ³vel serÃ£o pagas pelo LOCATÃRIO aos responsÃ¡veis pela cobranÃ§a, devendo apresentar comprovantes quando solicitado.
+Parágrafo Primeiro - As taxas e despesas ordinárias de condomínio que incidam ou venham a incidir sobre o imóvel serão pagas pelo LOCATÁRIO aos responsáveis pela cobrança, devendo apresentar comprovantes quando solicitado.
 
-ParÃ¡grafo Segundo - Na hipÃ³tese de os encargos serem pagos pelo LOCADOR por inadimplÃªncia do LOCATÃRIO, os respectivos valores serÃ£o reembolsados pelo LOCATÃRIO com multa, juros e correÃ§Ã£o monetÃ¡ria quando aplicÃ¡veis.
+Parágrafo Segundo - Na hipótese de os encargos serem pagos pelo LOCADOR por inadimplência do LOCATÁRIO, os respectivos valores serão reembolsados pelo LOCATÁRIO com multa, juros e correção monetária quando aplicáveis.
 
-ParÃ¡grafo Terceiro - O nÃ£o pagamento dos encargos sob responsabilidade do LOCATÃRIO poderÃ¡ dar ensejo Ã  rescisÃ£o contratual, despejo e aplicaÃ§Ã£o da multa prevista na CLÃUSULA DÃ‰CIMA SEXTA.
+Parágrafo Terceiro - O não pagamento dos encargos sob responsabilidade do LOCATÁRIO poderá dar ensejo à rescisão contratual, despejo e aplicação da multa prevista na CLÁUSULA DÉCIMA SEXTA.
 
-CLÃUSULA SÃ‰TIMA - No ato da devoluÃ§Ã£o do imÃ³vel, o LOCATÃRIO deverÃ¡ apresentar os comprovantes dos Ãºltimos pagamentos de Ã¡gua, energia elÃ©trica e demais encargos, bem como comprovar o encerramento, transferÃªncia ou regularizaÃ§Ã£o dos serviÃ§os quando necessÃ¡rio.
+CLÁUSULA SÉTIMA - No ato da devolução do imóvel, o LOCATÁRIO deverá apresentar os comprovantes dos últimos pagamentos de água, energia elétrica e demais encargos, bem como comprovar o encerramento, transferência ou regularização dos serviços quando necessário.
 
-CLÃUSULA OITAVA - O LOCATÃRIO obriga-se a nÃ£o depositar no imÃ³vel materiais inflamÃ¡veis, explosivos, corrosivos ou quaisquer bens que possam causar risco ao imÃ³vel, aos vizinhos ou a terceiros. Benfeitorias somente poderÃ£o ser realizadas com autorizaÃ§Ã£o prÃ©via do LOCADOR, ficando incorporadas ao imÃ³vel sem direito a retenÃ§Ã£o ou abatimento, salvo acordo escrito em sentido contrÃ¡rio.
+CLÁUSULA OITAVA - O LOCATÁRIO obriga-se a não depositar no imóvel materiais inflamáveis, explosivos, corrosivos ou quaisquer bens que possam causar risco ao imóvel, aos vizinhos ou a terceiros. Benfeitorias somente poderão ser realizadas com autorização prévia do LOCADOR, ficando incorporadas ao imóvel sem direito a retenção ou abatimento, salvo acordo escrito em sentido contrário.
 
-CLÃUSULA NONA - No caso de desapropriaÃ§Ã£o do imÃ³vel locado, ficarÃ¡ o LOCADOR desobrigado das clÃ¡usulas deste contrato, reservando-se ao LOCATÃRIO apenas os direitos que eventualmente lhe sejam assegurados pela autoridade competente.
+CLÁUSULA NONA - No caso de desapropriação do imóvel locado, ficará o LOCADOR desobrigado das cláusulas deste contrato, reservando-se ao LOCATÁRIO apenas os direitos que eventualmente lhe sejam assegurados pela autoridade competente.
 
-CLÃUSULA DÃ‰CIMA - Nenhuma intimaÃ§Ã£o ou exigÃªncia da SaÃºde PÃºblica ou Ã³rgÃ£o pÃºblico serÃ¡ motivo para o LOCATÃRIO abandonar o imÃ³vel ou pedir rescisÃ£o contratual, salvo decisÃ£o ou vistoria oficial que comprove risco estrutural ou impossibilidade de uso do imÃ³vel.
+CLÁUSULA DÉCIMA - Nenhuma intimação ou exigência da Saúde Pública ou órgão público será motivo para o LOCATÁRIO abandonar o imóvel ou pedir rescisão contratual, salvo decisão ou vistoria oficial que comprove risco estrutural ou impossibilidade de uso do imóvel.
 
-CLÃUSULA DÃ‰CIMA PRIMEIRA - Quaisquer tolerÃ¢ncias ou concessÃµes do LOCADOR para com o LOCATÃRIO, quando nÃ£o manifestadas por escrito, nÃ£o constituirÃ£o precedente invocÃ¡vel e nÃ£o alterarÃ£o as obrigaÃ§Ãµes contratuais.
+CLÁUSULA DÉCIMA PRIMEIRA - Quaisquer tolerâncias ou concessões do LOCADOR para com o LOCATÁRIO, quando não manifestadas por escrito, não constituirão precedente invocável e não alterarão as obrigações contratuais.
 
-CLÃUSULA DÃ‰CIMA SEGUNDA - O LOCADOR nÃ£o responderÃ¡ por danos sofridos pelo LOCATÃRIO em razÃ£o de vazamentos, chuvas, rompimento de canos, defeitos em esgoto ou fossa, incÃªndios, arrombamentos, roubos, furtos, caso fortuito ou forÃ§a maior, salvo quando comprovada responsabilidade legal do LOCADOR.
+CLÁUSULA DÉCIMA SEGUNDA - O LOCADOR não responderá por danos sofridos pelo LOCATÁRIO em razão de vazamentos, chuvas, rompimento de canos, defeitos em esgoto ou fossa, incêndios, arrombamentos, roubos, furtos, caso fortuito ou força maior, salvo quando comprovada responsabilidade legal do LOCADOR.
 
-CLÃUSULA DÃ‰CIMA TERCEIRA - O LOCATÃRIO nÃ£o terÃ¡ direito de reter o pagamento do aluguel ou de qualquer quantia devida ao LOCADOR sob alegaÃ§Ã£o de nÃ£o terem sido atendidas exigÃªncias ou solicitaÃ§Ãµes, devendo eventuais controvÃ©rsias ser resolvidas pelos meios legais cabÃ­veis.
+CLÁUSULA DÉCIMA TERCEIRA - O LOCATÁRIO não terá direito de reter o pagamento do aluguel ou de qualquer quantia devida ao LOCADOR sob alegação de não terem sido atendidas exigências ou solicitações, devendo eventuais controvérsias ser resolvidas pelos meios legais cabíveis.
 
-CLÃUSULA DÃ‰CIMA QUARTA - O imÃ³vel objeto do presente contrato destina-se exclusivamente para fim residencial, ficando o LOCATÃRIO proibido de mudar a destinaÃ§Ã£o, ceder, transferir, sublocar ou emprestar o imÃ³vel, no todo ou em parte, a qualquer tÃ­tulo, sem autorizaÃ§Ã£o expressa do LOCADOR.
+CLÁUSULA DÉCIMA QUARTA - O imóvel objeto do presente contrato destina-se exclusivamente para fim residencial, ficando o LOCATÁRIO proibido de mudar a destinação, ceder, transferir, sublocar ou emprestar o imóvel, no todo ou em parte, a qualquer título, sem autorização expressa do LOCADOR.
 
-ParÃ¡grafo Ãšnico - A ocupaÃ§Ã£o do imÃ³vel por pessoa nÃ£o autorizada ou a permanÃªncia de terceiros apÃ³s a saÃ­da do LOCATÃRIO caracterizarÃ¡ infraÃ§Ã£o contratual grave, sujeitando o LOCATÃRIO Ã  rescisÃ£o e Ã  multa prevista na CLÃUSULA DÃ‰CIMA SEXTA.
+Parágrafo Único - A ocupação do imóvel por pessoa não autorizada ou a permanência de terceiros após a saída do LOCATÁRIO caracterizará infração contratual grave, sujeitando o LOCATÁRIO à rescisão e à multa prevista na CLÁUSULA DÉCIMA SEXTA.
 
-CLÃUSULA DÃ‰CIMA QUINTA - Em caso de venda do imÃ³vel, o LOCATÃRIO serÃ¡ notificado acerca do direito de preferÃªncia previsto na Lei do Inquilinato. NÃ£o se manifestando no prazo legal, serÃ¡ considerado nÃ£o interessado. NÃ£o efetuando a compra, o LOCATÃRIO autoriza o LOCADOR a mostrar o imÃ³vel a interessados, mediante agendamento prÃ©vio.
+CLÁUSULA DÉCIMA QUINTA - Em caso de venda do imóvel, o LOCATÁRIO será notificado acerca do direito de preferência previsto na Lei do Inquilinato. Não se manifestando no prazo legal, será considerado não interessado. Não efetuando a compra, o LOCATÁRIO autoriza o LOCADOR a mostrar o imóvel a interessados, mediante agendamento prévio.
 
-CLÃUSULA DÃ‰CIMA SEXTA - Fica estipulada a multa equivalente a 03 (trÃªs) meses de aluguel vigente na data da ocorrÃªncia, na qual incorrerÃ¡ a parte que infringir quaisquer clÃ¡usulas deste contrato, facultando Ã  parte inocente considerar rescindida a locaÃ§Ã£o, promover a cobranÃ§a dos valores devidos e tomar as medidas judiciais cabÃ­veis.
+CLÁUSULA DÉCIMA SEXTA - Fica estipulada a multa equivalente a 03 (três) meses de aluguel vigente na data da ocorrência, na qual incorrerá a parte que infringir quaisquer cláusulas deste contrato, facultando à parte inocente considerar rescindida a locação, promover a cobrança dos valores devidos e tomar as medidas judiciais cabíveis.
 
-CLÃUSULA DÃ‰CIMA SÃ‰TIMA - Elegem as partes contratantes o foro da comarca de {contractCity}, para dirimir as questÃµes oriundas da interpretaÃ§Ã£o ou aplicaÃ§Ã£o deste contrato, com exclusÃ£o de qualquer outro, por mais privilegiado que seja.
+CLÁUSULA DÉCIMA SÉTIMA - Elegem as partes contratantes o foro da comarca de {contractCity}, para dirimir as questões oriundas da interpretação ou aplicação deste contrato, com exclusão de qualquer outro, por mais privilegiado que seja.
 
 {contractDefaultNotes}
 
-E assim, por estarem justas e convencionadas, as partes assinam o presente instrumento particular de CONTRATO DE LOCAÃ‡ÃƒO RESIDENCIAL, em 2 (duas) vias de igual teor, juntamente com as testemunhas abaixo.
+E assim, por estarem justas e convencionadas, as partes assinam o presente instrumento particular de CONTRATO DE LOCAÇÃO RESIDENCIAL, em 2 (duas) vias de igual teor, juntamente com as testemunhas abaixo.
 
 {contractCity}, {currentDate}.
 
@@ -324,7 +324,7 @@ ____________________________________
 LOCADOR: {landlordName}
 
 ____________________________________
-LOCATÃRIO: {tenantName}
+LOCATÁRIO: {tenantName}
 
 ____________________________________
 Testemunha:
@@ -500,10 +500,10 @@ type PaymentMethodOption = {
 const paymentMethodOptions: PaymentMethodOption[] = [
   { value: "Cash", label: "Dinheiro" },
   { value: "Pix", label: "Pix" },
-  { value: "CreditCard", label: "CartÃ£o de crÃ©dito" },
-  { value: "DebitCard", label: "CartÃ£o de dÃ©bito" },
-  { value: "BankSlip", label: "Boleto bancÃ¡rio" },
-  { value: "BankTransfer", label: "TransferÃªncia bancÃ¡ria" },
+  { value: "CreditCard", label: "Cartão de crédito" },
+  { value: "DebitCard", label: "Cartão de débito" },
+  { value: "BankSlip", label: "Boleto bancário" },
+  { value: "BankTransfer", label: "Transferência bancária" },
   { value: "Other", label: "Outros" },
 ];
 
@@ -732,7 +732,7 @@ export default function AccountsReceivablePage() {
         }
       }
     } catch (error) {
-      console.error("NÃ£o foi possÃ­vel carregar contas a receber.", error);
+      console.error("Não foi possível carregar contas a receber.", error);
     }
   }
 
@@ -960,7 +960,7 @@ export default function AccountsReceivablePage() {
 
         return {
           id,
-          property: property?.name || "ImÃ³vel",
+          property: property?.name || "Imóvel",
           tenant: tenant?.name || "Inquilino",
           dueDate: dueDate.toISOString(),
           amount: getContractAmount(contract),
@@ -1315,7 +1315,7 @@ export default function AccountsReceivablePage() {
     if (filter === "Overdue") return "Vencidas";
     if (filter === "DueToday") return "Vencendo hoje";
     if (filter === "Upcoming") return "A vencer";
-    if (filter === "DateRange") return "Por perÃ­odo";
+    if (filter === "DateRange") return "Por período";
 
     return "Todos os vencimentos";
   }
@@ -1791,8 +1791,8 @@ export default function AccountsReceivablePage() {
 
   function getPaymentBookletInstructions() {
     const defaultInstructions = [
-      "1. Efetue o pagamento atÃ© a data de vencimento.",
-      "2. ApÃ³s o vencimento, poderÃ£o ser aplicados multa e juros conforme contrato.",
+      "1. Efetue o pagamento até a data de vencimento.",
+      "2. Após o vencimento, poderão ser aplicados multa e juros conforme contrato.",
       "3. Guarde este comprovante para controle financeiro.",
     ].join("\n");
 
@@ -1844,7 +1844,7 @@ export default function AccountsReceivablePage() {
       return "";
     }
 
-    return `<div class="instructions"><span>InstruÃ§Ãµes</span>${instructionRows}</div>`;
+    return `<div class="instructions"><span>Instruções</span>${instructionRows}</div>`;
   }
 
   function removeTextAccents(value: string) {
@@ -1996,7 +1996,7 @@ export default function AccountsReceivablePage() {
 
     if (!printWindow) {
       setChargeFormError(
-        "As parcelas foram salvas, mas nÃ£o foi possÃ­vel abrir o carnÃª. Verifique se o navegador bloqueou pop-ups.",
+        "As parcelas foram salvas, mas não foi possível abrir o carnê. Verifique se o navegador bloqueou pop-ups.",
       );
       return;
     }
@@ -2004,11 +2004,11 @@ export default function AccountsReceivablePage() {
     const companySettings = getCompanySettingsForCarnet();
     const companyName =
       companySettings.tradeName || companySettings.companyName || "Contrx";
-    const companyDocument = companySettings.document || "NÃ£o informado";
-    const companyPhone = companySettings.phone || "NÃ£o informado";
-    const companyEmail = companySettings.email || "NÃ£o informado";
+    const companyDocument = companySettings.document || "Não informado";
+    const companyPhone = companySettings.phone || "Não informado";
+    const companyEmail = companySettings.email || "Não informado";
     const pixKeyType = companySettings.pixKeyType || "Pix";
-    const pixKey = companySettings.pixKey || "NÃ£o cadastrada";
+    const pixKey = companySettings.pixKey || "Não cadastrada";
     const firstCharge = carnetCharges[0];
     const paymentBookletInstructions = getPaymentBookletInstructions();
     const totalAmount = carnetCharges.reduce(
@@ -2069,7 +2069,7 @@ export default function AccountsReceivablePage() {
             <div class="voucher-header">
               <div>
                 <div class="brand">${escapeHtml(companyName)}</div>
-                <h2>CarnÃª de pagamento</h2>
+                <h2>Carnê de pagamento</h2>
               </div>
               <div class="installment-badge">
                 Parcela ${installmentLabel}
@@ -2083,7 +2083,7 @@ export default function AccountsReceivablePage() {
               </div>
 
               <div class="field full">
-                <span>ImÃ³vel</span>
+                <span>Imóvel</span>
                 <strong>${escapeHtml(charge.property)}</strong>
               </div>
 
@@ -2102,11 +2102,11 @@ export default function AccountsReceivablePage() {
               <div class="pix-info">
                 <span>Pagamento via Pix</span>
                 <strong>${escapeHtml(pixKey)}</strong>
-                <small>Tipo da chave: ${escapeHtml(pixKeyType || "NÃ£o informado")}</small>
+                <small>Tipo da chave: ${escapeHtml(pixKeyType || "Não informado")}</small>
                 ${
                   pixPayload
                     ? `<div class="pix-copy"><span>Pix copia e cola</span><p>${escapeHtml(pixPayload)}</p></div>`
-                    : `<div class="pix-warning">Cadastre a chave Pix da empresa para gerar o QR Code automÃ¡tico.</div>`
+                    : `<div class="pix-warning">Cadastre a chave Pix da empresa para gerar o QR Code automático.</div>`
                 }
               </div>
               ${
@@ -2119,8 +2119,8 @@ export default function AccountsReceivablePage() {
             ${renderPaymentBookletInstructions(paymentBookletContent)}
 
             <div class="voucher-footer">
-              <span>${escapeHtml(companyName)} Â· Documento: ${escapeHtml(companyDocument)}</span>
-              <span>Telefone: ${escapeHtml(companyPhone)} Â· E-mail: ${escapeHtml(companyEmail)}</span>
+              <span>${escapeHtml(companyName)} · Documento: ${escapeHtml(companyDocument)}</span>
+              <span>Telefone: ${escapeHtml(companyPhone)} · E-mail: ${escapeHtml(companyEmail)}</span>
             </div>
           </section>
         `;
@@ -2132,7 +2132,7 @@ export default function AccountsReceivablePage() {
       <html lang="pt-BR">
         <head>
           <meta charset="utf-8" />
-          <title>CarnÃª de Pagamento</title>
+          <title>Carnê de Pagamento</title>
           <style>
             * { box-sizing: border-box; }
             body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -2191,7 +2191,7 @@ export default function AccountsReceivablePage() {
         </head>
         <body>
           <div class="toolbar">
-            <button class="print-button" type="button" onclick="window.print()">Imprimir carnÃª</button>
+            <button class="print-button" type="button" onclick="window.print()">Imprimir carnê</button>
             <button class="close-button" type="button" onclick="window.close()">Fechar</button>
           </div>
 
@@ -2199,10 +2199,10 @@ export default function AccountsReceivablePage() {
             <section class="summary">
               <div class="summary-header">
                 <div>
-                  <div class="brand">${escapeHtml(companyName)} Â· Financeiro</div>
-                  <h1>CarnÃª de Pagamento</h1>
+                  <div class="brand">${escapeHtml(companyName)} · Financeiro</div>
+                  <h1>Carnê de Pagamento</h1>
                   <p>Inquilino: <strong>${escapeHtml(firstCharge.tenant)}</strong></p>
-                  <p>ImÃ³vel: <strong>${escapeHtml(firstCharge.property)}</strong></p>
+                  <p>Imóvel: <strong>${escapeHtml(firstCharge.property)}</strong></p>
                 </div>
                 <div class="summary-meta">
                   Parcelas: <strong>${carnetCharges.length}</strong><br />
@@ -2216,7 +2216,7 @@ export default function AccountsReceivablePage() {
                   <tr>
                     <th>Parcela</th>
                     <th>Inquilino</th>
-                    <th>ImÃ³vel</th>
+                    <th>Imóvel</th>
                     <th>Vencimento</th>
                     <th>Valor</th>
                   </tr>
@@ -2257,13 +2257,13 @@ export default function AccountsReceivablePage() {
 
     if (reportDueFilter === "DateRange" && !reportStartDate && !reportEndDate) {
       setReportFormError(
-        "Informe ao menos uma data inicial ou final para gerar relatÃ³rio por perÃ­odo.",
+        "Informe ao menos uma data inicial ou final para gerar relatório por período.",
       );
       return;
     }
 
     if (reportStartDate && reportEndDate && reportStartDate > reportEndDate) {
-      setReportFormError("A data inicial nÃ£o pode ser maior que a data final.");
+      setReportFormError("A data inicial não pode ser maior que a data final.");
       return;
     }
 
@@ -2296,11 +2296,11 @@ export default function AccountsReceivablePage() {
         ? `De: ${formatDate(`${reportStartDate}T00:00:00`)}`
         : "",
       reportDueFilter === "DateRange" && reportEndDate
-        ? `AtÃ©: ${formatDate(`${reportEndDate}T00:00:00`)}`
+        ? `Até: ${formatDate(`${reportEndDate}T00:00:00`)}`
         : "",
     ]
       .filter(Boolean)
-      .join(" Â· ");
+      .join(" · ");
 
     const rows = reportCharges
       .map((charge) => {
@@ -2338,7 +2338,7 @@ export default function AccountsReceivablePage() {
 
     if (!reportWindow) {
       setReportFormError(
-        "NÃ£o foi possÃ­vel abrir o relatÃ³rio. Verifique se o navegador bloqueou pop-ups.",
+        "Não foi possível abrir o relatório. Verifique se o navegador bloqueou pop-ups.",
       );
       return;
     }
@@ -2348,7 +2348,7 @@ export default function AccountsReceivablePage() {
       <html lang="pt-BR">
         <head>
           <meta charset="utf-8" />
-          <title>RelatÃ³rio de Contas a Receber</title>
+          <title>Relatório de Contas a Receber</title>
           <style>
             * { box-sizing: border-box; }
             body { font-family: Arial, sans-serif; margin: 0; color: #0f172a; background: #f1f5f9; }
@@ -2383,14 +2383,14 @@ export default function AccountsReceivablePage() {
         <body>
           <div class="report-toolbar no-print">
             <button class="toolbar-button print" type="button" onclick="window.print()">Imprimir</button>
-            <button class="toolbar-button close" type="button" onclick="window.close()">Fechar relatÃ³rio</button>
+            <button class="toolbar-button close" type="button" onclick="window.close()">Fechar relatório</button>
           </div>
 
           <main class="report-page">
           <div class="header">
             <div>
-              <div class="brand">Contrx Â· Financeiro</div>
-              <h1>RelatÃ³rio de Contas a Receber</h1>
+              <div class="brand">Contrx · Financeiro</div>
+              <h1>Relatório de Contas a Receber</h1>
               <div class="meta">${escapeHtml(filterSummary)}</div>
             </div>
             <div class="meta">
@@ -2416,7 +2416,7 @@ export default function AccountsReceivablePage() {
           <table>
             <thead>
               <tr>
-                <th>ImÃ³vel</th>
+                <th>Imóvel</th>
                 <th>Inquilino/Pessoa</th>
                 <th>Vencimento</th>
                 <th>Valor</th>
@@ -2428,7 +2428,7 @@ export default function AccountsReceivablePage() {
             <tbody>${rows}</tbody>
           </table>
 
-          <div class="footer">RelatÃ³rio gerado pelo mÃ³dulo Contas a Receber do Contrx.</div>
+          <div class="footer">Relatório gerado pelo módulo Contas a Receber do Contrx.</div>
           </main>
           ${
             shouldPrint
@@ -2566,7 +2566,7 @@ export default function AccountsReceivablePage() {
 
     if (interest < 0 || discount < 0) {
       setPaymentFormError(
-        "Informe juros e desconto com valores vÃ¡lidos para receber a cobranÃ§a.",
+        "Informe juros e desconto com valores válidos para receber a cobrança.",
       );
       return;
     }
@@ -2578,7 +2578,7 @@ export default function AccountsReceivablePage() {
 
     if (amountPaid - remainingAmount > 0.01) {
       setPaymentFormError(
-        `O valor recebido nÃ£o pode ser maior que o saldo em aberto de ${formatCurrency(remainingAmount)}.`,
+        `O valor recebido não pode ser maior que o saldo em aberto de ${formatCurrency(remainingAmount)}.`,
       );
       return;
     }
@@ -2594,7 +2594,7 @@ export default function AccountsReceivablePage() {
 
     if (hasInvalidPaymentEntry) {
       setPaymentFormError(
-        "Informe valores vÃ¡lidos em todas as formas de pagamento.",
+        "Informe valores válidos em todas as formas de pagamento.",
       );
       return;
     }
@@ -2665,7 +2665,7 @@ export default function AccountsReceivablePage() {
         setPaymentFormError(
           error instanceof Error
             ? error.message
-            : "NÃ£o foi possÃ­vel registrar o recebimento no backend.",
+            : "Não foi possível registrar o recebimento no backend.",
         );
         return;
       }
@@ -2841,7 +2841,7 @@ export default function AccountsReceivablePage() {
           setPaymentFormError(
             error instanceof Error
               ? error.message
-              : "NÃ£o foi possÃ­vel registrar o recebimento em lote no backend.",
+              : "Não foi possível registrar o recebimento em lote no backend.",
           );
           return;
         }
@@ -2864,7 +2864,7 @@ export default function AccountsReceivablePage() {
     }
 
     if (nextPaymentRecords.length === 0) {
-      setPaymentFormError("Informe um valor vÃ¡lido para receber as contas selecionadas.");
+      setPaymentFormError("Informe um valor válido para receber as contas selecionadas.");
       return;
     }
 
@@ -2964,14 +2964,14 @@ export default function AccountsReceivablePage() {
 
     if (!charge) {
       setChargeFormError(
-        "Esta cobranÃ§a nÃ£o pode ser excluÃ­da porque foi gerada automaticamente por contrato.",
+        "Esta cobrança não pode ser excluída porque foi gerada automaticamente por contrato.",
       );
       return;
     }
 
     if (charge.contractId) {
       setChargeFormError(
-        "Esta parcela pertence a um contrato e nÃ£o pode ser excluÃ­da individualmente. Exclua ou cancele o contrato para remover as parcelas vinculadas.",
+        "Esta parcela pertence a um contrato e não pode ser excluída individualmente. Exclua ou cancele o contrato para remover as parcelas vinculadas.",
       );
       return;
     }
@@ -2992,7 +2992,7 @@ export default function AccountsReceivablePage() {
 
     if (!charge || !getChargePayment(charge.id)) {
       setChargeFormError(
-        "Esta cobranÃ§a nÃ£o estÃ¡ marcada como paga para voltar para pagamento.",
+        "Esta cobrança não está marcada como paga para voltar para pagamento.",
       );
       return;
     }
@@ -3018,7 +3018,7 @@ export default function AccountsReceivablePage() {
         setChargeFormError(
           error instanceof Error
             ? error.message
-            : "NÃ£o foi possÃ­vel estornar o recebimento no backend.",
+            : "Não foi possível estornar o recebimento no backend.",
         );
         setChargePendingPaymentReversal(null);
         return;
@@ -3092,7 +3092,7 @@ export default function AccountsReceivablePage() {
         setChargeFormError(
           error instanceof Error
             ? error.message
-            : "NÃ£o foi possÃ­vel excluir a cobranÃ§a no backend.",
+            : "Não foi possível excluir a cobrança no backend.",
         );
         setChargePendingDeletion(null);
         return;
@@ -3223,7 +3223,7 @@ export default function AccountsReceivablePage() {
 
       if (remainingAmountInCents < 0) {
         setChargeFormError(
-          "O valor informado ultrapassa o valor total da cobranÃ§a.",
+          "O valor informado ultrapassa o valor total da cobrança.",
         );
 
         return currentInstallments.map((installment) =>
@@ -3444,10 +3444,10 @@ export default function AccountsReceivablePage() {
 
     setPendingContractPrintRequest(null);
     setPendingContractScheduleNotice({
-      title: wasScheduleRegistered ? "Agenda criada" : "Agenda nÃ£o criada",
+      title: wasScheduleRegistered ? "Agenda criada" : "Agenda não criada",
       description: wasScheduleRegistered
-        ? "O vencimento do contrato foi registrado na agenda apÃ³s a impressÃ£o."
-        : "O contrato foi aberto para impressÃ£o, mas nÃ£o foi possÃ­vel registrar o vencimento na agenda automaticamente.",
+        ? "O vencimento do contrato foi registrado na agenda após a impressão."
+        : "O contrato foi aberto para impressão, mas não foi possível registrar o vencimento na agenda automaticamente.",
       itemValue: contractToPrint.propertyName || "Contrato vinculado",
     });
   }
@@ -3532,7 +3532,7 @@ export default function AccountsReceivablePage() {
   }) {
     return [
       address.street,
-      address.number ? `nÂº ${address.number}` : "",
+      address.number ? `nº ${address.number}` : "",
       address.complement,
       address.neighborhood || address.district
         ? `Bairro: ${address.neighborhood || address.district}`
@@ -3782,11 +3782,11 @@ export default function AccountsReceivablePage() {
       companySettings.legalName ||
       companySettings.companyName ||
       companySettings.tradeName ||
-      "LOCADOR NÃƒO INFORMADO";
+      "LOCADOR NÃO INFORMADO";
     const landlordDocument = formatDocumentForContractPrint(companySettings.document || "");
-    const tenantName = contract.tenantName || tenant?.name || "LOCATÃRIO NÃƒO INFORMADO";
+    const tenantName = contract.tenantName || tenant?.name || "LOCATÁRIO NÃO INFORMADO";
     const tenantDocument = formatDocumentForContractPrint(tenant?.cpf || tenant?.document || "");
-    const propertyName = contract.propertyName || property?.name || "IMÃ“VEL NÃƒO INFORMADO";
+    const propertyName = contract.propertyName || property?.name || "IMÓVEL NÃO INFORMADO";
     const propertyAddress = formatContractPrintAddress(property || {});
     const locationText =
       companySettings.contractCity ||
@@ -3800,18 +3800,18 @@ export default function AccountsReceivablePage() {
       companyName: landlordName,
       tradeName: companySettings.tradeName || companySettings.companyName || landlordName,
       landlordName,
-      landlordDocument: landlordDocument || "nÃ£o informado",
-      landlordAddress: formatContractPrintAddress(companySettings) || "endereÃ§o nÃ£o informado",
-      companyEmail: companySettings.email || "nÃ£o informado",
-      companyPhone: companySettings.phone || "nÃ£o informado",
+      landlordDocument: landlordDocument || "não informado",
+      landlordAddress: formatContractPrintAddress(companySettings) || "endereço não informado",
+      companyEmail: companySettings.email || "não informado",
+      companyPhone: companySettings.phone || "não informado",
       personName: tenantName,
       tenantName,
-      tenantDocument: tenantDocument || "nÃ£o informado",
-      tenantAddress: formatContractPrintAddress(tenant || {}) || "endereÃ§o nÃ£o informado",
-      tenantPhone: tenant?.phone || "nÃ£o informado",
-      tenantEmail: tenant?.email || "nÃ£o informado",
+      tenantDocument: tenantDocument || "não informado",
+      tenantAddress: formatContractPrintAddress(tenant || {}) || "endereço não informado",
+      tenantPhone: tenant?.phone || "não informado",
+      tenantEmail: tenant?.email || "não informado",
       propertyName,
-      propertyAddress: propertyAddress || "endereÃ§o nÃ£o informado",
+      propertyAddress: propertyAddress || "endereço não informado",
       startDate: formatContractDateForTemplate(contract.startDate),
       endDate: formatContractDateForTemplate(contract.endDate),
       entryTime: contract.isTemporaryRental ? contract.checkInTime || "____:____" : "",
@@ -3825,7 +3825,7 @@ export default function AccountsReceivablePage() {
       monthlyAmount,
       penaltyAmount: formatCurrency(getContractAmount(contract) * 3),
       dueDay: String(getContractRentDueDayForPrint(contract.startDate)),
-      pixKey: companySettings.pixKey || "nÃ£o informado",
+      pixKey: companySettings.pixKey || "não informado",
       contractCity: locationText,
       currentDate: new Date().toLocaleDateString("pt-BR", {
         day: "2-digit",
@@ -3851,7 +3851,7 @@ export default function AccountsReceivablePage() {
 
     if (!printWindow) {
       setChargeFormError(
-        "NÃ£o foi possÃ­vel abrir o contrato. Verifique se o navegador bloqueou pop-ups.",
+        "Não foi possível abrir o contrato. Verifique se o navegador bloqueou pop-ups.",
       );
       return false;
     }
@@ -3882,7 +3882,7 @@ export default function AccountsReceivablePage() {
 
     if (!paymentRecord) {
       setPaymentFormError(
-        "NÃ£o existe recibo salvo para esta cobranÃ§a. Confirme o recebimento antes de reimprimir.",
+        "Não existe recibo salvo para esta cobrança. Confirme o recebimento antes de reimprimir.",
       );
       return;
     }
@@ -3896,7 +3896,7 @@ export default function AccountsReceivablePage() {
     );
 
     if (carnetCharges.length === 0) {
-      window.alert("Selecione ao menos uma cobranÃ§a para imprimir o carnÃª.");
+      window.alert("Selecione ao menos uma cobrança para imprimir o carnê.");
       return;
     }
 
@@ -3913,7 +3913,7 @@ export default function AccountsReceivablePage() {
       .filter((item): item is ReceiptPrintItem => Boolean(item));
 
     if (receiptItems.length === 0) {
-      window.alert("Selecione contas jÃ¡ recebidas para imprimir recibos.");
+      window.alert("Selecione contas já recebidas para imprimir recibos.");
       return;
     }
 
@@ -3947,7 +3947,7 @@ export default function AccountsReceivablePage() {
 
     if (!receiptWindow) {
       setPaymentFormError(
-        "NÃ£o foi possÃ­vel abrir os recibos. Verifique se o navegador bloqueou pop-ups.",
+        "Não foi possível abrir os recibos. Verifique se o navegador bloqueou pop-ups.",
       );
       return;
     }
@@ -3957,9 +3957,9 @@ export default function AccountsReceivablePage() {
     const companySettings = getCompanySettingsForCarnet();
     const companyName =
       companySettings.tradeName || companySettings.companyName || "Contrx";
-    const companyDocument = companySettings.document || "NÃ£o informado";
-    const companyPhone = companySettings.phone || "NÃ£o informado";
-    const companyEmail = companySettings.email || "NÃ£o informado";
+    const companyDocument = companySettings.document || "Não informado";
+    const companyPhone = companySettings.phone || "Não informado";
+    const companyEmail = companySettings.email || "Não informado";
     const receipts = receiptItems
       .map(({ charge, paymentRecord }) => {
         const receiptNumber = String(paymentRecord.chargeId)
@@ -3978,7 +3978,7 @@ export default function AccountsReceivablePage() {
           ? "Entrada"
           : charge.installmentNumber && charge.installmentTotal
             ? `Parcela ${charge.installmentNumber}/${charge.installmentTotal}`
-            : "CobranÃ§a";
+            : "Cobrança";
         const receiptDateTime = new Date(paymentRecord.paidAt).toLocaleString("pt-BR");
         const receiptObservation = paymentRecord.note?.trim() || "";
 
@@ -3990,14 +3990,14 @@ export default function AccountsReceivablePage() {
                 <div class="subtitle">Comprovante de recebimento</div>
               </div>
               <div class="number">
-                NÂº <strong>${escapeHtml(receiptNumber || "CONTRX")}</strong><br />
+                Nº <strong>${escapeHtml(receiptNumber || "CONTRX")}</strong><br />
                 Emitido em: <strong>${escapeHtml(receiptDateTime)}</strong>
               </div>
             </header>
 
             <div class="reference">
               <div><span>Recebimento</span><strong>${formatDate(paymentRecord.paidAt)}</strong></div>
-              <div><span>ReferÃªncia</span><strong>${escapeHtml(chargeLabel)}</strong></div>
+              <div><span>Referência</span><strong>${escapeHtml(chargeLabel)}</strong></div>
               <div><span>Vencimento</span><strong>${formatDate(charge.dueDate)}</strong></div>
             </div>
 
@@ -4015,22 +4015,22 @@ export default function AccountsReceivablePage() {
             <div class="payment-box">
               <div class="payment-row"><span>Forma(s) de pagamento</span><strong>${escapeHtml(paymentMethods)}</strong></div>
               <div class="payment-row"><span>Pagador</span><strong>${escapeHtml(charge.tenant)}</strong></div>
-              <div class="payment-row"><span>ReferÃªncia</span><strong>${escapeHtml(charge.property)}</strong></div>
-              ${receiptObservation ? `<div class="payment-row"><span>ObservaÃ§Ã£o</span><strong>${escapeHtml(receiptObservation)}</strong></div>` : ""}
+              <div class="payment-row"><span>Referência</span><strong>${escapeHtml(charge.property)}</strong></div>
+              ${receiptObservation ? `<div class="payment-row"><span>Observação</span><strong>${escapeHtml(receiptObservation)}</strong></div>` : ""}
             </div>
 
             <p class="declaration">
-              Declaramos o recebimento do valor acima descrito, referente Ã  cobranÃ§a indicada neste comprovante.
-              Este recibo Ã© vÃ¡lido apÃ³s a confirmaÃ§Ã£o do pagamento.
+              Declaramos o recebimento do valor acima descrito, referente à cobrança indicada neste comprovante.
+              Este recibo é válido após a confirmação do pagamento.
             </p>
 
             <div class="signature-area">
               <div class="signature">${escapeHtml(companyName)}<small>Recebedor</small></div>
-              <div class="signature">Assinatura / ConferÃªncia<small>Pagador</small></div>
+              <div class="signature">Assinatura / Conferência<small>Pagador</small></div>
             </div>
 
             <div class="footer">
-              ${escapeHtml(companyName)} Â· Documento: ${escapeHtml(companyDocument)} Â· Telefone: ${escapeHtml(companyPhone)} Â· E-mail: ${escapeHtml(companyEmail)}
+              ${escapeHtml(companyName)} · Documento: ${escapeHtml(companyDocument)} · Telefone: ${escapeHtml(companyPhone)} · E-mail: ${escapeHtml(companyEmail)}
             </div>
           </section>
         `;
@@ -4121,7 +4121,7 @@ export default function AccountsReceivablePage() {
 
     if (!receiptWindow) {
       setPaymentFormError(
-        "O recebimento foi salvo, mas nÃ£o foi possÃ­vel abrir o recibo. Verifique se o navegador bloqueou pop-ups.",
+        "O recebimento foi salvo, mas não foi possível abrir o recibo. Verifique se o navegador bloqueou pop-ups.",
       );
       return;
     }
@@ -4131,9 +4131,9 @@ export default function AccountsReceivablePage() {
     const companySettings = getCompanySettingsForCarnet();
     const companyName =
       companySettings.tradeName || companySettings.companyName || "Contrx";
-    const companyDocument = companySettings.document || "NÃ£o informado";
-    const companyPhone = companySettings.phone || "NÃ£o informado";
-    const companyEmail = companySettings.email || "NÃ£o informado";
+    const companyDocument = companySettings.document || "Não informado";
+    const companyPhone = companySettings.phone || "Não informado";
+    const companyEmail = companySettings.email || "Não informado";
     const receiptNumber = String(paymentRecord.chargeId)
       .replace(/[^a-zA-Z0-9]/g, "")
       .slice(-8)
@@ -4150,7 +4150,7 @@ export default function AccountsReceivablePage() {
       ? "Entrada"
       : charge.installmentNumber && charge.installmentTotal
         ? `Parcela ${charge.installmentNumber}/${charge.installmentTotal}`
-        : "CobranÃ§a";
+        : "Cobrança";
     const receiptDateTime = new Date(paymentRecord.paidAt).toLocaleString("pt-BR");
     const receiptDate = formatDate(paymentRecord.paidAt);
     const receiptObservation = paymentRecord.note?.trim() || "-";
@@ -4228,7 +4228,7 @@ export default function AccountsReceivablePage() {
                   <div class="subtitle">Comprovante de recebimento</div>
                 </div>
                 <div class="number">
-                  NÂº <strong>${escapeHtml(receiptNumber || "CONTRX")}</strong><br />
+                  Nº <strong>${escapeHtml(receiptNumber || "CONTRX")}</strong><br />
                   Emitido em: <strong>${escapeHtml(receiptDateTime)}</strong>
                 </div>
               </header>
@@ -4239,7 +4239,7 @@ export default function AccountsReceivablePage() {
                   <strong>${escapeHtml(receiptDate)}</strong>
                 </div>
                 <div>
-                  <span>ReferÃªncia</span>
+                  <span>Referência</span>
                   <strong>${escapeHtml(chargeLabel)}</strong>
                 </div>
                 <div>
@@ -4274,13 +4274,13 @@ export default function AccountsReceivablePage() {
               <div class="payment-box">
                 <div class="payment-row"><span>Forma(s) de pagamento</span><strong>${escapeHtml(paymentMethods)}</strong></div>
                 <div class="payment-row"><span>Pagador</span><strong>${escapeHtml(charge.tenant)}</strong></div>
-                <div class="payment-row"><span>ReferÃªncia</span><strong>${escapeHtml(charge.property)}</strong></div>
-                ${hasObservation ? `<div class="payment-row"><span>ObservaÃ§Ã£o</span><strong>${escapeHtml(receiptObservation)}</strong></div>` : ""}
+                <div class="payment-row"><span>Referência</span><strong>${escapeHtml(charge.property)}</strong></div>
+                ${hasObservation ? `<div class="payment-row"><span>Observação</span><strong>${escapeHtml(receiptObservation)}</strong></div>` : ""}
               </div>
 
               <p class="declaration">
-                Declaramos o recebimento do valor acima descrito, referente Ã  cobranÃ§a indicada neste comprovante.
-                Este recibo Ã© vÃ¡lido apÃ³s a confirmaÃ§Ã£o do pagamento.
+                Declaramos o recebimento do valor acima descrito, referente à cobrança indicada neste comprovante.
+                Este recibo é válido após a confirmação do pagamento.
               </p>
 
               <div class="signature-area">
@@ -4289,13 +4289,13 @@ export default function AccountsReceivablePage() {
                   <small>Recebedor</small>
                 </div>
                 <div class="signature">
-                  Assinatura / ConferÃªncia
+                  Assinatura / Conferência
                   <small>Pagador</small>
                 </div>
               </div>
 
               <div class="footer">
-                ${escapeHtml(companyName)} Â· Documento: ${escapeHtml(companyDocument)} Â· Telefone: ${escapeHtml(companyPhone)} Â· E-mail: ${escapeHtml(companyEmail)}
+                ${escapeHtml(companyName)} · Documento: ${escapeHtml(companyDocument)} · Telefone: ${escapeHtml(companyPhone)} · E-mail: ${escapeHtml(companyEmail)}
               </div>
             </section>
           </main>
@@ -4381,7 +4381,7 @@ export default function AccountsReceivablePage() {
           setChargeFormError(
             error instanceof Error
               ? error.message
-              : "NÃ£o foi possÃ­vel atualizar o recebimento no backend.",
+              : "Não foi possível atualizar o recebimento no backend.",
           );
           return;
         }
@@ -4395,28 +4395,28 @@ export default function AccountsReceivablePage() {
 
     if (!formTenant) {
       setChargeFormError(
-        "Selecione um inquilino/pessoa para salvar a cobranÃ§a.",
+        "Selecione um inquilino/pessoa para salvar a cobrança.",
       );
       return;
     }
 
     if (normalizedAmount <= 0) {
       setChargeFormError(
-        "Informe um valor total vÃ¡lido para salvar a cobranÃ§a.",
+        "Informe um valor total válido para salvar a cobrança.",
       );
       return;
     }
 
     if (!formIssueDate) {
       setChargeFormError(
-        "Informe a data de lanÃ§amento para salvar a cobranÃ§a.",
+        "Informe a data de lançamento para salvar a cobrança.",
       );
       return;
     }
 
     if (!formDueDate) {
       setChargeFormError(
-        "Informe o primeiro vencimento para salvar a cobranÃ§a.",
+        "Informe o primeiro vencimento para salvar a cobrança.",
       );
       return;
     }
@@ -4428,12 +4428,12 @@ export default function AccountsReceivablePage() {
 
     if (!tenant) {
       setChargeFormError(
-        "Inquilino/pessoa nÃ£o encontrado. Selecione novamente.",
+        "Inquilino/pessoa não encontrado. Selecione novamente.",
       );
       return;
     }
 
-    const chargeProperty = property?.name || "Sem imÃ³vel vinculado";
+    const chargeProperty = property?.name || "Sem imóvel vinculado";
     const issueDate = new Date(`${formIssueDate}T00:00:00`).toISOString();
 
     if (formLaunchType === "single") {
@@ -4484,7 +4484,7 @@ export default function AccountsReceivablePage() {
           setChargeFormError(
             error instanceof Error
               ? error.message
-              : "NÃ£o foi possÃ­vel salvar a cobranÃ§a no backend.",
+              : "Não foi possível salvar a cobrança no backend.",
           );
           return;
         }
@@ -4513,7 +4513,7 @@ export default function AccountsReceivablePage() {
 
     if (installmentPreview.length === 0) {
       setChargeFormError(
-        "Gere ao menos uma parcela vÃ¡lida para salvar a cobranÃ§a.",
+        "Gere ao menos uma parcela válida para salvar a cobrança.",
       );
       return;
     }
@@ -4535,7 +4535,7 @@ export default function AccountsReceivablePage() {
 
     if (installmentTotalInCents !== chargeTotalInCents) {
       setChargeFormError(
-        `A soma das parcelas precisa fechar exatamente o valor total da cobranÃ§a. DiferenÃ§a: ${formatCurrency(
+        `A soma das parcelas precisa fechar exatamente o valor total da cobrança. Diferença: ${formatCurrency(
           Math.abs(installmentTotalInCents - chargeTotalInCents) / 100,
         )}.`,
       );
@@ -4590,7 +4590,7 @@ export default function AccountsReceivablePage() {
         setChargeFormError(
           error instanceof Error
             ? error.message
-            : "NÃ£o foi possÃ­vel salvar as parcelas no backend.",
+            : "Não foi possível salvar as parcelas no backend.",
         );
         return;
       }
@@ -5162,12 +5162,12 @@ export default function AccountsReceivablePage() {
         <div>
           <p className="text-sm font-semibold text-orange-600">Financeiro</p>
 
-          <h1 className="mt-1 text-3xl font-black text-slate-900 dark:text-slate-100">
+          <h1 className="mt-1 text-2xl font-black text-slate-900 dark:text-slate-100 sm:text-3xl">
             Contas a Receber
           </h1>
 
           <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
-            Acompanhe cobranÃ§as geradas automaticamente pelos contratos ativos.
+            Acompanhe cobranças geradas automaticamente pelos contratos ativos.
           </p>
         </div>
 
@@ -5186,7 +5186,7 @@ export default function AccountsReceivablePage() {
             value={formatCurrency(totalOverdue)}
             red
           />
-          <Card title="CobranÃ§as" value={filteredCharges.length} />
+          <Card title="Cobranças" value={filteredCharges.length} />
         </div>
 
         <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-sm">
@@ -5197,7 +5197,7 @@ export default function AccountsReceivablePage() {
               </h2>
 
               <p className={`mt-1 text-sm leading-6 ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
-                Refine a visualizaÃ§Ã£o sem alterar os dados originais.
+                Refine a visualização sem alterar os dados originais.
               </p>
             </div>
 
@@ -5243,7 +5243,7 @@ export default function AccountsReceivablePage() {
                 ) : (
                   "Todos os inquilinos"
                 )}{" "}
-                Â· Status: <strong>{getStatusFilterLabel(statusFilter)}</strong>.
+                · Status: <strong>{getStatusFilterLabel(statusFilter)}</strong>.
               </p>
             </div>
 
@@ -5274,14 +5274,14 @@ export default function AccountsReceivablePage() {
                   onClick={openCreateModal}
                   className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
                 >
-                  Nova cobranÃ§a
+                  Nova cobrança
                 </button>
 
                 <button
                   onClick={openReportModal}
                   className="rounded-xl bg-[#0f172a] px-5 py-3 text-sm font-bold text-[#ffffff] shadow-sm transition hover:bg-[#1e293b]"
                 >
-                  RelatÃ³rio PDF
+                  Relatório PDF
                 </button>
 
                 <button
@@ -5302,7 +5302,7 @@ export default function AccountsReceivablePage() {
                     {selectedCharges.length} conta(s) selecionada(s)
                   </p>
                   <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                    Pendentes para receber: {selectedPendingCharges.length} Â· Com recibo: {selectedPaidCharges.length}
+                    Pendentes para receber: {selectedPendingCharges.length} · Com recibo: {selectedPaidCharges.length}
                   </p>
                 </div>
 
@@ -5320,7 +5320,7 @@ export default function AccountsReceivablePage() {
                     onClick={printSelectedCarnets}
                     className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-orange-600"
                   >
-                    Imprimir carnÃªs
+                    Imprimir carnês
                   </button>
                   <button
                     type="button"
@@ -5335,7 +5335,7 @@ export default function AccountsReceivablePage() {
                     onClick={clearChargeSelection}
                     className="rounded-xl bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700"
                   >
-                    Limpar seleÃ§Ã£o
+                    Limpar seleção
                   </button>
                 </div>
               </div>
@@ -5351,13 +5351,13 @@ export default function AccountsReceivablePage() {
                       type="checkbox"
                       checked={allVisibleChargesSelected}
                       onChange={toggleAllVisibleChargeSelection}
-                      aria-label="Selecionar todas as contas visÃ­veis"
+                      aria-label="Selecionar todas as contas visíveis"
                       className="h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
                     />
                   </th>
 
                   <th className="px-5 py-4 text-left text-sm font-black text-slate-900 dark:text-slate-100">
-                    ImÃ³vel
+                    Imóvel
                   </th>
 
                   <th className="px-5 py-4 text-left text-sm font-black text-slate-900 dark:text-slate-100">
@@ -5377,7 +5377,7 @@ export default function AccountsReceivablePage() {
                   </th>
 
                   <th className="px-5 py-4 text-center text-sm font-black text-slate-900 dark:text-slate-100">
-                    AÃ§Ã£o
+                    Ação
                   </th>
                 </tr>
               </thead>
@@ -5461,8 +5461,8 @@ export default function AccountsReceivablePage() {
                             aria-expanded={openActionMenuChargeId === charge.id}
                             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-800 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
                           >
-                            AÃ§Ãµes
-                            <span className="text-xs">â–¼</span>
+                            Ações
+                            <span className="text-xs">▼</span>
                           </button>
 
                         </div>
@@ -5583,17 +5583,17 @@ export default function AccountsReceivablePage() {
                         : "bg-[#f8fafc] shadow-slate-200/70 ring-1 ring-[#e2e8f0]"
                     }`}
                   >
-                    Ã°Å¸â€œâ€ž
+                    📄
                   </div>
 
                   <div>
                     <h2 className={`text-xl font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
-                      RelatÃ³rio de contas a receber
+                      Relatório de contas a receber
                     </h2>
 
                     <p className={`mt-1 text-sm leading-6 ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
-                      Visualize o relatÃ³rio na tela ou gere um PDF com filtros por pessoa,
-                      status, vencidas, a vencer ou perÃ­odo.
+                      Visualize o relatório na tela ou gere um PDF com filtros por pessoa,
+                      status, vencidas, a vencer ou período.
                     </p>
                   </div>
                 </div>
@@ -5606,9 +5606,9 @@ export default function AccountsReceivablePage() {
                       ? "bg-[#1e293b] text-[#cbd5e1] ring-[#334155] hover:bg-[#334155] hover:text-[#ffffff]"
                       : "bg-[#ffffff] text-[#64748b] ring-[#dbe4ef] hover:bg-[#f8fafc] hover:text-[#0f172a]"
                   }`}
-                  aria-label="Fechar relatÃ³rio"
+                  aria-label="Fechar relatório"
                 >
-                  âœ•
+                  ✕
                 </button>
               </div>
             </div>
@@ -5758,7 +5758,7 @@ export default function AccountsReceivablePage() {
                 }`}
               >
                 <p className={`text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
-                  PrÃ©via do relatÃ³rio
+                  Prévia do relatório
                 </p>
 
                 <div className="mt-3 grid gap-3 md:grid-cols-3">
@@ -5838,7 +5838,7 @@ export default function AccountsReceivablePage() {
                     : "bg-[#f8fafc] text-[#334155] ring-[#dbe4ef] hover:bg-[#e2e8f0]"
                 }`}
               >
-                Visualizar relatÃ³rio
+                Visualizar relatório
               </button>
 
               <button
@@ -5860,7 +5860,7 @@ export default function AccountsReceivablePage() {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50 dark:bg-orange-950/300 text-xl shadow-lg shadow-orange-500/20">
-                    Ã°Å¸â€Å½
+                    🔎
                   </div>
 
                   <div>
@@ -5884,7 +5884,7 @@ export default function AccountsReceivablePage() {
                   }`}
                   aria-label="Fechar busca"
                 >
-                  âœ•
+                  ✕
                 </button>
               </div>
             </div>
@@ -5961,7 +5961,7 @@ export default function AccountsReceivablePage() {
                   </span>
 
                   <span className="mt-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                    Desmarque esta opÃ§Ã£o para nÃ£o abrir a busca toda vez que
+                    Desmarque esta opção para não abrir a busca toda vez que
                     acessar Contas a Receber.
                   </span>
                 </span>
@@ -5998,18 +5998,18 @@ export default function AccountsReceivablePage() {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-xl shadow-lg shadow-orange-500/20 dark:shadow-orange-950/30">
-                    Ã°Å¸â€™Â°
+                    💰
                   </div>
 
                   <div>
                     <h2 className={`text-xl font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
-                      {editingChargeId ? "Editar cobranÃ§a" : "Nova cobranÃ§a"}
+                      {editingChargeId ? "Editar cobrança" : "Nova cobrança"}
                     </h2>
 
                     <p className={`mt-1 text-sm leading-6 ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
                       {editingChargeId
                         ? "Ajuste os dados da conta a receber selecionada."
-                        : "Cadastre uma conta a receber avulsa, Ãºnica ou parcelada."}
+                        : "Cadastre uma conta a receber avulsa, única ou parcelada."}
                     </p>
                   </div>
                 </div>
@@ -6023,7 +6023,7 @@ export default function AccountsReceivablePage() {
                   }`}
                   aria-label="Fechar cadastro"
                 >
-                  âœ•
+                  ✕
                 </button>
               </div>
             </div>
@@ -6032,7 +6032,7 @@ export default function AccountsReceivablePage() {
               {!editingChargeId && (
                 <div>
                   <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                    Tipo de lanÃ§amento
+                    Tipo de lançamento
                   </label>
 
                   <div className="grid gap-3 md:grid-cols-2">
@@ -6049,10 +6049,10 @@ export default function AccountsReceivablePage() {
                       }`}
                     >
                       <p className={`text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
-                        Conta Ãºnica
+                        Conta única
                       </p>
                       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                        LanÃ§amento avulso com apenas um vencimento.
+                        Lançamento avulso com apenas um vencimento.
                       </p>
                     </button>
 
@@ -6069,10 +6069,10 @@ export default function AccountsReceivablePage() {
                       }`}
                     >
                       <p className={`text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
-                        SequÃªncia de parcelas
+                        Sequência de parcelas
                       </p>
                       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                        Divide o valor total em parcelas editÃ¡veis.
+                        Divide o valor total em parcelas editáveis.
                       </p>
                     </button>
                   </div>
@@ -6128,14 +6128,14 @@ export default function AccountsReceivablePage() {
 
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
                   {isEditingPaidCharge
-                    ? "CobranÃ§a paga nÃ£o permite alteraÃ§Ã£o de inquilino/pessoa."
-                    : "Use o botÃ£o NOVO para abrir o cadastro completo de inquilino e selecionar automaticamente no lanÃ§amento."}
+                    ? "Cobrança paga não permite alteração de inquilino/pessoa."
+                    : "Use o botão NOVO para abrir o cadastro completo de inquilino e selecionar automaticamente no lançamento."}
                 </p>
               </div>
 
               <div>
                 <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                  ImÃ³vel
+                  Imóvel
                   <span className="ml-1 text-xs font-semibold text-slate-400 dark:text-slate-500">
                     opcional
                   </span>
@@ -6154,7 +6154,7 @@ export default function AccountsReceivablePage() {
                       : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                   }`}
                 >
-                  <option value="">Sem imÃ³vel vinculado</option>
+                  <option value="">Sem imóvel vinculado</option>
                   {properties.map((property) => (
                     <option key={property.id} value={property.id}>
                       {property.name}
@@ -6200,7 +6200,7 @@ export default function AccountsReceivablePage() {
 
                 <div>
                   <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                    Data de lanÃ§amento
+                    Data de lançamento
                     <span className="ml-1 text-red-500">*</span>
                   </label>
 
@@ -6260,7 +6260,7 @@ export default function AccountsReceivablePage() {
                   />
 
                   <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                    Para cobranÃ§a paga, somente a data de pagamento pode ser
+                    Para cobrança paga, somente a data de pagamento pode ser
                     ajustada antes de salvar.
                   </p>
                 </div>
@@ -6326,7 +6326,7 @@ export default function AccountsReceivablePage() {
                             Primeira parcela como entrada
                           </strong>
                           <small className="mt-1 block text-xs font-semibold leading-5">
-                            Usa a data de lanÃ§amento e abre o recebimento da entrada apÃ³s salvar.
+                            Usa a data de lançamento e abre o recebimento da entrada após salvar.
                           </small>
                         </span>
                       </label>
@@ -6336,7 +6336,7 @@ export default function AccountsReceivablePage() {
                       O sistema divide o valor total em parcelas iguais e gera
                       os vencimentos automaticamente de 30 em 30 dias. Quando a
                       primeira parcela for marcada como entrada, ela usa a data
-                      de lanÃ§amento e as prÃ³ximas parcelas seguem a sequÃªncia a
+                      de lançamento e as próximas parcelas seguem a sequência a
                       partir do primeiro vencimento.
                     </div>
                   </div>
@@ -6415,7 +6415,7 @@ export default function AccountsReceivablePage() {
                         onClick={openDeleteChargeConfirmation}
                         className="rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-red-700"
                       >
-                        Excluir cobranÃ§a
+                        Excluir cobrança
                       </button>
                     )}
 
@@ -6464,7 +6464,7 @@ export default function AccountsReceivablePage() {
                       ? "Salvando..."
                       : editingChargeId
                         ? "Salvar ajustes"
-                        : "Salvar cobranÃ§a"}
+                        : "Salvar cobrança"}
                   </button>
                 </div>
               </div>
@@ -6485,7 +6485,7 @@ export default function AccountsReceivablePage() {
 
                   <div className="min-w-0">
                     <h2 className={`text-xl font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
-                      {isBatchPayment ? "Receber cobranÃ§as selecionadas" : "Receber cobranÃ§a"}
+                      {isBatchPayment ? "Receber cobranças selecionadas" : "Receber cobrança"}
                     </h2>
 
                     <p className={`mt-1 text-sm ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
@@ -6504,7 +6504,7 @@ export default function AccountsReceivablePage() {
                   }`}
                   aria-label="Fechar recebimento"
                 >
-                  âœ•
+                  ✕
                 </button>
               </div>
             </div>
@@ -6513,7 +6513,7 @@ export default function AccountsReceivablePage() {
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30">
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
-                    {isBatchPayment ? "CobranÃ§as selecionadas" : "CobranÃ§a selecionada"}
+                    {isBatchPayment ? "Cobranças selecionadas" : "Cobrança selecionada"}
                   </p>
 
                   <span
@@ -6532,12 +6532,12 @@ export default function AccountsReceivablePage() {
                     <span className="font-black text-slate-950 dark:text-white">
                       Inquilino:
                     </span>{" "}
-                    {isBatchPayment ? "VÃ¡rios selecionados" : chargePendingPaymentReceipt.tenant}
+                    {isBatchPayment ? "Vários selecionados" : chargePendingPaymentReceipt.tenant}
                   </p>
 
                   <p>
-                    <span className="font-black text-slate-950 dark:text-white">ImÃ³vel:</span>{" "}
-                    {isBatchPayment ? "VÃ¡rios imÃ³veis" : chargePendingPaymentReceipt.property}
+                    <span className="font-black text-slate-950 dark:text-white">Imóvel:</span>{" "}
+                    {isBatchPayment ? "Vários imóveis" : chargePendingPaymentReceipt.property}
                   </p>
 
                   <p>
@@ -6583,7 +6583,7 @@ export default function AccountsReceivablePage() {
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                   <p className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    RestarÃ¡
+                    Restará
                   </p>
                   <p className="mt-2 text-lg font-black text-slate-950 dark:text-white">
                     {formatCurrency(paymentModalBalanceAfterPayment)}
@@ -6767,8 +6767,8 @@ export default function AccountsReceivablePage() {
                     </h3>
 
                     <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                      Permite receber com um ou mais tipos, como Pix e cartÃ£o de
-                      dÃ©bito no mesmo recebimento.
+                      Permite receber com um ou mais tipos, como Pix e cartão de
+                      débito no mesmo recebimento.
                     </p>
                   </div>
 
@@ -6855,14 +6855,14 @@ export default function AccountsReceivablePage() {
 
               <div>
                 <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                  ObservaÃ§Ã£o
+                  Observação
                   <span className="ml-1 text-xs font-semibold text-slate-400 dark:text-slate-500">
                     opcional
                   </span>
                 </label>
 
                 <input
-                  placeholder="Ex: Pix + cartÃ£o de dÃ©bito / comprovante enviado pelo WhatsApp"
+                  placeholder="Ex: Pix + cartão de débito / comprovante enviado pelo WhatsApp"
                   value={paymentNote}
                   onChange={(event) => setPaymentNote(event.target.value)}
                   className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50"
@@ -6892,7 +6892,7 @@ export default function AccountsReceivablePage() {
                 </strong>
                 {paymentModalBalanceAfterPayment > 0.01 && (
                   <span className={isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}>
-                    {" "}Â· restarÃ¡ {formatCurrency(paymentModalBalanceAfterPayment)}
+                    {" "}· restará {formatCurrency(paymentModalBalanceAfterPayment)}
                   </span>
                 )}
               </div>
@@ -6923,8 +6923,8 @@ export default function AccountsReceivablePage() {
         <ConfirmationModal
           icon="OK"
           title="Confirmar recebimento?"
-          description="Confira os dados antes de concluir. Se o valor for menor que o saldo, a cobranÃ§a ficarÃ¡ parcialmente recebida."
-          itemLabel={isBatchPayment ? "Contas selecionadas" : "CobranÃ§a selecionada"}
+          description="Confira os dados antes de concluir. Se o valor for menor que o saldo, a cobrança ficará parcialmente recebida."
+          itemLabel={isBatchPayment ? "Contas selecionadas" : "Cobrança selecionada"}
           itemValue={
             isBatchPayment
               ? `${paymentModalCharges.length} contas`
@@ -6933,9 +6933,9 @@ export default function AccountsReceivablePage() {
           details={
             <>
               <p>
-                ImÃ³vel:{" "}
+                Imóvel:{" "}
                 {isBatchPayment
-                  ? "VÃ¡rios imÃ³veis"
+                  ? "Vários imóveis"
                   : chargePendingPaymentReceipt.property}
               </p>
               <p>
@@ -6961,7 +6961,7 @@ export default function AccountsReceivablePage() {
                   ))}
                 </div>
               </div>
-              {paymentNote.trim() && <p>ObservaÃ§Ã£o: {paymentNote.trim()}</p>}
+              {paymentNote.trim() && <p>Observação: {paymentNote.trim()}</p>}
             </>
           }
           confirmLabel="Confirmar recebimento"
@@ -6977,18 +6977,18 @@ export default function AccountsReceivablePage() {
       {chargePendingDeletion && (
         <ConfirmationModal
           icon="!"
-          title="Excluir cobranÃ§a?"
-          description="Esta aÃ§Ã£o removerÃ¡ a cobranÃ§a selecionada do contas a receber."
-          itemLabel="CobranÃ§a"
+          title="Excluir cobrança?"
+          description="Esta ação removerá a cobrança selecionada do contas a receber."
+          itemLabel="Cobrança"
           itemValue={chargePendingDeletion.tenant}
           details={
             <>
-              <p>ImÃ³vel: {chargePendingDeletion.property}</p>
+              <p>Imóvel: {chargePendingDeletion.property}</p>
               <p>Vencimento: {formatDate(chargePendingDeletion.dueDate)}</p>
               <p>Valor: {formatCurrency(chargePendingDeletion.amount)}</p>
             </>
           }
-          confirmLabel="Excluir cobranÃ§a"
+          confirmLabel="Excluir cobrança"
           danger
           onCancel={closeDeleteChargeConfirmation}
           onConfirm={confirmDeleteCharge}
@@ -7000,14 +7000,14 @@ export default function AccountsReceivablePage() {
 
       {chargePendingPaymentReversal && (
         <ConfirmationModal
-          icon="â†©"
-          title="Voltar cobranÃ§a para pagamento?"
-          description="O registro de pagamento serÃ¡ removido e a cobranÃ§a voltarÃ¡ para pendente ou vencida, conforme a data de vencimento."
-          itemLabel="CobranÃ§a selecionada"
+          icon="↩"
+          title="Voltar cobrança para pagamento?"
+          description="O registro de pagamento será removido e a cobrança voltará para pendente ou vencida, conforme a data de vencimento."
+          itemLabel="Cobrança selecionada"
           itemValue={chargePendingPaymentReversal.tenant}
           details={
             <>
-              <p>ImÃ³vel: {chargePendingPaymentReversal.property}</p>
+              <p>Imóvel: {chargePendingPaymentReversal.property}</p>
               <p>Vencimento: {formatDate(chargePendingPaymentReversal.dueDate)}</p>
               <p>Valor: {formatCurrency(chargePendingPaymentReversal.amount)}</p>
             </>
@@ -7025,13 +7025,13 @@ export default function AccountsReceivablePage() {
       {pendingContractCarnetRequest && (
         <ConfirmationModal
           icon="DOC"
-          title="Imprimir carnÃª agora?"
-          description="As parcelas deste contrato jÃ¡ existem no contas a receber. Imprima o carnÃª antes de seguir para o contrato."
+          title="Imprimir carnê agora?"
+          description="As parcelas deste contrato já existem no contas a receber. Imprima o carnê antes de seguir para o contrato."
           itemLabel="Contrato vinculado"
-          itemValue={pendingContractCarnetRequest.contract.propertyName || "NÃ£o informado"}
+          itemValue={pendingContractCarnetRequest.contract.propertyName || "Não informado"}
           details={
             <>
-              <p>Inquilino: {pendingContractCarnetRequest.contract.tenantName || "NÃ£o informado"}</p>
+              <p>Inquilino: {pendingContractCarnetRequest.contract.tenantName || "Não informado"}</p>
               <p>Parcelas: {pendingContractCarnetRequest.charges.length}</p>
               <p>
                 Total:{" "}
@@ -7044,7 +7044,7 @@ export default function AccountsReceivablePage() {
               </p>
             </>
           }
-          confirmLabel="Imprimir carnÃª"
+          confirmLabel="Imprimir carnê"
           cancelLabel="Ver contas"
           tone="orange"
           onCancel={closeContractCarnetQuestion}
@@ -7059,12 +7059,12 @@ export default function AccountsReceivablePage() {
         <ConfirmationModal
           icon="DOC"
           title="Imprimir contrato agora?"
-          description="O carnÃª foi gerado. Agora abra o contrato vinculado para impressÃ£o; depois disso o vencimento serÃ¡ registrado na agenda."
+          description="O carnê foi gerado. Agora abra o contrato vinculado para impressão; depois disso o vencimento será registrado na agenda."
           itemLabel="Contrato vinculado"
           itemValue={
             pendingContractPrintRequest.propertyName ||
             properties.find((property) => String(property.id) === String(pendingContractPrintRequest.propertyId))?.name ||
-            "NÃ£o informado"
+            "Não informado"
           }
           details={
             <>
@@ -7072,15 +7072,15 @@ export default function AccountsReceivablePage() {
                 Inquilino:{" "}
                 {pendingContractPrintRequest.tenantName ||
                   tenants.find((tenant) => String(tenant.id) === String(pendingContractPrintRequest.tenantId))?.name ||
-                  "NÃ£o informado"}
+                  "Não informado"}
               </p>
               <p>
                 Tipo:{" "}
                 {pendingContractPrintRequest.isTemporaryRental
-                  ? "Contrato temporÃ¡rio"
-                  : "Contrato padrÃ£o"}
+                  ? "Contrato temporário"
+                  : "Contrato padrão"}
               </p>
-              <p>InÃ­cio: {formatContractDateForTemplate(pendingContractPrintRequest.startDate)}</p>
+              <p>Início: {formatContractDateForTemplate(pendingContractPrintRequest.startDate)}</p>
               <p>Fim: {formatContractDateForTemplate(pendingContractPrintRequest.endDate)}</p>
             </>
           }

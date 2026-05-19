@@ -1,4 +1,12 @@
-import { IsArray, IsEmail, IsIn, IsString, MinLength } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsEmail,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export const userToolPermissions = [
   'dashboard',
@@ -9,6 +17,7 @@ export const userToolPermissions = [
   'accountsReceivable',
   'accountsPayable',
   'schedule',
+  'settings',
 ] as const;
 
 export type UserToolPermission = (typeof userToolPermissions)[number];
@@ -25,11 +34,30 @@ export class CriarUsuarioEmpresaDto {
   email!: string;
 
   @IsString()
-  @MinLength(6)
+  @IsNotEmpty()
   password!: string;
 
   @IsIn(companyUserRoles)
   role!: CompanyUserRole;
+
+  @IsArray()
+  @IsIn(userToolPermissions, { each: true })
+  permissions!: UserToolPermission[];
+}
+
+export class AtualizarUsuarioEmpresaDto {
+  @IsString()
+  name!: string;
+
+  @IsString()
+  @IsOptional()
+  password?: string;
+
+  @IsIn(companyUserRoles)
+  role!: CompanyUserRole;
+
+  @IsBoolean()
+  isActive!: boolean;
 
   @IsArray()
   @IsIn(userToolPermissions, { each: true })

@@ -1649,13 +1649,13 @@ export default function AccountsPayablePage() {
   }
 
   function getAccountsPayableReportHeader(templateData: Record<string, string>) {
-    const defaultTemplate = `RELATÃ“RIO DE CONTAS A PAGAR
+    const defaultTemplate = `RELATÓRIO DE CONTAS A PAGAR
 
 EMPRESA: {companyName}
 CATEGORIA: {reportCategory}
 STATUS: {reportStatus}
 VENCIMENTO: {reportDueFilter}
-PERÃODO: {reportStartDate} atÃ© {reportEndDate}
+PERÍODO: {reportStartDate} até {reportEndDate}
 
 RESUMO:
 Quantidade: {reportCount}
@@ -2166,7 +2166,7 @@ GERADO EM: {currentDate}`;
         <div>
           <p className="text-sm font-semibold text-orange-600">Financeiro</p>
 
-          <h1 className="mt-1 text-3xl font-black text-slate-900 dark:text-slate-100">
+          <h1 className="mt-1 text-2xl font-black text-slate-900 dark:text-slate-100 sm:text-3xl">
             Contas a Pagar
           </h1>
 

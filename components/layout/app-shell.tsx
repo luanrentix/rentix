@@ -104,6 +104,7 @@ const toolKeyByHref: Record<string, string> = {
   "/contas-receber": "accountsReceivable",
   "/contas-pagar": "accountsPayable",
   "/agenda": "schedule",
+  "/configuracoes": "settings",
 };
 
 const menuLinkPrefetch = process.env.NODE_ENV === "production" ? null : false;
@@ -566,6 +567,7 @@ export default function AppShell({ children }: AppShellProps) {
   const [resetError, setResetError] = useState("");
 
   const userInitials = useMemo(() => getInitialLetters(userSettings.name), [userSettings.name]);
+  const lockedUserEmail = user?.email || userSettings.email;
   const visibleMenuItems = useMemo(
     () => {
       const allowedMenuItems = menuItems.filter((item) =>
@@ -605,11 +607,12 @@ export default function AppShell({ children }: AppShellProps) {
       setUserSettings({
         ...defaultUserSettings,
         ...JSON.parse(storedUserSettings),
+        email: user?.email || defaultUserSettings.email,
       });
     }
 
     setThemeSettings(readThemeSettingsFromStorage(companyId));
-  }, [companyId]);
+  }, [companyId, user?.email]);
 
   const loadSettings = useCallback(async (currentCompanyId: string) => {
     const cachedUserSettings = getCachedUserSettings();
@@ -624,6 +627,7 @@ export default function AppShell({ children }: AppShellProps) {
         setUserSettings({
           ...defaultUserSettings,
           ...cachedUserSettings,
+          email: user?.email || defaultUserSettings.email,
         } as UserSettings);
       }
 
@@ -651,6 +655,7 @@ export default function AppShell({ children }: AppShellProps) {
       setUserSettings({
         ...defaultUserSettings,
         ...(settings.userSettings || {}),
+        email: user?.email || defaultUserSettings.email,
       } as UserSettings);
       setCompanySettings({
         ...defaultCompanySettings,
@@ -667,6 +672,7 @@ export default function AppShell({ children }: AppShellProps) {
           setUserSettings({
             ...defaultUserSettings,
             ...cachedUserSettings,
+            email: user?.email || defaultUserSettings.email,
           } as UserSettings);
         }
 
@@ -688,7 +694,7 @@ export default function AppShell({ children }: AppShellProps) {
 
       loadSettingsFromLocalStorage();
     }
-  }, [loadSettingsFromLocalStorage]);
+  }, [loadSettingsFromLocalStorage, user?.email]);
 
   useEffect(() => {
     if (!companyId) {
@@ -832,8 +838,8 @@ export default function AppShell({ children }: AppShellProps) {
       return false;
     }
 
-    if (passwordSettings.newPassword.length < 8) {
-      setPasswordError("A nova senha precisa ter no mínimo 8 caracteres.");
+    if (!passwordSettings.newPassword) {
+      setPasswordError("Informe a nova senha.");
       return false;
     }
 
@@ -866,9 +872,14 @@ export default function AppShell({ children }: AppShellProps) {
         });
       }
 
+      const immutableUserSettings = {
+        ...userSettings,
+        email: lockedUserEmail,
+      };
+
       await saveAppSettings({
         companyId,
-        userSettings,
+        userSettings: immutableUserSettings,
         companySettings,
         themeSettings,
       });
@@ -885,14 +896,24 @@ export default function AppShell({ children }: AppShellProps) {
     setCompanyStorageItem(
       companyId,
       "contrx_user_settings",
-      JSON.stringify(userSettings),
+      JSON.stringify({
+        ...userSettings,
+        email: lockedUserEmail,
+      }),
     );
     setCompanyStorageItem(
       companyId,
       "contrx_theme_settings",
       JSON.stringify(themeSettings),
     );
-    setCachedAppSettings({ userSettings, companySettings, themeSettings });
+    setCachedAppSettings({
+      userSettings: {
+        ...userSettings,
+        email: lockedUserEmail,
+      },
+      companySettings,
+      themeSettings,
+    });
     window.dispatchEvent(new Event("contrx-theme-change"));
 
     if (passwordSettings.newPassword) {
@@ -1119,11 +1140,12 @@ export default function AppShell({ children }: AppShellProps) {
                         themeSettings.mode !== "light" ? "text-slate-400" : "text-slate-500"
                       }`}
                     >
-                      {userSettings.email}
+                      {lockedUserEmail}
                     </p>
                   </div>
 
-                  <Link
+                  {canAccessTool(user?.role, user?.permissions, "settings") && (
+                    <Link
                     href="/configuracoes"
                     prefetch={menuLinkPrefetch}
                     onClick={() => setIsUserMenuOpen(false)}
@@ -1134,7 +1156,8 @@ export default function AppShell({ children }: AppShellProps) {
                     }`}
                   >
                     ⚙️ Configurações
-                  </Link>
+                    </Link>
+                  )}
 
                   <button
                     type="button"
@@ -1642,16 +1665,15 @@ export default function AppShell({ children }: AppShellProps) {
                           </span>
                           <input
                             type="email"
-                            value={userSettings.email}
-                            onChange={(event) =>
-                              setUserSettings({
-                                ...userSettings,
-                                email: event.target.value,
-                              })
-                            }
+                            value={lockedUserEmail}
+                            readOnly
+                            disabled
                             placeholder="usuario@contrx.com.br"
-                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                            className="w-full cursor-not-allowed rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-500 outline-none"
                           />
+                          <span className="text-xs font-semibold text-slate-500">
+                            O e-mail de acesso não pode ser alterado após o cadastro.
+                          </span>
                         </label>
                       </div>
 
@@ -1709,7 +1731,7 @@ export default function AppShell({ children }: AppShellProps) {
                                   newPassword: event.target.value,
                                 })
                               }
-                              placeholder="Mínimo 6 caracteres"
+                              placeholder="Digite a nova senha"
                               className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                             />
                           </label>

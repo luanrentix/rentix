@@ -25,6 +25,49 @@ type RequestOptions = RequestInit & {
 };
 
 const LEGACY_STORAGE_PREFIX = ['ren', 'tix'].join('');
+const SESSION_REPLACED_EVENT = 'contrx-session-replaced';
+const SESSION_REPLACED_NOTICE =
+  'Sua sessão foi encerrada porque este usuário entrou no Contrx em outro dispositivo. Para proteger seus dados, mantemos apenas um acesso ativo por usuário.';
+
+export class SessionReplacedError extends Error {
+  constructor(message = SESSION_REPLACED_NOTICE) {
+    super(message);
+    this.name = 'SessionReplacedError';
+  }
+}
+
+export function isSessionReplacedError(error: unknown) {
+  return error instanceof SessionReplacedError;
+}
+
+function normalizeMessage(message: string) {
+  return message
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function isSessionReplacedMessage(message: string) {
+  const normalizedMessage = normalizeMessage(message);
+
+  return (
+    normalizedMessage.includes('outro dispositivo') ||
+    normalizedMessage.includes('sessao encerrada') ||
+    normalizedMessage.includes('session replaced')
+  );
+}
+
+function dispatchSessionReplaced(message = SESSION_REPLACED_NOTICE) {
+  if (typeof window === 'undefined') return;
+
+  window.dispatchEvent(
+    new CustomEvent(SESSION_REPLACED_EVENT, {
+      detail: {
+        message,
+      },
+    }),
+  );
+}
 
 function getStoredToken() {
   if (typeof window === 'undefined') return null;
@@ -71,10 +114,15 @@ export async function apiFetch<TResponse>(
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => null);
+    const errorMessage =
+      errorBody?.message || `Request failed with status ${response.status}`;
 
-    throw new Error(
-      errorBody?.message || `Request failed with status ${response.status}`,
-    );
+    if (response.status === 401 && isSessionReplacedMessage(String(errorMessage))) {
+      dispatchSessionReplaced(SESSION_REPLACED_NOTICE);
+      throw new SessionReplacedError();
+    }
+
+    throw new Error(errorMessage);
   }
 
   return response.json() as Promise<TResponse>;

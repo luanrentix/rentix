@@ -8,7 +8,8 @@ export type UserToolPermission =
   | 'financial'
   | 'accountsReceivable'
   | 'accountsPayable'
-  | 'schedule';
+  | 'schedule'
+  | 'settings';
 
 export type CompanyUserRole = 'OWNER' | 'ADMIN' | 'MANAGER' | 'USER';
 
@@ -31,6 +32,14 @@ export type CreateCompanyUserRequest = {
   permissions: UserToolPermission[];
 };
 
+export type UpdateCompanyUserRequest = {
+  name: string;
+  password?: string;
+  role: CompanyUserRole;
+  isActive: boolean;
+  permissions: UserToolPermission[];
+};
+
 export async function getCompanyUsers() {
   return apiFetch<CompanyUser[]>('/autenticacao/usuarios');
 }
@@ -38,6 +47,13 @@ export async function getCompanyUsers() {
 export async function createCompanyUser(data: CreateCompanyUserRequest) {
   return apiFetch<CompanyUser>('/autenticacao/usuarios', {
     method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateCompanyUser(userId: string, data: UpdateCompanyUserRequest) {
+  return apiFetch<CompanyUser>(`/autenticacao/usuarios/${userId}`, {
+    method: 'PATCH',
     body: JSON.stringify(data),
   });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { resetTestData, type ResetTestDataModule } from "@/services/admin.service";
@@ -8,6 +8,7 @@ import { changePasswordRequest } from "@/services/auth";
 import {
   createCompanyUser,
   getCompanyUsers,
+  updateCompanyUser,
   type CompanyUser,
   type CompanyUserRole,
   type UserToolPermission,
@@ -40,6 +41,15 @@ type NewCompanyUserForm = {
   permissions: UserToolPermission[];
 };
 
+type EditCompanyUserForm = {
+  name: string;
+  email: string;
+  password: string;
+  role: CompanyUserRole;
+  isActive: boolean;
+  permissions: UserToolPermission[];
+};
+
 type SettingsValidationErrorKey =
   | keyof UserSettings
   | keyof CompanySettings
@@ -52,6 +62,7 @@ type PixKeyType = "cpf" | "cnpj" | "email" | "phone" | "random";
 type CompanySettings = {
   companyName: string;
   tradeName: string;
+  logo: string;
   document: string;
   stateRegistration: string;
   municipalRegistration: string;
@@ -153,6 +164,10 @@ function isCompanyAdminRole(role?: string | null) {
     role === "SYSTEM_OWNER" ||
     role === "DONO_SISTEMA"
   );
+}
+
+function canEditCompanyUser(companyUser: CompanyUser) {
+  return companyUser.role !== "SYSTEM_OWNER" && companyUser.role !== "DONO_SISTEMA";
 }
 
 const pixKeyTypeOptions: { label: string; value: PixKeyType }[] = [
@@ -260,12 +275,22 @@ const defaultNewCompanyUserForm: NewCompanyUserForm = {
   email: "",
   password: "",
   role: "USER",
-  permissions: ["dashboard"],
+  permissions: ["dashboard", "settings"],
+};
+
+const defaultEditCompanyUserForm: EditCompanyUserForm = {
+  name: "",
+  email: "",
+  password: "",
+  role: "USER",
+  isActive: true,
+  permissions: ["dashboard", "settings"],
 };
 
 const defaultCompanySettings: CompanySettings = {
   companyName: "",
   tradeName: "",
+  logo: "",
   document: "",
   stateRegistration: "",
   municipalRegistration: "",
@@ -282,6 +307,8 @@ const defaultCompanySettings: CompanySettings = {
   contractCity: "",
   contractDefaultNotes: "",
 };
+
+const maxCompanyLogoSizeInBytes = 1024 * 1024;
 
 const defaultThemeSettings: ThemeSettings = {
   mode: "light",
@@ -1222,6 +1249,7 @@ export default function ConfiguracoesPage() {
   const router = useRouter();
   const { user } = useAuth();
   const companyId = user?.companyId;
+  const userEmail = user?.email;
   const [activeSettingsTab, setActiveSettingsTab] = useState<SettingsTab>("company");
   const [userSettings, setUserSettings] = useState<UserSettings>(defaultUserSettings);
   const [companySettings, setCompanySettings] = useState<CompanySettings>(defaultCompanySettings);
@@ -1238,6 +1266,7 @@ export default function ConfiguracoesPage() {
   const [validationErrors, setValidationErrors] = useState<SettingsValidationErrors>({});
   const [successMessage, setSuccessMessage] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [logoUploadError, setLogoUploadError] = useState("");
   const [documentLookupError, setDocumentLookupError] = useState("");
   const [zipCodeLookupError, setZipCodeLookupError] = useState("");
   const [isDocumentLookupLoading, setIsDocumentLookupLoading] = useState(false);
@@ -1250,14 +1279,26 @@ export default function ConfiguracoesPage() {
   const [resetError, setResetError] = useState("");
   const [companyUsers, setCompanyUsers] = useState<CompanyUser[]>([]);
   const [newCompanyUserForm, setNewCompanyUserForm] = useState<NewCompanyUserForm>(defaultNewCompanyUserForm);
+  const [editingCompanyUser, setEditingCompanyUser] = useState<CompanyUser | null>(null);
+  const [editCompanyUserForm, setEditCompanyUserForm] = useState<EditCompanyUserForm>(defaultEditCompanyUserForm);
+  const [isUserSettingsEditing, setIsUserSettingsEditing] = useState(false);
+  const [isNewCompanyUserFormOpen, setIsNewCompanyUserFormOpen] = useState(false);
   const [isLoadingCompanyUsers, setIsLoadingCompanyUsers] = useState(false);
   const [isCreatingCompanyUser, setIsCreatingCompanyUser] = useState(false);
+  const [isUpdatingCompanyUser, setIsUpdatingCompanyUser] = useState(false);
   const [companyUserError, setCompanyUserError] = useState("");
+  const companyLogoInputRef = useRef<HTMLInputElement | null>(null);
   const printTemplateTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const userInitials = useMemo(() => getInitialLetters(userSettings.name), [userSettings.name]);
+  const lockedUserEmail = user?.email || userSettings.email;
+  const currentUserRoleLabel = roleLabels[user?.role || ""] || "Usuário";
   const canResetTestData = canResetTestDataRole(user?.role);
   const canManageCompanyUsers = isCompanyAdminRole(user?.role);
+  const companyDisplayName =
+    companySettings.tradeName || companySettings.companyName || "Empresa não cadastrada";
+  const companyLogoFallbackText = getInitialLetters(
+    companySettings.tradeName || companySettings.companyName || userSettings.name,
+  );
 
   const selectedPrintTemplate = printModalState.documentKey
     ? printTemplates[printModalState.documentKey]
@@ -1289,6 +1330,14 @@ export default function ConfiguracoesPage() {
     () => resetModuleOptions.filter((option) => resetOptions[option.key]).length,
     [resetOptions]
   );
+
+  function getCompanyUserPermissions(companyUser: CompanyUser) {
+    const permissions = companyUser.permissions || [];
+
+    return permissions.length > 0
+      ? permissions
+      : defaultEditCompanyUserForm.permissions;
+  }
 
   const saveChangeSummary = useMemo(
     () =>
@@ -1326,6 +1375,7 @@ export default function ConfiguracoesPage() {
       const parsedUserSettings = {
         ...defaultUserSettings,
         ...JSON.parse(storedUserSettings),
+        email: userEmail || defaultUserSettings.email,
       };
 
       setUserSettings(parsedUserSettings);
@@ -1336,7 +1386,7 @@ export default function ConfiguracoesPage() {
 
     setThemeSettings(parsedThemeSettings);
     setInitialThemeSettings(parsedThemeSettings);
-  }, [companyId]);
+  }, [companyId, userEmail]);
 
   const loadSettings = useCallback(async (currentCompanyId: string) => {
     try {
@@ -1346,10 +1396,19 @@ export default function ConfiguracoesPage() {
       const nextUserSettings = {
         ...defaultUserSettings,
         ...(settings.userSettings || {}),
+        email: userEmail || defaultUserSettings.email,
       } as UserSettings;
+      const storedCompanySettings = (settings.companySettings || {}) as Record<string, unknown>;
       const nextCompanySettings = {
         ...defaultCompanySettings,
-        ...(settings.companySettings || {}),
+        ...storedCompanySettings,
+        logo: String(
+          storedCompanySettings.logo ||
+            storedCompanySettings.logoUrl ||
+            storedCompanySettings.logoBase64 ||
+            storedCompanySettings.companyLogo ||
+            "",
+        ),
       } as CompanySettings;
       const nextThemeSettings = normalizeThemeSettings(
         settings.themeSettings as Partial<ThemeSettings> | undefined,
@@ -1370,7 +1429,7 @@ export default function ConfiguracoesPage() {
       console.warn("Settings API unavailable. Local cached settings were loaded.");
       loadSettingsFromLocalStorage();
     }
-  }, [loadSettingsFromLocalStorage]);
+  }, [loadSettingsFromLocalStorage, userEmail]);
 
   useEffect(() => {
     if (!companyId) {
@@ -1514,6 +1573,81 @@ export default function ConfiguracoesPage() {
     });
   }
 
+  function handleToggleEditCompanyUserPermission(permission: UserToolPermission) {
+    setCompanyUserError("");
+    setEditCompanyUserForm((currentForm) => {
+      const currentPermissions = new Set(currentForm.permissions);
+
+      if (currentPermissions.has(permission)) {
+        currentPermissions.delete(permission);
+      } else {
+        currentPermissions.add(permission);
+      }
+
+      return {
+        ...currentForm,
+        permissions: Array.from(currentPermissions),
+      };
+    });
+  }
+
+  function handleStartUserSettingsEdit() {
+    setIsUserSettingsEditing(true);
+    setPasswordError("");
+  }
+
+  function handleCancelUserSettingsEdit() {
+    setUserSettings({
+      ...initialUserSettings,
+      email: lockedUserEmail,
+    });
+    setPasswordSettings(defaultPasswordSettings);
+    setPasswordError("");
+    setValidationErrors((currentErrors) => {
+      const remainingErrors = { ...currentErrors };
+      delete remainingErrors.name;
+      delete remainingErrors.userEmail;
+
+      return remainingErrors;
+    });
+    setIsUserSettingsEditing(false);
+  }
+
+  function handleFinishUserSettingsEdit() {
+    setIsUserSettingsEditing(false);
+  }
+
+  function handleOpenNewCompanyUserForm() {
+    setNewCompanyUserForm(defaultNewCompanyUserForm);
+    setCompanyUserError("");
+    setIsNewCompanyUserFormOpen(true);
+  }
+
+  function handleCancelNewCompanyUserForm() {
+    setNewCompanyUserForm(defaultNewCompanyUserForm);
+    setCompanyUserError("");
+    setIsNewCompanyUserFormOpen(false);
+  }
+
+  function handleOpenEditCompanyUserForm(companyUser: CompanyUser) {
+    setEditingCompanyUser(companyUser);
+    setEditCompanyUserForm({
+      name: companyUser.name,
+      email: companyUser.email,
+      password: "",
+      role: companyUser.role as CompanyUserRole,
+      isActive: companyUser.isActive,
+      permissions: getCompanyUserPermissions(companyUser),
+    });
+    setCompanyUserError("");
+  }
+
+  function handleCancelEditCompanyUserForm() {
+    setEditingCompanyUser(null);
+    setEditCompanyUserForm(defaultEditCompanyUserForm);
+    setCompanyUserError("");
+  }
+
   async function handleCreateCompanyUser() {
     if (!canManageCompanyUsers) {
       setCompanyUserError("Acesso restrito ao administrador.");
@@ -1549,6 +1683,7 @@ export default function ConfiguracoesPage() {
       });
 
       setNewCompanyUserForm(defaultNewCompanyUserForm);
+      setIsNewCompanyUserFormOpen(false);
       await loadCompanyUsers();
       setSuccessMessage("Usuário criado com sucesso.");
     } catch (error) {
@@ -1559,6 +1694,56 @@ export default function ConfiguracoesPage() {
       );
     } finally {
       setIsCreatingCompanyUser(false);
+    }
+  }
+
+  async function handleUpdateCompanyUser() {
+    if (!canManageCompanyUsers || !editingCompanyUser) {
+      setCompanyUserError("Acesso restrito ao administrador.");
+      return;
+    }
+
+    const name = editCompanyUserForm.name.trim();
+    const password = editCompanyUserForm.password.trim();
+
+    if (!name) {
+      setCompanyUserError("Informe o nome do usuário.");
+      return;
+    }
+
+    if (password && password.length < 6) {
+      setCompanyUserError("A senha precisa ter pelo menos 6 caracteres.");
+      return;
+    }
+
+    if (editCompanyUserForm.permissions.length === 0) {
+      setCompanyUserError("Selecione pelo menos uma ferramenta para o usuário.");
+      return;
+    }
+
+    try {
+      setIsUpdatingCompanyUser(true);
+      setCompanyUserError("");
+
+      await updateCompanyUser(editingCompanyUser.id, {
+        name,
+        role: editCompanyUserForm.role,
+        isActive: editCompanyUserForm.isActive,
+        permissions: editCompanyUserForm.permissions,
+        ...(password ? { password } : {}),
+      });
+
+      handleCancelEditCompanyUserForm();
+      await loadCompanyUsers();
+      setSuccessMessage("Usuário atualizado com sucesso.");
+    } catch (error) {
+      setCompanyUserError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar o usuário agora.",
+      );
+    } finally {
+      setIsUpdatingCompanyUser(false);
     }
   }
 
@@ -1656,6 +1841,62 @@ export default function ConfiguracoesPage() {
     }
   }
 
+  function handleSelectCompanyLogo(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setLogoUploadError("Selecione um arquivo de imagem válido.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > maxCompanyLogoSizeInBytes) {
+      setLogoUploadError("A logo precisa ter no máximo 1 MB.");
+      event.target.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onerror = () => {
+      setLogoUploadError("Não foi possível carregar a imagem selecionada.");
+      event.target.value = "";
+    };
+
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        setLogoUploadError("Não foi possível carregar a imagem selecionada.");
+        event.target.value = "";
+        return;
+      }
+
+      setCompanySettings((currentSettings) => ({
+        ...currentSettings,
+        logo: reader.result as string,
+      }));
+      setLogoUploadError("");
+      event.target.value = "";
+    };
+
+    reader.readAsDataURL(file);
+  }
+
+  function handleRemoveCompanyLogo() {
+    setCompanySettings((currentSettings) => ({
+      ...currentSettings,
+      logo: "",
+    }));
+    setLogoUploadError("");
+
+    if (companyLogoInputRef.current) {
+      companyLogoInputRef.current.value = "";
+    }
+  }
+
   function validatePasswordChange() {
     const hasAnyPasswordField =
       passwordSettings.currentPassword ||
@@ -1733,10 +1974,10 @@ export default function ConfiguracoesPage() {
       nextValidationErrors.name = "Informe o nome do usuário.";
     }
 
-    if (!userSettings.email.trim()) {
-      nextValidationErrors.userEmail = "Informe o e-mail do usuário.";
-    } else if (!isValidEmail(userSettings.email)) {
-      nextValidationErrors.userEmail = "Informe um e-mail de usuário válido.";
+    if (!lockedUserEmail.trim()) {
+      nextValidationErrors.userEmail = "E-mail do usuário não encontrado. Faça login novamente.";
+    } else if (!isValidEmail(lockedUserEmail)) {
+      nextValidationErrors.userEmail = "E-mail de acesso inválido. Faça login novamente.";
     }
 
     setValidationErrors(nextValidationErrors);
@@ -1907,7 +2148,7 @@ export default function ConfiguracoesPage() {
     }
 
     if (!validatePasswordChange()) {
-      setActiveSettingsTab("user");
+      setActiveSettingsTab(passwordSettings.newPassword ? "user" : "company");
       return;
     }
 
@@ -1933,9 +2174,14 @@ export default function ConfiguracoesPage() {
         });
       }
 
+      const immutableUserSettings = {
+        ...userSettings,
+        email: lockedUserEmail,
+      };
+
       await saveAppSettings({
         companyId,
-        userSettings,
+        userSettings: immutableUserSettings,
         companySettings,
         printTemplates,
         themeSettings,
@@ -1946,7 +2192,7 @@ export default function ConfiguracoesPage() {
           ? error.message
           : "Não foi possível salvar as configurações.",
       );
-      setActiveSettingsTab("user");
+      setActiveSettingsTab(passwordSettings.newPassword ? "user" : "company");
       setIsSaveConfirmModalOpen(false);
       return;
     }
@@ -1954,14 +2200,25 @@ export default function ConfiguracoesPage() {
     setCompanyStorageItem(
       companyId,
       "contrx_user_settings",
-      JSON.stringify(userSettings),
+      JSON.stringify({
+        ...userSettings,
+        email: lockedUserEmail,
+      }),
     );
     setCompanyStorageItem(
       companyId,
       "contrx_theme_settings",
       JSON.stringify(themeSettings),
     );
-    setCachedAppSettings({ userSettings, companySettings, printTemplates, themeSettings });
+    setCachedAppSettings({
+      userSettings: {
+        ...userSettings,
+        email: lockedUserEmail,
+      },
+      companySettings,
+      printTemplates,
+      themeSettings,
+    });
     window.dispatchEvent(new Event("contrx-theme-change"));
 
     if (passwordSettings.newPassword) {
@@ -1969,20 +2226,16 @@ export default function ConfiguracoesPage() {
       setPasswordSettings(defaultPasswordSettings);
     }
 
-    setInitialUserSettings(userSettings);
+    setInitialUserSettings({
+      ...userSettings,
+      email: lockedUserEmail,
+    });
     setInitialCompanySettings(companySettings);
     setInitialPrintTemplates(printTemplates);
     setInitialThemeSettings(themeSettings);
     setValidationErrors({});
     setSuccessMessage("Configurações salvas com sucesso.");
-    setCompanyStorageItem(
-      companyId,
-      "contrx_dashboard_success_message",
-      "Configurações salvas com sucesso.",
-    );
     setIsSaveConfirmModalOpen(false);
-
-    router.push("/dashboard");
   }
 
   return (
@@ -2026,8 +2279,17 @@ export default function ConfiguracoesPage() {
             <aside className="flex flex-col border-b border-slate-100 bg-slate-50 p-3 sm:p-4 lg:border-b-0 lg:border-r">
               <div className="rounded-3xl bg-white p-4 shadow-sm">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 text-xl font-black text-white">
-                    {userInitials}
+                  <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 text-xl font-black text-white">
+                    {companySettings.logo ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={companySettings.logo}
+                        alt={`Logo ${companyDisplayName}`}
+                        className="h-full w-full bg-white object-contain p-1.5"
+                      />
+                    ) : (
+                      companyLogoFallbackText
+                    )}
                   </div>
 
                   <div>
@@ -2136,6 +2398,68 @@ export default function ConfiguracoesPage() {
                     <p className="mt-1 text-sm font-medium text-slate-500">
                       Essas informações serão usadas em contratos, recibos, cobranças e documentos do Contrx.
                     </p>
+                  </div>
+
+                  <div className="flex flex-col gap-4 rounded-3xl border border-slate-100 bg-slate-50 p-5 md:flex-row md:items-center md:justify-between">
+                    <div className="flex min-w-0 items-center gap-4">
+                      <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white text-xl font-black text-slate-400">
+                        {companySettings.logo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={companySettings.logo}
+                            alt="Logo da empresa"
+                            className="h-full w-full object-contain p-2"
+                          />
+                        ) : (
+                          <span>
+                            {(companySettings.tradeName || companySettings.companyName || "L")
+                              .trim()
+                              .charAt(0)
+                              .toUpperCase() || "L"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-black uppercase tracking-wide text-slate-600">
+                          Logo da empresa
+                        </h3>
+                        <p className="mt-1 text-sm font-medium leading-6 text-slate-500">
+                          Envie uma imagem PNG, JPG ou SVG com ate 1 MB para aparecer nos documentos e relatorios.
+                        </p>
+                        {logoUploadError && (
+                          <p className="mt-2 text-xs font-bold text-red-600">
+                            {logoUploadError}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <input
+                        ref={companyLogoInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                        onChange={handleSelectCompanyLogo}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => companyLogoInputRef.current?.click()}
+                        className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
+                      >
+                        Escolher logo
+                      </button>
+                      {companySettings.logo && (
+                        <button
+                          type="button"
+                          onClick={handleRemoveCompanyLogo}
+                          className="rounded-2xl bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-100"
+                        >
+                          Remover
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -2540,152 +2864,253 @@ export default function ConfiguracoesPage() {
 
               {activeSettingsTab === "user" && (
                 <div className="space-y-6">
-                  <div>
-                    <h2 className="text-xl font-black text-slate-950">
-                      Dados do usuário
-                    </h2>
-                    <p className="mt-1 text-sm font-medium text-slate-500">
-                      Atualize os dados exibidos no cabeçalho do sistema e altere a senha de acesso.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                    <label className="space-y-2">
-                      <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                        Nome *
-                      </span>
-                      <input
-                        type="text"
-                        value={userSettings.name}
-                        onChange={(event) =>
-                          setUserSettings({
-                            ...userSettings,
-                            name: event.target.value,
-                          })
-                        }
-                        placeholder="Nome do usuário"
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                      />
-                    </label>
-
-                    <label className="space-y-2">
-                      <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                        E-mail *
-                      </span>
-                      <input
-                        type="email"
-                        value={userSettings.email}
-                        onChange={(event) =>
-                          setUserSettings({
-                            ...userSettings,
-                            email: event.target.value,
-                          })
-                        }
-                        placeholder="usuario@contrx.com.br"
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                      />
-                    </label>
-                  </div>
-
-                  <div className="rounded-3xl border border-slate-100 bg-slate-50 p-5">
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <h3 className="text-sm font-black uppercase tracking-wide text-slate-600">
-                          Alterar senha
-                        </h3>
-                        <p className="mt-1 text-sm font-medium text-slate-500">
-                          Preencha os campos abaixo somente quando desejar trocar a senha.
-                        </p>
-                      </div>
-
-                      <div className="rounded-full bg-orange-100 px-3 py-1 text-xs font-black text-orange-700">
-                        Segurança
-                      </div>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <h2 className="text-xl font-black text-slate-950">
+                        Dados do usuário
+                      </h2>
+                      <p className="mt-1 text-sm font-medium text-slate-500">
+                        Veja o usuário logado e edite os dados somente quando necessário.
+                      </p>
                     </div>
 
-                    {passwordError && (
-                      <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
-                        {passwordError}
+                    <button
+                      type="button"
+                      onClick={handleStartUserSettingsEdit}
+                      className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                    >
+                      Editar usuário
+                    </button>
+                  </div>
+
+                  <div className="rounded-3xl border border-orange-100 bg-white p-5 shadow-sm">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                      <div className="flex min-w-0 items-center gap-4">
+                        <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-br from-orange-400 to-orange-600 text-xl font-black text-white">
+                          {companySettings.logo ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={companySettings.logo}
+                              alt={`Logo ${companyDisplayName}`}
+                              className="h-full w-full bg-white object-contain p-2"
+                            />
+                          ) : (
+                            companyLogoFallbackText
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-lg font-black text-slate-950">
+                            {userSettings.name || "Usuário sem nome"}
+                          </p>
+                          <p className="mt-1 truncate text-sm font-semibold text-slate-500">
+                            {lockedUserEmail || "E-mail não informado"}
+                          </p>
+                        </div>
                       </div>
-                    )}
 
-                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
-                      <label className="space-y-2">
-                        <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                          Senha atual
-                        </span>
-                        <input
-                          type="password"
-                          value={passwordSettings.currentPassword}
-                          onChange={(event) =>
-                            setPasswordSettings({
-                              ...passwordSettings,
-                              currentPassword: event.target.value,
-                            })
-                          }
-                          placeholder="Digite a senha atual"
-                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                        />
-                      </label>
-
-                      <label className="space-y-2">
-                        <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                          Nova senha
-                        </span>
-                        <input
-                          type="password"
-                          value={passwordSettings.newPassword}
-                          onChange={(event) =>
-                            setPasswordSettings({
-                              ...passwordSettings,
-                              newPassword: event.target.value,
-                            })
-                          }
-                          placeholder="Mínimo 6 caracteres"
-                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                        />
-                      </label>
-
-                      <label className="space-y-2">
-                        <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                          Confirmar senha
-                        </span>
-                        <input
-                          type="password"
-                          value={passwordSettings.confirmPassword}
-                          onChange={(event) =>
-                            setPasswordSettings({
-                              ...passwordSettings,
-                              confirmPassword: event.target.value,
-                            })
-                          }
-                          placeholder="Repita a nova senha"
-                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                        />
-                      </label>
+                      <span className="inline-flex w-fit rounded-full bg-orange-50 px-3 py-2 text-xs font-black text-orange-700 ring-1 ring-orange-100">
+                        {currentUserRoleLabel}
+                      </span>
                     </div>
                   </div>
+
+                  {isUserSettingsEditing && (
+                    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+                      <div className="contrx-modal-panel flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
+                        <div className="border-b border-slate-100 bg-gradient-to-r from-orange-50 via-white to-white px-6 py-5">
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <div className="inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-black uppercase tracking-wide text-orange-700">
+                                Edição de usuário
+                              </div>
+                              <h2 className="mt-3 text-2xl font-black text-slate-950">
+                                Dados do usuário
+                              </h2>
+                              <p className="mt-1 text-sm font-medium leading-6 text-slate-500">
+                                Altere o nome exibido no sistema ou preencha os campos de senha quando precisar trocar o acesso.
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={handleCancelUserSettingsEdit}
+                              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-xl font-black text-slate-500 shadow-sm transition hover:bg-orange-50 hover:text-orange-600"
+                              aria-label="Fechar edição do usuário"
+                            >
+                              X
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="min-h-0 flex-1 overflow-y-auto space-y-5 bg-slate-50 p-6">
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <label className="space-y-2">
+                          <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                            Nome *
+                          </span>
+                          <input
+                            type="text"
+                            value={userSettings.name}
+                            onChange={(event) =>
+                              setUserSettings({
+                                ...userSettings,
+                                name: event.target.value,
+                              })
+                            }
+                            placeholder="Nome do usuário"
+                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                          />
+                        </label>
+
+                        <label className="space-y-2">
+                          <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                            E-mail *
+                          </span>
+                          <input
+                            type="email"
+                            value={lockedUserEmail}
+                            readOnly
+                            disabled
+                            placeholder="usuario@contrx.com.br"
+                            className="w-full cursor-not-allowed rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-500 outline-none"
+                          />
+                          <span className="text-xs font-semibold text-slate-500">
+                            O e-mail de acesso não pode ser alterado após o cadastro.
+                          </span>
+                        </label>
+                      </div>
+
+                      <div className="rounded-3xl border border-slate-100 bg-white p-5">
+                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <h3 className="text-sm font-black uppercase tracking-wide text-slate-600">
+                              Alterar senha
+                            </h3>
+                            <p className="mt-1 text-sm font-medium text-slate-500">
+                              Preencha somente se quiser trocar a senha deste usuário.
+                            </p>
+                          </div>
+
+                          <div className="rounded-full bg-orange-100 px-3 py-1 text-xs font-black text-orange-700">
+                            Segurança
+                          </div>
+                        </div>
+
+                        {passwordError && (
+                          <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                            {passwordError}
+                          </div>
+                        )}
+
+                        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+                          <label className="space-y-2">
+                            <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                              Senha atual
+                            </span>
+                            <input
+                              type="password"
+                              value={passwordSettings.currentPassword}
+                              onChange={(event) =>
+                                setPasswordSettings({
+                                  ...passwordSettings,
+                                  currentPassword: event.target.value,
+                                })
+                              }
+                              placeholder="Digite a senha atual"
+                              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                            />
+                          </label>
+
+                          <label className="space-y-2">
+                            <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                              Nova senha
+                            </span>
+                            <input
+                              type="password"
+                              value={passwordSettings.newPassword}
+                              onChange={(event) =>
+                                setPasswordSettings({
+                                  ...passwordSettings,
+                                  newPassword: event.target.value,
+                                })
+                              }
+                              placeholder="Digite a nova senha"
+                              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                            />
+                          </label>
+
+                          <label className="space-y-2">
+                            <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                              Confirmar senha
+                            </span>
+                            <input
+                              type="password"
+                              value={passwordSettings.confirmPassword}
+                              onChange={(event) =>
+                                setPasswordSettings({
+                                  ...passwordSettings,
+                                  confirmPassword: event.target.value,
+                                })
+                              }
+                              placeholder="Repita a nova senha"
+                              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                        <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white pt-5 sm:flex-row sm:justify-end">
+                          <button
+                            type="button"
+                            onClick={handleCancelUserSettingsEdit}
+                            className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                          >
+                            Cancelar
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleFinishUserSettingsEdit}
+                            className="rounded-2xl bg-orange-500 px-6 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                          >
+                            Concluir edição
+                          </button>
+                        </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {canManageCompanyUsers && (
                     <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
-                      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
                           <h3 className="text-sm font-black uppercase tracking-wide text-slate-600">
                             Usuários da empresa
                           </h3>
                           <p className="mt-1 text-sm font-medium text-slate-500">
-                            Cadastre novos usuários vinculados somente a esta empresa.
+                            Consulte os acessos já cadastrados e abra o cadastro somente quando for criar um novo.
                           </p>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={loadCompanyUsers}
-                          disabled={isLoadingCompanyUsers}
-                          className="rounded-2xl bg-slate-100 px-4 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {isLoadingCompanyUsers ? "Atualizando..." : "Atualizar lista"}
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={loadCompanyUsers}
+                            disabled={isLoadingCompanyUsers}
+                            className="rounded-2xl bg-slate-100 px-4 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isLoadingCompanyUsers ? "Atualizando..." : "Atualizar lista"}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleOpenNewCompanyUserForm}
+                            className="rounded-2xl bg-orange-500 px-4 py-2 text-xs font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                          >
+                            Novo usuário
+                          </button>
+                        </div>
                       </div>
 
                       {companyUserError && (
@@ -2694,130 +3119,424 @@ export default function ConfiguracoesPage() {
                         </div>
                       )}
 
-                      <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                        <label className="space-y-2">
-                          <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                            Nome do novo usuário
-                          </span>
-                          <input
-                            type="text"
-                            value={newCompanyUserForm.name}
-                            onChange={(event) =>
-                              setNewCompanyUserForm({
-                                ...newCompanyUserForm,
-                                name: event.target.value,
-                              })
-                            }
-                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                          />
-                        </label>
+                      <div className="mt-5 space-y-3">
+                        {companyUsers.length === 0 ? (
+                          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm font-semibold text-slate-500">
+                            Nenhum usuário adicional cadastrado nesta empresa.
+                          </div>
+                        ) : (
+                          companyUsers.map((companyUser) => (
+                            <div
+                              key={companyUser.id}
+                              className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 md:flex-row md:items-center md:justify-between"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-black text-slate-950">
+                                  {companyUser.name}
+                                </p>
+                                <p className="mt-1 truncate text-xs font-semibold text-slate-500">
+                                  {companyUser.email}
+                                </p>
+                              </div>
 
-                        <label className="space-y-2">
-                          <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                            E-mail de acesso
-                          </span>
-                          <input
-                            type="email"
-                            value={newCompanyUserForm.email}
-                            onChange={(event) =>
-                              setNewCompanyUserForm({
-                                ...newCompanyUserForm,
-                                email: event.target.value,
-                              })
-                            }
-                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                          />
-                        </label>
-
-                        <label className="space-y-2">
-                          <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                            Senha temporária
-                          </span>
-                          <input
-                            type="password"
-                            value={newCompanyUserForm.password}
-                            onChange={(event) =>
-                              setNewCompanyUserForm({
-                                ...newCompanyUserForm,
-                                password: event.target.value,
-                              })
-                            }
-                            placeholder="Mínimo 6 caracteres"
-                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                          />
-                        </label>
-
-                        <label className="space-y-2">
-                          <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                            Perfil
-                          </span>
-                          <select
-                            value={newCompanyUserForm.role}
-                            onChange={(event) =>
-                              setNewCompanyUserForm({
-                                ...newCompanyUserForm,
-                                role: event.target.value as CompanyUserRole,
-                              })
-                            }
-                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                          >
-                            {companyUserRoleOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      </div>
-
-                      <div className="mt-5">
-                        <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-                          Ferramentas disponíveis
-                        </p>
-                        <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
-                          {toolPermissionOptions.map((tool) => {
-                            const isSelected = newCompanyUserForm.permissions.includes(tool.key);
-
-                            return (
-                              <button
-                                key={tool.key}
-                                type="button"
-                                onClick={() => handleToggleCompanyUserPermission(tool.key)}
-                                className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-sm font-black transition ${
-                                  isSelected
-                                    ? "border-orange-300 bg-orange-50 text-orange-800"
-                                    : "border-slate-200 bg-white text-slate-600 hover:border-orange-200 hover:bg-orange-50/40"
-                                }`}
-                              >
-                                <span className="flex min-w-0 items-center gap-2">
-                                  <span>{tool.icon}</span>
-                                  <span className="truncate">{tool.label}</span>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-600 ring-1 ring-slate-200">
+                                  {roleLabels[companyUser.role] || companyUser.role}
                                 </span>
                                 <span
-                                  className={`flex h-5 w-5 items-center justify-center rounded-md border text-xs ${
-                                    isSelected
-                                      ? "border-orange-500 bg-orange-500 text-white"
-                                      : "border-slate-300 text-transparent"
-                                  }`}
+                                  className={
+                                    companyUser.isActive
+                                      ? "rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700 ring-1 ring-emerald-100"
+                                      : "rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500 ring-1 ring-slate-200"
+                                  }
                                 >
-                                  ✓
+                                  {companyUser.isActive ? "Ativo" : "Inativo"}
                                 </span>
-                              </button>
-                            );
-                          })}
-                        </div>
+                                {canEditCompanyUser(companyUser) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditCompanyUserForm(companyUser)}
+                                    className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black text-orange-700 ring-1 ring-orange-100 transition hover:bg-orange-100"
+                                  >
+                                    Editar
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        )}
                       </div>
 
-                      <div className="mt-5 flex justify-end">
-                        <button
-                          type="button"
-                          onClick={handleCreateCompanyUser}
-                          disabled={isCreatingCompanyUser}
-                          className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {isCreatingCompanyUser ? "Criando..." : "Criar usuário"}
-                        </button>
-                      </div>
+                      {editingCompanyUser && (
+                        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+                          <div className="contrx-modal-panel flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
+                            <div className="border-b border-slate-100 bg-gradient-to-r from-orange-50 via-white to-white px-6 py-5">
+                              <div className="flex items-start justify-between gap-4">
+                                <div>
+                                  <div className="inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-black uppercase tracking-wide text-orange-700">
+                                    Editar acesso
+                                  </div>
+                                  <h2 className="mt-3 text-2xl font-black text-slate-950">
+                                    {editingCompanyUser.name}
+                                  </h2>
+                                  <p className="mt-1 text-sm font-medium leading-6 text-slate-500">
+                                    Ajuste perfil, status e ferramentas liberadas para este usuário.
+                                  </p>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={handleCancelEditCompanyUserForm}
+                                  disabled={isUpdatingCompanyUser}
+                                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-xl font-black text-slate-500 shadow-sm transition hover:bg-orange-50 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                                  aria-label="Fechar edição de usuário"
+                                >
+                                  X
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-6">
+                              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                                <label className="space-y-2">
+                                  <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                                    Nome do usuário
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={editCompanyUserForm.name}
+                                    onChange={(event) =>
+                                      setEditCompanyUserForm({
+                                        ...editCompanyUserForm,
+                                        name: event.target.value,
+                                      })
+                                    }
+                                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                                  />
+                                </label>
+
+                                <label className="space-y-2">
+                                  <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                                    E-mail de acesso
+                                  </span>
+                                  <input
+                                    type="email"
+                                    value={editCompanyUserForm.email}
+                                    readOnly
+                                    disabled
+                                    className="w-full cursor-not-allowed rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-500 outline-none"
+                                  />
+                                </label>
+
+                                <label className="space-y-2">
+                                  <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                                    Nova senha
+                                  </span>
+                                  <input
+                                    type="password"
+                                    value={editCompanyUserForm.password}
+                                    onChange={(event) =>
+                                      setEditCompanyUserForm({
+                                        ...editCompanyUserForm,
+                                        password: event.target.value,
+                                      })
+                                    }
+                                    placeholder="Deixe em branco para manter a senha"
+                                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                                  />
+                                </label>
+
+                                <label className="space-y-2">
+                                  <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                                    Perfil
+                                  </span>
+                                  <select
+                                    value={editCompanyUserForm.role}
+                                    onChange={(event) =>
+                                      setEditCompanyUserForm({
+                                        ...editCompanyUserForm,
+                                        role: event.target.value as CompanyUserRole,
+                                      })
+                                    }
+                                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                                  >
+                                    {companyUserRoleOptions.map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                              </div>
+
+                              <label className="mt-5 flex cursor-pointer items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-white px-4 py-4">
+                                <div>
+                                  <span className="text-sm font-black text-slate-900">
+                                    Usuário ativo
+                                  </span>
+                                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                                    Desative para bloquear o login sem remover o cadastro.
+                                  </p>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={editCompanyUserForm.isActive}
+                                  onChange={(event) =>
+                                    setEditCompanyUserForm({
+                                      ...editCompanyUserForm,
+                                      isActive: event.target.checked,
+                                    })
+                                  }
+                                  className="h-5 w-5 accent-orange-500"
+                                />
+                              </label>
+
+                              <div className="mt-5">
+                                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                                  Ferramentas disponíveis
+                                </p>
+                                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                                  {toolPermissionOptions.map((tool) => {
+                                    const isSelected = editCompanyUserForm.permissions.includes(tool.key);
+
+                                    return (
+                                      <button
+                                        key={tool.key}
+                                        type="button"
+                                        onClick={() => handleToggleEditCompanyUserPermission(tool.key)}
+                                        className={
+                                          isSelected
+                                            ? "flex items-center justify-between gap-3 rounded-2xl border border-orange-300 bg-orange-50 px-4 py-3 text-left text-sm font-black text-orange-800 transition"
+                                            : "flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-black text-slate-600 transition hover:border-orange-200 hover:bg-orange-50/40"
+                                        }
+                                      >
+                                        <span className="flex min-w-0 items-center gap-2">
+                                          <span>{tool.icon}</span>
+                                          <span className="truncate">{tool.label}</span>
+                                        </span>
+                                        <span
+                                          className={
+                                            isSelected
+                                              ? "flex h-5 w-5 items-center justify-center rounded-md border border-orange-500 bg-orange-500 text-xs text-white"
+                                              : "flex h-5 w-5 items-center justify-center rounded-md border border-slate-300 text-xs text-transparent"
+                                          }
+                                        >
+                                          ✓
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="border-t border-slate-100 bg-white px-6 py-5">
+                              {companyUserError && (
+                                <div className="mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                                  {companyUserError}
+                                </div>
+                              )}
+
+                              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                                <button
+                                  type="button"
+                                  onClick={handleCancelEditCompanyUserForm}
+                                  disabled={isUpdatingCompanyUser}
+                                  className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  Cancelar
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={handleUpdateCompanyUser}
+                                  disabled={isUpdatingCompanyUser}
+                                  className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {isUpdatingCompanyUser ? "Salvando..." : "Salvar usuário"}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {isNewCompanyUserFormOpen && (
+                        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+                          <div className="contrx-modal-panel flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
+                            <div className="border-b border-slate-100 bg-gradient-to-r from-orange-50 via-white to-white px-6 py-5">
+                              <div className="flex items-start justify-between gap-4">
+                            <div>
+                                  <div className="inline-flex rounded-full bg-orange-100 px-3 py-1 text-xs font-black uppercase tracking-wide text-orange-700">
+                                    Novo acesso
+                                  </div>
+                                  <h2 className="mt-3 text-2xl font-black text-slate-950">
+                                    Cadastro de novo usuário
+                                  </h2>
+                                  <p className="mt-1 text-sm font-medium leading-6 text-slate-500">
+                                Defina login, perfil e ferramentas liberadas para o novo acesso.
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={handleCancelNewCompanyUserForm}
+                              disabled={isCreatingCompanyUser}
+                                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-xl font-black text-slate-500 shadow-sm transition hover:bg-orange-50 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                                  aria-label="Fechar cadastro de novo usuário"
+                            >
+                                  X
+                            </button>
+                              </div>
+                          </div>
+
+                            <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-6">
+                          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                            <label className="space-y-2">
+                              <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                                Nome do novo usuário
+                              </span>
+                              <input
+                                type="text"
+                                value={newCompanyUserForm.name}
+                                onChange={(event) =>
+                                  setNewCompanyUserForm({
+                                    ...newCompanyUserForm,
+                                    name: event.target.value,
+                                  })
+                                }
+                                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                              />
+                            </label>
+
+                            <label className="space-y-2">
+                              <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                                E-mail de acesso
+                              </span>
+                              <input
+                                type="email"
+                                value={newCompanyUserForm.email}
+                                onChange={(event) =>
+                                  setNewCompanyUserForm({
+                                    ...newCompanyUserForm,
+                                    email: event.target.value,
+                                  })
+                                }
+                                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                              />
+                            </label>
+
+                            <label className="space-y-2">
+                              <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                                Senha temporária
+                              </span>
+                              <input
+                                type="password"
+                                value={newCompanyUserForm.password}
+                                onChange={(event) =>
+                                  setNewCompanyUserForm({
+                                    ...newCompanyUserForm,
+                                    password: event.target.value,
+                                  })
+                                }
+                                placeholder="Digite uma senha temporária"
+                                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                              />
+                            </label>
+
+                            <label className="space-y-2">
+                              <span className="text-xs font-black uppercase tracking-wide text-slate-500">
+                                Perfil
+                              </span>
+                              <select
+                                value={newCompanyUserForm.role}
+                                onChange={(event) =>
+                                  setNewCompanyUserForm({
+                                    ...newCompanyUserForm,
+                                    role: event.target.value as CompanyUserRole,
+                                  })
+                                }
+                                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                              >
+                                {companyUserRoleOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+
+                          <div className="mt-5">
+                            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                              Ferramentas disponíveis
+                            </p>
+                            <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                              {toolPermissionOptions.map((tool) => {
+                                const isSelected = newCompanyUserForm.permissions.includes(tool.key);
+
+                                return (
+                                  <button
+                                    key={tool.key}
+                                    type="button"
+                                    onClick={() => handleToggleCompanyUserPermission(tool.key)}
+                                    className={
+                                      isSelected
+                                        ? "flex items-center justify-between gap-3 rounded-2xl border border-orange-300 bg-orange-50 px-4 py-3 text-left text-sm font-black text-orange-800 transition"
+                                        : "flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-black text-slate-600 transition hover:border-orange-200 hover:bg-orange-50/40"
+                                    }
+                                  >
+                                    <span className="flex min-w-0 items-center gap-2">
+                                      <span>{tool.icon}</span>
+                                      <span className="truncate">{tool.label}</span>
+                                    </span>
+                                    <span
+                                      className={
+                                        isSelected
+                                          ? "flex h-5 w-5 items-center justify-center rounded-md border border-orange-500 bg-orange-500 text-xs text-white"
+                                          : "flex h-5 w-5 items-center justify-center rounded-md border border-slate-300 text-xs text-transparent"
+                                      }
+                                    >
+                                      ✓
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                            </div>
+
+                            <div className="border-t border-slate-100 bg-white px-6 py-5">
+                              {companyUserError && (
+                                <div className="mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                                  {companyUserError}
+                                </div>
+                              )}
+
+                          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                            <button
+                              type="button"
+                              onClick={handleCancelNewCompanyUserForm}
+                              disabled={isCreatingCompanyUser}
+                              className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Cancelar
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={handleCreateCompanyUser}
+                              disabled={isCreatingCompanyUser}
+                              className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {isCreatingCompanyUser ? "Criando..." : "Criar usuário"}
+                            </button>
+                          </div>
+                          </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -3145,7 +3864,7 @@ export default function ConfiguracoesPage() {
                   </div>
 
                   <p className="mt-3 text-xs font-semibold text-slate-500">
-                    As informações serão salvas e você será redirecionado para o Dashboard.
+                    As informações serão salvas e você continuará nesta tela para conferir o resultado.
                   </p>
                 </div>
 

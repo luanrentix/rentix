@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 
 import { AutenticacaoService } from './autenticacao.service';
 
@@ -6,7 +6,10 @@ import { RegisterDto } from './dto/registro.dto';
 import { LoginDto } from './dto/login.dto';
 import { CriarContaDto } from './dto/criar-conta.dto';
 import { AlterarSenhaDto } from './dto/alterar-senha.dto';
-import { CriarUsuarioEmpresaDto } from './dto/criar-usuario-empresa.dto';
+import {
+  AtualizarUsuarioEmpresaDto,
+  CriarUsuarioEmpresaDto,
+} from './dto/criar-usuario-empresa.dto';
 import { CurrentUser } from './decorators/usuario-atual.decorator';
 import { CompanyAdminGuard } from './guards/company-admin.guard';
 import { JwtGuardAutenticacao } from './guards/jwt-autenticacao.guard';
@@ -39,6 +42,15 @@ export class AutenticacaoController {
     return this.authService.findCompanyUsers(user);
   }
 
+  @Get('sessao')
+  @UseGuards(JwtGuardAutenticacao)
+  async verifySession(@CurrentUser() user: UsuarioAutenticado) {
+    return {
+      active: true,
+      userId: user.id,
+    };
+  }
+
   @Post('usuarios')
   @UseGuards(JwtGuardAutenticacao, CompanyAdminGuard)
   async createCompanyUser(
@@ -46,6 +58,16 @@ export class AutenticacaoController {
     @Body() data: CriarUsuarioEmpresaDto,
   ) {
     return this.authService.createCompanyUser(user, data);
+  }
+
+  @Patch('usuarios/:id')
+  @UseGuards(JwtGuardAutenticacao, CompanyAdminGuard)
+  async updateCompanyUser(
+    @CurrentUser() user: UsuarioAutenticado,
+    @Param('id') id: string,
+    @Body() data: AtualizarUsuarioEmpresaDto,
+  ) {
+    return this.authService.updateCompanyUser(user, id, data);
   }
 
   @Patch('me/senha')

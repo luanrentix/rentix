@@ -1,0 +1,5 @@
+// Add this import in src/app.module.ts
+import { PessoasModule } from './pessoas/pessoas.module';
+
+// Add PessoasModule inside imports: []
+PessoasModule,

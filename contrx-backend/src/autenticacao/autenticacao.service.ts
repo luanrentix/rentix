@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  NotFoundException,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -9,6 +10,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 
 import * as bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
 import type { User } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -18,6 +20,7 @@ import { LoginDto } from './dto/login.dto';
 import { CriarContaDto } from './dto/criar-conta.dto';
 import { AlterarSenhaDto } from './dto/alterar-senha.dto';
 import {
+  AtualizarUsuarioEmpresaDto,
   CriarUsuarioEmpresaDto,
   userToolPermissions,
   type UserToolPermission,
@@ -153,22 +156,33 @@ export class AutenticacaoService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    const sessionId = randomUUID();
+    const authenticatedUser = await this.prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        activeSessionId: sessionId,
+      },
+    });
+
     const token = await this.jwtService.signAsync({
-      sub: user.id,
-      email: user.email,
-      companyId: user.companyId,
-      role: user.role,
+      sub: authenticatedUser.id,
+      email: authenticatedUser.email,
+      companyId: authenticatedUser.companyId,
+      role: authenticatedUser.role,
+      sessionId,
     });
 
     return {
       accessToken: token,
       user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        companyId: user.companyId,
-        role: user.role,
-        permissions: user.permissions,
+        id: authenticatedUser.id,
+        name: authenticatedUser.name,
+        email: authenticatedUser.email,
+        companyId: authenticatedUser.companyId,
+        role: authenticatedUser.role,
+        permissions: authenticatedUser.permissions,
       },
     };
   }
@@ -181,12 +195,6 @@ export class AutenticacaoService {
 
     if (!name || !email || !password || !companyName) {
       throw new BadRequestException('Preencha nome, e-mail, senha e empresa.');
-    }
-
-    if (password.length < 6) {
-      throw new BadRequestException(
-        'A senha precisa ter pelo menos 6 caracteres.',
-      );
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -263,22 +271,33 @@ export class AutenticacaoService {
       throwDatabaseUnavailable(error);
     }
 
+    const sessionId = randomUUID();
+    const authenticatedUser = await this.prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        activeSessionId: sessionId,
+      },
+    });
+
     const token = await this.jwtService.signAsync({
       sub: user.id,
       email: user.email,
       companyId: user.companyId,
       role: user.role,
+      sessionId,
     });
 
     return {
       accessToken: token,
       user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        companyId: user.companyId,
-        role: user.role,
-        permissions: user.permissions,
+        id: authenticatedUser.id,
+        name: authenticatedUser.name,
+        email: authenticatedUser.email,
+        companyId: authenticatedUser.companyId,
+        role: authenticatedUser.role,
+        permissions: authenticatedUser.permissions,
       },
     };
   }
@@ -360,14 +379,84 @@ export class AutenticacaoService {
     return createdUser;
   }
 
+  async updateCompanyUser(
+    user: UsuarioAutenticado,
+    userId: string,
+    data: AtualizarUsuarioEmpresaDto,
+  ) {
+    const name = data.name?.trim();
+    const permissions = normalizePermissions(data.permissions || []);
+    const password = data.password?.trim();
+
+    if (!name) {
+      throw new BadRequestException('Informe o nome do usuario.');
+    }
+
+    if (permissions.length === 0) {
+      throw new BadRequestException('Selecione ao menos uma ferramenta.');
+    }
+
+    if (password && password.length < 6) {
+      throw new BadRequestException('A senha precisa ter pelo menos 6 caracteres.');
+    }
+
+    const existingUser = await this.prisma.user.findFirst({
+      where: {
+        id: userId,
+        companyId: user.companyId,
+      },
+      select: {
+        id: true,
+        role: true,
+      },
+    });
+
+    if (!existingUser) {
+      throw new NotFoundException('Usuario nao encontrado nesta empresa.');
+    }
+
+    if (existingUser.role === 'SYSTEM_OWNER') {
+      throw new BadRequestException(
+        'O dono do sistema nao pode ser editado neste cadastro.',
+      );
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        name,
+        role: data.role,
+        isActive: data.isActive,
+        permissions,
+        ...(password
+          ? {
+              passwordHash: await bcrypt.hash(password, 10),
+            }
+          : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        isActive: true,
+        permissions: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return updatedUser;
+  }
+
   async changePassword(user: UsuarioAutenticado, data: AlterarSenhaDto) {
     const currentPassword = data.currentPassword;
     const newPassword = data.newPassword;
 
-    if (newPassword.length < 6) {
-      throw new BadRequestException(
-        'A nova senha precisa ter pelo menos 6 caracteres.',
-      );
+    if (!newPassword) {
+      throw new BadRequestException('Informe a nova senha.');
     }
 
     const existingUser = await this.prisma.user.findFirst({

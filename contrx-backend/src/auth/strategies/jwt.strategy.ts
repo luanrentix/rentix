@@ -10,6 +10,7 @@ type JwtPayload = {
   companyId: string;
   email: string;
   role: string;
+  sessionId?: string;
 };
 
 @Injectable()
@@ -42,12 +43,19 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         name: true,
         email: true,
         role: true,
+        activeSessionId: true,
       },
     });
 
     if (!user) {
       throw new UnauthorizedException(
         'Invalid or expired authentication token.',
+      );
+    }
+
+    if (!payload.sessionId || user.activeSessionId !== payload.sessionId) {
+      throw new UnauthorizedException(
+        'Sessao encerrada porque este usuario entrou no Contrx em outro dispositivo.',
       );
     }
 

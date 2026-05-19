@@ -15,6 +15,7 @@ import {
   getPropertyMovements,
   type PropertyMovement as ApiPropertyMovement,
 } from "@/services/property-movements.service";
+import { isSessionReplacedError } from "@/services/api";
 import { getCompanyStorageItem } from "@/services/company-storage";
 import { getCachedCompanySettings } from "@/services/settings-cache";
 
@@ -390,6 +391,9 @@ export default function PropertiesPage() {
       setProperties(normalizedProperties);
     } catch (error) {
       console.error("Erro ao carregar imóveis:", error);
+      if (isSessionReplacedError(error)) {
+        return;
+      }
       alert("Não foi possível carregar os imóveis.");
     } finally {
       setIsLoadingProperties(false);
@@ -1283,7 +1287,7 @@ export default function PropertiesPage() {
       <div className="contrx-properties-page space-y-8 print:space-y-0">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <h1 className="text-4xl font-black tracking-tight text-slate-950">
+            <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
               Imóveis
             </h1>
             <p className="mt-2 text-slate-500">
@@ -2161,7 +2165,7 @@ function SummaryCard({ icon, title, value, detail }: SummaryCardProps) {
       </div>
 
       <p className="text-sm font-bold text-slate-500">{title}</p>
-      <h3 className="mt-3 text-3xl font-black text-slate-950">{value}</h3>
+      <h3 className="mt-2 text-2xl font-black text-slate-950">{value}</h3>
       <p className="mt-3 text-sm font-bold text-orange-600">{detail}</p>
     </div>
   );

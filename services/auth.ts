@@ -57,3 +57,7 @@ export async function changePasswordRequest(
     body: JSON.stringify(data),
   });
 }
+
+export async function verifySessionRequest(): Promise<{ active: boolean }> {
+  return apiFetch<{ active: boolean }>('/autenticacao/sessao');
+}

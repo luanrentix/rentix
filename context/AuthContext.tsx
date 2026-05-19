@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { useRouter } from 'next/navigation';
@@ -15,7 +16,9 @@ import {
   CreateAccountRequest,
   createAccountRequest,
   loginRequest,
+  verifySessionRequest,
 } from '@/services/auth';
+import { isSessionReplacedError } from '@/services/api';
 import {
   removeCompanyStorageItem,
   setCompanyStorageItem,
@@ -39,6 +42,10 @@ const LEGACY_STORAGE_PREFIX = ['ren', 'tix'].join('');
 const LEGACY_TOKEN_STORAGE_KEY = `${LEGACY_STORAGE_PREFIX}_token`;
 const LEGACY_USER_STORAGE_KEY = `${LEGACY_STORAGE_PREFIX}_user`;
 const LOCAL_BACKUP_TOKEN = 'contrx-local-backup-token';
+const AUTH_NOTICE_STORAGE_KEY = 'contrx_auth_notice';
+const SESSION_REPLACED_EVENT = 'contrx-session-replaced';
+const SESSION_REPLACED_MESSAGE =
+  'Sua sessão foi encerrada porque este usuário entrou no Contrx em outro dispositivo. Para proteger seus dados, mantemos apenas um acesso ativo por usuário.';
 
 type AuthProviderProps = {
   children: ReactNode;
@@ -50,6 +57,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const isHandlingSessionReplacementRef = useRef(false);
+
+  const clearStoredAuth = useCallback(() => {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.removeItem(USER_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_USER_STORAGE_KEY);
+  }, []);
 
   useEffect(() => {
     const storedToken =
@@ -60,10 +75,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       localStorage.getItem(LEGACY_USER_STORAGE_KEY);
 
     if (storedToken === LOCAL_BACKUP_TOKEN) {
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
-      localStorage.removeItem(USER_STORAGE_KEY);
-      localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
-      localStorage.removeItem(LEGACY_USER_STORAGE_KEY);
+      clearStoredAuth();
       setIsLoading(false);
       return;
     }
@@ -75,15 +87,74 @@ export function AuthProvider({ children }: AuthProviderProps) {
         localStorage.setItem(TOKEN_STORAGE_KEY, storedToken);
         localStorage.setItem(USER_STORAGE_KEY, storedUser);
       } catch {
-        localStorage.removeItem(TOKEN_STORAGE_KEY);
-        localStorage.removeItem(USER_STORAGE_KEY);
-        localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
-        localStorage.removeItem(LEGACY_USER_STORAGE_KEY);
+        clearStoredAuth();
       }
     }
 
     setIsLoading(false);
-  }, []);
+  }, [clearStoredAuth]);
+
+  useEffect(() => {
+    function handleSessionReplaced(event: Event) {
+      if (isHandlingSessionReplacementRef.current) return;
+      isHandlingSessionReplacementRef.current = true;
+
+      const detail = (event as CustomEvent<{ message?: string }>).detail;
+      const message =
+        detail?.message ||
+        SESSION_REPLACED_MESSAGE;
+
+      localStorage.setItem(AUTH_NOTICE_STORAGE_KEY, message);
+      removeCompanyStorageItem(user?.companyId, 'contrx_onboarding_pending');
+      clearStoredAuth();
+      setToken(null);
+      setUser(null);
+      router.push('/');
+    }
+
+    window.addEventListener(SESSION_REPLACED_EVENT, handleSessionReplaced);
+
+    return () => {
+      window.removeEventListener(SESSION_REPLACED_EVENT, handleSessionReplaced);
+    };
+  }, [clearStoredAuth, router, user?.companyId]);
+
+  useEffect(() => {
+    if (!token || !user) return;
+
+    let isCheckingSession = false;
+
+    async function verifyCurrentSession() {
+      if (isCheckingSession || document.visibilityState !== 'visible') return;
+
+      try {
+        isCheckingSession = true;
+        await verifySessionRequest();
+      } catch (error) {
+        if (!isSessionReplacedError(error)) {
+          console.warn('Não foi possível verificar a sessão atual.', error);
+        }
+      } finally {
+        isCheckingSession = false;
+      }
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        void verifyCurrentSession();
+      }
+    }
+
+    window.addEventListener('focus', verifyCurrentSession);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    const sessionCheckInterval = window.setInterval(verifyCurrentSession, 60_000);
+
+    return () => {
+      window.removeEventListener('focus', verifyCurrentSession);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.clearInterval(sessionCheckInterval);
+    };
+  }, [token, user]);
 
   const login = useCallback(async (email: string, password: string) => {
     const response = await loginRequest({
@@ -94,6 +165,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     localStorage.setItem(TOKEN_STORAGE_KEY, response.accessToken);
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.user));
 
+    isHandlingSessionReplacementRef.current = false;
     setToken(response.accessToken);
     setUser(response.user);
 
@@ -111,6 +183,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       'true',
     );
 
+    isHandlingSessionReplacementRef.current = false;
     setToken(response.accessToken);
     setUser(response.user);
 
@@ -118,17 +191,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [router]);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_STORAGE_KEY);
-    localStorage.removeItem(USER_STORAGE_KEY);
-    localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
-    localStorage.removeItem(LEGACY_USER_STORAGE_KEY);
+    clearStoredAuth();
     removeCompanyStorageItem(user?.companyId, 'contrx_onboarding_pending');
 
+    isHandlingSessionReplacementRef.current = false;
     setToken(null);
     setUser(null);
 
     router.push('/');
-  }, [router, user?.companyId]);
+  }, [clearStoredAuth, router, user?.companyId]);
 
   const value = useMemo<AuthContextData>(
     () => ({
