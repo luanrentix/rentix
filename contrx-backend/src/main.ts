@@ -46,6 +46,7 @@ function getAllowedOrigins() {
         'http://localhost:3001',
         'https://contrx.com.br',
         'https://www.contrx.com.br',
+        'https://app.contrx.com.br',
       ];
 }
 

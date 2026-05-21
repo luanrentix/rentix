@@ -8,6 +8,8 @@ export type ScheduleItem = {
   id: string;
   companyId: string;
   title: string;
+  personId?: string | null;
+  propertyId?: string | null;
   customerName: string;
   propertyName: string;
   date: string;
@@ -24,8 +26,10 @@ export type ScheduleItem = {
 
 export type CreateScheduleItemDto = {
   title: string;
-  customerName: string;
-  propertyName: string;
+  personId?: string | null;
+  propertyId?: string | null;
+  customerName?: string;
+  propertyName?: string;
   date: string;
   time: string;
   type: string;

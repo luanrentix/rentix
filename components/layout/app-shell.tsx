@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Maximize2, X } from "lucide-react";
+import { Loader2, Maximize2, X } from "lucide-react";
 import AuthGuard from "@/components/auth/auth-guard";
 import { useAuth } from "@/context/AuthContext";
 import { changePasswordRequest } from "@/services/auth";
@@ -29,6 +29,11 @@ import {
   type MinimizedModalState,
 } from "@/services/minimized-modal.service";
 import { canAccessTool } from "@/services/tool-permissions";
+import {
+  internalToolRoutes,
+  systemOwnerToolRoutes,
+  toolKeyByHref,
+} from "@/services/app-routes";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -88,33 +93,6 @@ type ResetModuleOption = {
   description: string;
   icon: string;
   storageKeys: string[];
-};
-
-const menuItems = [
-  { label: "Dashboard", href: "/dashboard", icon: "🏠" },
-  { label: "Imóveis", href: "/imoveis", icon: "🏢" },
-  { label: "Pessoas", href: "/pessoas", icon: "👥" },
-  { label: "Contratos", href: "/contratos", icon: "📄" },
-  { label: "Financeiro", href: "/financeiro", icon: "💰" },
-  { label: "Contas a Receber", href: "/contas-receber", icon: "📥" },
-  { label: "Contas a Pagar", href: "/contas-pagar", icon: "📤" },
-  { label: "Agenda", href: "/agenda", icon: "📅" },
-];
-
-const systemOwnerMenuItems = [
-  { label: "Admin", href: "/admin", icon: "SYS" },
-];
-
-const toolKeyByHref: Record<string, string> = {
-  "/dashboard": "dashboard",
-  "/imoveis": "properties",
-  "/pessoas": "people",
-  "/contratos": "contracts",
-  "/financeiro": "financial",
-  "/contas-receber": "accountsReceivable",
-  "/contas-pagar": "accountsPayable",
-  "/agenda": "schedule",
-  "/configuracoes": "settings",
 };
 
 const menuLinkPrefetch = process.env.NODE_ENV === "production" ? null : false;
@@ -469,6 +447,8 @@ export default function AppShell({ children }: AppShellProps) {
   const [themeSettings, setThemeSettings] = useState<ThemeSettings>(defaultThemeSettings);
   const [passwordSettings, setPasswordSettings] = useState<PasswordSettings>(defaultPasswordSettings);
   const [successMessage, setSuccessMessage] = useState("");
+  const [settingsErrorMessage, setSettingsErrorMessage] = useState("");
+  const [isSettingsSaving, setIsSettingsSaving] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [resetOptions, setResetOptions] = useState<ResetOptions>(defaultResetOptions);
@@ -483,12 +463,12 @@ export default function AppShell({ children }: AppShellProps) {
   );
   const visibleMenuItems = useMemo(
     () => {
-      const allowedMenuItems = menuItems.filter((item) =>
+      const allowedMenuItems = internalToolRoutes.filter((item) =>
         canAccessTool(user?.role, user?.permissions, toolKeyByHref[item.href]),
       );
 
       return isSystemOwnerRole(user?.role)
-        ? [...allowedMenuItems, ...systemOwnerMenuItems]
+        ? [...allowedMenuItems, ...systemOwnerToolRoutes]
         : allowedMenuItems;
     },
     [user?.permissions, user?.role],
@@ -699,7 +679,9 @@ export default function AppShell({ children }: AppShellProps) {
   function handleCloseSettings() {
     setIsSettingsOpen(false);
     setSuccessMessage("");
+    setSettingsErrorMessage("");
     setPasswordError("");
+    setIsSettingsSaving(false);
     setPasswordSettings(defaultPasswordSettings);
     handleCloseResetModal();
   }
@@ -761,6 +743,9 @@ export default function AppShell({ children }: AppShellProps) {
   }
 
   function validatePasswordChange() {
+    setPasswordError("");
+    setSettingsErrorMessage("");
+
     const hasAnyPasswordField =
       passwordSettings.currentPassword ||
       passwordSettings.newPassword ||
@@ -789,7 +774,11 @@ export default function AppShell({ children }: AppShellProps) {
   }
 
   async function handleSaveSettings() {
+    if (isSettingsSaving) return;
+
     setPasswordError("");
+    setSettingsErrorMessage("");
+    setSuccessMessage("");
 
     if (!validatePasswordChange()) {
       setActiveSettingsTab("user");
@@ -797,9 +786,11 @@ export default function AppShell({ children }: AppShellProps) {
     }
 
     if (!companyId) {
-      setPasswordError("Empresa do usuário não encontrada. Faça login novamente.");
+      setSettingsErrorMessage("Empresa do usuário não encontrada. Faça login novamente.");
       return;
     }
+
+    setIsSettingsSaving(true);
 
     try {
       if (passwordSettings.newPassword) {
@@ -822,12 +813,16 @@ export default function AppShell({ children }: AppShellProps) {
       });
     } catch (error) {
       setActiveSettingsTab("user");
-      setPasswordError(
+      const message =
         error instanceof Error
           ? error.message
-          : "Não foi possível salvar as configurações.",
-      );
+          : "Não foi possível salvar as configurações.";
+
+      setPasswordError(message);
+      setSettingsErrorMessage(message);
       return;
+    } finally {
+      setIsSettingsSaving(false);
     }
 
     setCompanyStorageItem(
@@ -858,7 +853,11 @@ export default function AppShell({ children }: AppShellProps) {
       setPasswordSettings(defaultPasswordSettings);
     }
 
-    setSuccessMessage("Configurações salvas com sucesso.");
+    setSuccessMessage(
+      passwordSettings.newPassword
+        ? "Senha alterada e configurações salvas com sucesso."
+        : "Configurações salvas com sucesso.",
+    );
 
     window.setTimeout(() => {
       setSuccessMessage("");
@@ -1717,14 +1716,27 @@ export default function AppShell({ children }: AppShellProps) {
               </div>
 
               <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white px-6 py-5 sm:flex-row sm:items-center sm:justify-between lg:px-8">
-                <p className="text-xs font-semibold text-slate-400">
-                  As configurações serão mantidas no navegador até integração com backend.
-                </p>
+                <div className="min-w-0">
+                  {settingsErrorMessage ? (
+                    <p className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-bold text-red-700">
+                      {settingsErrorMessage}
+                    </p>
+                  ) : successMessage ? (
+                    <p className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-700">
+                      {successMessage}
+                    </p>
+                  ) : (
+                    <p className="text-xs font-semibold text-slate-400">
+                      As configurações serão sincronizadas com o backend ao salvar.
+                    </p>
+                  )}
+                </div>
 
                 <div className="flex justify-end gap-3">
                   <button
                     type="button"
                     onClick={handleCloseSettings}
+                    disabled={isSettingsSaving}
                     className="rounded-2xl px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-100"
                   >
                     Cancelar
@@ -1733,9 +1745,11 @@ export default function AppShell({ children }: AppShellProps) {
                   <button
                     type="button"
                     onClick={handleSaveSettings}
-                    className="rounded-2xl bg-orange-500 px-6 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                    disabled={isSettingsSaving}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-6 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
                   >
-                    Salvar configurações
+                    {isSettingsSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {isSettingsSaving ? "Salvando..." : "Salvar configurações"}
                   </button>
                 </div>
               </div>

@@ -1,504 +1,340 @@
-"use client";
-
 import Image from "next/image";
+import Link from "next/link";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import {
-  AlertTriangle,
-  Building2,
-  Eye,
-  EyeOff,
+  ArrowRight,
+  BarChart3,
+  CalendarDays,
+  CheckCircle2,
+  FileText,
   Home,
-  LockKeyhole,
-  LogIn,
-  Mail,
-  User,
-  UserPlus,
-  X,
+  Landmark,
+  MessageCircle,
+  ShieldCheck,
+  Users,
 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useAuth } from "@/context/AuthContext";
+import ExperimentSignupCard from "@/components/home/experiment-signup-card";
 
-type AuthMode = "login" | "signup";
+const appLoginUrl = process.env.NEXT_PUBLIC_APP_URL || "/login";
+const whatsappUrl = process.env.NEXT_PUBLIC_WHATSAPP_URL;
 
-function getAuthErrorPresentation(
-  error: unknown,
-  defaultTitle: string,
-  defaultMessage: string,
-) {
-  const message = error instanceof Error ? error.message : defaultMessage;
-  const normalizedMessage = message.toLowerCase();
-  const isInvalidCredentialsError =
-    normalizedMessage.includes("invalid credentials") ||
-    normalizedMessage.includes("unauthorized") ||
-    normalizedMessage.includes("e-mail ou senha");
-  const isBackendConfigurationError =
-    message.includes("NEXT_PUBLIC_API_URL") ||
-    normalizedMessage.includes("backend não configurado") ||
-    normalizedMessage.includes("backend nao configurado") ||
-    normalizedMessage.includes("api em");
-  const isDatabaseConfigurationError =
-    normalizedMessage.includes("credenciais do banco") ||
-    normalizedMessage.includes("database_url") ||
-    normalizedMessage.includes("direct_url") ||
-    normalizedMessage.includes("banco de dados indisponivel");
+const modules = [
+  {
+    title: "Imóveis",
+    description: "Carteira organizada com status, dados do proprietário e histórico.",
+    icon: Home,
+  },
+  {
+    title: "Pessoas",
+    description: "Clientes, inquilinos e proprietários em um cadastro centralizado.",
+    icon: Users,
+  },
+  {
+    title: "Contratos",
+    description: "Vencimentos, renovações e encerramentos acompanhados de perto.",
+    icon: FileText,
+  },
+  {
+    title: "Financeiro",
+    description: "Contas a receber, contas a pagar, indicadores e relatórios.",
+    icon: Landmark,
+  },
+  {
+    title: "Agenda",
+    description: "Compromissos e alertas conectados à rotina da gestão de contratos.",
+    icon: CalendarDays,
+  },
+  {
+    title: "Dashboard",
+    description: "Visão rápida de ocupação, receita, contratos e pendências.",
+    icon: BarChart3,
+  },
+];
 
-  if (isBackendConfigurationError) {
-    return {
-      title: "Backend não configurado",
-      message,
-      subtitle: "Configure a API para continuar.",
-    };
+const overviewMetrics = [
+  { value: "82%", label: "ocupação" },
+  { value: "38", label: "contratos ativos" },
+  { value: "R$ 86,4 mil", label: "receita prevista" },
+];
+
+const previewRows = [
+  { label: "Contratos vencendo", value: "6", tone: "bg-orange-50 text-orange-700" },
+  { label: "Contas em atenção", value: "12", tone: "bg-red-50 text-red-700" },
+  { label: "Imóveis disponíveis", value: "14", tone: "bg-emerald-50 text-emerald-700" },
+];
+
+export default async function HomePage() {
+  const host = (await headers()).get("host")?.toLowerCase() || "";
+
+  if (host === "app.contrx.com.br" || host.startsWith("app.contrx.com.br:")) {
+    redirect("/login");
   }
-
-  if (isDatabaseConfigurationError) {
-    return {
-      title: "Banco não conectado",
-      message,
-      subtitle: "Corrija a conexão do backend.",
-    };
-  }
-
-  if (isInvalidCredentialsError) {
-    return {
-      title: defaultTitle,
-      message: defaultMessage,
-      subtitle: "Revise os dados para continuar.",
-    };
-  }
-
-  return {
-    title: defaultTitle,
-    message,
-    subtitle: "Revise os dados para continuar.",
-  };
-}
-
-export default function LoginPage() {
-  const { login, createAccount, isLoading } = useAuth();
-
-  const [mode, setMode] = useState<AuthMode>("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [signupName, setSignupName] = useState("");
-  const [signupCompanyName, setSignupCompanyName] = useState("");
-  const [signupPasswordConfirm, setSignupPasswordConfirm] = useState("");
-  const [authError, setAuthError] = useState(false);
-  const [authErrorTitle, setAuthErrorTitle] = useState("Acesso não autorizado");
-  const [authErrorSubtitle, setAuthErrorSubtitle] = useState(
-    "Revise os dados para continuar.",
-  );
-  const [authErrorMessage, setAuthErrorMessage] = useState(
-    "E-mail ou senha inválidos.",
-  );
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  useEffect(() => {
-    const legacyStoragePrefix = ["ren", "tix"].join("");
-    const savedEmail =
-      localStorage.getItem("contrx_remember_email") ||
-      localStorage.getItem(`${legacyStoragePrefix}_remember_email`);
-    const authNotice = localStorage.getItem("contrx_auth_notice");
-
-    if (savedEmail) {
-      localStorage.setItem("contrx_remember_email", savedEmail);
-      setEmail(savedEmail);
-      setRemember(true);
-    }
-
-    if (authNotice) {
-      localStorage.removeItem("contrx_auth_notice");
-      showAuthError("Sessão encerrada", authNotice, "Acesse novamente para continuar.");
-    }
-  }, []);
-
-  function showAuthError(title: string, message: string, subtitle?: string) {
-    setAuthErrorTitle(title);
-    setAuthErrorSubtitle(subtitle || "Revise os dados para continuar.");
-    setAuthErrorMessage(message);
-    setAuthError(true);
-  }
-
-  async function handleLogin() {
-    if (!email.trim() || !password) {
-      showAuthError("Dados incompletos", "Informe e-mail e senha para entrar.");
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      setAuthError(false);
-
-      await login(email.trim(), password);
-
-      if (remember) {
-        localStorage.setItem("contrx_remember_email", email.trim());
-      } else {
-        localStorage.removeItem("contrx_remember_email");
-        localStorage.removeItem(`${["ren", "tix"].join("")}_remember_email`);
-      }
-    } catch (error) {
-      const authErrorPresentation = getAuthErrorPresentation(
-        error,
-        "Acesso não autorizado",
-        "E-mail ou senha inválidos.",
-      );
-
-      showAuthError(
-        authErrorPresentation.title,
-        authErrorPresentation.message,
-        authErrorPresentation.subtitle,
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function handleCreateAccount() {
-    const normalizedEmail = email.trim();
-
-    if (!signupName.trim() || !normalizedEmail || !password || !signupCompanyName.trim()) {
-      showAuthError(
-        "Cadastro incompleto",
-        "Preencha nome, e-mail, senha e nome da empresa.",
-      );
-      return;
-    }
-
-    if (password !== signupPasswordConfirm) {
-      showAuthError("Senhas diferentes", "Confirme a senha digitada.");
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      setAuthError(false);
-
-      await createAccount({
-        name: signupName.trim(),
-        email: normalizedEmail,
-        password,
-        companyName: signupCompanyName.trim(),
-      });
-    } catch (error) {
-      const authErrorPresentation = getAuthErrorPresentation(
-        error,
-        "Não foi possível criar a conta",
-        "Revise os dados informados e tente novamente.",
-      );
-
-      showAuthError(
-        authErrorPresentation.title,
-        authErrorPresentation.message,
-        authErrorPresentation.subtitle,
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  function handleSubmit() {
-    if (mode === "login") {
-      void handleLogin();
-      return;
-    }
-
-    void handleCreateAccount();
-  }
-
-  function switchMode(nextMode: AuthMode) {
-    setMode(nextMode);
-    setAuthError(false);
-    setPassword("");
-    setSignupPasswordConfirm("");
-  }
-
-  const isSignup = mode === "signup";
 
   return (
-    <main className="min-h-dvh overflow-x-hidden bg-white">
-      <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[42%_58%]">
-        <section className="relative flex min-h-dvh flex-col items-center bg-gradient-to-br from-[#ff4b00] via-[#f04400] to-[#d93200] px-4 pt-6 sm:px-9 sm:pt-8 lg:min-h-screen">
-          <div className="relative z-10 flex w-full max-w-[525px] justify-center">
-            <div className="flex h-20 w-full max-w-[325px] shrink-0 items-center justify-center rounded-[18px] bg-white px-5 shadow-lg sm:h-28 sm:max-w-[430px] sm:rounded-[22px] sm:px-8">
-              <Image
-                src="/logo-contrx.png"
-                alt="Contrx"
-                width={1536}
-                height={1024}
-                className="h-full w-full object-contain"
-                priority
-              />
-            </div>
+    <main className="min-h-dvh bg-[#f8fafc] text-slate-950">
+      <header className="fixed inset-x-0 top-0 z-30 border-b border-slate-200/80 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex h-20 w-full max-w-7xl items-center justify-between px-5 sm:px-8">
+          <Link href="/" className="flex items-center gap-3" aria-label="Contrx">
+            <Image
+              src="/logo-contrx.svg"
+              alt=""
+              width={52}
+              height={52}
+              className="h-12 w-12 rounded-2xl object-contain shadow-sm"
+              priority
+            />
+            <span className="text-2xl font-black text-slate-950">Contrx</span>
+          </Link>
+
+          <nav className="hidden items-center gap-8 text-sm font-black text-slate-600 md:flex">
+            <a href="#modulos" className="transition hover:text-[#ff4b00]">
+              Módulos
+            </a>
+            <a href="#controle" className="transition hover:text-[#ff4b00]">
+              Controle
+            </a>
+            <a href="#contato" className="transition hover:text-[#ff4b00]">
+              Contato
+            </a>
+          </nav>
+
+          <div className="flex items-center gap-3">
+            <Link
+              href={appLoginUrl}
+              className="hidden h-11 items-center justify-center px-3 text-sm font-black text-slate-600 transition hover:text-[#ff4b00] sm:inline-flex"
+            >
+              Entrar
+            </Link>
+            <a
+              href="#experimente"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#ff4b00] px-5 text-sm font-black text-white shadow-[0_12px_28px_rgba(255,75,0,0.24)] transition hover:bg-[#e94400]"
+            >
+              Experimente Grátis
+              <ArrowRight size={17} />
+            </a>
           </div>
+        </div>
+      </header>
 
-          <div className="relative z-10 mt-5 flex w-full max-w-[525px] justify-center pb-6 sm:mt-6 sm:pb-8">
-            <div className="w-full max-w-[525px] rounded-[24px] bg-white px-4 py-6 shadow-2xl sm:rounded-[30px] sm:px-10 sm:py-10">
-              <h1 className="text-center text-2xl font-light leading-tight text-slate-950 sm:text-[30px]">
-                {isSignup ? "Crie sua conta" : "Bem-vindo ao"}{" "}
-                <span className="font-black text-[#ff4b00]">
-                  {isSignup ? "Contrx" : "Contrx!"}
-                </span>
-              </h1>
+      <section className="relative overflow-hidden bg-white pt-20">
+        <div className="absolute inset-0 bg-[linear-gradient(110deg,#ffffff_0%,#f8fafc_48%,#fff1e8_100%)]" />
+        <div className="absolute inset-x-0 bottom-0 h-28 bg-slate-950" />
 
-              <div className="mt-5 grid grid-cols-2 rounded-2xl bg-slate-100 p-1 sm:mt-7">
-                <button
-                  type="button"
-                  onClick={() => switchMode("login")}
-                  className={`flex h-11 items-center justify-center gap-2 rounded-xl text-sm font-black transition ${
-                    mode === "login"
-                      ? "bg-white text-[#ff4b00] shadow-sm"
-                      : "text-slate-500 hover:text-slate-900"
-                  }`}
+        <div className="relative mx-auto grid w-full max-w-7xl gap-10 px-5 py-12 sm:px-8 lg:min-h-[calc(100dvh-5rem)] lg:grid-cols-[minmax(0,1fr)_430px] lg:items-center lg:py-16">
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-4 py-2 text-xs font-black uppercase text-[#ff4b00]">
+              <ShieldCheck size={16} />
+              ERP de gestão de contratos online
+            </div>
+
+            <h1 className="mt-7 max-w-4xl text-4xl font-black leading-[1.04] text-slate-950 sm:text-6xl lg:text-7xl">
+              Gestão de contratos mais clara, rápida e controlada.
+            </h1>
+
+            <p className="mt-6 max-w-2xl text-base font-semibold leading-8 text-slate-600 sm:text-xl">
+              O Contrx reúne imóveis, pessoas, contratos, agenda e financeiro
+              em uma operação única para sua equipe acompanhar tudo sem depender
+              de planilhas soltas.
+            </p>
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <a
+                href="#experimente"
+                className="inline-flex h-14 items-center justify-center gap-2 rounded-full bg-[#ff4b00] px-7 text-base font-black text-white shadow-[0_20px_45px_rgba(255,75,0,0.24)] transition hover:bg-[#e94400]"
+              >
+                Experimente Grátis
+                <ArrowRight size={19} />
+              </a>
+              <Link
+                href={appLoginUrl}
+                className="inline-flex h-14 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-7 text-base font-black text-slate-700 transition hover:border-orange-200 hover:text-[#ff4b00]"
+              >
+                Entrar no sistema
+              </Link>
+            </div>
+
+            <div className="mt-10 grid gap-3 sm:grid-cols-3">
+              {overviewMetrics.map((metric) => (
+                <div
+                  key={metric.label}
+                  className="rounded-[8px] border border-slate-200 bg-white px-5 py-4 shadow-sm"
                 >
-                  <LogIn size={17} />
-                  Entrar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => switchMode("signup")}
-                  className={`flex h-11 items-center justify-center gap-2 rounded-xl text-sm font-black transition ${
-                    mode === "signup"
-                      ? "bg-white text-[#ff4b00] shadow-sm"
-                      : "text-slate-500 hover:text-slate-900"
-                  }`}
-                >
-                  <UserPlus size={17} />
-                  Criar conta
-                </button>
-              </div>
+                  <p className="text-2xl font-black text-slate-950">
+                    {metric.value}
+                  </p>
+                  <p className="mt-1 text-xs font-black uppercase text-slate-500">
+                    {metric.label}
+                  </p>
+                </div>
+              ))}
+            </div>
 
-              <div className="mt-5 space-y-3 sm:mt-7 sm:space-y-4">
-                {isSignup && (
-                  <>
-                    <AuthInput
-                      icon={<User size={20} />}
-                      type="text"
-                      placeholder="Seu nome"
-                      value={signupName}
-                      onChange={setSignupName}
-                      autoComplete="name"
-                    />
-                    <AuthInput
-                      icon={<Building2 size={20} />}
-                      type="text"
-                      placeholder="Nome da empresa"
-                      value={signupCompanyName}
-                      onChange={setSignupCompanyName}
-                      autoComplete="organization"
-                    />
-                  </>
-                )}
-
-                <AuthInput
-                  icon={<Mail size={20} />}
-                  type="email"
-                  placeholder="E-mail"
-                  value={email}
-                  onChange={setEmail}
-                  autoComplete="username"
-                  onEnter={handleSubmit}
-                />
-
-                <div className="flex h-[54px] items-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_3px_10px_rgba(15,23,42,0.10)] sm:h-[58px]">
-                  <div className="flex h-full w-[58px] items-center justify-center text-slate-600">
-                    <LockKeyhole size={20} />
+            <div className="relative mt-10 overflow-hidden rounded-[24px] border border-slate-800 bg-slate-950 p-4 shadow-[0_30px_80px_rgba(15,23,42,0.22)] lg:mr-8">
+              <div className="rounded-[18px] bg-white p-4">
+                <div className="flex flex-col gap-4 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase text-[#ff4b00]">
+                      Visão operacional
+                    </p>
+                    <h2 className="mt-1 text-xl font-black text-slate-950">
+                      Painel de contratos
+                    </h2>
                   </div>
-
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Senha"
-                    value={password}
-                    autoComplete={isSignup ? "new-password" : "current-password"}
-                    onChange={(event) => setPassword(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") handleSubmit();
-                    }}
-                    className="contrx-auth-input h-full min-w-0 flex-1 bg-white px-2 text-sm font-bold text-slate-700 outline-none placeholder:text-slate-400"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="flex h-full w-[58px] items-center justify-center text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
-                    aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                  >
-                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                  </button>
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 text-[#ff4b00]">
+                    <BarChart3 size={22} />
+                  </div>
                 </div>
 
-                {isSignup && (
-                  <AuthInput
-                    icon={<LockKeyhole size={20} />}
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Confirmar senha"
-                    value={signupPasswordConfirm}
-                    onChange={setSignupPasswordConfirm}
-                    onEnter={handleSubmit}
-                    autoComplete="new-password"
-                  />
-                )}
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  {previewRows.map((row) => (
+                    <div key={row.label} className={`rounded-2xl px-4 py-4 ${row.tone}`}>
+                      <p className="text-2xl font-black">{row.value}</p>
+                      <p className="mt-1 text-xs font-bold leading-4">{row.label}</p>
+                    </div>
+                  ))}
+                </div>
 
-                {!isSignup && (
-                  <label className="flex w-fit items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={remember}
-                      onChange={(event) => setRemember(event.target.checked)}
-                      className="h-4 w-4 accent-[#ff4b00]"
-                    />
-                    <span className="text-sm font-bold text-slate-600">
-                      Lembrar e-mail
-                    </span>
-                  </label>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={isSubmitting || isLoading}
-                  className="flex h-[58px] w-full items-center justify-center gap-2 rounded-2xl bg-[#ff4b00] text-base font-black text-white shadow-[0_14px_30px_rgba(255,75,0,0.28)] transition hover:bg-[#e94400] disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {isSignup ? <UserPlus size={19} /> : <LogIn size={19} />}
-                  {isSubmitting
-                    ? isSignup
-                      ? "Criando..."
-                      : "Entrando..."
-                    : isSignup
-                      ? "Criar conta"
-                      : "Entrar"}
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={() =>
-                  showAuthError(
-                    "Recuperação de senha",
-                    "A recuperação de senha será configurada na próxima etapa.",
-                  )
-                }
-                className="mt-5 w-full text-center text-sm font-black text-[#ff4b00] sm:mt-6"
-              >
-                Esqueceu sua senha?
-              </button>
-            </div>
-          </div>
-
-          <p className="relative z-10 mt-auto pb-5 text-center text-sm font-black text-white sm:pb-8 sm:text-base">
-            Contrx © 2026
-          </p>
-        </section>
-
-        <section className="hidden min-h-screen items-center justify-center bg-white px-10 lg:flex">
-          <div className="w-full max-w-[705px] rounded-[32px] bg-[#fff6ec] p-10">
-            <div className="rounded-[30px] border border-slate-100 bg-white px-8 pb-8 pt-0 text-center shadow-sm">
-              <div className="mx-auto -mt-2 mb-9 flex h-32 w-32 items-center justify-center rounded-[30px] bg-[#ffedd2] text-[#ff4b00]">
-                <Home size={70} strokeWidth={2.4} />
-              </div>
-
-              <h2 className="mx-auto max-w-[650px] text-[34px] font-black leading-tight text-slate-950">
-                Gestão de locações simples, rápida e inteligente.
-              </h2>
-
-              <p className="mx-auto mt-7 max-w-[620px] text-lg leading-8 text-slate-600">
-                Controle imóveis, inquilinos, contratos, vencimentos e receitas
-                em uma plataforma moderna e profissional.
-              </p>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      {authError && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-md">
-          <div className="w-full max-w-[460px] overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-red-100">
-            <div className="bg-gradient-to-r from-red-50 via-white to-orange-50 px-7 py-6">
-              <div className="flex items-start justify-between gap-5">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500 text-white shadow-lg shadow-red-500/25">
-                    <AlertTriangle size={26} />
+                <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_0.85fr]">
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <p className="text-sm font-black text-slate-800">
+                        Receitas previstas
+                      </p>
+                      <p className="text-sm font-black text-slate-950">
+                        R$ 86,4 mil
+                      </p>
+                    </div>
+                    <div className="mt-3 h-2 rounded-full bg-white">
+                      <div className="h-2 w-[82%] rounded-full bg-[#ff4b00]" />
+                    </div>
                   </div>
-
-                  <div>
-                    <h2 className="text-xl font-black text-slate-950">
-                      {authErrorTitle}
-                    </h2>
-                    <p className="mt-1 text-sm font-medium text-slate-500">
-                      {authErrorSubtitle}
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="text-emerald-500" size={18} />
+                      <p className="text-sm font-black text-slate-800">
+                        Agenda sincronizada
+                      </p>
+                    </div>
+                    <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
+                      Vistorias, cobranças e renovações em uma fila de atenção.
                     </p>
                   </div>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => setAuthError(false)}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 hover:text-slate-900"
-                  aria-label="Fechar aviso"
-                >
-                  <X size={18} />
-                </button>
               </div>
-            </div>
-
-            <div className="px-7 pb-7 pt-5">
-              <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3">
-                <p className="text-sm font-bold text-red-700">
-                  {authErrorMessage}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setAuthError(false)}
-                className="mt-5 h-12 w-full rounded-2xl bg-[#ff4b00] text-sm font-black text-white shadow-[0_12px_24px_rgba(255,75,0,0.24)] transition hover:bg-[#e94400]"
-              >
-                Entendi
-              </button>
             </div>
           </div>
+
+          <ExperimentSignupCard />
         </div>
-      )}
+      </section>
+
+      <section id="modulos" className="bg-white py-20">
+        <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
+          <div className="max-w-3xl">
+            <p className="text-sm font-black uppercase text-[#ff4b00]">
+              Operação integrada
+            </p>
+            <h2 className="mt-3 text-3xl font-black leading-tight text-slate-950 sm:text-5xl">
+              Tudo que sua equipe acompanha no dia a dia, no mesmo ambiente.
+            </h2>
+          </div>
+
+          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {modules.map((module) => {
+              const Icon = module.icon;
+
+              return (
+                <article
+                  key={module.title}
+                  className="rounded-[8px] border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-orange-200 hover:shadow-lg"
+                >
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50 text-[#ff4b00]">
+                    <Icon size={24} />
+                  </div>
+                  <h3 className="mt-5 text-xl font-black text-slate-950">
+                    {module.title}
+                  </h3>
+                  <p className="mt-3 text-sm font-medium leading-6 text-slate-600">
+                    {module.description}
+                  </p>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section id="controle" className="bg-[#f7f8fb] py-20">
+        <div className="mx-auto grid w-full max-w-7xl gap-10 px-5 sm:px-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
+          <div>
+            <p className="text-sm font-black uppercase text-[#ff4b00]">
+              Controle financeiro
+            </p>
+            <h2 className="mt-3 text-3xl font-black leading-tight text-slate-950 sm:text-5xl">
+              Receber, pagar, projetar e decidir com mais clareza.
+            </h2>
+            <p className="mt-6 max-w-xl text-base font-medium leading-8 text-slate-600">
+              O Contrx reúne contratos, vencimentos e lançamentos financeiros
+              para ajudar a equipe a enxergar o realizado, o projetado e o que
+              exige atenção.
+            </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            {[
+              "Contas a receber com status e pagamentos",
+              "Contas a pagar vinculadas a pessoas e imóveis",
+              "Relatórios financeiros por período",
+              "Alertas para pendências operacionais",
+            ].map((item) => (
+              <div
+                key={item}
+                className="rounded-[8px] border border-slate-200 bg-white p-5 shadow-sm"
+              >
+                <CheckCircle2 className="text-emerald-500" size={22} />
+                <p className="mt-4 text-sm font-black leading-6 text-slate-800">
+                  {item}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="contato" className="bg-slate-950 py-16 text-white">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-5 sm:px-8 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-sm font-black uppercase text-orange-200">
+              Contrx
+            </p>
+            <h2 className="mt-3 max-w-3xl text-3xl font-black leading-tight sm:text-5xl">
+              Entre no ERP ou conheça a plataforma com a nossa equipe.
+            </h2>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <a
+              href="#experimente"
+              className="inline-flex h-14 items-center justify-center gap-2 rounded-full bg-[#ff4b00] px-7 text-base font-black text-white transition hover:bg-[#e94400]"
+            >
+              Experimente Grátis
+              <ArrowRight size={19} />
+            </a>
+            {whatsappUrl && (
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-14 items-center justify-center gap-2 rounded-full border border-white/20 px-7 text-base font-black text-white transition hover:bg-white/10"
+              >
+                <MessageCircle size={19} />
+                WhatsApp
+              </a>
+            )}
+          </div>
+        </div>
+      </section>
     </main>
-  );
-}
-
-type AuthInputProps = {
-  icon: React.ReactNode;
-  type: string;
-  placeholder: string;
-  value: string;
-  onChange: (value: string) => void;
-  onEnter?: () => void;
-  autoComplete?: string;
-};
-
-function AuthInput({
-  icon,
-  type,
-  placeholder,
-  value,
-  onChange,
-  onEnter,
-  autoComplete,
-}: AuthInputProps) {
-  return (
-    <div className="flex h-[54px] items-center rounded-2xl border border-slate-200 bg-white shadow-[0_3px_10px_rgba(15,23,42,0.10)] sm:h-[58px]">
-      <div className="flex h-full w-[58px] items-center justify-center text-slate-600">
-        {icon}
-      </div>
-
-      <input
-        type={type}
-        placeholder={placeholder}
-        value={value}
-        autoComplete={autoComplete}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") onEnter?.();
-        }}
-        className="contrx-auth-input h-full min-w-0 flex-1 rounded-r-2xl bg-white px-2 text-sm font-bold text-slate-700 outline-none placeholder:text-slate-400"
-      />
-    </div>
   );
 }

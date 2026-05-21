@@ -771,7 +771,7 @@ export default function DashboardPage() {
               </h1>
               <p className="mt-2 max-w-2xl text-slate-500">
                 Indicadores estratégicos para acompanhar ocupação, receita,
-                contratos e oportunidades da carteira imobiliária.
+                contratos e oportunidades da carteira de contratos.
               </p>
             </div>
 

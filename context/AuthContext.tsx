@@ -109,7 +109,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       clearStoredAuth();
       setToken(null);
       setUser(null);
-      router.push('/');
+      router.push('/login');
     }
 
     window.addEventListener(SESSION_REPLACED_EVENT, handleSessionReplaced);
@@ -198,7 +198,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setToken(null);
     setUser(null);
 
-    router.push('/');
+    router.push('/login');
   }, [clearStoredAuth, router, user?.companyId]);
 
   const value = useMemo<AuthContextData>(

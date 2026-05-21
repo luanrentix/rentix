@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { uppercaseFields } from '../common/text-normalization';
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,15 +14,20 @@ import { AtualizarAgendaItemDto } from './dto/atualizar-agenda-item.dto';
 export class AgendaService {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(data: CriarAgendaItemDto, companyId: string) {
+  async create(data: CriarAgendaItemDto, companyId: string) {
     const normalizedData = this.normalizeScheduleData(data);
+
+    await this.validatePerson(companyId, normalizedData.personId);
+    await this.validateProperty(companyId, normalizedData.propertyId);
 
     return this.prisma.scheduleItem.create({
       data: {
         companyId,
         title: normalizedData.title,
-        customerName: normalizedData.customerName,
-        propertyName: normalizedData.propertyName,
+        personId: normalizedData.personId || null,
+        propertyId: normalizedData.propertyId || null,
+        customerName: normalizedData.customerName || '',
+        propertyName: normalizedData.propertyName || '',
         date: new Date(`${normalizedData.date}T00:00:00`),
         time: normalizedData.time,
         type: normalizedData.type,
@@ -54,11 +63,21 @@ export class AgendaService {
     const normalizedData = this.normalizeScheduleData(data);
 
     await this.findOne(id, companyId);
+    await this.validatePerson(companyId, normalizedData.personId);
+    await this.validateProperty(companyId, normalizedData.propertyId);
 
     return this.prisma.scheduleItem.update({
       where: { id },
       data: {
         title: normalizedData.title,
+        personId:
+          normalizedData.personId === undefined
+            ? undefined
+            : normalizedData.personId || null,
+        propertyId:
+          normalizedData.propertyId === undefined
+            ? undefined
+            : normalizedData.propertyId || null,
         customerName: normalizedData.customerName,
         propertyName: normalizedData.propertyName,
         date: normalizedData.date
@@ -93,5 +112,44 @@ export class AgendaService {
       'reminder',
       'notes',
     ]);
+  }
+
+  private async validatePerson(companyId: string, personId?: string | null) {
+    if (!personId) return;
+
+    const person = await this.prisma.person.findFirst({
+      where: {
+        id: personId,
+        companyId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!person) {
+      throw new BadRequestException('Pessoa nao encontrada para esta empresa.');
+    }
+  }
+
+  private async validateProperty(
+    companyId: string,
+    propertyId?: string | null,
+  ) {
+    if (!propertyId) return;
+
+    const property = await this.prisma.property.findFirst({
+      where: {
+        id: propertyId,
+        companyId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!property) {
+      throw new BadRequestException('Imovel nao encontrado para esta empresa.');
+    }
   }
 }

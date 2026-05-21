@@ -124,6 +124,7 @@ model Person {
   tenantContracts    Contract[]     @relation("ContractTenant")
   receivableAccounts ContaReceber[]
   payableAccounts    ContaPagar[]
+  scheduleItems       ScheduleItem[]
 
   @@index([companyId])
   @@index([document])
@@ -165,6 +166,7 @@ model Property {
   contracts Contract[]
   movements PropertyMovement[]
   payableAccounts ContaPagar[]
+  scheduleItems ScheduleItem[]
 
   @@index([companyId])
   @@index([ownerId])
@@ -392,8 +394,10 @@ model ScheduleItem {
   companyId String @map("empresa_id")
 
   title           String @map("titulo")
-  customerName    String @map("cliente")
-  propertyName    String @map("imovel")
+  personId        String? @map("pessoa_id")
+  propertyId      String? @map("imovel_id")
+  customerName    String @default("") @map("cliente")
+  propertyName    String @default("") @map("imovel")
   date            DateTime @map("data")
   time            String @map("horario")
   type            String @map("tipo")
@@ -406,9 +410,13 @@ model ScheduleItem {
   createdAt DateTime @default(now()) @map("criado_em")
   updatedAt DateTime @updatedAt @map("atualizado_em")
 
-  company Company @relation(fields: [companyId], references: [id])
+  company  Company   @relation(fields: [companyId], references: [id])
+  person   Person?   @relation(fields: [personId], references: [id], onDelete: SetNull)
+  property Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
   @@index([date])
+  @@index([personId])
+  @@index([propertyId])
   @@map("agenda_itens")
 }

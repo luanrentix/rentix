@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 import {
   AlertTriangle,
@@ -30,6 +30,11 @@ import {
   updateScheduleItem,
   type ScheduleItem as ApiScheduleItem,
 } from "@/services/schedule.service";
+import { getPeople, type Person as ApiPerson } from "@/services/people.service";
+import {
+  getProperties,
+  type Property as ApiProperty,
+} from "@/services/properties.service";
 import {
   getCompanyStorageItem,
   setCompanyStorageItem,
@@ -43,6 +48,8 @@ type ThemeMode = "light" | "black" | "graphite";
 type ScheduleItem = {
   id: string;
   title: string;
+  personId?: string | null;
+  propertyId?: string | null;
   customerName: string;
   propertyName: string;
   date: string;
@@ -56,6 +63,18 @@ type ScheduleItem = {
 };
 
 type ScheduleFormData = Omit<ScheduleItem, "id">;
+
+type AgendaPerson = {
+  id: string;
+  name: string;
+  document: string;
+};
+
+type AgendaProperty = {
+  id: string;
+  name: string;
+  address: string;
+};
 
 type ActionMenuPosition = {
   top: number;
@@ -221,8 +240,10 @@ function mapApiScheduleItemToScheduleItem(item: ApiScheduleItem): ScheduleItem {
   return {
     id: item.id,
     title: item.title,
-    customerName: item.customerName,
-    propertyName: item.propertyName,
+    personId: item.personId || undefined,
+    propertyId: item.propertyId || undefined,
+    customerName: item.customerName || "",
+    propertyName: item.propertyName || "",
     date: item.date.slice(0, 10),
     time: item.time,
     type: item.type,
@@ -231,6 +252,32 @@ function mapApiScheduleItemToScheduleItem(item: ApiScheduleItem): ScheduleItem {
     responsibleName: item.responsibleName,
     reminder: item.reminder,
     notes: item.notes || "",
+  };
+}
+
+function mapApiPersonToAgendaPerson(person: ApiPerson): AgendaPerson {
+  return {
+    id: person.id,
+    name: person.name,
+    document: person.document || "",
+  };
+}
+
+function mapApiPropertyToAgendaProperty(property: ApiProperty): AgendaProperty {
+  const address = [
+    property.address,
+    property.number,
+    property.district,
+    property.city,
+    property.state,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  return {
+    id: property.id,
+    name: property.title,
+    address,
   };
 }
 
@@ -309,6 +356,8 @@ export default function AgendaPage() {
     formatDateToInputValue(new Date()),
   );
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
+  const [people, setPeople] = useState<AgendaPerson[]>([]);
+  const [properties, setProperties] = useState<AgendaProperty[]>([]);
   const [selectedDate, setSelectedDate] = useState(todayInputValue);
   const [currentCalendarDate, setCurrentCalendarDate] = useState(() =>
     createDateFromInputValue(todayInputValue),
@@ -494,6 +543,34 @@ export default function AgendaPage() {
     return () => window.clearInterval(intervalId);
   }, []);
 
+  const loadScheduleItems = useCallback(async () => {
+    setIsLoadingSchedules(true);
+    setLoadError("");
+
+    try {
+      const [apiItems, apiPeople, apiProperties] = await Promise.all([
+        getScheduleItems(),
+        companyId ? getPeople(companyId) : Promise.resolve([]),
+        companyId ? getProperties(companyId) : Promise.resolve([]),
+      ]);
+      setScheduleItems(apiItems.map(mapApiScheduleItemToScheduleItem));
+      setPeople(apiPeople.map(mapApiPersonToAgendaPerson));
+      setProperties(apiProperties.map(mapApiPropertyToAgendaProperty));
+    } catch (error) {
+      console.error("Não foi possível carregar a agenda.", error);
+      setLoadError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível carregar a agenda.",
+      );
+      setScheduleItems([]);
+      setPeople([]);
+      setProperties([]);
+    } finally {
+      setIsLoadingSchedules(false);
+    }
+  }, [companyId]);
+
   useEffect(() => {
     if (!companyId) {
       setIsLoadingSchedules(false);
@@ -501,7 +578,7 @@ export default function AgendaPage() {
     }
 
     loadScheduleItems();
-  }, [companyId]);
+  }, [companyId, loadScheduleItems]);
 
   useEffect(() => {
     function applyStoredTheme() {
@@ -645,26 +722,6 @@ export default function AgendaPage() {
     };
   }, [openActionMenuScheduleId]);
 
-  async function loadScheduleItems() {
-    setIsLoadingSchedules(true);
-    setLoadError("");
-
-    try {
-      const apiItems = await getScheduleItems();
-      setScheduleItems(apiItems.map(mapApiScheduleItemToScheduleItem));
-    } catch (error) {
-      console.error("Não foi possível carregar a agenda.", error);
-      setLoadError(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível carregar a agenda.",
-      );
-      setScheduleItems([]);
-    } finally {
-      setIsLoadingSchedules(false);
-    }
-  }
-
   function setScheduleItemsFromBackend(
     nextItems:
       | ScheduleItem[]
@@ -764,6 +821,8 @@ export default function AgendaPage() {
     setFormError("");
     setFormData({
       title: item.title,
+      personId: item.personId,
+      propertyId: item.propertyId,
       customerName: item.customerName,
       propertyName: item.propertyName,
       date: item.date,
@@ -794,16 +853,6 @@ export default function AgendaPage() {
       return;
     }
 
-    if (!formData.customerName.trim()) {
-      setFormError("Informe o cliente ou responsável externo.");
-      return;
-    }
-
-    if (!formData.propertyName.trim()) {
-      setFormError("Informe o imóvel ou referência do agendamento.");
-      return;
-    }
-
     if (!formData.date || !formData.time) {
       setFormError("Informe data e horário do agendamento.");
       return;
@@ -819,10 +868,19 @@ export default function AgendaPage() {
       return;
     }
 
+    const selectedPerson = people.find(
+      (person) => String(person.id) === String(formData.personId || ""),
+    );
+    const selectedProperty = properties.find(
+      (property) => String(property.id) === String(formData.propertyId || ""),
+    );
+
     const normalizedData: ScheduleFormData = {
       title: formData.title.trim(),
-      customerName: formData.customerName.trim(),
-      propertyName: formData.propertyName.trim(),
+      personId: formData.personId ? selectedPerson?.id || null : null,
+      propertyId: formData.propertyId ? selectedProperty?.id || null : null,
+      customerName: selectedPerson?.name || "",
+      propertyName: selectedProperty?.name || "",
       date: formData.date,
       time: formData.time,
       type: formData.type.trim() || "Outros",
@@ -929,6 +987,8 @@ export default function AgendaPage() {
     try {
       const duplicatedItem = await createScheduleItem({
         title: `${item.title} - cópia`,
+        personId: item.personId,
+        propertyId: item.propertyId,
         customerName: item.customerName,
         propertyName: item.propertyName,
         date: addDaysToInputValue(item.date, 1),
@@ -1034,9 +1094,13 @@ export default function AgendaPage() {
         >
           <p className="flex min-w-0 items-center gap-2">
             <UserRound className="h-4 w-4 shrink-0 text-orange-600" />
-            <span className="truncate">{item.customerName}</span>
+            <span className="truncate">
+              {item.customerName || "Sem pessoa vinculada"}
+            </span>
           </p>
-          <p className="min-w-0 truncate">Imóvel: {item.propertyName}</p>
+          <p className="min-w-0 truncate">
+            Imóvel: {item.propertyName || "Sem imóvel vinculado"}
+          </p>
           <p className="min-w-0 truncate">Responsável: {item.responsibleName}</p>
           <p className="flex min-w-0 items-center gap-2">
             <Clock3 className="h-4 w-4 shrink-0 text-orange-600" />
@@ -1687,7 +1751,8 @@ export default function AgendaPage() {
                         {item.title}
                       </p>
                       <p className={`mt-1 truncate text-xs font-semibold ${mutedTextClass}`}>
-                        {item.customerName} · {item.propertyName}
+                        {item.customerName || "Sem pessoa vinculada"} ·{" "}
+                        {item.propertyName || "Sem imóvel vinculado"}
                       </p>
                     </button>
                   ))
@@ -1889,34 +1954,58 @@ export default function AgendaPage() {
                   />
                 </Field>
 
-                <Field label="Cliente / responsável" isBlackTheme={isBlackTheme} required>
-                  <input
-                    type="text"
-                    value={formData.customerName}
-                    onChange={(event) =>
+                <Field label="Pessoa / responsável" isBlackTheme={isBlackTheme}>
+                  <select
+                    value={formData.personId || ""}
+                    onChange={(event) => {
+                      const selectedPerson = people.find(
+                        (person) => String(person.id) === String(event.target.value),
+                      );
+
+                      setFormError("");
                       setFormData((current) => ({
                         ...current,
-                        customerName: event.target.value,
-                      }))
-                    }
-                    placeholder="Nome do cliente"
+                        personId: selectedPerson?.id,
+                        customerName: selectedPerson?.name || "",
+                      }));
+                    }}
                     className={inputClass}
-                  />
+                  >
+                    <option value="">Sem pessoa vinculada</option>
+                    {people.map((person) => (
+                      <option key={person.id} value={person.id}>
+                        {person.name}
+                        {person.document ? ` - ${person.document}` : ""}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
 
-                <Field label="Imóvel / referência" isBlackTheme={isBlackTheme} required>
-                  <input
-                    type="text"
-                    value={formData.propertyName}
-                    onChange={(event) =>
+                <Field label="Imóvel" isBlackTheme={isBlackTheme}>
+                  <select
+                    value={formData.propertyId || ""}
+                    onChange={(event) => {
+                      const selectedProperty = properties.find(
+                        (property) => String(property.id) === String(event.target.value),
+                      );
+
+                      setFormError("");
                       setFormData((current) => ({
                         ...current,
-                        propertyName: event.target.value,
-                      }))
-                    }
-                    placeholder="Imóvel ou referência"
+                        propertyId: selectedProperty?.id,
+                        propertyName: selectedProperty?.name || "",
+                      }));
+                    }}
                     className={inputClass}
-                  />
+                  >
+                    <option value="">Sem imóvel vinculado</option>
+                    {properties.map((property) => (
+                      <option key={property.id} value={property.id}>
+                        {property.name}
+                        {property.address ? ` - ${property.address}` : ""}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
 
                 <Field label="Data" isBlackTheme={isBlackTheme} required>
@@ -2112,7 +2201,8 @@ export default function AgendaPage() {
                 {getReadableDate(scheduleToDelete.date)} às {scheduleToDelete.time}
               </p>
               <p className={`mt-1 text-sm font-semibold ${mutedTextClass}`}>
-                {scheduleToDelete.customerName} · {scheduleToDelete.propertyName}
+                {scheduleToDelete.customerName || "Sem pessoa vinculada"} ·{" "}
+                {scheduleToDelete.propertyName || "Sem imóvel vinculado"}
               </p>
             </div>
 

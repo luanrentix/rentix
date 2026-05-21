@@ -1031,6 +1031,10 @@ function getValidationErrorMessages(validationErrors: SettingsValidationErrors) 
   );
 }
 
+function getSettingsErrorTab(validationErrors: SettingsValidationErrors): SettingsTab {
+  return validationErrors.name || validationErrors.userEmail ? "user" : "company";
+}
+
 
 function renderPrintTemplatePreview(content: string, documentKey: PrintDocumentKey | null) {
   const previewValues: Record<string, string> = {
@@ -1273,6 +1277,7 @@ export default function ConfiguracoesPage() {
   const [isDocumentLookupLoading, setIsDocumentLookupLoading] = useState(false);
   const [isZipCodeLookupLoading, setIsZipCodeLookupLoading] = useState(false);
   const [isSaveConfirmModalOpen, setIsSaveConfirmModalOpen] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isCloseConfirmModalOpen, setIsCloseConfirmModalOpen] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [resetOptions, setResetOptions] = useState<ResetOptions>(defaultResetOptions);
@@ -1615,6 +1620,19 @@ export default function ConfiguracoesPage() {
   }
 
   function handleFinishUserSettingsEdit() {
+    setPasswordError("");
+
+    if (!validatePasswordChange()) {
+      return;
+    }
+
+    const nextValidationErrors = getSettingsValidationErrors(false);
+
+    if (nextValidationErrors.name || nextValidationErrors.userEmail) {
+      setValidationErrors(nextValidationErrors);
+      return;
+    }
+
     setIsUserSettingsEditing(false);
   }
 
@@ -1913,8 +1931,13 @@ export default function ConfiguracoesPage() {
       return false;
     }
 
-    if (passwordSettings.newPassword.length < 8) {
-      setPasswordError("A nova senha precisa ter no mínimo 8 caracteres.");
+    if (!passwordSettings.newPassword) {
+      setPasswordError("Informe a nova senha.");
+      return false;
+    }
+
+    if (passwordSettings.newPassword.length < 6) {
+      setPasswordError("A nova senha precisa ter no mínimo 6 caracteres.");
       return false;
     }
 
@@ -1926,49 +1949,51 @@ export default function ConfiguracoesPage() {
     return true;
   }
 
-  function validateSettings() {
+  function getSettingsValidationErrors(validateCompanySettings = true) {
     const nextValidationErrors: SettingsValidationErrors = {};
 
-    if (!companySettings.companyName.trim() && !companySettings.tradeName.trim()) {
-      nextValidationErrors.companyName = "Informe a razão social ou o nome fantasia.";
-    }
+    if (validateCompanySettings) {
+      if (!companySettings.companyName.trim() && !companySettings.tradeName.trim()) {
+        nextValidationErrors.companyName = "Informe a razão social ou o nome fantasia.";
+      }
 
-    if (!companySettings.document.trim()) {
-      nextValidationErrors.document = "Informe o CPF ou CNPJ da empresa.";
-    } else if (!validateDocument(companySettings.document)) {
-      nextValidationErrors.document = "Informe um CPF ou CNPJ válido.";
-    }
+      if (!companySettings.document.trim()) {
+        nextValidationErrors.document = "Informe o CPF ou CNPJ da empresa.";
+      } else if (!validateDocument(companySettings.document)) {
+        nextValidationErrors.document = "Informe um CPF ou CNPJ válido.";
+      }
 
-    if (companySettings.email.trim() && !isValidEmail(companySettings.email)) {
-      nextValidationErrors.companyEmail = "Informe um e-mail comercial válido.";
-    }
+      if (companySettings.email.trim() && !isValidEmail(companySettings.email)) {
+        nextValidationErrors.companyEmail = "Informe um e-mail comercial válido.";
+      }
 
-    if (
-      companySettings.phone.trim() &&
-      onlyDigits(companySettings.phone).length < 10
-    ) {
-      nextValidationErrors.phone = "Informe um telefone com DDD válido.";
-    }
+      if (
+        companySettings.phone.trim() &&
+        onlyDigits(companySettings.phone).length < 10
+      ) {
+        nextValidationErrors.phone = "Informe um telefone com DDD válido.";
+      }
 
-    if (!validatePixKey(companySettings.pixKey, companySettings.pixKeyType)) {
-      nextValidationErrors.pixKey = "Informe uma chave Pix válida para o tipo selecionado.";
-    }
+      if (!validatePixKey(companySettings.pixKey, companySettings.pixKeyType)) {
+        nextValidationErrors.pixKey = "Informe uma chave Pix válida para o tipo selecionado.";
+      }
 
-    if (
-      companySettings.zipCode.trim() &&
-      onlyDigits(companySettings.zipCode).length !== 8
-    ) {
-      nextValidationErrors.zipCode = "Informe um CEP com 8 números ou deixe em branco.";
-    }
+      if (
+        companySettings.zipCode.trim() &&
+        onlyDigits(companySettings.zipCode).length !== 8
+      ) {
+        nextValidationErrors.zipCode = "Informe um CEP com 8 números ou deixe em branco.";
+      }
 
-    if (!companySettings.city.trim()) {
-      nextValidationErrors.city = "Informe a cidade da empresa.";
-    }
+      if (!companySettings.city.trim()) {
+        nextValidationErrors.city = "Informe a cidade da empresa.";
+      }
 
-    if (!companySettings.state.trim()) {
-      nextValidationErrors.state = "Informe a UF da empresa.";
-    } else if (companySettings.state.trim().length !== 2) {
-      nextValidationErrors.state = "Informe a UF com 2 letras.";
+      if (!companySettings.state.trim()) {
+        nextValidationErrors.state = "Informe a UF da empresa.";
+      } else if (companySettings.state.trim().length !== 2) {
+        nextValidationErrors.state = "Informe a UF com 2 letras.";
+      }
     }
 
     if (!userSettings.name.trim()) {
@@ -1981,13 +2006,14 @@ export default function ConfiguracoesPage() {
       nextValidationErrors.userEmail = "E-mail de acesso inválido. Faça login novamente.";
     }
 
-    setValidationErrors(nextValidationErrors);
-
-    return Object.keys(nextValidationErrors).length === 0;
+    return nextValidationErrors;
   }
 
   function handleOpenPrintModal(documentKey: PrintDocumentKey, mode: PrintModalMode) {
-    setPrintEditorViewMode(mode === "edit" ? "split" : "preview");
+    if (mode === "edit") {
+      setPrintEditorViewMode("split");
+    }
+
     setPrintModalState({
       isOpen: true,
       mode,
@@ -1996,6 +2022,7 @@ export default function ConfiguracoesPage() {
   }
 
   function handleClosePrintModal() {
+    setPrintEditorViewMode("split");
     setPrintModalState(defaultPrintModalState);
   }
 
@@ -2141,15 +2168,26 @@ export default function ConfiguracoesPage() {
   }
 
   function handleOpenSaveConfirmModal() {
-    setPasswordError("");
+    if (isSavingSettings) return;
 
-    if (!validateSettings()) {
-      setActiveSettingsTab("company");
+    setPasswordError("");
+    setSuccessMessage("");
+
+    if (!validatePasswordChange()) {
+      setActiveSettingsTab("user");
+      setIsUserSettingsEditing(true);
       return;
     }
 
-    if (!validatePasswordChange()) {
-      setActiveSettingsTab(passwordSettings.newPassword ? "user" : "company");
+    const shouldValidateCompanySettings =
+      activeSettingsTab === "company" ||
+      JSON.stringify(companySettings) !== JSON.stringify(initialCompanySettings);
+
+    const nextValidationErrors = getSettingsValidationErrors(shouldValidateCompanySettings);
+
+    if (Object.keys(nextValidationErrors).length > 0) {
+      setValidationErrors(nextValidationErrors);
+      setActiveSettingsTab(getSettingsErrorTab(nextValidationErrors));
       return;
     }
 
@@ -2161,11 +2199,17 @@ export default function ConfiguracoesPage() {
   }
 
   async function handleConfirmSaveSettings() {
+    if (isSavingSettings) return;
+
     if (!companyId) {
       setPasswordError("Empresa do usuário não encontrada. Faça login novamente.");
       setIsSaveConfirmModalOpen(false);
       return;
     }
+
+    setIsSavingSettings(true);
+    setPasswordError("");
+    setSuccessMessage("");
 
     try {
       if (passwordSettings.newPassword) {
@@ -2195,6 +2239,7 @@ export default function ConfiguracoesPage() {
       );
       setActiveSettingsTab(passwordSettings.newPassword ? "user" : "company");
       setIsSaveConfirmModalOpen(false);
+      setIsSavingSettings(false);
       return;
     }
 
@@ -2242,6 +2287,7 @@ export default function ConfiguracoesPage() {
       "Configurações salvas com sucesso.",
     );
     setIsSaveConfirmModalOpen(false);
+    setIsSavingSettings(false);
 
     router.push("/dashboard");
   }
@@ -2921,6 +2967,12 @@ export default function ConfiguracoesPage() {
                       </span>
                     </div>
                   </div>
+
+                  {passwordError && !isUserSettingsEditing && (
+                    <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                      {passwordError}
+                    </div>
+                  )}
 
                   {isUserSettingsEditing && (
                     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
@@ -3822,9 +3874,10 @@ export default function ConfiguracoesPage() {
               <button
                 type="button"
                 onClick={handleOpenSaveConfirmModal}
-                className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 sm:px-6"
+                disabled={isSavingSettings}
+                className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60 sm:px-6"
               >
-                Salvar configurações
+                {isSavingSettings ? "Salvando..." : "Salvar configurações"}
               </button>
             </div>
           </div>
@@ -3880,7 +3933,8 @@ export default function ConfiguracoesPage() {
                   <button
                     type="button"
                     onClick={handleCloseSaveConfirmModal}
-                    className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                    disabled={isSavingSettings}
+                    className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     Cancelar
                   </button>
@@ -3888,9 +3942,10 @@ export default function ConfiguracoesPage() {
                   <button
                     type="button"
                     onClick={handleConfirmSaveSettings}
-                    className="rounded-2xl bg-orange-500 px-6 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                    disabled={isSavingSettings}
+                    className="rounded-2xl bg-orange-500 px-6 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Confirmar e salvar
+                    {isSavingSettings ? "Salvando..." : "Confirmar e salvar"}
                   </button>
                 </div>
               </div>
@@ -4021,7 +4076,6 @@ export default function ConfiguracoesPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          setPrintEditorViewMode("split");
                           setPrintModalState((currentState) => ({ ...currentState, mode: "edit" }));
                         }}
                         className="w-full rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
@@ -4039,188 +4093,186 @@ export default function ConfiguracoesPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 gap-5 xl:grid-cols-[320px_1fr]">
-                    <aside className="space-y-4 xl:max-h-[68vh] xl:overflow-y-auto xl:pr-1">
-                      <div className="rounded-3xl border border-orange-100 bg-orange-50 px-4 py-4">
-                        <p className="text-sm font-black text-orange-800">
-                          Edição do modelo
-                        </p>
-                        <p className="mt-1 text-sm font-semibold leading-6 text-orange-700">
-                          Edite o texto completo do impresso ao lado. Use as variáveis para preencher os dados reais do contrato automaticamente.
-                        </p>
+                  <div className="min-h-0 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-slate-100">
+                    <div className="border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
+                      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-black text-slate-950">
+                            Editor do impresso
+                          </p>
+                          <p className="mt-0.5 text-xs font-semibold text-slate-500">
+                            {selectedPrintTemplateStats.words} palavras · {selectedPrintTemplateStats.variables.length} campos
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="inline-flex rounded-xl bg-slate-100 p-1">
+                            {[
+                              { label: "Lado a lado", value: "split" as const },
+                              { label: "Texto", value: "editor" as const },
+                              { label: "Previa", value: "preview" as const },
+                            ].map((viewMode) => (
+                              <button
+                                key={viewMode.value}
+                                type="button"
+                                onClick={() => setPrintEditorViewMode(viewMode.value)}
+                                className={`rounded-lg px-3 py-1.5 text-xs font-black transition ${
+                                  printEditorViewMode === viewMode.value
+                                    ? "bg-white text-orange-700 shadow-sm"
+                                    : "text-slate-500 hover:text-slate-900"
+                                }`}
+                              >
+                                {viewMode.label}
+                              </button>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handlePrintEditorAction("title")}
+                            className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+                            title="Transformar seleção em título"
+                          >
+                            Título
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handlePrintEditorAction("uppercase")}
+                            className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+                            title="Maiúsculas"
+                          >
+                            AA
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handlePrintEditorAction("numbered")}
+                            className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+                            title="Lista numerada"
+                          >
+                            1. Lista
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handlePrintEditorAction("signature")}
+                            className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+                            title="Bloco de assinaturas"
+                          >
+                            Assinaturas
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handlePrintEditorAction("pageBreak")}
+                            className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+                            title="Inserir marca de quebra de página"
+                          >
+                            Quebra
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenRestorePrintModal(printModalState.documentKey!)}
+                            className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-700 transition hover:bg-red-100"
+                          >
+                            Restaurar padrão
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid min-h-[70vh] grid-cols-1 gap-0 xl:grid-cols-[minmax(0,1fr)_320px]">
+                      <div className="min-w-0 overflow-auto p-3 sm:p-5">
+                        <div
+                          className={`grid gap-4 ${
+                            printEditorViewMode === "split"
+                              ? "2xl:grid-cols-2"
+                              : "grid-cols-1"
+                          }`}
+                        >
+                          {printEditorViewMode !== "preview" && (
+                            <section className="min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                              <div className="border-b border-slate-100 px-5 py-4">
+                                <p className="text-sm font-black text-slate-950">
+                                  Texto do modelo
+                                </p>
+                                <p className="mt-1 text-xs font-semibold text-slate-500">
+                                  {selectedPrintTemplateStats.lines} linhas no modelo
+                                </p>
+                              </div>
+
+                              <div className="bg-slate-50 p-3 sm:p-5">
+                                <div className="mx-auto max-w-[850px] bg-white px-5 py-6 shadow-[0_18px_60px_rgba(15,23,42,0.10)] ring-1 ring-slate-200 sm:px-8">
+                                  <textarea
+                                    ref={printTemplateTextareaRef}
+                                    value={selectedPrintTemplate.content}
+                                    onChange={(event) =>
+                                      handleUpdatePrintTemplateContent(printModalState.documentKey!, event.target.value)
+                                    }
+                                    spellCheck={false}
+                                    className="min-h-[62vh] w-full resize-y border-0 bg-transparent font-serif text-[15px] font-medium leading-8 text-slate-900 outline-none"
+                                  />
+                                </div>
+                              </div>
+                            </section>
+                          )}
+
+                          {printEditorViewMode !== "editor" && (
+                            <section className="min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                              <div className="border-b border-slate-100 px-5 py-4">
+                                <p className="text-sm font-black text-slate-950">
+                                  Previa do PDF
+                                </p>
+                                <p className="mt-1 text-xs font-semibold text-slate-500">
+                                  Dados de exemplo
+                                </p>
+                              </div>
+
+                              <div className="overflow-auto bg-slate-50 p-3 sm:p-5">
+                                <div className="mx-auto min-h-[62vh] max-w-[850px] bg-white px-5 py-6 shadow-[0_18px_60px_rgba(15,23,42,0.10)] ring-1 ring-slate-200 sm:px-8">
+                                  <pre className="whitespace-pre-wrap font-sans text-sm font-semibold leading-7 text-slate-700">
+                                    {selectedPrintTemplatePreview}
+                                  </pre>
+                                </div>
+                              </div>
+                            </section>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="rounded-3xl border border-slate-200 bg-white p-4">
-                        <div className="mb-4 grid grid-cols-3 gap-2">
-                          <div className="rounded-2xl bg-slate-50 px-3 py-3">
-                            <p className="text-sm font-black text-slate-950">{selectedPrintTemplateStats.lines}</p>
-                            <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">linhas</p>
-                          </div>
-                          <div className="rounded-2xl bg-slate-50 px-3 py-3">
-                            <p className="text-sm font-black text-slate-950">{selectedPrintTemplateStats.words}</p>
-                            <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">palavras</p>
-                          </div>
-                          <div className="rounded-2xl bg-slate-50 px-3 py-3">
-                            <p className="text-sm font-black text-slate-950">{selectedPrintTemplateStats.variables.length}</p>
-                            <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">campos</p>
-                          </div>
+                      <aside className="border-t border-slate-200 bg-white px-4 py-4 xl:max-h-[calc(96vh-13rem)] xl:overflow-y-auto xl:border-l xl:border-t-0">
+                        <div className="mb-4">
+                          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                            Campos do documento
+                          </p>
+                          <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                            Clique para inserir no cursor.
+                          </p>
                         </div>
 
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                          <div>
-                            <p className="text-sm font-black text-slate-800">
-                              Variáveis clicáveis
-                            </p>
-                            <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
-                              Clique para inserir no ponto selecionado do texto.
-                            </p>
-                          </div>
-
-                          <span className="w-fit rounded-full bg-orange-50 px-3 py-1 text-xs font-black text-orange-700">
-                            Inserção rápida
-                          </span>
-                        </div>
-
-                        <div className="mt-4 space-y-4">
+                        <div className="space-y-4">
                           {printTemplateVariableGroups.map((group) => (
                             <div key={group.title}>
-                              <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-500">
+                              <p className="mb-2 text-[11px] font-black uppercase tracking-wide text-slate-400">
                                 {group.title}
                               </p>
 
-                              <div className="flex flex-wrap gap-2">
+                              <div className="grid gap-2">
                                 {group.variables.map((variable) => (
                                   <button
                                     key={`${group.title}-${variable.value}`}
                                     type="button"
                                     onClick={() => handleInsertPrintTemplateVariable(variable.value)}
-                                    className="rounded-full border border-orange-100 bg-orange-50 px-3 py-2 text-xs font-black text-orange-700 transition hover:border-orange-200 hover:bg-orange-100"
+                                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-xs font-black text-slate-700 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700"
                                     title={`Inserir ${variable.value}`}
                                   >
-                                    + {variable.label}
+                                    <span>{variable.label}</span>
+                                    <span className="font-mono text-[10px] text-slate-400">
+                                      {variable.value}
+                                    </span>
                                   </button>
                                 ))}
                               </div>
                             </div>
                           ))}
                         </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => handleOpenRestorePrintModal(printModalState.documentKey!)}
-                        className="w-full rounded-2xl bg-red-50 px-5 py-3 text-sm font-black text-red-700 transition hover:bg-red-100"
-                      >
-                        Restaurar este impresso para o padrão
-                      </button>
-                    </aside>
-
-                    <div className="min-w-0 space-y-3">
-                      <div className="flex flex-col gap-2 rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <p className="text-sm font-black text-slate-800">
-                            Texto completo do impresso
-                          </p>
-                          <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
-                            Área maior para revisar e editar o contrato com mais conforto.
-                          </p>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2">
-                          {(["split", "editor", "preview"] as PrintEditorViewMode[]).map((viewMode) => (
-                            <button
-                              key={viewMode}
-                              type="button"
-                              onClick={() => setPrintEditorViewMode(viewMode)}
-                              className={`rounded-2xl px-3 py-2 text-xs font-black transition ${
-                                printEditorViewMode === viewMode
-                                  ? "bg-orange-500 text-white shadow-md shadow-orange-100"
-                                  : "bg-white text-slate-600 shadow-sm hover:bg-slate-100"
-                              }`}
-                            >
-                              {viewMode === "split" ? "Editor + previa" : viewMode === "editor" ? "Editor" : "Previa"}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2 rounded-3xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                        <button
-                          type="button"
-                          onClick={() => handlePrintEditorAction("title")}
-                          className="rounded-2xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
-                          title="Transformar seleção em título"
-                        >
-                          Título
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handlePrintEditorAction("uppercase")}
-                          className="rounded-2xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
-                          title="Maiúsculas"
-                        >
-                          AA
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handlePrintEditorAction("numbered")}
-                          className="rounded-2xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
-                          title="Lista numerada"
-                        >
-                          1. Lista
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handlePrintEditorAction("signature")}
-                          className="rounded-2xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
-                          title="Bloco de assinaturas"
-                        >
-                          Assinaturas
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handlePrintEditorAction("pageBreak")}
-                          className="rounded-2xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
-                          title="Inserir marca de quebra de página"
-                        >
-                          Quebra
-                        </button>
-                        <span className="ml-auto rounded-full bg-orange-50 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-orange-700">
-                          selecione um trecho e aplique
-                        </span>
-                      </div>
-
-                      <div className={`grid gap-3 ${printEditorViewMode === "split" ? "xl:grid-cols-[minmax(0,1fr)_420px]" : "grid-cols-1"}`}>
-                        {printEditorViewMode !== "preview" && (
-                          <textarea
-                            ref={printTemplateTextareaRef}
-                            value={selectedPrintTemplate.content}
-                            onChange={(event) =>
-                              handleUpdatePrintTemplateContent(printModalState.documentKey!, event.target.value)
-                            }
-                            rows={34}
-                            className="h-[68vh] min-h-[680px] w-full resize-none rounded-3xl border border-slate-200 bg-white px-6 py-5 font-mono text-sm font-semibold leading-7 text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                          />
-                        )}
-
-                        {printEditorViewMode !== "editor" && (
-                          <div className="h-[68vh] min-h-[680px] overflow-y-auto rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                            <div className="mx-auto min-h-full rounded-2xl bg-white p-6 shadow-sm">
-                              <div className="mb-4 flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-                                  Previa preenchida
-                                </p>
-                                <span className="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black text-emerald-700">
-                                  dados exemplo
-                                </span>
-                              </div>
-                              <pre className="whitespace-pre-wrap font-sans text-sm font-semibold leading-7 text-slate-700">
-                                {selectedPrintTemplatePreview}
-                              </pre>
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                      </aside>
                     </div>
                   </div>
                 )}

@@ -4,7 +4,7 @@ import { AuthProvider } from '@/context/AuthContext';
 import AppFrame from '@/components/layout/app-frame';
 
 const siteUrl = 'https://www.contrx.com.br';
-const siteDescription = 'Contrx ERP Imobiliario SaaS';
+const siteDescription = 'Contrx Gestão de Contratos SaaS';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

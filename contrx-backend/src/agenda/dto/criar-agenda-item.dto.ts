@@ -12,11 +12,21 @@ export class CriarAgendaItemDto {
   @MinLength(1)
   title: string;
 
+  @IsOptional()
   @IsString()
-  customerName: string;
+  personId?: string | null;
 
+  @IsOptional()
   @IsString()
-  propertyName: string;
+  propertyId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  customerName?: string;
+
+  @IsOptional()
+  @IsString()
+  propertyName?: string;
 
   @IsDateString({ strict: true })
   date: string;

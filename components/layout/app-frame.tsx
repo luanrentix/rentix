@@ -1,8 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import AppShell from "./app-shell";
 import AuthGuard from "@/components/auth/auth-guard";
+import AppShell from "./app-shell";
+import { isInternalRoute } from "@/services/app-routes";
 
 type AppFrameProps = {
   children: React.ReactNode;
@@ -11,13 +12,13 @@ type AppFrameProps = {
 export default function AppFrame({ children }: AppFrameProps) {
   const pathname = usePathname();
 
-  if (pathname === "/") {
-    return <>{children}</>;
-  }
-
   if (pathname === "/configuracoes") {
     return <AuthGuard>{children}</AuthGuard>;
   }
 
-  return <AppShell>{children}</AppShell>;
+  if (isInternalRoute(pathname)) {
+    return <AppShell>{children}</AppShell>;
+  }
+
+  return <>{children}</>;
 }
