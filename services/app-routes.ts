@@ -10,7 +10,10 @@ export type AppToolRoute = {
 
 export const publicRoutes = ["/"] as const;
 export const authRoutes = ["/login"] as const;
-export const internalUtilityRoutes = ["/financeiro/relatorios"] as const;
+export const internalUtilityRoutes = [
+  "/configuracoes",
+  "/financeiro/relatorios",
+] as const;
 
 export const internalToolRoutes: AppToolRoute[] = [
   {
@@ -67,13 +70,6 @@ export const internalToolRoutes: AppToolRoute[] = [
     href: "/agenda",
     icon: "📅",
     permissionKey: "schedule",
-    scope: "internal",
-  },
-  {
-    label: "Configurações",
-    href: "/configuracoes",
-    icon: "⚙️",
-    permissionKey: "settings",
     scope: "internal",
   },
 ];
