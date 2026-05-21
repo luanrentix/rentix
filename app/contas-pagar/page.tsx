@@ -9,12 +9,17 @@ import {
   deletePayableAccount,
   getPayableAccounts,
   payAccount,
+  replacePaidAccountPayment,
   reversePaidAccount,
   updatePayableAccount,
   type PayableAccount,
   type PaymentMethod as ApiPaymentMethod,
 } from "@/services/financial.service";
 import { getPeople, type Person } from "@/services/people.service";
+import {
+  getProperties,
+  type Property as ApiProperty,
+} from "@/services/properties.service";
 import {
   getCompanyStorageItem,
   setCompanyStorageItem,
@@ -89,6 +94,8 @@ type Expense = {
   id: string;
   personId?: string;
   personName?: string;
+  propertyId?: string;
+  propertyName?: string;
   description: string;
   category?: string;
   note?: string;
@@ -118,6 +125,11 @@ type Tenant = {
   number?: string;
   district?: string;
   complement?: string;
+};
+
+type Property = {
+  id: string;
+  name: string;
 };
 
 const paymentMethodOptions: PaymentMethodOption[] = [
@@ -229,6 +241,7 @@ export default function AccountsPayablePage() {
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
   const [paymentRecords, setPaymentRecords] = useState<ExpensePayment[]>([]);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
@@ -256,6 +269,7 @@ export default function AccountsPayablePage() {
     useState(false);
 
   const [formTenant, setFormTenant] = useState("");
+  const [formProperty, setFormProperty] = useState("");
   const [formDescription, setFormDescription] = useState("");
   const [formCategory, setFormCategory] = useState("Outros");
   const [formAmount, setFormAmount] = useState("");
@@ -299,9 +313,10 @@ export default function AccountsPayablePage() {
 
   async function loadPayablesFromBackend(currentCompanyId: string) {
     try {
-      const [apiExpenses, apiPeople] = await Promise.all([
+      const [apiExpenses, apiPeople, apiProperties] = await Promise.all([
         getPayableAccounts(currentCompanyId),
         getPeople(currentCompanyId),
+        getProperties(currentCompanyId),
       ]);
       const nextExpenses = apiExpenses.map(mapApiPayableToExpense);
       const nextPaymentRecords = apiExpenses.flatMap(mapApiPayableToPayments);
@@ -309,6 +324,7 @@ export default function AccountsPayablePage() {
       setExpenses(nextExpenses);
       setPaymentRecords(nextPaymentRecords);
       setTenants(apiPeople.map(mapApiPersonToTenant));
+      setProperties(apiProperties.map(mapApiPropertyToProperty));
     } catch (error) {
       console.error("Não foi possível carregar contas a pagar.", error);
     }
@@ -430,9 +446,37 @@ export default function AccountsPayablePage() {
     );
   }, [paymentRecords]);
 
+  const getExpensePayments = useCallback((expenseId: string) => {
+    return paymentRecords.filter(
+      (paymentRecord) => String(paymentRecord.expenseId) === String(expenseId),
+    );
+  }, [paymentRecords]);
+
   const getExpensePaidAmount = useCallback((expense: Expense) => {
-    return getExpensePayment(expense.id)?.amountPaid ?? expense.amount;
-  }, [getExpensePayment]);
+    const paymentTotal = getExpensePayments(expense.id).reduce(
+      (total, paymentRecord) => total + paymentRecord.amountPaid,
+      0,
+    );
+
+    return paymentTotal || (expense.status === "Paid" ? expense.amount : 0);
+  }, [getExpensePayments]);
+
+  const getExpenseSettlementAmount = useCallback((expenseId: string) => {
+    return getExpensePayments(expenseId).reduce(
+      (total, paymentRecord) =>
+        total +
+        paymentRecord.amountPaid +
+        paymentRecord.discount -
+        paymentRecord.interest,
+      0,
+    );
+  }, [getExpensePayments]);
+
+  const getExpenseRemainingAmount = useCallback((expense: Expense) => {
+    if (expense.status === "Paid" && !getExpensePayment(expense.id)) return 0;
+
+    return Math.max(expense.amount - getExpenseSettlementAmount(expense.id), 0);
+  }, [getExpensePayment, getExpenseSettlementAmount]);
 
   const expensesWithStatus = useMemo<Expense[]>(() => {
     const today = getStartOfDay(new Date());
@@ -445,7 +489,9 @@ export default function AccountsPayablePage() {
 
       let status: ExpenseStatus = "Pending";
 
-      if (paymentRecord) {
+      if (paymentRecord && getExpenseSettlementAmount(expense.id) >= expense.amount) {
+        status = "Paid";
+      } else if (!paymentRecord && expense.status === "Paid") {
         status = "Paid";
       } else if (dueDate < today) {
         status = "Overdue";
@@ -456,7 +502,7 @@ export default function AccountsPayablePage() {
         status,
       };
     });
-  }, [expenses, getExpensePayment]);
+  }, [expenses, getExpensePayment, getExpenseSettlementAmount]);
 
   const filteredExpenses = useMemo(() => {
     let result = expensesWithStatus;
@@ -468,6 +514,7 @@ export default function AccountsPayablePage() {
         (expense) =>
           expense.description.toLowerCase().includes(normalizedSearch) ||
           (expense.personName || "").toLowerCase().includes(normalizedSearch) ||
+          (expense.propertyName || "").toLowerCase().includes(normalizedSearch) ||
           (expense.category || "").toLowerCase().includes(normalizedSearch),
       );
     }
@@ -580,8 +627,8 @@ export default function AccountsPayablePage() {
   const totalPayable = useMemo(() => {
     return filteredExpenses
       .filter((expense) => expense.status !== "Paid")
-      .reduce((total, expense) => total + expense.amount, 0);
-  }, [filteredExpenses]);
+      .reduce((total, expense) => total + getExpenseRemainingAmount(expense), 0);
+  }, [filteredExpenses, getExpenseRemainingAmount]);
 
   const totalPaid = useMemo(() => {
     return filteredExpenses
@@ -592,8 +639,8 @@ export default function AccountsPayablePage() {
   const totalOverdue = useMemo(() => {
     return filteredExpenses
       .filter((expense) => expense.status === "Overdue")
-      .reduce((total, expense) => total + expense.amount, 0);
-  }, [filteredExpenses]);
+      .reduce((total, expense) => total + getExpenseRemainingAmount(expense), 0);
+  }, [filteredExpenses, getExpenseRemainingAmount]);
 
   const isEditingPaidExpense = editingExpenseId
     ? Boolean(getExpensePayment(editingExpenseId))
@@ -865,6 +912,7 @@ export default function AccountsPayablePage() {
 
     setEditingExpenseId(null);
     setFormTenant("");
+    setFormProperty("");
     setFormDescription("");
     setFormCategory("Outros");
     setFormAmount("");
@@ -885,6 +933,7 @@ export default function AccountsPayablePage() {
 
     setEditingExpenseId(expense.id);
     setFormTenant(expense.personId || "");
+    setFormProperty(expense.propertyId || "");
     setFormDescription(expense.description);
     setFormCategory(expense.category || "Outros");
     setFormAmount(formatAmountInput(expense.amount));
@@ -913,6 +962,7 @@ export default function AccountsPayablePage() {
   function resetCreateForm() {
     setEditingExpenseId(null);
     setFormTenant("");
+    setFormProperty("");
     setFormDescription("");
     setFormCategory("Outros");
     setFormAmount("");
@@ -1065,6 +1115,9 @@ export default function AccountsPayablePage() {
     const selectedTenant = tenants.find(
       (tenant) => String(tenant.id) === String(formTenant),
     );
+    const selectedProperty = properties.find(
+      (property) => String(property.id) === String(formProperty),
+    );
 
     if (isEditingPaidExpense) {
       if (!editingExpenseId) return;
@@ -1103,8 +1156,7 @@ export default function AccountsPayablePage() {
 
       if (companyId) {
         try {
-          await reversePaidAccount(editingExpenseId);
-          await payAccount(editingExpenseId, {
+          await replacePaidAccountPayment(editingExpenseId, {
             paidAt: updatedPaymentRecord.paidAt,
             method: mapUiPaymentMethodToApi(updatedPaymentRecord.method),
             paymentItems: updatedPaymentRecord.paymentItems
@@ -1163,6 +1215,8 @@ export default function AccountsPayablePage() {
         id: editingExpenseId || createLocalId("expense"),
         personId: selectedTenant.id,
         personName: selectedTenant.name,
+        propertyId: selectedProperty?.id,
+        propertyName: selectedProperty?.name,
         description: trimmedDescription,
         category: trimmedCategory,
         note: formNote.trim(),
@@ -1183,6 +1237,7 @@ export default function AccountsPayablePage() {
           const apiExpense = alreadyExists
             ? await updatePayableAccount(savedExpense.id, {
                 personId: selectedTenant.id,
+                propertyId: selectedProperty?.id || null,
                 personName: selectedTenant.name,
                 description: trimmedDescription,
                 category: trimmedCategory,
@@ -1195,6 +1250,7 @@ export default function AccountsPayablePage() {
             : await createPayableAccount({
                 companyId,
                 personId: selectedTenant.id,
+                propertyId: selectedProperty?.id || null,
                 personName: selectedTenant.name,
                 description: trimmedDescription,
                 category: trimmedCategory,
@@ -1265,6 +1321,8 @@ export default function AccountsPayablePage() {
       id: `${installmentGroupId}-${installment.installmentNumber}`,
       personId: selectedTenant.id,
       personName: selectedTenant.name,
+      propertyId: selectedProperty?.id,
+      propertyName: selectedProperty?.name,
       description: trimmedDescription,
       category: trimmedCategory,
       note: formNote.trim(),
@@ -1286,6 +1344,7 @@ export default function AccountsPayablePage() {
             createPayableAccount({
               companyId,
               personId: selectedTenant.id,
+              propertyId: selectedProperty?.id || null,
               personName: selectedTenant.name,
               description: expense.description,
               category: expense.category,
@@ -1320,18 +1379,19 @@ export default function AccountsPayablePage() {
 
   function openPayExpenseModal(expense: Expense) {
     const today = new Date();
+    const remainingAmount = getExpenseRemainingAmount(expense);
 
     setExpensePendingPaymentReceipt(expense);
     setPaymentInterest("");
     setPaymentDiscount("");
-    setPaymentFinalAmount(formatAmountInput(expense.amount));
+    setPaymentFinalAmount(formatAmountInput(remainingAmount));
     setFormPaymentDate(getLocalDateValue(today));
     setPaymentMethod("Cash");
     setPaymentEntries([
       {
         id: createLocalId("payment-entry"),
         method: "Cash",
-        amount: formatAmountInput(expense.amount),
+        amount: formatAmountInput(remainingAmount),
       },
     ]);
     setPaymentNote("");
@@ -1358,6 +1418,8 @@ export default function AccountsPayablePage() {
     const discount = normalizeAmount(paymentDiscount);
     const amountPaid = normalizeAmount(paymentFinalAmount);
     const paymentEntriesTotal = getPaymentEntriesTotal();
+    const remainingAmount = getExpenseRemainingAmount(expensePendingPaymentReceipt);
+    const maximumPaymentAmount = Math.max(remainingAmount + interest - discount, 0);
 
     if (interest < 0 || discount < 0) {
       setPaymentFormError("Informe juros e desconto com valores válidos.");
@@ -1366,6 +1428,13 @@ export default function AccountsPayablePage() {
 
     if (amountPaid <= 0) {
       setPaymentFormError("O valor final pago precisa ser maior que zero.");
+      return;
+    }
+
+    if (amountPaid - maximumPaymentAmount > 0.01) {
+      setPaymentFormError(
+        `O valor pago não pode ser maior que ${formatCurrency(maximumPaymentAmount)} considerando juros e desconto.`,
+      );
       return;
     }
 
@@ -1422,7 +1491,7 @@ export default function AccountsPayablePage() {
       note: paymentNote.trim(),
     };
 
-    const updatedPaymentRecords = [
+    let updatedPaymentRecords = [
       ...paymentRecords.filter(
         (currentPaymentRecord) =>
           String(currentPaymentRecord.expenseId) !==
@@ -1433,7 +1502,7 @@ export default function AccountsPayablePage() {
 
     if (companyId) {
       try {
-        await payAccount(expensePendingPaymentReceipt.id, {
+        const paidAccount = await payAccount(expensePendingPaymentReceipt.id, {
           paidAt: paymentRecord.paidAt,
           method: mapUiPaymentMethodToApi(paymentRecord.method),
           paymentItems: mapUiPaymentItemsToApi(paymentRecord.paymentItems || []),
@@ -1442,6 +1511,20 @@ export default function AccountsPayablePage() {
           amountPaid,
           note: paymentRecord.note,
         });
+
+        const paidExpense = mapApiPayableToExpense(paidAccount);
+        updatedPaymentRecords = [
+          ...paymentRecords.filter(
+            (currentPaymentRecord) =>
+              String(currentPaymentRecord.expenseId) !== String(paidExpense.id),
+          ),
+          ...mapApiPayableToPayments(paidAccount),
+        ];
+        saveExpenses(
+          expenses.map((expense) =>
+            String(expense.id) === String(paidExpense.id) ? paidExpense : expense,
+          ),
+        );
       } catch (error) {
         setPaymentFormError(
           error instanceof Error
@@ -1634,7 +1717,7 @@ export default function AccountsPayablePage() {
         total +
         (expense.status === "Paid"
           ? getExpensePaidAmount(expense)
-          : expense.amount),
+          : getExpenseRemainingAmount(expense)),
       0,
     );
   }
@@ -2300,6 +2383,10 @@ GERADO EM: {currentDate}`;
                   </th>
 
                   <th className="px-5 py-4 text-left text-sm font-black text-slate-900 dark:text-slate-100">
+                    Imóvel
+                  </th>
+
+                  <th className="px-5 py-4 text-left text-sm font-black text-slate-900 dark:text-slate-100">
                     Descrição
                   </th>
 
@@ -2329,7 +2416,7 @@ GERADO EM: {currentDate}`;
                 {filteredExpenses.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500"
                     >
                       Nenhuma conta a pagar encontrada.
@@ -2343,6 +2430,10 @@ GERADO EM: {currentDate}`;
                     >
                       <td className="px-5 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
                         {expense.personName || "Pessoa não informada"}
+                      </td>
+
+                      <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500">
+                        {expense.propertyName || "Sem imóvel vinculado"}
                       </td>
 
                       <td className="px-5 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
@@ -2591,6 +2682,33 @@ GERADO EM: {currentDate}`;
                     ? "Conta paga não permite alteração de pessoa/fornecedor."
                     : "Use o botão NOVO para abrir o cadastro completo de pessoa e selecionar automaticamente no lançamento."}
                 </p>
+              </div>
+
+              <div>
+                <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
+                  Imóvel
+                </label>
+
+                <select
+                  value={formProperty}
+                  disabled={isEditingPaidExpense}
+                  onChange={(event) => {
+                    setExpenseFormError("");
+                    setFormProperty(event.target.value);
+                  }}
+                  className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
+                    isEditingPaidExpense
+                      ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                      : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  }`}
+                >
+                  <option value="">Sem imóvel vinculado</option>
+                  {properties.map((property) => (
+                    <option key={property.id} value={property.id}>
+                      {property.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -3437,6 +3555,8 @@ function mapApiPayableToExpense(account: PayableAccount): Expense {
   return {
     id: account.id,
     personId: account.personId || undefined,
+    propertyId: account.propertyId || account.property?.id || undefined,
+    propertyName: account.property?.title || undefined,
     personName: account.personName || "Pessoa não informada",
     description: account.description,
     category: account.category || "Outros",
@@ -3478,6 +3598,13 @@ function mapApiPersonToTenant(person: Person): Tenant {
     state: person.state || "",
     city: person.city || "",
     street: person.address || "",
+  };
+}
+
+function mapApiPropertyToProperty(property: ApiProperty): Property {
+  return {
+    id: property.id,
+    name: property.title,
   };
 }
 
@@ -3675,4 +3802,3 @@ function ConfirmationModal({
     </div>
   );
 }
-

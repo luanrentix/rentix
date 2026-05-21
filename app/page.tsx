@@ -26,6 +26,10 @@ function getAuthErrorPresentation(
 ) {
   const message = error instanceof Error ? error.message : defaultMessage;
   const normalizedMessage = message.toLowerCase();
+  const isInvalidCredentialsError =
+    normalizedMessage.includes("invalid credentials") ||
+    normalizedMessage.includes("unauthorized") ||
+    normalizedMessage.includes("e-mail ou senha");
   const isBackendConfigurationError =
     message.includes("NEXT_PUBLIC_API_URL") ||
     normalizedMessage.includes("backend não configurado") ||
@@ -50,6 +54,14 @@ function getAuthErrorPresentation(
       title: "Banco não conectado",
       message,
       subtitle: "Corrija a conexão do backend.",
+    };
+  }
+
+  if (isInvalidCredentialsError) {
+    return {
+      title: defaultTitle,
+      message: defaultMessage,
+      subtitle: "Revise os dados para continuar.",
     };
   }
 

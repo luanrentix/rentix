@@ -42,9 +42,20 @@ body.dark {
   color: #f8fafc;
 }
 
+[data-contrx-theme="black"] main,
+[data-contrx-theme="black"] header,
+[data-contrx-theme="black"] aside,
+[data-contrx-theme="black"] .min-h-screen,
+[data-contrx-theme="black"] .flex-1,
+[data-contrx-theme="black"] .contrx-app-main {
+  background-color: #020617 !important;
+}
+
 [data-contrx-theme="black"] [class*="bg-white"],
 [data-contrx-theme="black"] [class*="bg-slate-50"],
 [data-contrx-theme="black"] [class*="bg-slate-100"],
+[data-contrx-theme="black"] [class*="bg-[#f8fafc]"],
+[data-contrx-theme="black"] [class*="bg-\[\#f8fafc\]"],
 [data-contrx-theme="black"][class*="bg-white"],
 [data-contrx-theme="black"][class*="bg-slate-50"],
 [data-contrx-theme="black"][class*="bg-slate-100"],
@@ -95,6 +106,17 @@ body.dark [class*="bg-amber-100"] {
   background-color: rgb(245 158 11 / 0.14) !important;
 }
 
+[data-contrx-theme="black"] [class*="bg-blue-50"],
+[data-contrx-theme="black"] [class*="bg-blue-100"],
+[data-contrx-theme="black"] [class*="bg-sky-50"],
+[data-contrx-theme="black"] [class*="bg-sky-100"],
+body.dark [class*="bg-blue-50"],
+body.dark [class*="bg-blue-100"],
+body.dark [class*="bg-sky-50"],
+body.dark [class*="bg-sky-100"] {
+  background-color: rgb(14 165 233 / 0.14) !important;
+}
+
 [data-contrx-theme="black"] [class*="text-slate-950"],
 [data-contrx-theme="black"] [class*="text-slate-900"],
 [data-contrx-theme="black"] [class*="text-slate-800"],
@@ -115,8 +137,35 @@ body.dark [class*="text-slate-400"] {
   color: #cbd5e1 !important;
 }
 
+[data-contrx-theme="black"] [class*="text-orange-"],
+body.dark [class*="text-orange-"] {
+  color: #fb923c !important;
+}
+
+[data-contrx-theme="black"] [class*="text-red-"],
+body.dark [class*="text-red-"] {
+  color: #fca5a5 !important;
+}
+
+[data-contrx-theme="black"] [class*="text-emerald-"],
+body.dark [class*="text-emerald-"] {
+  color: #6ee7b7 !important;
+}
+
+[data-contrx-theme="black"] [class*="text-blue-"],
+[data-contrx-theme="black"] [class*="text-sky-"],
+body.dark [class*="text-blue-"],
+body.dark [class*="text-sky-"] {
+  color: #7dd3fc !important;
+}
+
 [data-contrx-theme="black"] [class*="border-slate-"],
 [data-contrx-theme="black"] [class*="border-orange-"],
+[data-contrx-theme="black"] [class*="border-amber-"],
+[data-contrx-theme="black"] [class*="border-red-"],
+[data-contrx-theme="black"] [class*="border-emerald-"],
+[data-contrx-theme="black"] [class*="border-blue-"],
+[data-contrx-theme="black"] [class*="border-sky-"],
 body.dark [class*="border-slate-"],
 body.dark [class*="border-orange-"] {
   border-color: #334155 !important;
@@ -161,12 +210,42 @@ body.dark thead {
   background-color: rgb(249 115 22 / 0.16) !important;
 }
 
+[data-contrx-theme="black"] tbody tr:hover,
+[data-contrx-theme="black"] [class*="hover:bg-slate-50"]:hover,
+[data-contrx-theme="black"] [class*="hover:bg-slate-100"]:hover {
+  background-color: #111c31 !important;
+}
+
+[data-contrx-theme="black"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+[data-contrx-theme="black"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #334155 !important;
+}
+
 [data-contrx-theme="black"] [class*="shadow"],
 body.dark [class*="shadow"] {
   --tw-shadow-color: rgb(0 0 0 / 0.45) !important;
   box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000),
     var(--tw-ring-shadow, 0 0 #0000),
     0 22px 65px rgb(0 0 0 / 0.38) !important;
+}
+
+[data-contrx-theme="black"] .recharts-cartesian-grid line {
+  stroke: #334155 !important;
+}
+
+[data-contrx-theme="black"] .recharts-text {
+  fill: #cbd5e1 !important;
+}
+
+[data-contrx-theme="black"] .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+[data-contrx-theme="black"] .recharts-tooltip-label,
+[data-contrx-theme="black"] .recharts-tooltip-item {
+  color: #f8fafc !important;
 }
 
 [data-contrx-theme="graphite"],
@@ -176,9 +255,20 @@ body[data-contrx-theme="graphite"] {
   color: #f4f4f5 !important;
 }
 
+[data-contrx-theme="graphite"] main,
+[data-contrx-theme="graphite"] header,
+[data-contrx-theme="graphite"] aside,
+[data-contrx-theme="graphite"] .min-h-screen,
+[data-contrx-theme="graphite"] .flex-1,
+[data-contrx-theme="graphite"] .contrx-app-main {
+  background-color: #18181b !important;
+}
+
 [data-contrx-theme="graphite"] [class*="bg-white"],
 [data-contrx-theme="graphite"] [class*="bg-slate-50"],
 [data-contrx-theme="graphite"] [class*="bg-slate-100"],
+[data-contrx-theme="graphite"] [class*="bg-[#f8fafc]"],
+[data-contrx-theme="graphite"] [class*="bg-\[\#f8fafc\]"],
 [data-contrx-theme="graphite"][class*="bg-white"],
 [data-contrx-theme="graphite"][class*="bg-slate-50"],
 [data-contrx-theme="graphite"][class*="bg-slate-100"],
@@ -337,12 +427,42 @@ body[data-contrx-theme="graphite"] thead {
   background-color: rgb(249 115 22 / 0.18) !important;
 }
 
+[data-contrx-theme="graphite"] tbody tr:hover,
+[data-contrx-theme="graphite"] [class*="hover:bg-slate-50"]:hover,
+[data-contrx-theme="graphite"] [class*="hover:bg-slate-100"]:hover {
+  background-color: #323238 !important;
+}
+
+[data-contrx-theme="graphite"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+[data-contrx-theme="graphite"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #52525b !important;
+}
+
 [data-contrx-theme="graphite"] [class*="shadow"],
 body[data-contrx-theme="graphite"] [class*="shadow"] {
   --tw-shadow-color: rgb(0 0 0 / 0.36) !important;
   box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000),
     var(--tw-ring-shadow, 0 0 #0000),
     0 20px 55px rgb(0 0 0 / 0.32) !important;
+}
+
+[data-contrx-theme="graphite"] .recharts-cartesian-grid line {
+  stroke: #52525b !important;
+}
+
+[data-contrx-theme="graphite"] .recharts-text {
+  fill: #d4d4d8 !important;
+}
+
+[data-contrx-theme="graphite"] .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: #27272a !important;
+  border-color: #52525b !important;
+  color: #f4f4f5 !important;
+}
+
+[data-contrx-theme="graphite"] .recharts-tooltip-label,
+[data-contrx-theme="graphite"] .recharts-tooltip-item {
+  color: #f4f4f5 !important;
 }
 
 button,

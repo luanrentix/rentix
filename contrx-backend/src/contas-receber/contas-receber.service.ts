@@ -4,9 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { FinancialAccountStatus, Prisma } from '@prisma/client';
+import { toUpperText, uppercaseFields } from '../common/text-normalization';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CriarContaReceberDto,
+  ReceberPagamentoLoteDto,
   ReceberPagamentoDto,
 } from './dto/criar-conta-receber.dto';
 import { AtualizarContaReceberDto } from './dto/atualizar-conta-receber.dto';
@@ -86,11 +88,7 @@ export class ContasReceberService {
     data: ReceberPagamentoDto,
     companyId: string,
   ) {
-    if (data.amountPaid <= 0) {
-      throw new BadRequestException(
-        'O valor recebido deve ser maior que zero.',
-      );
-    }
+    this.validatePaymentInput(data, 'O valor recebido deve ser maior que zero.');
 
     const account = await this.ensureExists(id, companyId);
 
@@ -117,6 +115,12 @@ export class ContasReceberService {
           data.interest || 0,
         );
 
+      this.validateSettlementLimit(
+        Number(account.amount),
+        nextSettlementAmount,
+        'O valor recebido excede o saldo em aberto da conta.',
+      );
+
       await tx.pagamentoRecebido.create({
         data: {
           charge: { connect: { id } },
@@ -129,7 +133,7 @@ export class ContasReceberService {
           interest: new Prisma.Decimal(data.interest || 0),
           discount: new Prisma.Decimal(data.discount || 0),
           amountPaid: new Prisma.Decimal(data.amountPaid),
-          note: data.note || null,
+          note: data.note ? toUpperText(data.note) : null,
         },
       });
 
@@ -143,6 +147,155 @@ export class ContasReceberService {
         },
         include: this.defaultInclude,
       });
+    });
+  }
+
+  async replacePayment(
+    id: string,
+    data: ReceberPagamentoDto,
+    companyId: string,
+  ) {
+    this.validatePaymentInput(data, 'O valor recebido deve ser maior que zero.');
+    const account = await this.ensureExists(id, companyId);
+    const nextSettlementAmount = this.getSettlementAmount(
+      data.amountPaid,
+      data.discount || 0,
+      data.interest || 0,
+    );
+
+    this.validateSettlementLimit(
+      Number(account.amount),
+      nextSettlementAmount,
+      'O valor recebido excede o saldo da conta.',
+    );
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.pagamentoRecebido.deleteMany({
+        where: { chargeId: id },
+      });
+
+      await tx.pagamentoRecebido.create({
+        data: {
+          charge: { connect: { id } },
+          paidAt: this.parseDate(data.paidAt, 'Data de pagamento invalida.'),
+          method: data.method,
+          paymentItems:
+            data.paymentItems === undefined
+              ? Prisma.JsonNull
+              : data.paymentItems,
+          interest: new Prisma.Decimal(data.interest || 0),
+          discount: new Prisma.Decimal(data.discount || 0),
+          amountPaid: new Prisma.Decimal(data.amountPaid),
+          note: data.note ? toUpperText(data.note) : null,
+        },
+      });
+
+      return tx.contaReceber.update({
+        where: { id },
+        data: {
+          status: this.getStatusAfterPayment(
+            Number(account.amount),
+            nextSettlementAmount,
+          ),
+        },
+        include: this.defaultInclude,
+      });
+    });
+  }
+
+  async receiveBatch(data: ReceberPagamentoLoteDto, companyId: string) {
+    if (!data.payments?.length) {
+      throw new BadRequestException('Informe ao menos uma conta para receber.');
+    }
+
+    data.payments.forEach((payment) =>
+      this.validatePaymentInput(
+        payment,
+        'O valor recebido deve ser maior que zero.',
+      ),
+    );
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedAccounts: Array<
+        Prisma.ContaReceberGetPayload<{
+          include: { payments: true; contract: true; tenant: true };
+        }>
+      > = [];
+
+      for (const payment of data.payments) {
+        const account = await tx.contaReceber.findFirst({
+          where: { id: payment.chargeId, companyId },
+          select: { id: true, amount: true },
+        });
+
+        if (!account) {
+          throw new NotFoundException('Conta a receber nao encontrada.');
+        }
+
+        const currentPaymentSummary = await tx.pagamentoRecebido.aggregate({
+          where: { chargeId: payment.chargeId },
+          _sum: { amountPaid: true, discount: true, interest: true },
+        });
+        const currentSettlementAmount = this.getSettlementAmount(
+          currentPaymentSummary._sum.amountPaid,
+          currentPaymentSummary._sum.discount,
+          currentPaymentSummary._sum.interest,
+        );
+
+        if (currentSettlementAmount >= Number(account.amount)) {
+          throw new BadRequestException(
+            'Uma das contas selecionadas ja esta quitada.',
+          );
+        }
+
+        const nextSettlementAmount =
+          currentSettlementAmount +
+          this.getSettlementAmount(
+            payment.amountPaid,
+            payment.discount || 0,
+            payment.interest || 0,
+          );
+
+        this.validateSettlementLimit(
+          Number(account.amount),
+          nextSettlementAmount,
+          'Um dos recebimentos excede o saldo em aberto da conta.',
+        );
+
+        await tx.pagamentoRecebido.create({
+          data: {
+            charge: { connect: { id: payment.chargeId } },
+            paidAt: this.parseDate(
+              payment.paidAt,
+              'Data de pagamento invalida.',
+            ),
+            method: payment.method,
+            paymentItems:
+              payment.paymentItems === undefined
+                ? Prisma.JsonNull
+                : payment.paymentItems,
+            interest: new Prisma.Decimal(payment.interest || 0),
+            discount: new Prisma.Decimal(payment.discount || 0),
+            amountPaid: new Prisma.Decimal(payment.amountPaid),
+            note: payment.note ? toUpperText(payment.note) : null,
+          },
+        });
+
+        const updatedAccount = await tx.contaReceber.update({
+          where: { id: payment.chargeId },
+          data: {
+            status: this.getStatusAfterPayment(
+              Number(account.amount),
+              nextSettlementAmount,
+            ),
+          },
+          include: this.defaultInclude,
+        });
+
+        updatedAccounts.push(updatedAccount);
+      }
+
+      return updatedAccounts;
     });
   }
 
@@ -239,65 +392,87 @@ export class ContasReceberService {
   private buildCreateData(
     data: CriarContaReceberDto,
   ): Prisma.ContaReceberCreateInput {
+    const normalizedData = this.normalizeAccountData(data);
+
     return {
-      company: { connect: { id: data.companyId } },
-      contract: data.contractId
-        ? { connect: { id: data.contractId } }
+      company: { connect: { id: normalizedData.companyId } },
+      contract: normalizedData.contractId
+        ? { connect: { id: normalizedData.contractId } }
         : undefined,
-      tenant: data.tenantId ? { connect: { id: data.tenantId } } : undefined,
-      propertyName: data.property,
-      tenantName: data.tenant,
-      issueDate: this.parseOptionalDate(data.issueDate),
-      dueDate: this.parseDate(data.dueDate, 'Data de vencimento invalida.'),
-      amount: new Prisma.Decimal(data.amount),
-      status: data.status ?? FinancialAccountStatus.PENDING,
-      manual: data.manual ?? true,
-      installmentNumber: data.installmentNumber ?? null,
-      installmentTotal: data.installmentTotal ?? null,
-      installmentGroupId: data.installmentGroupId || null,
-      isDownPayment: data.isDownPayment ?? false,
+      tenant: normalizedData.tenantId
+        ? { connect: { id: normalizedData.tenantId } }
+        : undefined,
+      propertyName: normalizedData.property,
+      tenantName: normalizedData.tenant,
+      issueDate: this.parseOptionalDate(normalizedData.issueDate),
+      dueDate: this.parseDate(
+        normalizedData.dueDate,
+        'Data de vencimento invalida.',
+      ),
+      amount: new Prisma.Decimal(normalizedData.amount),
+      status: normalizedData.status ?? FinancialAccountStatus.PENDING,
+      manual: normalizedData.manual ?? true,
+      installmentNumber: normalizedData.installmentNumber ?? null,
+      installmentTotal: normalizedData.installmentTotal ?? null,
+      installmentGroupId: normalizedData.installmentGroupId || null,
+      isDownPayment: normalizedData.isDownPayment ?? false,
     };
   }
 
   private buildUpdateData(
     data: AtualizarContaReceberDto,
   ): Prisma.ContaReceberUpdateInput {
+    const normalizedData = this.normalizeAccountData(data);
+
     return {
-      company: data.companyId ? { connect: { id: data.companyId } } : undefined,
+      company: normalizedData.companyId
+        ? { connect: { id: normalizedData.companyId } }
+        : undefined,
       contract:
-        data.contractId !== undefined
-          ? data.contractId
-            ? { connect: { id: data.contractId } }
+        normalizedData.contractId !== undefined
+          ? normalizedData.contractId
+            ? { connect: { id: normalizedData.contractId } }
             : { disconnect: true }
           : undefined,
       tenant:
-        data.tenantId !== undefined
-          ? data.tenantId
-            ? { connect: { id: data.tenantId } }
+        normalizedData.tenantId !== undefined
+          ? normalizedData.tenantId
+            ? { connect: { id: normalizedData.tenantId } }
             : { disconnect: true }
           : undefined,
-      propertyName: data.property,
-      tenantName: data.tenant,
+      propertyName: normalizedData.property,
+      tenantName: normalizedData.tenant,
       issueDate:
-        data.issueDate !== undefined
-          ? this.parseOptionalDate(data.issueDate)
+        normalizedData.issueDate !== undefined
+          ? this.parseOptionalDate(normalizedData.issueDate)
           : undefined,
       dueDate:
-        data.dueDate !== undefined
-          ? this.parseDate(data.dueDate, 'Data de vencimento invalida.')
+        normalizedData.dueDate !== undefined
+          ? this.parseDate(
+              normalizedData.dueDate,
+              'Data de vencimento invalida.',
+            )
           : undefined,
       amount:
-        data.amount !== undefined ? new Prisma.Decimal(data.amount) : undefined,
-      status: data.status,
-      manual: data.manual,
-      installmentNumber: data.installmentNumber,
-      installmentTotal: data.installmentTotal,
-      installmentGroupId:
-        data.installmentGroupId !== undefined
-          ? data.installmentGroupId || null
+        normalizedData.amount !== undefined
+          ? new Prisma.Decimal(normalizedData.amount)
           : undefined,
-      isDownPayment: data.isDownPayment,
+      status: normalizedData.status,
+      manual: normalizedData.manual,
+      installmentNumber: normalizedData.installmentNumber,
+      installmentTotal: normalizedData.installmentTotal,
+      installmentGroupId:
+        normalizedData.installmentGroupId !== undefined
+          ? normalizedData.installmentGroupId || null
+          : undefined,
+      isDownPayment: normalizedData.isDownPayment,
     };
+  }
+
+  private normalizeAccountData<
+    TData extends CriarContaReceberDto | AtualizarContaReceberDto,
+  >(data: TData) {
+    return uppercaseFields(data, ['property', 'tenant']);
   }
 
   private parseDate(value: string, errorMessage: string) {
@@ -332,5 +507,25 @@ export class ContasReceberService {
     return (
       Number(amountPaid || 0) + Number(discount || 0) - Number(interest || 0)
     );
+  }
+
+  private validatePaymentInput(data: ReceberPagamentoDto, amountMessage: string) {
+    if (data.amountPaid <= 0) {
+      throw new BadRequestException(amountMessage);
+    }
+
+    if ((data.interest || 0) < 0 || (data.discount || 0) < 0) {
+      throw new BadRequestException('Juros e desconto nao podem ser negativos.');
+    }
+  }
+
+  private validateSettlementLimit(
+    accountAmount: number,
+    settlementAmount: number,
+    message: string,
+  ) {
+    if (settlementAmount - accountAmount > 0.01) {
+      throw new BadRequestException(message);
+    }
   }
 }

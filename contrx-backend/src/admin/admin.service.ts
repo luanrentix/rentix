@@ -223,6 +223,7 @@ export class AdminService {
     modules: ResetTestDataModule[],
   ) {
     const selectedModules = new Set(modules);
+    const deletedRecords: Partial<Record<ResetTestDataModule, number>> = {};
 
     await this.prisma.$transaction(async (tx) => {
       const shouldResetPeople = selectedModules.has('people');
@@ -252,7 +253,10 @@ export class AdminService {
           });
         }
 
-        await tx.contaReceber.deleteMany({ where: { companyId } });
+        const deletedReceivables = await tx.contaReceber.deleteMany({
+          where: { companyId },
+        });
+        deletedRecords.accountsReceivable = deletedReceivables.count;
       }
 
       if (shouldResetPayables) {
@@ -268,16 +272,25 @@ export class AdminService {
           });
         }
 
-        await tx.contaPagar.deleteMany({ where: { companyId } });
+        const deletedPayables = await tx.contaPagar.deleteMany({
+          where: { companyId },
+        });
+        deletedRecords.accountsPayable = deletedPayables.count;
       }
 
       if (shouldResetContracts) {
-        await tx.contract.deleteMany({ where: { companyId } });
+        const deletedContracts = await tx.contract.deleteMany({
+          where: { companyId },
+        });
+        deletedRecords.contracts = deletedContracts.count;
       }
 
       if (shouldResetProperties) {
         await tx.propertyMovement.deleteMany({ where: { companyId } });
-        await tx.property.deleteMany({ where: { companyId } });
+        const deletedProperties = await tx.property.deleteMany({
+          where: { companyId },
+        });
+        deletedRecords.properties = deletedProperties.count;
       } else if (selectedModules.has('contracts')) {
         await tx.propertyMovement.deleteMany({
           where: {
@@ -297,27 +310,32 @@ export class AdminService {
       }
 
       if (shouldResetPeople) {
-        await tx.person.deleteMany({ where: { companyId } });
+        const deletedPeople = await tx.person.deleteMany({ where: { companyId } });
+        deletedRecords.people = deletedPeople.count;
       }
 
       if (selectedModules.has('schedule')) {
-        await tx.scheduleItem.deleteMany({ where: { companyId } });
+        const deletedScheduleItems = await tx.scheduleItem.deleteMany({
+          where: { companyId },
+        });
+        deletedRecords.schedule = deletedScheduleItems.count;
       }
 
       if (selectedModules.has('masterPanel')) {
-        await tx.user.deleteMany({
+        const deletedMasterPanelUsers = await tx.user.deleteMany({
           where: {
             id: { not: currentUserId },
-            role: { not: 'SYSTEM_OWNER' },
             email: { not: 'adm@contrx.com' },
           },
         });
+        deletedRecords.masterPanel = deletedMasterPanelUsers.count;
       }
     });
 
     return {
       success: true,
       modules,
+      deletedRecords,
     };
   }
 }

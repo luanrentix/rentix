@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
+import { normalizeEmail, uppercaseFields } from '../common/text-normalization';
 import { PrismaService } from '../prisma/prisma.service';
 
 import { CreateCompanyDto } from './dto/create-company.dto';
@@ -11,7 +12,7 @@ export class CompaniesService {
 
   async create(data: CreateCompanyDto) {
     return this.prisma.company.create({
-      data,
+      data: this.normalizeCompanyData(data),
     });
   }
 
@@ -36,7 +37,7 @@ export class CompaniesService {
       where: {
         id,
       },
-      data,
+      data: this.normalizeCompanyData(data),
     });
   }
 
@@ -46,5 +47,24 @@ export class CompaniesService {
         id,
       },
     });
+  }
+
+  private normalizeCompanyData<TData extends CreateCompanyDto | UpdateCompanyDto>(
+    data: TData,
+  ) {
+    const normalizedData = uppercaseFields(data, [
+      'companyName',
+      'tradeName',
+      'document',
+      'phone',
+    ]);
+
+    return {
+      ...normalizedData,
+      email:
+        normalizedData.email !== undefined
+          ? normalizeEmail(normalizedData.email)
+          : undefined,
+    };
   }
 }

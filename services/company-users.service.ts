@@ -1,4 +1,5 @@
 import { apiFetch } from './api';
+import { uppercaseFields } from './text-normalization';
 
 export type UserToolPermission =
   | 'dashboard'
@@ -47,13 +48,13 @@ export async function getCompanyUsers() {
 export async function createCompanyUser(data: CreateCompanyUserRequest) {
   return apiFetch<CompanyUser>('/autenticacao/usuarios', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify(uppercaseFields(data, ['name'])),
   });
 }
 
 export async function updateCompanyUser(userId: string, data: UpdateCompanyUserRequest) {
   return apiFetch<CompanyUser>(`/autenticacao/usuarios/${userId}`, {
     method: 'PATCH',
-    body: JSON.stringify(data),
+    body: JSON.stringify(uppercaseFields(data, ['name'])),
   });
 }

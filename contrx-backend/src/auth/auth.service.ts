@@ -5,6 +5,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { normalizeEmail, toUpperText } from '../common/text-normalization';
 
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -17,9 +18,11 @@ export class AuthService {
   ) {}
 
   async register(data: RegisterDto) {
+    const email = normalizeEmail(data.email) || '';
+    const name = toUpperText(data.name || '');
     const userExists = await this.prisma.user.findUnique({
       where: {
-        email: data.email,
+        email,
       },
     });
 
@@ -32,8 +35,8 @@ export class AuthService {
     const user = await this.prisma.user.create({
       data: {
         companyId: data.companyId,
-        name: data.name,
-        email: data.email,
+        name,
+        email,
         passwordHash,
       },
     });
@@ -47,9 +50,10 @@ export class AuthService {
   }
 
   async login(data: LoginDto) {
+    const email = normalizeEmail(data.email) || '';
     const user = await this.prisma.user.findUnique({
       where: {
-        email: data.email,
+        email,
       },
     });
 

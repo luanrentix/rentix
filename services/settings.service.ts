@@ -1,4 +1,5 @@
 import { apiFetch } from './api';
+import { uppercaseRecordFields } from './text-normalization';
 
 export type AppSettingsPayload = {
   companyId: string;
@@ -23,6 +24,26 @@ export async function getAppSettings(companyId: string) {
 export async function saveAppSettings(data: AppSettingsPayload) {
   return apiFetch<AppSettingsResponse>('/settings', {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: JSON.stringify(normalizeSettingsPayload(data)),
   });
+}
+
+function normalizeSettingsPayload(data: AppSettingsPayload): AppSettingsPayload {
+  return {
+    ...data,
+    userSettings: uppercaseRecordFields(data.userSettings, ['name']),
+    companySettings: uppercaseRecordFields(data.companySettings, [
+      'companyName',
+      'tradeName',
+      'document',
+      'stateRegistration',
+      'municipalRegistration',
+      'zipCode',
+      'address',
+      'number',
+      'neighborhood',
+      'city',
+      'state',
+    ]),
+  };
 }

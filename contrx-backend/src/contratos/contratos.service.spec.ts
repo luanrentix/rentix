@@ -96,7 +96,7 @@ describe('ContratosService', () => {
       data: {
         status: ContractStatus.CANCELED,
         deletedAt: null,
-        statusReason: 'Motivo valido',
+        statusReason: 'MOTIVO VALIDO',
         statusReasonType: 'CANCELED',
         statusReasonAt: expect.any(Date) as Date,
       },

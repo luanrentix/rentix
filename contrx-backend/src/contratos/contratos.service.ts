@@ -9,6 +9,7 @@ import {
   FinancialAccountStatus,
   Prisma,
 } from '@prisma/client';
+import { toUpperText, uppercaseFields } from '../common/text-normalization';
 import { PrismaService } from '../prisma/prisma.service';
 import { CriarContratoDto } from './dto/criar-contrato.dto';
 import { AtualizarContratoDto } from './dto/atualizar-contrato.dto';
@@ -22,8 +23,9 @@ export class ContratosService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createContractDto: CriarContratoDto, companyId: string) {
+    const normalizedContractDto = this.normalizeContractData(createContractDto);
     const data = {
-      ...createContractDto,
+      ...normalizedContractDto,
       companyId,
     };
 
@@ -32,15 +34,22 @@ export class ContratosService {
       data.propertyId,
       data.tenantId,
     );
+    this.validateContractInput(data.startDate, data.endDate, data.rentValue);
 
     await this.ensurePropertyHasNoActiveContract(
       data.companyId,
       data.propertyId,
     );
 
-    return this.prisma.contract.create({
-      data: this.buildCreateData(data),
-      include: this.defaultInclude,
+    return this.prisma.$transaction(async (tx) => {
+      const contract = await tx.contract.create({
+        data: this.buildCreateData(data),
+        include: this.defaultInclude,
+      });
+
+      await this.syncRelatedRecordsAfterContractChange(tx, contract);
+
+      return contract;
     });
   }
 
@@ -86,8 +95,15 @@ export class ContratosService {
     const nextPropertyId =
       updateContractDto.propertyId ?? currentContract.propertyId;
     const nextTenantId = updateContractDto.tenantId ?? currentContract.tenantId;
+    const nextStartDate =
+      updateContractDto.startDate ?? this.formatDateForInput(currentContract.startDate);
+    const nextEndDate =
+      updateContractDto.endDate ?? this.formatDateForInput(currentContract.endDate);
+    const nextRentValue =
+      updateContractDto.rentValue ?? Number(currentContract.rentValue || 0);
 
     await this.validateCompany(nextCompanyId);
+    this.validateContractInput(nextStartDate, nextEndDate, nextRentValue);
 
     if (
       nextPropertyId !== currentContract.propertyId ||
@@ -222,7 +238,7 @@ export class ContratosService {
       newEndDate: this.formatDateForInput(nextEndDate),
       previousRentValue: Number(currentContract.rentValue || 0),
       newRentValue: nextRentValue,
-      notes: data.notes?.trim() || undefined,
+      notes: data.notes ? toUpperText(data.notes) : undefined,
     };
     const renewalHistory = Array.isArray(currentContract.renewalHistory)
       ? currentContract.renewalHistory
@@ -290,7 +306,7 @@ export class ContratosService {
   }
 
   private normalizeRequiredReason(reason?: string | null) {
-    const cleanReason = reason?.trim() || '';
+    const cleanReason = reason ? toUpperText(reason) : '';
 
     if (cleanReason.length < 5) {
       throw new BadRequestException(
@@ -625,9 +641,10 @@ export class ContratosService {
       contract.startDate,
       contract.endDate,
     );
+    const firstDueDate = this.addMonthsToDate(contract.startDate, 1);
 
     return Array.from({ length: installmentQuantity }, (_, index) => ({
-      dueDate: this.addMonthsToDate(contract.startDate, index),
+      dueDate: this.addMonthsToDate(firstDueDate, index),
       amount: Number(contract.rentValue || 0),
       installmentNumber: index + 1,
       installmentTotal: installmentQuantity,
@@ -638,8 +655,7 @@ export class ContratosService {
     const monthDifference =
       (endDate.getFullYear() - startDate.getFullYear()) * 12 +
       endDate.getMonth() -
-      startDate.getMonth() +
-      1;
+      startDate.getMonth();
 
     return Math.max(monthDifference, 1);
   }
@@ -762,82 +778,115 @@ export class ContratosService {
     };
   }
 
+  private validateContractInput(
+    startDateValue: string,
+    endDateValue: string,
+    rentValue: unknown,
+  ) {
+    const startDate = this.parseDate(startDateValue, 'Data inicial invalida.');
+    const endDate = this.parseDate(endDateValue, 'Data final invalida.');
+    const normalizedRentValue = Number(rentValue || 0);
+
+    if (endDate < startDate) {
+      throw new BadRequestException(
+        'A data final nao pode ser menor que a data inicial.',
+      );
+    }
+
+    if (!Number.isFinite(normalizedRentValue) || normalizedRentValue <= 0) {
+      throw new BadRequestException('Valor de aluguel invalido.');
+    }
+  }
+
   private buildUpdateData(
     updateContractDto: AtualizarContratoDto,
   ): Prisma.ContractUpdateInput {
+    const normalizedData = this.normalizeContractData(updateContractDto);
+
     return {
-      property: updateContractDto.propertyId
-        ? { connect: { id: updateContractDto.propertyId } }
+      property: normalizedData.propertyId
+        ? { connect: { id: normalizedData.propertyId } }
         : undefined,
-      tenant: updateContractDto.tenantId
-        ? { connect: { id: updateContractDto.tenantId } }
+      tenant: normalizedData.tenantId
+        ? { connect: { id: normalizedData.tenantId } }
         : undefined,
       propertyName:
-        updateContractDto.propertyName !== undefined
-          ? updateContractDto.propertyName || null
+        normalizedData.propertyName !== undefined
+          ? normalizedData.propertyName || null
           : undefined,
       tenantName:
-        updateContractDto.tenantName !== undefined
-          ? updateContractDto.tenantName || null
+        normalizedData.tenantName !== undefined
+          ? normalizedData.tenantName || null
           : undefined,
       startDate:
-        updateContractDto.startDate !== undefined
+        normalizedData.startDate !== undefined
           ? this.parseDate(
-              updateContractDto.startDate,
+              normalizedData.startDate,
               'Data inicial invalida.',
             )
           : undefined,
       endDate:
-        updateContractDto.endDate !== undefined
-          ? this.parseDate(updateContractDto.endDate, 'Data final invalida.')
+        normalizedData.endDate !== undefined
+          ? this.parseDate(normalizedData.endDate, 'Data final invalida.')
           : undefined,
       rentValue:
-        updateContractDto.rentValue !== undefined
-          ? new Prisma.Decimal(updateContractDto.rentValue)
+        normalizedData.rentValue !== undefined
+          ? new Prisma.Decimal(normalizedData.rentValue)
           : undefined,
-      status: updateContractDto.status,
+      status: normalizedData.status,
       deletedAt:
-        updateContractDto.deletedAt !== undefined
-          ? this.parseOptionalDate(updateContractDto.deletedAt)
+        normalizedData.deletedAt !== undefined
+          ? this.parseOptionalDate(normalizedData.deletedAt)
           : undefined,
       statusReason:
-        updateContractDto.statusReason !== undefined
-          ? updateContractDto.statusReason || null
+        normalizedData.statusReason !== undefined
+          ? normalizedData.statusReason || null
           : undefined,
       statusReasonType:
-        updateContractDto.statusReasonType !== undefined
-          ? updateContractDto.statusReasonType
+        normalizedData.statusReasonType !== undefined
+          ? normalizedData.statusReasonType
           : undefined,
       statusReasonAt:
-        updateContractDto.statusReasonAt !== undefined
-          ? this.parseOptionalDate(updateContractDto.statusReasonAt)
+        normalizedData.statusReasonAt !== undefined
+          ? this.parseOptionalDate(normalizedData.statusReasonAt)
           : undefined,
-      isTemporaryRental: updateContractDto.isTemporaryRental,
+      isTemporaryRental: normalizedData.isTemporaryRental,
       checkInTime:
-        updateContractDto.checkInTime !== undefined
-          ? updateContractDto.checkInTime || null
+        normalizedData.checkInTime !== undefined
+          ? normalizedData.checkInTime || null
           : undefined,
       checkOutTime:
-        updateContractDto.checkOutTime !== undefined
-          ? updateContractDto.checkOutTime || null
+        normalizedData.checkOutTime !== undefined
+          ? normalizedData.checkOutTime || null
           : undefined,
       renewedAt:
-        updateContractDto.renewedAt !== undefined
-          ? this.parseOptionalDate(updateContractDto.renewedAt)
+        normalizedData.renewedAt !== undefined
+          ? this.parseOptionalDate(normalizedData.renewedAt)
           : undefined,
       renewalHistory:
-        updateContractDto.renewalHistory !== undefined
-          ? updateContractDto.renewalHistory
+        normalizedData.renewalHistory !== undefined
+          ? normalizedData.renewalHistory
           : undefined,
       finishedAt:
-        updateContractDto.finishedAt !== undefined
-          ? this.parseOptionalDate(updateContractDto.finishedAt)
+        normalizedData.finishedAt !== undefined
+          ? this.parseOptionalDate(normalizedData.finishedAt)
           : undefined,
       finishReason:
-        updateContractDto.finishReason !== undefined
-          ? updateContractDto.finishReason || null
+        normalizedData.finishReason !== undefined
+          ? normalizedData.finishReason || null
           : undefined,
     };
+  }
+
+  private normalizeContractData<
+    TData extends CriarContratoDto | AtualizarContratoDto,
+  >(data: TData) {
+    return uppercaseFields(data, [
+      'propertyName',
+      'tenantName',
+      'statusReason',
+      'finishReason',
+    ]);
   }
 
   private parseDate(value: string, errorMessage: string) {

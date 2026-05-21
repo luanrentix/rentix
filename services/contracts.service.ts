@@ -1,4 +1,5 @@
 import { apiFetch } from './api';
+import { uppercaseFields } from './text-normalization';
 
 export type ContractStatus =
   | 'ACTIVE'
@@ -109,35 +110,35 @@ export async function getContractById(id: string) {
 export async function createContract(data: CreateContractDto) {
   return apiFetch<Contract>('/contratos', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify(normalizeContractPayload(data)),
   });
 }
 
 export async function updateContract(id: string, data: UpdateContractDto) {
   return apiFetch<Contract>(`/contratos/${id}`, {
     method: 'PATCH',
-    body: JSON.stringify(data),
+    body: JSON.stringify(normalizeContractPayload(data)),
   });
 }
 
 export async function cancelContract(id: string, reason: string) {
   return apiFetch<Contract>(`/contratos/${id}/cancelar`, {
     method: 'POST',
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({ reason: reason.toLocaleUpperCase('pt-BR').trim() }),
   });
 }
 
 export async function softDeleteContract(id: string, reason: string) {
   return apiFetch<Contract>(`/contratos/${id}/excluir`, {
     method: 'POST',
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({ reason: reason.toLocaleUpperCase('pt-BR').trim() }),
   });
 }
 
 export async function finishContract(id: string, reason: string) {
   return apiFetch<Contract>(`/contratos/${id}/finalizar`, {
     method: 'POST',
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({ reason: reason.toLocaleUpperCase('pt-BR').trim() }),
   });
 }
 
@@ -151,7 +152,7 @@ export async function renewContract(
 ) {
   return apiFetch<Contract>(`/contratos/${id}/renovar`, {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify(uppercaseFields(data, ['notes'])),
   });
 }
 
@@ -159,4 +160,15 @@ export async function deleteContract(id: string) {
   return apiFetch<Contract>(`/contratos/${id}`, {
     method: 'DELETE',
   });
+}
+
+function normalizeContractPayload<
+  TData extends CreateContractDto | UpdateContractDto,
+>(data: TData) {
+  return uppercaseFields(data, [
+    'propertyName',
+    'tenantName',
+    'statusReason',
+    'finishReason',
+  ]);
 }

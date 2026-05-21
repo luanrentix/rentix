@@ -11,6 +11,7 @@ import {
   FileText,
   MapPin,
   Maximize2,
+  MessageCircle,
   Minimize2,
   Pencil,
   RefreshCw,
@@ -52,11 +53,19 @@ import {
   setCompanyStorageItem,
 } from "@/services/company-storage";
 import {
+  clearMinimizedModalState,
+  getMinimizedModalState,
+  setMinimizedModalState,
+  CLOSE_MINIMIZED_MODAL_EVENT,
+  RESTORE_MINIMIZED_MODAL_EVENT,
+} from "@/services/minimized-modal.service";
+import {
   createScheduleItem,
   getScheduleItems,
   updateScheduleItem,
   type ScheduleItem,
 } from "@/services/schedule.service";
+import { openWhatsAppMessage } from "@/services/whatsapp.service";
 
 type ThemeMode = "light" | "black" | "graphite";
 
@@ -506,6 +515,18 @@ type PropertyMovement = {
   createdAt: string;
 };
 
+type ContractModalDraft = {
+  editingContractId: string | null;
+  propertyId: string;
+  tenantId: string;
+  startDate: string;
+  endDate: string;
+  rentValue: string;
+  isTemporaryRental: boolean;
+  checkInTime: string;
+  checkOutTime: string;
+};
+
 export default function ContractsPage() {
   const { user } = useAuth();
 
@@ -519,6 +540,7 @@ export default function ContractsPage() {
   const [isBlackTheme, setIsBlackTheme] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isFormMinimized, setIsFormMinimized] = useState(false);
+  const [isSavingContract, setIsSavingContract] = useState(false);
   const [formError, setFormError] = useState("");
   const [editingContractId, setEditingContractId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<ContractFilterStatus>("Active");
@@ -550,6 +572,7 @@ export default function ContractsPage() {
   const [finishContract, setFinishContract] = useState<Contract | null>(null);
   const [finishReason, setFinishReason] = useState("");
   const [finishReasonError, setFinishReasonError] = useState("");
+  const [pendingEditConfirmation, setPendingEditConfirmation] = useState<Contract | null>(null);
   const [openActionMenuContractId, setOpenActionMenuContractId] = useState<string | null>(null);
   const [actionMenuPosition, setActionMenuPosition] = useState<ActionMenuPosition | null>(null);
   const [selectedContractDetails, setSelectedContractDetails] = useState<Contract | null>(null);
@@ -673,6 +696,49 @@ export default function ContractsPage() {
     setProperties((currentProperties) => syncPropertiesWithContracts(contracts, currentProperties));
   }, [contracts, isLoaded]);
 
+  useEffect(() => {
+    const storedModalState = getMinimizedModalState<ContractModalDraft>();
+
+    if (storedModalState?.tool === "contracts" && storedModalState.draft) {
+      applyContractModalDraft(storedModalState.draft);
+      setIsFormOpen(true);
+      setIsFormMinimized(false);
+      clearMinimizedModalState("contracts");
+    }
+
+    function handleRestoreMinimizedModal(event: Event) {
+      const detail = (event as CustomEvent<{ tool?: string }>).detail;
+
+      if (detail?.tool !== "contracts") return;
+
+      const currentState = getMinimizedModalState<ContractModalDraft>();
+
+      if (currentState?.tool === "contracts" && currentState.draft) {
+        applyContractModalDraft(currentState.draft);
+      }
+
+      setIsFormOpen(true);
+      setIsFormMinimized(false);
+      clearMinimizedModalState("contracts");
+    }
+
+    function handleCloseMinimizedModal(event: Event) {
+      const detail = (event as CustomEvent<{ tool?: string }>).detail;
+
+      if (detail?.tool !== "contracts") return;
+
+      resetForm();
+    }
+
+    window.addEventListener(RESTORE_MINIMIZED_MODAL_EVENT, handleRestoreMinimizedModal);
+    window.addEventListener(CLOSE_MINIMIZED_MODAL_EVENT, handleCloseMinimizedModal);
+
+    return () => {
+      window.removeEventListener(RESTORE_MINIMIZED_MODAL_EVENT, handleRestoreMinimizedModal);
+      window.removeEventListener(CLOSE_MINIMIZED_MODAL_EVENT, handleCloseMinimizedModal);
+    };
+  }, []);
+
   const availableProperties = useMemo(() => {
     return properties.filter((property) => {
       const hasActiveContract = contracts.some(
@@ -758,6 +824,7 @@ export default function ContractsPage() {
   }
 
   function resetForm() {
+    clearMinimizedModalState("contracts");
     setPropertyId("");
     setTenantId("");
     setStartDate("");
@@ -784,8 +851,57 @@ export default function ContractsPage() {
     setActionMenuPosition(null);
     setSelectedContractDetails(null);
     setContractDetailsActiveTab("Data");
+    setIsSavingContract(false);
     setIsFormMinimized(false);
     setIsFormOpen(false);
+  }
+
+  function getContractModalDraft(): ContractModalDraft {
+    return {
+      editingContractId,
+      propertyId,
+      tenantId,
+      startDate,
+      endDate,
+      rentValue,
+      isTemporaryRental,
+      checkInTime,
+      checkOutTime,
+    };
+  }
+
+  function applyContractModalDraft(draft: ContractModalDraft) {
+    setEditingContractId(draft.editingContractId);
+    setPropertyId(draft.propertyId || "");
+    setTenantId(draft.tenantId || "");
+    setStartDate(draft.startDate || "");
+    setEndDate(draft.endDate || "");
+    setRentValue(draft.rentValue || "");
+    setIsTemporaryRental(draft.isTemporaryRental ?? false);
+    setCheckInTime(draft.checkInTime || "");
+    setCheckOutTime(draft.checkOutTime || "");
+    setFormError("");
+  }
+
+  function handleMinimizeForm() {
+    const selectedPropertyName =
+      properties.find((property) => String(property.id) === String(propertyId))?.name || "";
+
+    setMinimizedModalState<ContractModalDraft>({
+      tool: "contracts",
+      href: "/contratos",
+      title: editingContractId ? "Editar contrato" : "Novo contrato",
+      subtitle: selectedPropertyName || "Contrato em andamento",
+      mode: editingContractId ? "edit" : "create",
+      draft: getContractModalDraft(),
+      updatedAt: Date.now(),
+    });
+    setIsFormMinimized(true);
+  }
+
+  function handleRestoreForm() {
+    clearMinimizedModalState("contracts");
+    setIsFormMinimized(false);
   }
 
   function handleOpenCreateForm() {
@@ -804,8 +920,35 @@ export default function ContractsPage() {
     setCheckInTime(contract.checkInTime || "");
     setCheckOutTime(contract.checkOutTime || "");
     setFormError("");
+    clearMinimizedModalState("contracts");
     setIsFormMinimized(false);
     setIsFormOpen(true);
+  }
+
+  function handleRequestEditContract(contract: Contract) {
+    const displayStatus = getDisplayContractStatus(contract);
+    const requiresConfirmation = ["Canceled", "Deleted", "Finished"].includes(displayStatus);
+
+    if (requiresConfirmation) {
+      setPendingEditConfirmation(contract);
+      setOpenActionMenuContractId(null);
+      setActionMenuPosition(null);
+      return;
+    }
+
+    handleEditContract(contract);
+  }
+
+  function handleCloseEditConfirmation() {
+    setPendingEditConfirmation(null);
+  }
+
+  function handleConfirmEditContract() {
+    if (!pendingEditConfirmation) return;
+
+    const contract = pendingEditConfirmation;
+    setPendingEditConfirmation(null);
+    handleEditContract(contract);
   }
 
   function getFirstDueDateFromStartDate(dateValue: string) {
@@ -1192,7 +1335,14 @@ export default function ContractsPage() {
 
   async function handleSubmitContract(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (isSavingContract) {
+      return;
+    }
+
+    setIsSavingContract(true);
     setFormError("");
+    try {
 
     const selectedProperty = properties.find(
       (property) => String(property.id) === String(propertyId)
@@ -1331,8 +1481,12 @@ export default function ContractsPage() {
       "ContractCreated",
       "Contrato criado e imóvel vinculado à locação."
     );
+    window.alert("Contrato criado, parcelas geradas e vencimento registrado na agenda.");
     resetForm();
     await openReceivableChargeFromContract(newContract);
+    } finally {
+      setIsSavingContract(false);
+    }
   }
 
   function handlePropertyChange(selectedPropertyId: string) {
@@ -1469,6 +1623,37 @@ export default function ContractsPage() {
     setSelectedContractDetails(contract);
     setContractDetailsActiveTab("Data");
     setOpenActionMenuContractId(null);
+  }
+
+  function sendContractWhatsAppMessage(contract: Contract) {
+    const tenant = tenants.find(
+      (item) => String(item.id) === String(contract.tenantId),
+    );
+    const tenantPhone = tenant?.phone || "";
+
+    if (!tenantPhone) {
+      window.alert("Este inquilino nao possui telefone cadastrado.");
+      return;
+    }
+
+    const contractCompanySettings = getCompanySettingsForContractPrint();
+    const companyName =
+      contractCompanySettings.name || contractCompanySettings.legalName || "Contrx";
+
+    openWhatsAppMessage({
+      phone: tenantPhone,
+      message: [
+        `Olá, ${contract.tenantName || tenant?.name || "inquilino"}.`,
+        "",
+        `${companyName} informa sobre o contrato de locação:`,
+        `Imóvel: ${contract.propertyName || "Não informado"}`,
+        `Período: ${formatDate(contract.startDate)} até ${formatDate(contract.endDate)}`,
+        `Valor: ${formatCurrency(contract.rentValue)}`,
+        `Status: ${getContractStatusLabel(getDisplayContractStatus(contract))}`,
+        "",
+        "Caso precise de alguma informação ou queira solicitar o documento, pode responder por aqui.",
+      ].join("\n"),
+    });
   }
 
   function handleCloseContractDetails() {
@@ -2389,9 +2574,13 @@ export default function ContractsPage() {
               handleCloseContractActions();
               handleOpenPrintableContract(openActionMenuContract);
             }}
+            onWhatsApp={() => {
+              handleCloseContractActions();
+              sendContractWhatsAppMessage(openActionMenuContract);
+            }}
             onEdit={() => {
               handleCloseContractActions();
-              handleEditContract(openActionMenuContract);
+              handleRequestEditContract(openActionMenuContract);
             }}
             onDelete={() => handleOpenStatusReasonModal(openActionMenuContract, "Deleted")}
           />
@@ -2874,6 +3063,52 @@ export default function ContractsPage() {
           </div>
         )}
 
+        {pendingEditConfirmation && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
+            <div className={`w-full max-w-lg rounded-[2rem] border border-orange-100 bg-white p-8 shadow-2xl ${contractsThemeClass}`}>
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 text-orange-600">
+                <Pencil className="h-8 w-8" />
+              </div>
+
+              <div className="mt-5 text-center">
+                <h3 className="text-2xl font-black text-slate-950">
+                  Editar contrato?
+                </h3>
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
+                  Este contrato ja foi cancelado, excluido ou finalizado. Deseja mesmo editar este contrato?
+                </p>
+              </div>
+
+              <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
+                <p className="text-sm font-black text-slate-900">
+                  {pendingEditConfirmation.propertyName || "Contrato"}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">
+                  {pendingEditConfirmation.tenantName || "Inquilino nao informado"}
+                </p>
+              </div>
+
+              <div className="mt-8 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={handleCloseEditConfirmation}
+                  className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleConfirmEditContract}
+                  className="rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                >
+                  Editar contrato
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {pendingStatusChange && (
           <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
             <div className={`w-full max-w-lg rounded-[2rem] border border-red-100 bg-white p-8 shadow-2xl ${contractsThemeClass}`}>
@@ -3035,7 +3270,7 @@ export default function ContractsPage() {
                 <div className="flex shrink-0 items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setIsFormMinimized(false)}
+                    onClick={handleRestoreForm}
                     className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-200 transition hover:bg-orange-600"
                     title="Restaurar modal"
                     aria-label="Restaurar modal"
@@ -3074,7 +3309,7 @@ export default function ContractsPage() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setIsFormMinimized(true)}
+                    onClick={handleMinimizeForm}
                     className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-orange-50 hover:text-orange-600"
                     title="Minimizar modal"
                     aria-label="Minimizar modal"
@@ -3285,9 +3520,14 @@ export default function ContractsPage() {
 
                   <button
                     type="submit"
-                    className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                    disabled={isSavingContract}
+                    className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
                   >
-                    {isEditing ? "Salvar alterações" : "Criar contrato"}
+                    {isSavingContract
+                      ? "Salvando..."
+                      : isEditing
+                        ? "Salvar alterações"
+                        : "Criar contrato"}
                   </button>
                 </div>
               </form>
@@ -3337,6 +3577,7 @@ type ContractActionMenuProps = {
   onFinish: () => void;
   onCancel: () => void;
   onPrint: () => void;
+  onWhatsApp: () => void;
   onEdit: () => void;
   onDelete: () => void;
 };
@@ -3352,6 +3593,7 @@ function ContractActionMenu({
   onFinish,
   onCancel,
   onPrint,
+  onWhatsApp,
   onEdit,
   onDelete,
 }: ContractActionMenuProps) {
@@ -3401,6 +3643,14 @@ function ContractActionMenu({
         className="text-orange-600 hover:bg-orange-50"
       >
         Gerar contrato
+      </ActionMenuButton>
+
+      <ActionMenuButton
+        onClick={onWhatsApp}
+        icon={<MessageCircle className="h-4 w-4 shrink-0" />}
+        className="text-emerald-700 hover:bg-emerald-50"
+      >
+        Enviar WhatsApp
       </ActionMenuButton>
 
       <ActionMenuButton onClick={onEdit} icon={<Pencil className="h-4 w-4 shrink-0" />}>

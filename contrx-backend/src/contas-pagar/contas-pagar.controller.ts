@@ -61,6 +61,15 @@ export class ContasPagarController {
     return this.contasPagarService.pay(id, data, user.companyId);
   }
 
+  @Post(':id/pagar/substituir')
+  replacePayment(
+    @Param('id') id: string,
+    @Body() data: PagarContaDto,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    return this.contasPagarService.replacePayment(id, data, user.companyId);
+  }
+
   @Post(':id/estornar')
   reversePayment(
     @Param('id') id: string,

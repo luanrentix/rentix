@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ContractStatus, Prisma } from '@prisma/client';
+import { uppercaseFields } from '../common/text-normalization';
 import { PrismaService } from '../prisma/prisma.service';
 import { CriarImovelDto } from './dto/criar-imovel.dto';
 import { AtualizarImovelDto } from './dto/atualizar-imovel.dto';
@@ -13,6 +14,7 @@ export class ImoveisService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createPropertyDto: CriarImovelDto, companyId: string) {
+    const data = this.normalizePropertyData(createPropertyDto);
     const company = await this.prisma.company.findUnique({
       where: { id: companyId },
     });
@@ -21,10 +23,10 @@ export class ImoveisService {
       throw new BadRequestException('Empresa não encontrada.');
     }
 
-    if (createPropertyDto.ownerId) {
+    if (data.ownerId) {
       const owner = await this.prisma.person.findFirst({
         where: {
-          id: createPropertyDto.ownerId,
+          id: data.ownerId,
           companyId,
         },
       });
@@ -37,32 +39,32 @@ export class ImoveisService {
     return this.prisma.property.create({
       data: {
         companyId,
-        ownerId: createPropertyDto.ownerId || null,
+        ownerId: data.ownerId || null,
 
-        title: createPropertyDto.title,
-        code: createPropertyDto.code || null,
-        type: createPropertyDto.type || null,
-        purpose: createPropertyDto.purpose || null,
+        title: data.title,
+        code: data.code || null,
+        type: data.type || null,
+        purpose: data.purpose || null,
         rentalValue:
-          createPropertyDto.rentalValue !== undefined &&
-          createPropertyDto.rentalValue !== null
-            ? new Prisma.Decimal(createPropertyDto.rentalValue)
+          data.rentalValue !== undefined &&
+          data.rentalValue !== null
+            ? new Prisma.Decimal(data.rentalValue)
             : null,
 
-        zipCode: createPropertyDto.zipCode || null,
-        city: createPropertyDto.city || null,
-        state: createPropertyDto.state || null,
-        address: createPropertyDto.address || null,
-        district: createPropertyDto.district || null,
-        number: createPropertyDto.number || null,
-        complement: createPropertyDto.complement || null,
+        zipCode: data.zipCode || null,
+        city: data.city || null,
+        state: data.state || null,
+        address: data.address || null,
+        district: data.district || null,
+        number: data.number || null,
+        complement: data.complement || null,
 
-        bedrooms: createPropertyDto.bedrooms ?? null,
-        bathrooms: createPropertyDto.bathrooms ?? null,
-        garages: createPropertyDto.garages ?? null,
+        bedrooms: data.bedrooms ?? null,
+        bathrooms: data.bathrooms ?? null,
+        garages: data.garages ?? null,
 
-        description: createPropertyDto.description || null,
-        isActive: createPropertyDto.isActive ?? true,
+        description: data.description || null,
+        isActive: data.isActive ?? true,
       },
       include: {
         owner: true,
@@ -106,6 +108,7 @@ export class ImoveisService {
     updatePropertyDto: AtualizarImovelDto,
     companyId: string,
   ) {
+    const data = this.normalizePropertyData(updatePropertyDto);
     const property = await this.prisma.property.findFirst({
       where: { id, companyId },
     });
@@ -114,10 +117,10 @@ export class ImoveisService {
       throw new NotFoundException('Imóvel não encontrado.');
     }
 
-    if (updatePropertyDto.ownerId) {
+    if (data.ownerId) {
       const owner = await this.prisma.person.findFirst({
         where: {
-          id: updatePropertyDto.ownerId,
+          id: data.ownerId,
           companyId,
         },
       });
@@ -132,76 +135,76 @@ export class ImoveisService {
       data: {
         companyId,
         ownerId:
-          updatePropertyDto.ownerId !== undefined
-            ? updatePropertyDto.ownerId || null
+          data.ownerId !== undefined
+            ? data.ownerId || null
             : property.ownerId,
 
-        title: updatePropertyDto.title ?? property.title,
+        title: data.title ?? property.title,
         code:
-          updatePropertyDto.code !== undefined
-            ? updatePropertyDto.code || null
+          data.code !== undefined
+            ? data.code || null
             : property.code,
         type:
-          updatePropertyDto.type !== undefined
-            ? updatePropertyDto.type || null
+          data.type !== undefined
+            ? data.type || null
             : property.type,
         purpose:
-          updatePropertyDto.purpose !== undefined
-            ? updatePropertyDto.purpose || null
+          data.purpose !== undefined
+            ? data.purpose || null
             : property.purpose,
         rentalValue:
-          updatePropertyDto.rentalValue !== undefined &&
-          updatePropertyDto.rentalValue !== null
-            ? new Prisma.Decimal(updatePropertyDto.rentalValue)
+          data.rentalValue !== undefined &&
+          data.rentalValue !== null
+            ? new Prisma.Decimal(data.rentalValue)
             : property.rentalValue,
 
         zipCode:
-          updatePropertyDto.zipCode !== undefined
-            ? updatePropertyDto.zipCode || null
+          data.zipCode !== undefined
+            ? data.zipCode || null
             : property.zipCode,
         city:
-          updatePropertyDto.city !== undefined
-            ? updatePropertyDto.city || null
+          data.city !== undefined
+            ? data.city || null
             : property.city,
         state:
-          updatePropertyDto.state !== undefined
-            ? updatePropertyDto.state || null
+          data.state !== undefined
+            ? data.state || null
             : property.state,
         address:
-          updatePropertyDto.address !== undefined
-            ? updatePropertyDto.address || null
+          data.address !== undefined
+            ? data.address || null
             : property.address,
         district:
-          updatePropertyDto.district !== undefined
-            ? updatePropertyDto.district || null
+          data.district !== undefined
+            ? data.district || null
             : property.district,
         number:
-          updatePropertyDto.number !== undefined
-            ? updatePropertyDto.number || null
+          data.number !== undefined
+            ? data.number || null
             : property.number,
         complement:
-          updatePropertyDto.complement !== undefined
-            ? updatePropertyDto.complement || null
+          data.complement !== undefined
+            ? data.complement || null
             : property.complement,
 
         bedrooms:
-          updatePropertyDto.bedrooms !== undefined
-            ? updatePropertyDto.bedrooms
+          data.bedrooms !== undefined
+            ? data.bedrooms
             : property.bedrooms,
         bathrooms:
-          updatePropertyDto.bathrooms !== undefined
-            ? updatePropertyDto.bathrooms
+          data.bathrooms !== undefined
+            ? data.bathrooms
             : property.bathrooms,
         garages:
-          updatePropertyDto.garages !== undefined
-            ? updatePropertyDto.garages
+          data.garages !== undefined
+            ? data.garages
             : property.garages,
 
         description:
-          updatePropertyDto.description !== undefined
-            ? updatePropertyDto.description || null
+          data.description !== undefined
+            ? data.description || null
             : property.description,
-        isActive: updatePropertyDto.isActive ?? property.isActive,
+        isActive: data.isActive ?? property.isActive,
       },
       include: {
         owner: true,
@@ -243,5 +246,23 @@ export class ImoveisService {
         company: true,
       },
     });
+  }
+
+  private normalizePropertyData<TData extends CriarImovelDto | AtualizarImovelDto>(
+    data: TData,
+  ) {
+    return uppercaseFields(data, [
+      'title',
+      'code',
+      'type',
+      'purpose',
+      'city',
+      'state',
+      'address',
+      'district',
+      'number',
+      'complement',
+      'description',
+    ]);
   }
 }

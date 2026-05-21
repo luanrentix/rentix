@@ -134,6 +134,59 @@ describe('ContasReceberService', () => {
     );
   });
 
+  it('permite receber juros sem exceder o saldo liquidado', async () => {
+    const { service, tx } = createService();
+
+    await service.receivePayment(
+      'receivable-1',
+      {
+        paidAt: '2026-05-15',
+        method: 'PIX',
+        amountPaid: 1100,
+        interest: 100,
+      },
+      'company-1',
+    );
+
+    expect(tx.pagamentoRecebido.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          amountPaid: new Prisma.Decimal(1100),
+          interest: new Prisma.Decimal(100),
+        }),
+      }),
+    );
+    expect(tx.contaReceber.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { status: FinancialAccountStatus.PAID },
+      }),
+    );
+  });
+
+  it('substitui recebimento em uma unica transacao', async () => {
+    const { service, tx } = createService();
+
+    await service.replacePayment(
+      'receivable-1',
+      {
+        paidAt: '2026-05-15',
+        method: 'PIX',
+        amountPaid: 1000,
+      },
+      'company-1',
+    );
+
+    expect(tx.pagamentoRecebido.deleteMany).toHaveBeenCalledWith({
+      where: { chargeId: 'receivable-1' },
+    });
+    expect(tx.pagamentoRecebido.create).toHaveBeenCalled();
+    expect(tx.contaReceber.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { status: FinancialAccountStatus.PAID },
+      }),
+    );
+  });
+
   it('bloqueia recebimento adicional em conta ja quitada', async () => {
     const { service, tx } = createService({ currentPaidAmount: 1000 });
 

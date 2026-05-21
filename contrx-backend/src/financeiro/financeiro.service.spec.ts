@@ -105,7 +105,7 @@ describe('FinanceiroService', () => {
             {
               dueDate: {
                 gte: new Date('2026-05-01T00:00:00'),
-                lte: new Date('2026-05-31T00:00:00'),
+                lte: new Date('2026-05-31T23:59:59.999'),
               },
             },
             {
@@ -113,7 +113,7 @@ describe('FinanceiroService', () => {
                 some: {
                   paidAt: {
                     gte: new Date('2026-05-01T00:00:00'),
-                    lte: new Date('2026-05-31T00:00:00'),
+                    lte: new Date('2026-05-31T23:59:59.999'),
                   },
                 },
               },
@@ -122,5 +122,102 @@ describe('FinanceiroService', () => {
         },
       }),
     );
+  });
+
+  it('soma no realizado apenas pagamentos dentro do periodo filtrado', async () => {
+    const { service } = createService({
+      receivables: [
+        {
+          id: 'receivable-1',
+          tenantName: 'Inquilino',
+          propertyName: 'Imovel',
+          dueDate: new Date('2026-05-10T00:00:00'),
+          amount: new Prisma.Decimal(1000),
+          status: FinancialAccountStatus.PAID,
+          payments: [
+            {
+              paidAt: new Date('2026-05-05T00:00:00'),
+              amountPaid: new Prisma.Decimal(400),
+            },
+            {
+              paidAt: new Date('2026-04-25T00:00:00'),
+              amountPaid: new Prisma.Decimal(600),
+            },
+          ],
+        },
+      ],
+    });
+
+    const resumo = await service.getResumo('company-1', {
+      startDate: '2026-05-01',
+      endDate: '2026-05-31',
+    });
+
+    expect(resumo.receivables[0]).toMatchObject({
+      status: 'Paid',
+      paidAmount: 400,
+      discountAmount: 0,
+      interestAmount: 0,
+      remainingAmount: 0,
+      paymentDate: '2026-05-05',
+    });
+  });
+
+  it('informa juros e descontos das baixas dentro do periodo filtrado', async () => {
+    const { service } = createService({
+      receivables: [
+        {
+          id: 'receivable-1',
+          tenantName: 'Inquilino',
+          propertyName: 'Imovel',
+          dueDate: new Date('2026-05-10T00:00:00'),
+          amount: new Prisma.Decimal(1000),
+          status: FinancialAccountStatus.PAID,
+          payments: [
+            {
+              paidAt: new Date('2026-05-05T00:00:00'),
+              amountPaid: new Prisma.Decimal(920),
+              discount: new Prisma.Decimal(100),
+              interest: new Prisma.Decimal(20),
+            },
+          ],
+        },
+      ],
+      payables: [
+        {
+          id: 'payable-1',
+          personName: 'Fornecedor',
+          description: 'Despesa',
+          category: 'Manutencao',
+          dueDate: new Date('2026-05-12T00:00:00'),
+          amount: new Prisma.Decimal(500),
+          status: FinancialAccountStatus.PAID,
+          payments: [
+            {
+              paidAt: new Date('2026-05-08T00:00:00'),
+              amountPaid: new Prisma.Decimal(480),
+              discount: new Prisma.Decimal(30),
+              interest: new Prisma.Decimal(10),
+            },
+          ],
+        },
+      ],
+    });
+
+    const resumo = await service.getResumo('company-1', {
+      startDate: '2026-05-01',
+      endDate: '2026-05-31',
+    });
+
+    expect(resumo.receivables[0]).toMatchObject({
+      paidAmount: 920,
+      discountAmount: 100,
+      interestAmount: 20,
+    });
+    expect(resumo.payables[0]).toMatchObject({
+      paidAmount: 480,
+      discountAmount: 30,
+      interestAmount: 10,
+    });
   });
 });

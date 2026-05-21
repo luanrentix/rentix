@@ -8,6 +8,7 @@ import {
   Banknote,
   CalendarDays,
   CreditCard,
+  FileSpreadsheet,
   RefreshCw,
   TrendingDown,
   TrendingUp,
@@ -53,6 +54,55 @@ type ThemeMode = "light" | "black" | "graphite";
 const contrxFinancialThemeStyle = `
   .contrx-financial-page {
     color: #0f172a;
+  }
+
+  .contrx-financial-action-button {
+    cursor: pointer;
+    will-change: transform, box-shadow, filter;
+    transition:
+      transform 160ms ease,
+      box-shadow 160ms ease,
+      background-color 160ms ease,
+      border-color 160ms ease,
+      color 160ms ease,
+      filter 160ms ease;
+  }
+
+  .contrx-financial-action-button:hover {
+    transform: translateY(-2px);
+    filter: saturate(1.08);
+  }
+
+  .contrx-financial-action-button:active {
+    transform: translateY(0) scale(0.98);
+    filter: saturate(0.98);
+  }
+
+  .contrx-financial-action-button:focus-visible {
+    outline: 3px solid rgba(249, 115, 22, 0.28);
+    outline-offset: 3px;
+  }
+
+  .contrx-financial-action-button:disabled {
+    cursor: wait;
+    opacity: 0.72;
+    transform: none;
+  }
+
+  .contrx-financial-action-button-emerald:hover {
+    box-shadow: 0 14px 28px rgba(16, 185, 129, 0.18);
+  }
+
+  .contrx-financial-action-button-red:hover {
+    box-shadow: 0 14px 28px rgba(239, 68, 68, 0.16);
+  }
+
+  .contrx-financial-action-button-orange:hover {
+    box-shadow: 0 14px 28px rgba(249, 115, 22, 0.18);
+  }
+
+  .contrx-financial-action-button-slate:hover {
+    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
   }
 
   .contrx-financial-page-light,
@@ -581,7 +631,7 @@ export default function FinancialPage() {
             <button
               type="button"
               onClick={() => (window.location.href = "/contas-receber")}
-              className="inline-flex items-center gap-2 rounded-2xl bg-emerald-50 px-4 py-3 text-xs font-black text-emerald-700 ring-1 ring-emerald-100 transition hover:bg-emerald-100"
+              className="contrx-financial-action-button contrx-financial-action-button-emerald inline-flex items-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-black text-emerald-700 ring-1 ring-emerald-100 hover:border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 active:bg-emerald-200"
             >
               <ArrowUpCircle className="h-4 w-4" />
               Contas a receber
@@ -589,18 +639,27 @@ export default function FinancialPage() {
             <button
               type="button"
               onClick={() => (window.location.href = "/contas-pagar")}
-              className="inline-flex items-center gap-2 rounded-2xl bg-red-50 px-4 py-3 text-xs font-black text-red-700 ring-1 ring-red-100 transition hover:bg-red-100"
+              className="contrx-financial-action-button contrx-financial-action-button-red inline-flex items-center gap-2 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-black text-red-700 ring-1 ring-red-100 hover:border-red-200 hover:bg-red-100 hover:text-red-800 active:bg-red-200"
             >
               <ArrowDownCircle className="h-4 w-4" />
               Contas a pagar
             </button>
             <button
               type="button"
+              onClick={() => (window.location.href = "/financeiro/relatorios")}
+              className="contrx-financial-action-button contrx-financial-action-button-orange inline-flex items-center gap-2 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3 text-xs font-black text-orange-700 ring-1 ring-orange-100 hover:border-orange-200 hover:bg-orange-100 hover:text-orange-800 active:bg-orange-200"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              Relatórios
+            </button>
+            <button
+              type="button"
               onClick={() => companyId && loadFinancialSummary(companyId)}
-              className="inline-flex items-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-100"
+              disabled={isLoading}
+              className="contrx-financial-action-button contrx-financial-action-button-slate inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-xs font-black text-slate-700 hover:border-slate-300 hover:bg-slate-200 hover:text-slate-900 active:bg-slate-300 disabled:hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-100"
             >
               <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-              Atualizar
+              {isLoading ? "Atualizando..." : "Atualizar"}
             </button>
           </div>
         </div>

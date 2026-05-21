@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { LoaderCircle, Search, X } from "lucide-react";
+import { LoaderCircle, Minimize2, Search, X } from "lucide-react";
 import { createPerson, type Person } from "@/services/people.service";
 
 type PersonType = "individual" | "company";
@@ -12,7 +12,7 @@ export type PersonCreateModalListItem = {
   document?: string | null;
 };
 
-type PersonFormData = {
+export type PersonFormData = {
   name: string;
   type: PersonType;
   document: string;
@@ -61,6 +61,9 @@ type PersonCreateModalProps = {
   open: boolean;
   companyId?: string;
   people?: PersonCreateModalListItem[];
+  initialData?: PersonFormData;
+  onDraftChange?: (draft: PersonFormData) => void;
+  onMinimize?: () => void;
   onClose: () => void;
   onCreated: (person: Person) => void;
 };
@@ -88,6 +91,9 @@ export function PersonCreateModal({
   open,
   companyId,
   people = [],
+  initialData,
+  onDraftChange,
+  onMinimize,
   onClose,
   onCreated,
 }: PersonCreateModalProps) {
@@ -100,7 +106,9 @@ export function PersonCreateModal({
   const [cnpjError, setCnpjError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) {
+    if (open) {
+      setFormData(initialData || emptyFormData);
+    } else {
       setFormData(emptyFormData);
       setFormError(null);
       setZipCodeError(null);
@@ -109,7 +117,7 @@ export function PersonCreateModal({
       setIsSearchingZipCode(false);
       setIsSearchingCnpj(false);
     }
-  }, [open]);
+  }, [initialData, open]);
 
   if (!open) return null;
 
@@ -117,6 +125,7 @@ export function PersonCreateModal({
     if (isSaving) return;
 
     setFormData(emptyFormData);
+    onDraftChange?.(emptyFormData);
     setFormError(null);
     setZipCodeError(null);
     setCnpjError(null);
@@ -125,9 +134,42 @@ export function PersonCreateModal({
 
   function updateFormData(field: keyof PersonFormData, value: string) {
     setFormError(null);
-    setFormData((currentFormData) => ({
+    updateFormDataDraft((currentFormData) => ({
       ...currentFormData,
       [field]: formatPersonFormValue(field, value),
+    }));
+  }
+
+  function updateFormDataDraft(
+    updater: (currentFormData: PersonFormData) => PersonFormData,
+  ) {
+    let nextDraft: PersonFormData | null = null;
+
+    setFormData((currentFormData) => {
+      nextDraft = updater(currentFormData);
+      return nextDraft;
+    });
+
+    if (nextDraft) {
+      onDraftChange?.(nextDraft);
+    }
+  }
+  function changePersonType(nextType: PersonType) {
+    updateFormDataDraft((currentFormData) => ({
+      ...currentFormData,
+      type: nextType,
+      document: "",
+      stateRegistration: "",
+      identityNumber: "",
+    }));
+    setCnpjError(null);
+    setFormError(null);
+  }
+
+  function changeTenantFlag(isTenant: boolean) {
+    updateFormDataDraft((currentFormData) => ({
+      ...currentFormData,
+      isTenant,
     }));
   }
 
@@ -151,12 +193,12 @@ export function PersonCreateModal({
         return;
       }
 
-      setFormData((currentFormData) => ({
-        ...currentFormData,
-        city: toUpperText(data.localidade ?? currentFormData.city),
-        state: toUpperText(data.uf ?? currentFormData.state).slice(0, 2),
-        address: toUpperText(data.logradouro ?? currentFormData.address),
-        district: toUpperText(data.bairro ?? currentFormData.district),
+      updateFormDataDraft((currentFormData) => ({
+          ...currentFormData,
+          city: toUpperText(data.localidade ?? currentFormData.city),
+          state: toUpperText(data.uf ?? currentFormData.state).slice(0, 2),
+          address: toUpperText(data.logradouro ?? currentFormData.address),
+          district: toUpperText(data.bairro ?? currentFormData.district),
       }));
     } catch {
       setZipCodeError("Não foi possível consultar o CEP agora.");
@@ -191,29 +233,29 @@ export function PersonCreateModal({
 
       const data = (await response.json()) as CnpjApiResponse;
 
-      setFormData((currentFormData) => ({
-        ...currentFormData,
-        name:
-          toUpperText(data.razao_social?.trim() || "") ||
-          toUpperText(data.nome_fantasia?.trim() || "") ||
-          currentFormData.name,
-        email: toUpperText(data.email?.trim() || "") || currentFormData.email,
-        phone: data.ddd_telefone_1
-          ? formatPhone(data.ddd_telefone_1)
-          : data.ddd_telefone_2
-            ? formatPhone(data.ddd_telefone_2)
-            : currentFormData.phone,
-        zipCode: data.cep ? formatZipCode(data.cep) : currentFormData.zipCode,
-        city: toUpperText(data.municipio ?? currentFormData.city),
-        state: toUpperText(data.uf ?? currentFormData.state).slice(0, 2),
-        address: toUpperText(data.logradouro ?? currentFormData.address),
-        addressNumber: toUpperText(data.numero ?? currentFormData.addressNumber),
-        district: toUpperText(data.bairro ?? currentFormData.district),
-        reference: toUpperText(data.complemento ?? currentFormData.reference),
-        status:
-          data.descricao_situacao_cadastral?.toUpperCase() === "ATIVA"
-            ? "active"
-            : currentFormData.status,
+      updateFormDataDraft((currentFormData) => ({
+          ...currentFormData,
+          name:
+            toUpperText(data.razao_social?.trim() || "") ||
+            toUpperText(data.nome_fantasia?.trim() || "") ||
+            currentFormData.name,
+          email: data.email?.trim().toLowerCase() || currentFormData.email,
+          phone: data.ddd_telefone_1
+            ? formatPhone(data.ddd_telefone_1)
+            : data.ddd_telefone_2
+              ? formatPhone(data.ddd_telefone_2)
+              : currentFormData.phone,
+          zipCode: data.cep ? formatZipCode(data.cep) : currentFormData.zipCode,
+          city: toUpperText(data.municipio ?? currentFormData.city),
+          state: toUpperText(data.uf ?? currentFormData.state).slice(0, 2),
+          address: toUpperText(data.logradouro ?? currentFormData.address),
+          addressNumber: toUpperText(data.numero ?? currentFormData.addressNumber),
+          district: toUpperText(data.bairro ?? currentFormData.district),
+          reference: toUpperText(data.complemento ?? currentFormData.reference),
+          status:
+            data.descricao_situacao_cadastral?.toUpperCase() === "ATIVA"
+              ? "active"
+              : currentFormData.status,
       }));
     } catch {
       setCnpjError("Não foi possível consultar o CNPJ agora.");
@@ -267,7 +309,7 @@ export function PersonCreateModal({
         formData.type === "individual"
           ? toUpperText(formData.identityNumber).trim() || undefined
           : undefined,
-      email: toUpperText(formData.email).trim() || undefined,
+      email: formData.email.trim().toLowerCase() || undefined,
       phone: formData.phone.trim() || undefined,
       zipCode: formData.zipCode.trim() || undefined,
       city: toUpperText(formData.city).trim() || undefined,
@@ -287,6 +329,7 @@ export function PersonCreateModal({
 
       onCreated(createdPerson);
       setFormData(emptyFormData);
+      onDraftChange?.(emptyFormData);
       setFormError(null);
       setZipCodeError(null);
       setCnpjError(null);
@@ -302,9 +345,9 @@ export function PersonCreateModal({
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 px-4 py-6 backdrop-blur-sm">
       <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
         <div className="flex items-start justify-between border-b border-orange-100 px-8 py-6">
-          <div>
-            <h2 className="text-2xl font-black tracking-tight text-slate-950">
-              Nova pessoa
+              <div>
+                <h2 className="text-2xl font-black tracking-tight text-slate-950">
+                  Nova pessoa
             </h2>
 
             <p className="mt-1 text-sm font-medium text-slate-500">
@@ -312,15 +355,29 @@ export function PersonCreateModal({
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={handleClose}
-            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:bg-orange-50 hover:text-orange-600"
-            title="Fechar modal"
-            aria-label="Fechar modal"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {onMinimize && (
+              <button
+                type="button"
+                onClick={onMinimize}
+                className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:bg-orange-50 hover:text-orange-600"
+                title="Minimizar modal"
+                aria-label="Minimizar modal"
+              >
+                <Minimize2 className="h-5 w-5" />
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleClose}
+              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:bg-orange-50 hover:text-orange-600"
+              title="Fechar modal"
+              aria-label="Fechar modal"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="min-h-0 flex-1 overflow-y-auto">
@@ -340,15 +397,7 @@ export function PersonCreateModal({
                   onChange={(event) => {
                     const nextType = event.target.value as PersonType;
 
-                    setFormData((currentFormData) => ({
-                      ...currentFormData,
-                      type: nextType,
-                      document: "",
-                      stateRegistration: "",
-                      identityNumber: "",
-                    }));
-                    setCnpjError(null);
-                    setFormError(null);
+                    changePersonType(nextType);
                   }}
                   className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                 >
@@ -515,10 +564,7 @@ export function PersonCreateModal({
                     type="checkbox"
                     checked={formData.isTenant}
                     onChange={(event) =>
-                      setFormData((currentFormData) => ({
-                        ...currentFormData,
-                        isTenant: event.target.checked,
-                      }))
+                      changeTenantFlag(event.target.checked)
                     }
                     className="mt-1 h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
                   />

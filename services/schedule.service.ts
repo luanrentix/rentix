@@ -1,4 +1,5 @@
 import { apiFetch } from './api';
+import { uppercaseFields } from './text-normalization';
 
 export type ScheduleStatus = 'scheduled' | 'completed' | 'canceled';
 export type SchedulePriority = 'low' | 'medium' | 'high';
@@ -44,14 +45,14 @@ export async function getScheduleItems() {
 export async function createScheduleItem(data: CreateScheduleItemDto) {
   return apiFetch<ScheduleItem>('/agenda', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify(normalizeSchedulePayload(data)),
   });
 }
 
 export async function updateScheduleItem(id: string, data: UpdateScheduleItemDto) {
   return apiFetch<ScheduleItem>(`/agenda/${id}`, {
     method: 'PATCH',
-    body: JSON.stringify(data),
+    body: JSON.stringify(normalizeSchedulePayload(data)),
   });
 }
 
@@ -59,4 +60,18 @@ export async function deleteScheduleItem(id: string) {
   return apiFetch<ScheduleItem>(`/agenda/${id}`, {
     method: 'DELETE',
   });
+}
+
+function normalizeSchedulePayload<
+  TData extends CreateScheduleItemDto | UpdateScheduleItemDto,
+>(data: TData) {
+  return uppercaseFields(data, [
+    'title',
+    'customerName',
+    'propertyName',
+    'type',
+    'responsibleName',
+    'reminder',
+    'notes',
+  ]);
 }

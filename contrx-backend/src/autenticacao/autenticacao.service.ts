@@ -14,6 +14,7 @@ import { randomUUID } from 'crypto';
 import type { User } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { toUpperText } from '../common/text-normalization';
 
 import { RegisterDto } from './dto/registro.dto';
 import { LoginDto } from './dto/login.dto';
@@ -110,7 +111,7 @@ export class AutenticacaoService {
     const user = await this.prisma.user.create({
       data: {
         companyId: data.companyId,
-        name: data.name,
+        name: toUpperText(data.name || ''),
         email,
         passwordHash,
       },
@@ -188,10 +189,10 @@ export class AutenticacaoService {
   }
 
   async createAccount(data: CriarContaDto) {
-    const name = data.name?.trim();
+    const name = data.name ? toUpperText(data.name) : '';
     const email = normalizeEmail(data.email || '');
     const password = data.password;
-    const companyName = data.companyName?.trim();
+    const companyName = data.companyName ? toUpperText(data.companyName) : '';
 
     if (!name || !email || !password || !companyName) {
       throw new BadRequestException('Preencha nome, e-mail, senha e empresa.');
@@ -327,7 +328,7 @@ export class AutenticacaoService {
     user: UsuarioAutenticado,
     data: CriarUsuarioEmpresaDto,
   ) {
-    const name = data.name?.trim();
+    const name = data.name ? toUpperText(data.name) : '';
     const email = normalizeEmail(data.email || '');
     const password = data.password;
     const permissions = normalizePermissions(data.permissions || []);
@@ -384,7 +385,7 @@ export class AutenticacaoService {
     userId: string,
     data: AtualizarUsuarioEmpresaDto,
   ) {
-    const name = data.name?.trim();
+    const name = data.name ? toUpperText(data.name) : '';
     const permissions = normalizePermissions(data.permissions || []);
     const password = data.password?.trim();
 

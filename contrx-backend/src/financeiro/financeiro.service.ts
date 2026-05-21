@@ -13,6 +13,8 @@ type FinancialReceivable = {
   status: FinancialStatus;
   paymentDate: string | null;
   paidAmount: number;
+  discountAmount: number;
+  interestAmount: number;
   remainingAmount: number;
 };
 
@@ -26,6 +28,8 @@ type FinancialPayable = {
   status: FinancialStatus;
   paymentDate: string | null;
   paidAmount: number;
+  discountAmount: number;
+  interestAmount: number;
   remainingAmount: number;
 };
 
@@ -70,6 +74,7 @@ export class FinanceiroService {
           account.payments,
           amount,
           account.status,
+          dateRange,
         );
 
         return {
@@ -86,6 +91,8 @@ export class FinanceiroService {
           ),
           paymentDate: paymentSummary.paymentDate,
           paidAmount: paymentSummary.paidAmount,
+          discountAmount: paymentSummary.discountAmount,
+          interestAmount: paymentSummary.interestAmount,
           remainingAmount: paymentSummary.remainingAmount,
         };
       }),
@@ -95,6 +102,7 @@ export class FinanceiroService {
           account.payments,
           amount,
           account.status,
+          dateRange,
         );
 
         return {
@@ -112,6 +120,8 @@ export class FinanceiroService {
           ),
           paymentDate: paymentSummary.paymentDate,
           paidAmount: paymentSummary.paidAmount,
+          discountAmount: paymentSummary.discountAmount,
+          interestAmount: paymentSummary.interestAmount,
           remainingAmount: paymentSummary.remainingAmount,
         };
       }),
@@ -124,7 +134,11 @@ export class FinanceiroService {
         filters.startDate,
         'Data inicial invalida.',
       ),
-      endDate: this.parseOptionalDate(filters.endDate, 'Data final invalida.'),
+      endDate: this.parseOptionalDate(
+        filters.endDate,
+        'Data final invalida.',
+        'end',
+      ),
     };
   }
 
@@ -206,6 +220,7 @@ export class FinanceiroService {
     payments: FinancialPayment[],
     accountAmount: number,
     accountStatus: FinancialAccountStatus,
+    dateRange?: { startDate: Date | null; endDate: Date | null },
   ) {
     if (payments.length === 0) {
       const paidAmount =
@@ -214,6 +229,8 @@ export class FinanceiroService {
       return {
         paymentDate: null,
         paidAmount,
+        discountAmount: 0,
+        interestAmount: 0,
         settlementAmount: paidAmount,
         remainingAmount: Math.max(accountAmount - paidAmount, 0),
       };
@@ -233,20 +250,59 @@ export class FinanceiroService {
       return total + (Number.isFinite(amount) ? amount : 0);
     }, 0);
 
+    const paymentsInRange = dateRange
+      ? payments.filter((payment) => this.isDateInRange(payment.paidAt, dateRange))
+      : payments;
+    const paidAmountInRange = paymentsInRange.reduce((total, payment) => {
+      const amount = Number(payment.amountPaid || 0);
+
+      return total + (Number.isFinite(amount) ? amount : 0);
+    }, 0);
+    const discountAmountInRange = paymentsInRange.reduce((total, payment) => {
+      const amount = Number(payment.discount || 0);
+
+      return total + (Number.isFinite(amount) ? amount : 0);
+    }, 0);
+    const interestAmountInRange = paymentsInRange.reduce((total, payment) => {
+      const amount = Number(payment.interest || 0);
+
+      return total + (Number.isFinite(amount) ? amount : 0);
+    }, 0);
+
     return {
-      paymentDate: this.toDateOnly(payments[0].paidAt),
-      paidAmount,
+      paymentDate: paymentsInRange[0]
+        ? this.toDateOnly(paymentsInRange[0].paidAt)
+        : this.toDateOnly(payments[0].paidAt),
+      paidAmount: dateRange ? paidAmountInRange : paidAmount,
+      discountAmount: dateRange
+        ? discountAmountInRange
+        : payments.reduce((total, payment) => {
+            const amount = Number(payment.discount || 0);
+
+            return total + (Number.isFinite(amount) ? amount : 0);
+          }, 0),
+      interestAmount: dateRange
+        ? interestAmountInRange
+        : payments.reduce((total, payment) => {
+            const amount = Number(payment.interest || 0);
+
+            return total + (Number.isFinite(amount) ? amount : 0);
+          }, 0),
       settlementAmount,
       remainingAmount: Math.max(accountAmount - settlementAmount, 0),
     };
   }
 
-  private parseOptionalDate(value: string | undefined, errorMessage: string) {
+  private parseOptionalDate(
+    value: string | undefined,
+    errorMessage: string,
+    boundary: 'start' | 'end' = 'start',
+  ) {
     if (!value) return null;
 
     const parsedDate = value.includes('T')
       ? new Date(value)
-      : new Date(`${value}T00:00:00`);
+      : new Date(`${value}T${boundary === 'end' ? '23:59:59.999' : '00:00:00'}`);
 
     if (Number.isNaN(parsedDate.getTime())) {
       throw new BadRequestException(errorMessage);
@@ -273,5 +329,15 @@ export class FinanceiroService {
 
   private getTodayDate() {
     return new Date().toISOString().slice(0, 10);
+  }
+
+  private isDateInRange(
+    value: Date,
+    dateRange: { startDate: Date | null; endDate: Date | null },
+  ) {
+    if (dateRange.startDate && value < dateRange.startDate) return false;
+    if (dateRange.endDate && value > dateRange.endDate) return false;
+
+    return true;
   }
 }

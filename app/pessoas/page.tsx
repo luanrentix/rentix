@@ -2,6 +2,7 @@
 
 import {
   Children,
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -26,6 +27,13 @@ import {
   type PayableAccount,
   type ReceivableAccount,
 } from "@/services/financial.service";
+import {
+  clearMinimizedModalState,
+  getMinimizedModalState,
+  setMinimizedModalState,
+  CLOSE_MINIMIZED_MODAL_EVENT,
+  RESTORE_MINIMIZED_MODAL_EVENT,
+} from "@/services/minimized-modal.service";
 
 type ApiPersonType = "INDIVIDUAL" | "COMPANY";
 type ApiPersonStatus = "ACTIVE" | "INACTIVE";
@@ -73,6 +81,10 @@ type PersonFormData = {
   reference: string;
   isTenant: boolean;
   status: PersonStatus;
+};
+
+type PersonModalDraft = PersonFormData & {
+  editingPersonId: string | null;
 };
 
 type ViaCepResponse = {
@@ -314,6 +326,18 @@ export default function PeoplePage() {
 
   const companyId = user?.companyId;
 
+  const closeModal = useCallback(() => {
+    if (isSaving) return;
+
+    clearMinimizedModalState("people");
+    setIsModalOpen(false);
+    setIsModalMinimized(false);
+    setEditingPersonId(null);
+    setFormData(emptyFormData);
+    setZipCodeError(null);
+    setCnpjError(null);
+  }, [isSaving]);
+
   useEffect(() => {
     if (!companyId) {
       setIsLoadingPeople(false);
@@ -332,6 +356,51 @@ export default function PeoplePage() {
 
     return () => window.clearTimeout(timeout);
   }, [toast]);
+
+  useEffect(() => {
+    const storedModalState = getMinimizedModalState<PersonModalDraft>();
+
+    if (storedModalState?.tool === "people" && storedModalState.draft) {
+      setEditingPersonId(storedModalState.draft.editingPersonId);
+      setFormData(storedModalState.draft);
+      setIsModalOpen(true);
+      setIsModalMinimized(false);
+      clearMinimizedModalState("people");
+    }
+
+    function handleRestoreMinimizedModal(event: Event) {
+      const detail = (event as CustomEvent<{ tool?: string }>).detail;
+
+      if (detail?.tool !== "people") return;
+
+      const currentState = getMinimizedModalState<PersonModalDraft>();
+
+      if (currentState?.tool === "people" && currentState.draft) {
+        setFormData(currentState.draft);
+        setEditingPersonId(currentState.draft.editingPersonId);
+      }
+
+      setIsModalOpen(true);
+      setIsModalMinimized(false);
+      clearMinimizedModalState("people");
+    }
+
+    function handleCloseMinimizedModal(event: Event) {
+      const detail = (event as CustomEvent<{ tool?: string }>).detail;
+
+      if (detail?.tool !== "people") return;
+
+      closeModal();
+    }
+
+    window.addEventListener(RESTORE_MINIMIZED_MODAL_EVENT, handleRestoreMinimizedModal);
+    window.addEventListener(CLOSE_MINIMIZED_MODAL_EVENT, handleCloseMinimizedModal);
+
+    return () => {
+      window.removeEventListener(RESTORE_MINIMIZED_MODAL_EVENT, handleRestoreMinimizedModal);
+      window.removeEventListener(CLOSE_MINIMIZED_MODAL_EVENT, handleCloseMinimizedModal);
+    };
+  }, [closeModal]);
 
   async function loadPeople(currentCompanyId: string) {
     try {
@@ -420,7 +489,33 @@ export default function PeoplePage() {
     historyData.receivables.length +
     historyData.payables.length;
 
+  function getPersonModalDraft(): PersonModalDraft {
+    return {
+      ...formData,
+      editingPersonId,
+    };
+  }
+
+  function handleMinimizeModal() {
+    setMinimizedModalState<PersonModalDraft>({
+      tool: "people",
+      href: "/pessoas",
+      title: editingPersonId ? "Editar pessoa" : "Nova pessoa",
+      subtitle: formData.name || "Cadastro em andamento",
+      mode: editingPersonId ? "edit" : "create",
+      draft: getPersonModalDraft(),
+      updatedAt: Date.now(),
+    });
+    setIsModalMinimized(true);
+  }
+
+  function handleRestoreModal() {
+    clearMinimizedModalState("people");
+    setIsModalMinimized(false);
+  }
+
   function openCreateModal() {
+    clearMinimizedModalState("people");
     setEditingPersonId(null);
     setFormData(emptyFormData);
     setPageError(null);
@@ -433,6 +528,7 @@ export default function PeoplePage() {
   function openEditModal(person: Person) {
     const addressData = parsePersonAddress(person.address);
 
+    clearMinimizedModalState("people");
     setEditingPersonId(person.id);
     setFormData({
       name: person.name,
@@ -465,17 +561,6 @@ export default function PeoplePage() {
 
   function closePersonHistory() {
     setHistoryPerson(null);
-  }
-
-  function closeModal() {
-    if (isSaving) return;
-
-    setIsModalOpen(false);
-    setIsModalMinimized(false);
-    setEditingPersonId(null);
-    setFormData(emptyFormData);
-    setZipCodeError(null);
-    setCnpjError(null);
   }
 
   function updateFormData(field: keyof PersonFormData, value: string) {
@@ -1129,7 +1214,7 @@ export default function PeoplePage() {
               <div className="flex shrink-0 items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsModalMinimized(false)}
+                  onClick={handleRestoreModal}
                   className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-200 transition hover:bg-orange-600"
                   title="Restaurar modal"
                   aria-label="Restaurar modal"
@@ -1153,9 +1238,12 @@ export default function PeoplePage() {
       )}
 
       <PersonCreateModal
-        open={isModalOpen && !editingPersonId}
+        open={isModalOpen && !editingPersonId && !isModalMinimized}
         companyId={companyId}
         people={people}
+        initialData={formData}
+        onDraftChange={setFormData}
+        onMinimize={handleMinimizeModal}
         onClose={closeModal}
         onCreated={(createdPerson) => {
           setPeople((currentPeople) => [
@@ -1186,7 +1274,7 @@ export default function PeoplePage() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsModalMinimized(true)}
+                  onClick={handleMinimizeModal}
                   className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:bg-orange-50 hover:text-orange-600"
                   title="Minimizar modal"
                   aria-label="Minimizar modal"

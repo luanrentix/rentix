@@ -93,7 +93,11 @@ export async function updateAdminCompany(
 }
 
 export async function resetTestData(modules: ResetTestDataModule[]) {
-  return apiFetch<{ success: boolean; modules: ResetTestDataModule[] }>(
+  return apiFetch<{
+    success: boolean;
+    modules: ResetTestDataModule[];
+    deletedRecords?: Partial<Record<ResetTestDataModule, number>>;
+  }>(
     '/admin/reset-test-data',
     {
       method: 'POST',

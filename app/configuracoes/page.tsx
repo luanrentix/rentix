@@ -228,7 +228,7 @@ const resetModuleOptions: ResetModuleOption[] = [
   {
     key: "masterPanel",
     label: "Painel master",
-    description: "Remove usuarios do painel master, preservando adm@contrx.com e donos do sistema.",
+    description: "Remove usuarios do painel master no banco, preservando o usuario atual e adm@contrx.com.",
     icon: "🛡️",
     storageKeys: [],
   },
@@ -699,6 +699,7 @@ const printTemplateVariableGroups = [
   },
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function extractPaymentBookletInstructions(content: string) {
   const cleanContent = String(content || "").trim();
 

@@ -1,4 +1,5 @@
 import { apiFetch } from './api';
+import { uppercaseFields } from './text-normalization';
 
 export type ApiPersonType = 'INDIVIDUAL' | 'COMPANY';
 export type ApiPersonStatus = 'ACTIVE' | 'INACTIVE';
@@ -49,14 +50,14 @@ export async function getPeople(companyId: string) {
 export async function createPerson(data: CreatePersonDto) {
   return apiFetch<Person>('/pessoas', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify(normalizePersonPayload(data)),
   });
 }
 
 export async function updatePerson(id: string, data: UpdatePersonDto) {
   return apiFetch<Person>(`/pessoas/${id}`, {
     method: 'PATCH',
-    body: JSON.stringify(data),
+    body: JSON.stringify(normalizePersonPayload(data)),
   });
 }
 
@@ -64,4 +65,17 @@ export async function deletePerson(id: string) {
   return apiFetch<Person>(`/pessoas/${id}`, {
     method: 'DELETE',
   });
+}
+
+function normalizePersonPayload<TData extends CreatePersonDto | UpdatePersonDto>(
+  data: TData,
+) {
+  return uppercaseFields(data, [
+    'name',
+    'stateRegistration',
+    'identityNumber',
+    'city',
+    'state',
+    'address',
+  ]);
 }

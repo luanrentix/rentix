@@ -18,6 +18,10 @@ export class CriarContaPagarDto {
   personId?: string | null;
 
   @IsOptional()
+  @IsUUID()
+  propertyId?: string | null;
+
+  @IsOptional()
   @IsString()
   personName?: string | null;
 

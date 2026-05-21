@@ -9,6 +9,8 @@ import {
   deleteReceivableAccount,
   getReceivableAccounts,
   receiveAccount,
+  receiveAccountsBatch,
+  replaceReceivedAccountPayment,
   reverseReceivedAccount,
   updateReceivableAccount,
   type PaymentMethod as ApiPaymentMethod,
@@ -24,12 +26,15 @@ import {
 import {
   getCachedCompanySettings,
   getCachedPrintTemplates,
+  setCachedAppSettings,
 } from "@/services/settings-cache";
+import { getAppSettings } from "@/services/settings.service";
 import {
   getCompanyStorageItem,
   removeCompanyStorageItem,
   setCompanyStorageItem,
 } from "@/services/company-storage";
+import { openWhatsAppMessage } from "@/services/whatsapp.service";
 
 type ThemeMode = "light" | "black" | "graphite";
 
@@ -451,6 +456,7 @@ type ContractSchedulePayload = {
 
 const MAX_INSTALLMENT_QUANTITY = 120;
 const RECEIVABLE_FROM_CONTRACT_STORAGE_KEY = "contrx_receivable_from_contract";
+const DEFAULT_RECEIVABLE_STATUS_FILTER: StatusFilter = "Pending";
 
 type PaymentMethod =
   | "Cash"
@@ -599,7 +605,9 @@ export default function AccountsReceivablePage() {
 
   const [search, setSearch] = useState("");
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(
+    DEFAULT_RECEIVABLE_STATUS_FILTER,
+  );
   const [selectedChargeIds, setSelectedChargeIds] = useState<string[]>([]);
   const [openActionMenuChargeId, setOpenActionMenuChargeId] = useState<string | null>(null);
   const [actionMenuPosition, setActionMenuPosition] =
@@ -657,8 +665,6 @@ export default function AccountsReceivablePage() {
   const [reportFormError, setReportFormError] = useState("");
   const [themeMode, setThemeMode] = useState<ThemeMode>("light");
   const [isBlackTheme, setIsBlackTheme] = useState(false);
-  const [contractSchedulePayload, setContractSchedulePayload] =
-    useState<ContractSchedulePayload | null>(null);
   const [pendingContractCarnetRequest, setPendingContractCarnetRequest] =
     useState<{ contract: Contract; charges: Charge[] } | null>(null);
   const [pendingContractPrintRequest, setPendingContractPrintRequest] =
@@ -820,18 +826,6 @@ export default function AccountsReceivablePage() {
     setFormLaunchType(normalizedInstallmentQuantity > 1 ? "installment" : "single");
     setFormFirstInstallmentAsDownPayment(false);
     setFormInstallmentQuantity(String(Math.max(normalizedInstallmentQuantity, 2)));
-    setContractSchedulePayload(
-      payload.contractId
-        ? {
-            id: String(payload.contractId),
-            tenantId: String(payload.tenantId || ""),
-            tenantName: payload.tenantName,
-            propertyId: String(payload.propertyId || ""),
-            propertyName: payload.propertyName,
-            endDate: payload.endDate,
-          }
-        : null,
-    );
     setEditingChargeId(null);
     setChargeFormError("");
     setInstallmentPreview([]);
@@ -849,11 +843,6 @@ export default function AccountsReceivablePage() {
     const paidData = null;
     const manualData = null;
     const paymentData = null;
-    const savedStatusFilter = getCompanyStorageItem(
-      companyId,
-      "contrx_receivable_status_filter",
-      "contrx_receivable_status_filter",
-    );
     const savedAutoOpenSearch = getCompanyStorageItem(
       companyId,
       "contrx_auto_open_search",
@@ -867,14 +856,7 @@ export default function AccountsReceivablePage() {
     if (manualData) setManualCharges(JSON.parse(manualData));
     if (paymentData) setPaymentRecords(JSON.parse(paymentData));
 
-    if (
-      savedStatusFilter === "All" ||
-      savedStatusFilter === "Pending" ||
-      savedStatusFilter === "Paid" ||
-      savedStatusFilter === "Overdue"
-    ) {
-      setStatusFilter(savedStatusFilter);
-    }
+    setStatusFilter(DEFAULT_RECEIVABLE_STATUS_FILTER);
 
     if (savedAutoOpenSearch !== null) {
       const parsedAutoOpenSearch = JSON.parse(savedAutoOpenSearch) as boolean;
@@ -1281,6 +1263,83 @@ export default function AccountsReceivablePage() {
     if (hasPartialPayment(charge)) return "Parcial";
 
     return getStatusLabel(charge.status);
+  }
+
+  function getChargeTenant(charge: Charge) {
+    return tenants.find(
+      (tenant) =>
+        String(tenant.id) === String(charge.tenantId || "") ||
+        tenant.name.toLowerCase() === charge.tenant.toLowerCase(),
+    );
+  }
+
+  function getCompanyNameFromSettings(settings: Record<string, unknown> | null) {
+    const source =
+      settings?.company && typeof settings.company === "object" && !Array.isArray(settings.company)
+        ? (settings.company as Record<string, unknown>)
+        : settings;
+
+    return String(
+      source?.tradeName ||
+        source?.companyName ||
+        source?.name ||
+        source?.legalName ||
+        "Contrx",
+    );
+  }
+
+  async function getWhatsAppCompanyName() {
+    const cachedCompanySettings = getCachedCompanySettings();
+
+    if (cachedCompanySettings) {
+      return getCompanyNameFromSettings(cachedCompanySettings);
+    }
+
+    if (!companyId) return "Contrx";
+
+    try {
+      const settings = await getAppSettings(companyId);
+      setCachedAppSettings(settings);
+
+      return getCompanyNameFromSettings(settings.companySettings || null);
+    } catch {
+      return "Contrx";
+    }
+  }
+
+  async function sendChargeWhatsAppMessage(charge: Charge) {
+    const tenant = getChargeTenant(charge);
+    const tenantPhone = tenant?.phone || "";
+
+    if (!tenantPhone) {
+      window.alert("Este inquilino/pessoa nao possui telefone cadastrado.");
+      return;
+    }
+
+    const chargeAmount =
+      charge.status === "Paid"
+        ? getChargePaidAmount(charge)
+        : getChargeRemainingAmount(charge);
+    const installmentLabel =
+      charge.installmentNumber && charge.installmentTotal
+        ? ` (${charge.installmentNumber}/${charge.installmentTotal})`
+        : "";
+    const companyName = await getWhatsAppCompanyName();
+
+    openWhatsAppMessage({
+      phone: tenantPhone,
+      message: [
+        `Olá, ${charge.tenant}.`,
+        "",
+        `${companyName} informa sobre a cobrança${installmentLabel}:`,
+        `Imóvel: ${charge.property || "Não informado"}`,
+        `Vencimento: ${formatDate(charge.dueDate)}`,
+        `Valor: ${formatCurrency(chargeAmount)}`,
+        `Status: ${getChargeStatusLabel(charge)}`,
+        "",
+        "Caso já tenha realizado o pagamento, por favor envie o comprovante por aqui.",
+      ].join("\n"),
+    });
   }
 
   function getStatusClassName(status: Charge["status"]) {
@@ -2563,6 +2622,7 @@ export default function AccountsReceivablePage() {
           0,
         )
       : getChargeRemainingAmount(chargePendingPaymentReceipt);
+    const maximumPaymentAmount = Math.max(remainingAmount + interest - discount, 0);
 
     if (interest < 0 || discount < 0) {
       setPaymentFormError(
@@ -2576,9 +2636,9 @@ export default function AccountsReceivablePage() {
       return;
     }
 
-    if (amountPaid - remainingAmount > 0.01) {
+    if (amountPaid - maximumPaymentAmount > 0.01) {
       setPaymentFormError(
-        `O valor recebido não pode ser maior que o saldo em aberto de ${formatCurrency(remainingAmount)}.`,
+        `O valor recebido não pode ser maior que ${formatCurrency(maximumPaymentAmount)} considerando juros e desconto.`,
       );
       return;
     }
@@ -2823,29 +2883,9 @@ export default function AccountsReceivablePage() {
         note: paymentNote.trim() || "Recebimento em lote",
       };
 
-      if (companyId) {
-        try {
-          const receivedAccount = await receiveAccount(charge.id, {
-            paidAt: paymentRecord.paidAt,
-            method: mapUiPaymentMethodToApi(paymentRecord.method),
-            paymentItems: mapUiPaymentItemsToApi(paymentRecord.paymentItems || []),
-            interest: paymentRecord.interest,
-            discount: paymentRecord.discount,
-            amountPaid: paymentRecord.amountPaid,
-            note: paymentRecord.note,
-          });
+      nextPaymentRecords.push(paymentRecord);
 
-          nextReceivedCharges.push(mapApiReceivableToCharge(receivedAccount));
-          nextPaymentRecords.push(...mapApiReceivableToPayments(receivedAccount));
-        } catch (error) {
-          setPaymentFormError(
-            error instanceof Error
-              ? error.message
-              : "Não foi possível registrar o recebimento em lote no backend.",
-          );
-          return;
-        }
-      } else {
+      if (!companyId) {
         const nextSettlementAmount =
           getChargeSettlementAmount(charge) +
           distributedAmount +
@@ -2859,13 +2899,43 @@ export default function AccountsReceivablePage() {
           remainingAmount: Math.max(charge.amount - nextSettlementAmount, 0),
           status: shouldMarkAsPaid ? "Paid" : "Pending",
         });
-        nextPaymentRecords.push(paymentRecord);
       }
     }
 
     if (nextPaymentRecords.length === 0) {
       setPaymentFormError("Informe um valor válido para receber as contas selecionadas.");
       return;
+    }
+
+    if (companyId) {
+      try {
+        const receivedAccounts = await receiveAccountsBatch(
+          nextPaymentRecords.map((paymentRecord) => ({
+            chargeId: paymentRecord.chargeId,
+            paidAt: paymentRecord.paidAt,
+            method: mapUiPaymentMethodToApi(paymentRecord.method),
+            paymentItems: mapUiPaymentItemsToApi(paymentRecord.paymentItems || []),
+            interest: paymentRecord.interest,
+            discount: paymentRecord.discount,
+            amountPaid: paymentRecord.amountPaid,
+            note: paymentRecord.note,
+          })),
+        );
+
+        nextReceivedCharges.push(...receivedAccounts.map(mapApiReceivableToCharge));
+        nextPaymentRecords.splice(
+          0,
+          nextPaymentRecords.length,
+          ...receivedAccounts.flatMap(mapApiReceivableToPayments),
+        );
+      } catch (error) {
+        setPaymentFormError(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível registrar o recebimento em lote no backend.",
+        );
+        return;
+      }
     }
 
     setManualCharges((currentCharges) => {
@@ -2930,7 +3000,7 @@ export default function AccountsReceivablePage() {
   function clearAllFilters() {
     setSelectedTenant(null);
     setSearch("");
-    setStatusFilter("All");
+    setStatusFilter(DEFAULT_RECEIVABLE_STATUS_FILTER);
   }
 
   function resetCreateForm() {
@@ -4365,8 +4435,7 @@ export default function AccountsReceivablePage() {
 
       if (companyId) {
         try {
-          await reverseReceivedAccount(editingChargeId);
-          await receiveAccount(editingChargeId, {
+          await replaceReceivedAccountPayment(editingChargeId, {
             paidAt: updatedPaymentRecord.paidAt,
             method: mapUiPaymentMethodToApi(updatedPaymentRecord.method),
             paymentItems: updatedPaymentRecord.paymentItems
@@ -5228,7 +5297,7 @@ export default function AccountsReceivablePage() {
           </div>
         </div>
 
-        {(selectedTenant || statusFilter !== "All") && (
+        {(selectedTenant || statusFilter !== DEFAULT_RECEIVABLE_STATUS_FILTER) && (
           <div className="flex flex-col justify-between gap-3 rounded-2xl border border-orange-200 dark:border-orange-900/60 bg-orange-50 dark:bg-orange-950/30 p-4 md:flex-row md:items-center">
             <div>
               <p className="text-sm font-bold text-orange-700">
@@ -5505,6 +5574,17 @@ export default function AccountsReceivablePage() {
               Receber
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => {
+              handleCloseChargeActions();
+              sendChargeWhatsAppMessage(openActionMenuCharge);
+            }}
+            className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-emerald-700 transition hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
+          >
+            Enviar WhatsApp
+          </button>
 
           <button
             type="button"

@@ -1,4 +1,5 @@
 import { apiFetch } from './api';
+import { uppercaseFields } from './text-normalization';
 
 export type FinancialAccountStatus = 'PENDING' | 'PAID';
 
@@ -64,6 +65,7 @@ export type PayableAccount = {
   id: string;
   companyId: string;
   personId?: string | null;
+  propertyId?: string | null;
   personName?: string | null;
   description: string;
   category?: string | null;
@@ -77,11 +79,16 @@ export type PayableAccount = {
   installmentTotal?: number | null;
   installmentGroupId?: string | null;
   payments?: PaymentRecord[];
+  property?: {
+    id: string;
+    title: string;
+  } | null;
 };
 
 export type CreatePayableAccountDto = {
   companyId: string;
   personId?: string | null;
+  propertyId?: string | null;
   personName?: string | null;
   description: string;
   category?: string | null;
@@ -117,7 +124,7 @@ export async function getReceivableAccounts(companyId: string) {
 export async function createReceivableAccount(data: CreateReceivableAccountDto) {
   return apiFetch<ReceivableAccount>('/contas-receber', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify(normalizeReceivablePayload(data)),
   });
 }
 
@@ -127,7 +134,7 @@ export async function updateReceivableAccount(
 ) {
   return apiFetch<ReceivableAccount>(`/contas-receber/${id}`, {
     method: 'PATCH',
-    body: JSON.stringify(data),
+    body: JSON.stringify(normalizeReceivablePayload(data)),
   });
 }
 
@@ -140,7 +147,28 @@ export async function deleteReceivableAccount(id: string) {
 export async function receiveAccount(id: string, data: RegisterPaymentDto) {
   return apiFetch<ReceivableAccount>(`/contas-receber/${id}/receber`, {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify(normalizePaymentPayload(data)),
+  });
+}
+
+export async function receiveAccountsBatch(
+  payments: Array<RegisterPaymentDto & { chargeId: string }>,
+) {
+  return apiFetch<ReceivableAccount[]>('/contas-receber/receber-lote', {
+    method: 'POST',
+    body: JSON.stringify({
+      payments: payments.map((payment) => normalizePaymentPayload(payment)),
+    }),
+  });
+}
+
+export async function replaceReceivedAccountPayment(
+  id: string,
+  data: RegisterPaymentDto,
+) {
+  return apiFetch<ReceivableAccount>(`/contas-receber/${id}/receber/substituir`, {
+    method: 'POST',
+    body: JSON.stringify(normalizePaymentPayload(data)),
   });
 }
 
@@ -159,7 +187,7 @@ export async function getPayableAccounts(companyId: string) {
 export async function createPayableAccount(data: CreatePayableAccountDto) {
   return apiFetch<PayableAccount>('/contas-pagar', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify(normalizePayablePayload(data)),
   });
 }
 
@@ -169,7 +197,7 @@ export async function updatePayableAccount(
 ) {
   return apiFetch<PayableAccount>(`/contas-pagar/${id}`, {
     method: 'PATCH',
-    body: JSON.stringify(data),
+    body: JSON.stringify(normalizePayablePayload(data)),
   });
 }
 
@@ -182,7 +210,17 @@ export async function deletePayableAccount(id: string) {
 export async function payAccount(id: string, data: RegisterPaymentDto) {
   return apiFetch<PayableAccount>(`/contas-pagar/${id}/pagar`, {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify(normalizePaymentPayload(data)),
+  });
+}
+
+export async function replacePaidAccountPayment(
+  id: string,
+  data: RegisterPaymentDto,
+) {
+  return apiFetch<PayableAccount>(`/contas-pagar/${id}/pagar/substituir`, {
+    method: 'POST',
+    body: JSON.stringify(normalizePaymentPayload(data)),
   });
 }
 
@@ -190,4 +228,25 @@ export async function reversePaidAccount(id: string) {
   return apiFetch<PayableAccount>(`/contas-pagar/${id}/estornar`, {
     method: 'POST',
   });
+}
+
+function normalizeReceivablePayload<
+  TData extends CreateReceivableAccountDto | UpdateReceivableAccountDto,
+>(data: TData) {
+  return uppercaseFields(data, ['property', 'tenant']);
+}
+
+function normalizePayablePayload<
+  TData extends CreatePayableAccountDto | UpdatePayableAccountDto,
+>(data: TData) {
+  return uppercaseFields(data, [
+    'personName',
+    'description',
+    'category',
+    'note',
+  ]);
+}
+
+function normalizePaymentPayload<TData extends RegisterPaymentDto>(data: TData) {
+  return uppercaseFields(data, ['note']);
 }

@@ -18,6 +18,13 @@ import {
 import { isSessionReplacedError } from "@/services/api";
 import { getCompanyStorageItem } from "@/services/company-storage";
 import { getCachedCompanySettings } from "@/services/settings-cache";
+import {
+  clearMinimizedModalState,
+  getMinimizedModalState,
+  setMinimizedModalState,
+  CLOSE_MINIMIZED_MODAL_EVENT,
+  RESTORE_MINIMIZED_MODAL_EVENT,
+} from "@/services/minimized-modal.service";
 
 
 
@@ -118,6 +125,26 @@ type CompanySettings = {
   email: string;
   address: string;
   logo: string;
+};
+
+type PropertyModalDraft = {
+  editingPropertyId: string | null;
+  code: string;
+  type: PropertyType;
+  name: string;
+  zipCode: string;
+  state: string;
+  city: string;
+  neighborhood: string;
+  street: string;
+  number: string;
+  complement: string;
+  rentValue: string;
+  bedrooms: string;
+  bathrooms: string;
+  garages: string;
+  description: string;
+  isActive: boolean;
 };
 
 const propertyTypes: Array<{ label: string; value: PropertyType }> = [
@@ -406,6 +433,51 @@ export default function PropertiesPage() {
     setCompanySettings(getStoredCompanySettings());
   }, [loadProperties]);
 
+  useEffect(() => {
+    const storedModalState = getMinimizedModalState<PropertyModalDraft>();
+
+    if (storedModalState?.tool === "properties" && storedModalState.draft) {
+      applyPropertyModalDraft(storedModalState.draft);
+      setIsFormOpen(true);
+      setIsFormMinimized(false);
+      clearMinimizedModalState("properties");
+    }
+
+    function handleRestoreMinimizedModal(event: Event) {
+      const detail = (event as CustomEvent<{ tool?: string }>).detail;
+
+      if (detail?.tool !== "properties") return;
+
+      const currentState = getMinimizedModalState<PropertyModalDraft>();
+
+      if (currentState?.tool === "properties" && currentState.draft) {
+        applyPropertyModalDraft(currentState.draft);
+      }
+
+      setIsFormOpen(true);
+      setIsFormMinimized(false);
+      clearMinimizedModalState("properties");
+    }
+
+    function handleCloseMinimizedModal(event: Event) {
+      const detail = (event as CustomEvent<{ tool?: string }>).detail;
+
+      if (detail?.tool !== "properties") return;
+
+      resetForm();
+      setIsFormOpen(false);
+      setIsFormMinimized(false);
+    }
+
+    window.addEventListener(RESTORE_MINIMIZED_MODAL_EVENT, handleRestoreMinimizedModal);
+    window.addEventListener(CLOSE_MINIMIZED_MODAL_EVENT, handleCloseMinimizedModal);
+
+    return () => {
+      window.removeEventListener(RESTORE_MINIMIZED_MODAL_EVENT, handleRestoreMinimizedModal);
+      window.removeEventListener(CLOSE_MINIMIZED_MODAL_EVENT, handleCloseMinimizedModal);
+    };
+  }, []);
+
   function savePropertyMovements(updatedMovements: PropertyMovement[]) {
     setPropertyMovements(updatedMovements);
   }
@@ -462,13 +534,76 @@ export default function PropertiesPage() {
     setEditingPropertyId(null);
   }
 
+  function getPropertyModalDraft(): PropertyModalDraft {
+    return {
+      editingPropertyId,
+      code,
+      type,
+      name,
+      zipCode,
+      state,
+      city,
+      neighborhood,
+      street,
+      number,
+      complement,
+      rentValue,
+      bedrooms,
+      bathrooms,
+      garages,
+      description,
+      isActive,
+    };
+  }
+
+  function applyPropertyModalDraft(draft: PropertyModalDraft) {
+    setEditingPropertyId(draft.editingPropertyId);
+    setCode(draft.code || "");
+    setType(draft.type || "Apartment");
+    setName(draft.name || "");
+    setZipCode(draft.zipCode || "");
+    setState(draft.state || "");
+    setCity(draft.city || "");
+    setNeighborhood(draft.neighborhood || "");
+    setStreet(draft.street || "");
+    setNumber(draft.number || "");
+    setComplement(draft.complement || "");
+    setRentValue(draft.rentValue || "");
+    setBedrooms(draft.bedrooms || "");
+    setBathrooms(draft.bathrooms || "");
+    setGarages(draft.garages || "");
+    setDescription(draft.description || "");
+    setIsActive(draft.isActive ?? true);
+    setZipCodeFeedback("");
+  }
+
+  function handleMinimizeForm() {
+    setMinimizedModalState<PropertyModalDraft>({
+      tool: "properties",
+      href: "/imoveis",
+      title: editingPropertyId ? "Editar imovel" : "Novo imovel",
+      subtitle: name || "Cadastro em andamento",
+      mode: editingPropertyId ? "edit" : "create",
+      draft: getPropertyModalDraft(),
+      updatedAt: Date.now(),
+    });
+    setIsFormMinimized(true);
+  }
+
+  function handleRestoreForm() {
+    clearMinimizedModalState("properties");
+    setIsFormMinimized(false);
+  }
+
   function handleOpenCreateForm() {
+    clearMinimizedModalState("properties");
     resetForm();
     setIsFormMinimized(false);
     setIsFormOpen(true);
   }
 
   function handleCloseForm() {
+    clearMinimizedModalState("properties");
     resetForm();
     setIsFormMinimized(false);
     setIsFormOpen(false);
@@ -687,6 +822,7 @@ export default function PropertiesPage() {
     setGarages(property.garages ? String(property.garages) : "");
     setDescription(property.description);
     setIsActive(property.isActive);
+    clearMinimizedModalState("properties");
     setIsFormMinimized(false);
     setIsFormOpen(true);
   }
@@ -1768,7 +1904,7 @@ export default function PropertiesPage() {
                 <div className="flex shrink-0 items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setIsFormMinimized(false)}
+                    onClick={handleRestoreForm}
                     className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-200 transition hover:bg-orange-600"
                     title="Restaurar modal"
                     aria-label="Restaurar modal"
@@ -1807,7 +1943,7 @@ export default function PropertiesPage() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setIsFormMinimized(true)}
+                    onClick={handleMinimizeForm}
                     className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-orange-50 hover:text-orange-600"
                     title="Minimizar modal"
                     aria-label="Minimizar modal"

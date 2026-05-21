@@ -11,6 +11,7 @@ import {
 import { ContasReceberService } from './contas-receber.service';
 import {
   CriarContaReceberDto,
+  ReceberPagamentoLoteDto,
   ReceberPagamentoDto,
 } from './dto/criar-conta-receber.dto';
 import { AtualizarContaReceberDto } from './dto/atualizar-conta-receber.dto';
@@ -62,6 +63,23 @@ export class ContasReceberController {
     @CurrentUser() user: UsuarioAutenticado,
   ) {
     return this.contasReceberService.receivePayment(id, data, user.companyId);
+  }
+
+  @Post('receber-lote')
+  receiveBatch(
+    @Body() data: ReceberPagamentoLoteDto,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    return this.contasReceberService.receiveBatch(data, user.companyId);
+  }
+
+  @Post(':id/receber/substituir')
+  replacePayment(
+    @Param('id') id: string,
+    @Body() data: ReceberPagamentoDto,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    return this.contasReceberService.replacePayment(id, data, user.companyId);
   }
 
   @Post(':id/estornar')

@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { FinancialAccountStatus, Prisma } from '@prisma/client';
+import { toUpperText, uppercaseFields } from '../common/text-normalization';
 import { PrismaService } from '../prisma/prisma.service';
 import { CriarContaPagarDto, PagarContaDto } from './dto/criar-conta-pagar.dto';
 import { AtualizarContaPagarDto } from './dto/atualizar-conta-pagar.dto';
@@ -15,6 +16,7 @@ export class ContasPagarService {
   async create(data: CriarContaPagarDto, companyId: string) {
     await this.validateCompany(companyId);
     await this.validatePerson(companyId, data.personId);
+    await this.validateProperty(companyId, data.propertyId);
 
     return this.prisma.contaPagar.create({
       data: this.buildCreateData({
@@ -55,6 +57,7 @@ export class ContasPagarService {
 
     await this.validateCompany(companyId);
     await this.validatePerson(companyId, data.personId);
+    await this.validateProperty(companyId, data.propertyId);
 
     return this.prisma.contaPagar.update({
       where: { id },
@@ -79,7 +82,91 @@ export class ContasPagarService {
   }
 
   async pay(id: string, data: PagarContaDto, companyId: string) {
+    if (data.amountPaid <= 0) {
+      throw new BadRequestException('O valor pago deve ser maior que zero.');
+    }
+
+    if ((data.interest || 0) < 0 || (data.discount || 0) < 0) {
+      throw new BadRequestException('Juros e desconto nao podem ser negativos.');
+    }
+
     const account = await this.ensureExists(id, companyId);
+
+    return this.prisma.$transaction(async (tx) => {
+      const currentPaymentSummary = await tx.pagamentoRealizado.aggregate({
+        where: { expenseId: id },
+        _sum: { amountPaid: true, discount: true, interest: true },
+      });
+      const currentSettlementAmount = this.getSettlementAmount(
+        currentPaymentSummary._sum.amountPaid,
+        currentPaymentSummary._sum.discount,
+        currentPaymentSummary._sum.interest,
+      );
+
+      if (currentSettlementAmount >= Number(account.amount)) {
+        throw new BadRequestException('Esta conta a pagar ja esta quitada.');
+      }
+
+      const nextSettlementAmount =
+        currentSettlementAmount +
+        this.getSettlementAmount(
+          data.amountPaid,
+          data.discount || 0,
+          data.interest || 0,
+        );
+
+      if (nextSettlementAmount - Number(account.amount) > 0.01) {
+        throw new BadRequestException('O valor pago excede o saldo da conta.');
+      }
+
+      await tx.pagamentoRealizado.create({
+        data: {
+          expense: { connect: { id } },
+          paidAt: this.parseDate(data.paidAt, 'Data de pagamento invalida.'),
+          method: data.method,
+          paymentItems:
+            data.paymentItems === undefined
+              ? Prisma.JsonNull
+              : data.paymentItems,
+          interest: new Prisma.Decimal(data.interest || 0),
+          discount: new Prisma.Decimal(data.discount || 0),
+          amountPaid: new Prisma.Decimal(data.amountPaid),
+          note: data.note ? toUpperText(data.note) : null,
+        },
+      });
+
+      return tx.contaPagar.update({
+        where: { id },
+        data: {
+          status: this.getStatusAfterPayment(
+            Number(account.amount),
+            nextSettlementAmount,
+          ),
+        },
+        include: this.defaultInclude,
+      });
+    });
+  }
+
+  async replacePayment(id: string, data: PagarContaDto, companyId: string) {
+    if (data.amountPaid <= 0) {
+      throw new BadRequestException('O valor pago deve ser maior que zero.');
+    }
+
+    if ((data.interest || 0) < 0 || (data.discount || 0) < 0) {
+      throw new BadRequestException('Juros e desconto nao podem ser negativos.');
+    }
+
+    const account = await this.ensureExists(id, companyId);
+    const settlementAmount = this.getSettlementAmount(
+      data.amountPaid,
+      data.discount || 0,
+      data.interest || 0,
+    );
+
+    if (settlementAmount - Number(account.amount) > 0.01) {
+      throw new BadRequestException('O valor pago excede o saldo da conta.');
+    }
 
     return this.prisma.$transaction(async (tx) => {
       await tx.pagamentoRealizado.deleteMany({
@@ -98,7 +185,7 @@ export class ContasPagarService {
           interest: new Prisma.Decimal(data.interest || 0),
           discount: new Prisma.Decimal(data.discount || 0),
           amountPaid: new Prisma.Decimal(data.amountPaid),
-          note: data.note || null,
+          note: data.note ? toUpperText(data.note) : null,
         },
       });
 
@@ -107,7 +194,7 @@ export class ContasPagarService {
         data: {
           status: this.getStatusAfterPayment(
             Number(account.amount),
-            data.amountPaid,
+            settlementAmount,
           ),
         },
         include: this.defaultInclude,
@@ -135,6 +222,7 @@ export class ContasPagarService {
     return {
       payments: true,
       person: true,
+      property: true,
     };
   }
 
@@ -180,62 +268,125 @@ export class ContasPagarService {
     }
   }
 
+  private async validateProperty(
+    companyId: string,
+    propertyId?: string | null,
+  ) {
+    if (!propertyId) return;
+
+    const property = await this.prisma.property.findFirst({
+      where: {
+        id: propertyId,
+        companyId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!property) {
+      throw new BadRequestException('Imovel nao encontrado para esta empresa.');
+    }
+  }
+
   private buildCreateData(
     data: CriarContaPagarDto,
   ): Prisma.ContaPagarCreateInput {
+    const normalizedData = this.normalizeAccountData(data);
+
     return {
-      company: { connect: { id: data.companyId } },
-      person: data.personId ? { connect: { id: data.personId } } : undefined,
-      personName: data.personName || null,
-      description: data.description,
-      category: data.category || null,
-      note: data.note || null,
-      amount: new Prisma.Decimal(data.amount),
-      issueDate: this.parseOptionalDate(data.issueDate),
-      dueDate: this.parseDate(data.dueDate, 'Data de vencimento invalida.'),
-      status: data.status ?? FinancialAccountStatus.PENDING,
-      manual: data.manual ?? true,
-      installmentNumber: data.installmentNumber ?? null,
-      installmentTotal: data.installmentTotal ?? null,
-      installmentGroupId: data.installmentGroupId || null,
+      company: { connect: { id: normalizedData.companyId } },
+      person: normalizedData.personId
+        ? { connect: { id: normalizedData.personId } }
+        : undefined,
+      property: normalizedData.propertyId
+        ? { connect: { id: normalizedData.propertyId } }
+        : undefined,
+      personName: normalizedData.personName || null,
+      description: normalizedData.description,
+      category: normalizedData.category || null,
+      note: normalizedData.note || null,
+      amount: new Prisma.Decimal(normalizedData.amount),
+      issueDate: this.parseOptionalDate(normalizedData.issueDate),
+      dueDate: this.parseDate(
+        normalizedData.dueDate,
+        'Data de vencimento invalida.',
+      ),
+      status: normalizedData.status ?? FinancialAccountStatus.PENDING,
+      manual: normalizedData.manual ?? true,
+      installmentNumber: normalizedData.installmentNumber ?? null,
+      installmentTotal: normalizedData.installmentTotal ?? null,
+      installmentGroupId: normalizedData.installmentGroupId || null,
     };
   }
 
   private buildUpdateData(
     data: AtualizarContaPagarDto,
   ): Prisma.ContaPagarUpdateInput {
+    const normalizedData = this.normalizeAccountData(data);
+
     return {
-      company: data.companyId ? { connect: { id: data.companyId } } : undefined,
+      company: normalizedData.companyId
+        ? { connect: { id: normalizedData.companyId } }
+        : undefined,
       person:
-        data.personId !== undefined
-          ? data.personId
-            ? { connect: { id: data.personId } }
+        normalizedData.personId !== undefined
+          ? normalizedData.personId
+            ? { connect: { id: normalizedData.personId } }
+            : { disconnect: true }
+          : undefined,
+      property:
+        normalizedData.propertyId !== undefined
+          ? normalizedData.propertyId
+            ? { connect: { id: normalizedData.propertyId } }
             : { disconnect: true }
           : undefined,
       personName:
-        data.personName !== undefined ? data.personName || null : undefined,
-      description: data.description,
-      category: data.category !== undefined ? data.category || null : undefined,
-      note: data.note !== undefined ? data.note || null : undefined,
+        normalizedData.personName !== undefined
+          ? normalizedData.personName || null
+          : undefined,
+      description: normalizedData.description,
+      category:
+        normalizedData.category !== undefined
+          ? normalizedData.category || null
+          : undefined,
+      note:
+        normalizedData.note !== undefined ? normalizedData.note || null : undefined,
       amount:
-        data.amount !== undefined ? new Prisma.Decimal(data.amount) : undefined,
+        normalizedData.amount !== undefined
+          ? new Prisma.Decimal(normalizedData.amount)
+          : undefined,
       issueDate:
-        data.issueDate !== undefined
-          ? this.parseOptionalDate(data.issueDate)
+        normalizedData.issueDate !== undefined
+          ? this.parseOptionalDate(normalizedData.issueDate)
           : undefined,
       dueDate:
-        data.dueDate !== undefined
-          ? this.parseDate(data.dueDate, 'Data de vencimento invalida.')
+        normalizedData.dueDate !== undefined
+          ? this.parseDate(
+              normalizedData.dueDate,
+              'Data de vencimento invalida.',
+            )
           : undefined,
-      status: data.status,
-      manual: data.manual,
-      installmentNumber: data.installmentNumber,
-      installmentTotal: data.installmentTotal,
+      status: normalizedData.status,
+      manual: normalizedData.manual,
+      installmentNumber: normalizedData.installmentNumber,
+      installmentTotal: normalizedData.installmentTotal,
       installmentGroupId:
-        data.installmentGroupId !== undefined
-          ? data.installmentGroupId || null
+        normalizedData.installmentGroupId !== undefined
+          ? normalizedData.installmentGroupId || null
           : undefined,
     };
+  }
+
+  private normalizeAccountData<
+    TData extends CriarContaPagarDto | AtualizarContaPagarDto,
+  >(data: TData) {
+    return uppercaseFields(data, [
+      'personName',
+      'description',
+      'category',
+      'note',
+    ]);
   }
 
   private parseDate(value: string, errorMessage: string) {
@@ -260,5 +411,15 @@ export class ContasPagarService {
     return amountPaid >= accountAmount
       ? FinancialAccountStatus.PAID
       : FinancialAccountStatus.PENDING;
+  }
+
+  private getSettlementAmount(
+    amountPaid: unknown,
+    discount: unknown,
+    interest: unknown,
+  ) {
+    return (
+      Number(amountPaid || 0) + Number(discount || 0) - Number(interest || 0)
+    );
   }
 }

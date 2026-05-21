@@ -26,8 +26,12 @@ type RequestOptions = RequestInit & {
 
 const LEGACY_STORAGE_PREFIX = ['ren', 'tix'].join('');
 const SESSION_REPLACED_EVENT = 'contrx-session-replaced';
+const SESSION_EXPIRED_NOTICE =
+  'Sua sessao expirou ou nao e mais valida. Acesse novamente para continuar.';
 const SESSION_REPLACED_NOTICE =
   'Sua sessão foi encerrada porque este usuário entrou no Contrx em outro dispositivo. Para proteger seus dados, mantemos apenas um acesso ativo por usuário.';
+const READ_RETRY_DELAY_MS = 600;
+const READ_RETRY_ATTEMPTS = 5;
 
 export class SessionReplacedError extends Error {
   constructor(message = SESSION_REPLACED_NOTICE) {
@@ -78,6 +82,38 @@ function getStoredToken() {
   );
 }
 
+function delay(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function fetchWithReadRetry(
+  url: string,
+  init: RequestInit,
+  attempts = READ_RETRY_ATTEMPTS,
+) {
+  const method = String(init.method || 'GET').toUpperCase();
+  const canRetry = method === 'GET' || method === 'HEAD';
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await fetch(url, init);
+    } catch (error) {
+      lastError = error;
+
+      if (!canRetry || attempt === attempts - 1) {
+        throw error;
+      }
+
+      await delay(READ_RETRY_DELAY_MS);
+    }
+  }
+
+  throw lastError;
+}
+
 export async function apiFetch<TResponse>(
   endpoint: string,
   options: RequestOptions = {},
@@ -101,7 +137,7 @@ export async function apiFetch<TResponse>(
   let response: Response;
 
   try {
-    response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    response = await fetchWithReadRetry(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers,
     });
@@ -117,9 +153,13 @@ export async function apiFetch<TResponse>(
     const errorMessage =
       errorBody?.message || `Request failed with status ${response.status}`;
 
-    if (response.status === 401 && isSessionReplacedMessage(String(errorMessage))) {
-      dispatchSessionReplaced(SESSION_REPLACED_NOTICE);
-      throw new SessionReplacedError();
+    if (response.status === 401 && options.auth !== false && token) {
+      const sessionMessage = isSessionReplacedMessage(String(errorMessage))
+        ? SESSION_REPLACED_NOTICE
+        : SESSION_EXPIRED_NOTICE;
+
+      dispatchSessionReplaced(sessionMessage);
+      throw new SessionReplacedError(sessionMessage);
     }
 
     throw new Error(errorMessage);

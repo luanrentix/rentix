@@ -19,6 +19,8 @@ export type FinancialReceivable = {
   status: FinancialStatus;
   paymentDate: string | null;
   paidAmount: number;
+  discountAmount?: number;
+  interestAmount?: number;
   remainingAmount: number;
 };
 
@@ -35,6 +37,8 @@ export type FinancialPayable = {
   status: FinancialStatus;
   paymentDate: string | null;
   paidAmount: number;
+  discountAmount?: number;
+  interestAmount?: number;
   remainingAmount: number;
 };
 

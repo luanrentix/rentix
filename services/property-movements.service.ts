@@ -1,4 +1,5 @@
 import { apiFetch } from './api';
+import { uppercaseFields } from './text-normalization';
 
 export type PropertyMovement = {
   id: string;
@@ -32,6 +33,8 @@ export async function getPropertyMovements(companyId: string, propertyId?: strin
 export async function createPropertyMovement(data: CreatePropertyMovementDto) {
   return apiFetch<PropertyMovement>('/property-movements', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify(
+      uppercaseFields(data, ['propertyName', 'type', 'description']),
+    ),
   });
 }

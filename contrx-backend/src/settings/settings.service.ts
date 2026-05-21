@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { uppercaseRecordFields } from '../common/text-normalization';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertSettingsDto } from './dto/upsert-settings.dto';
 
@@ -19,21 +20,22 @@ export class SettingsService {
 
   async upsert(data: UpsertSettingsDto, companyId: string) {
     await this.validateCompany(companyId);
+    const normalizedData = this.normalizeSettingsData(data);
 
     return this.prisma.appSettings.upsert({
       where: { companyId },
       create: {
         company: { connect: { id: companyId } },
-        userSettings: this.toJsonValue(data.userSettings),
-        companySettings: this.toJsonValue(data.companySettings),
-        themeSettings: this.toJsonValue(data.themeSettings),
-        printTemplates: this.toJsonValue(data.printTemplates),
+        userSettings: this.toJsonValue(normalizedData.userSettings),
+        companySettings: this.toJsonValue(normalizedData.companySettings),
+        themeSettings: this.toJsonValue(normalizedData.themeSettings),
+        printTemplates: this.toJsonValue(normalizedData.printTemplates),
       },
       update: {
-        userSettings: this.toJsonValue(data.userSettings),
-        companySettings: this.toJsonValue(data.companySettings),
-        themeSettings: this.toJsonValue(data.themeSettings),
-        printTemplates: this.toJsonValue(data.printTemplates),
+        userSettings: this.toJsonValue(normalizedData.userSettings),
+        companySettings: this.toJsonValue(normalizedData.companySettings),
+        themeSettings: this.toJsonValue(normalizedData.themeSettings),
+        printTemplates: this.toJsonValue(normalizedData.printTemplates),
       },
     });
   }
@@ -66,5 +68,25 @@ export class SettingsService {
     return value === undefined
       ? Prisma.JsonNull
       : (value as Prisma.InputJsonValue);
+  }
+
+  private normalizeSettingsData(data: UpsertSettingsDto): UpsertSettingsDto {
+    return {
+      ...data,
+      userSettings: uppercaseRecordFields(data.userSettings, ['name']),
+      companySettings: uppercaseRecordFields(data.companySettings, [
+        'companyName',
+        'tradeName',
+        'document',
+        'stateRegistration',
+        'municipalRegistration',
+        'zipCode',
+        'address',
+        'number',
+        'neighborhood',
+        'city',
+        'state',
+      ]),
+    };
   }
 }

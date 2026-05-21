@@ -1,7 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
+import {
+  AlertTriangle,
+  CalendarDays,
+  ChartLine,
+  CircleCheck,
+  DollarSign,
+  FileText,
+  Home,
+  Info,
+} from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import {
   getContracts,
@@ -780,7 +790,10 @@ export default function DashboardPage() {
               </select>
 
               <div className="rounded-2xl border border-orange-100 bg-white px-5 py-3 text-sm font-bold text-slate-600 shadow-sm">
-                📅 Hoje, {new Date().toLocaleDateString("pt-BR")}
+                <span className="inline-flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4 text-orange-500" />
+                  Hoje, {new Date().toLocaleDateString("pt-BR")}
+                </span>
                 {lastUpdatedAt && (
                   <span className="ml-2 text-xs font-black text-orange-600">
                     Atualizado {lastUpdatedAt.toLocaleTimeString("pt-BR", {
@@ -822,7 +835,7 @@ export default function DashboardPage() {
 
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
             <MetricCard
-              icon="💰"
+              icon={<DollarSign className="h-5 w-5" />}
               title="Receita mensal prevista"
               value={formatCurrency(monthlyRevenue)}
               detail={`${formatCurrency(annualRevenueProjection)} projetado ao ano`}
@@ -830,7 +843,7 @@ export default function DashboardPage() {
             />
 
             <MetricCard
-              icon="📈"
+              icon={<ChartLine className="h-5 w-5" />}
               title="Taxa de ocupação"
               value={`${occupancyRate}%`}
               detail={`${rentedProperties} de ${totalProperties} imóveis alugados`}
@@ -838,7 +851,7 @@ export default function DashboardPage() {
             />
 
             <MetricCard
-              icon="📄"
+              icon={<FileText className="h-5 w-5" />}
               title="Contratos ativos"
               value={activeContracts}
               detail={`${finishedContracts} finalizado(s)`}
@@ -846,7 +859,7 @@ export default function DashboardPage() {
             />
 
             <MetricCard
-              icon="🏠"
+              icon={<Home className="h-5 w-5" />}
               title="A receber em aberto"
               value={formatCurrency(openReceivableTotal)}
               detail={`${formatCurrency(overdueReceivableTotal)} vencido(s)`}
@@ -1137,7 +1150,7 @@ export default function DashboardPage() {
 }
 
 type MetricCardProps = {
-  icon: string;
+  icon: ReactNode;
   title: string;
   value: string | number;
   detail: string;
@@ -1175,17 +1188,17 @@ function AlertCard({ alert }: AlertCardProps) {
     success: "border-emerald-100 bg-emerald-50 text-emerald-700",
   }[alert.level];
 
-  const icon = {
-    critical: "🚨",
-    warning: "⚠️",
-    info: "ℹ️",
-    success: "✅",
+  const Icon = {
+    critical: AlertTriangle,
+    warning: AlertTriangle,
+    info: Info,
+    success: CircleCheck,
   }[alert.level];
 
   return (
     <div className={`rounded-2xl border p-4 ${alertStyle}`}>
       <div className="flex gap-3">
-        <span className="text-lg">{icon}</span>
+        <Icon className="mt-0.5 h-5 w-5 shrink-0" />
         <div>
           <p className="font-black">{alert.title}</p>
           <p className="mt-1 text-sm opacity-80">{alert.description}</p>

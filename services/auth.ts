@@ -1,4 +1,5 @@
 import { apiFetch } from './api';
+import { uppercaseFields } from './text-normalization';
 
 export type LoginRequest = {
   email: string;
@@ -45,7 +46,7 @@ export async function createAccountRequest(
   return apiFetch<LoginResponse>('/autenticacao/criar-conta', {
     method: 'POST',
     auth: false,
-    body: JSON.stringify(data),
+    body: JSON.stringify(uppercaseFields(data, ['name', 'companyName'])),
   });
 }
 

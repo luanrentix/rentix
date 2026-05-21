@@ -58,6 +58,42 @@ async function ensureSchema(client) {
     ALTER TABLE IF EXISTS "pessoas"
     ADD COLUMN IF NOT EXISTS "inquilino" BOOLEAN NOT NULL DEFAULT true
   `);
+
+  await client.query(`
+    ALTER TABLE IF EXISTS "contas_pagar"
+    ADD COLUMN IF NOT EXISTS "imovel_id" TEXT
+  `);
+
+  await client.query(`
+    DO $$
+    BEGIN
+      IF to_regclass('public.contas_pagar') IS NOT NULL THEN
+        CREATE INDEX IF NOT EXISTS "contas_pagar_imovel_id_idx"
+        ON "contas_pagar"("imovel_id");
+      END IF;
+    END
+    $$;
+  `);
+
+  await client.query(`
+    DO $$
+    BEGIN
+      IF to_regclass('public.contas_pagar') IS NOT NULL
+        AND to_regclass('public.imoveis') IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'contas_pagar_imovel_id_fkey'
+        )
+      THEN
+        ALTER TABLE "contas_pagar"
+        ADD CONSTRAINT "contas_pagar_imovel_id_fkey"
+        FOREIGN KEY ("imovel_id") REFERENCES "imoveis"("id")
+        ON DELETE SET NULL ON UPDATE CASCADE;
+      END IF;
+    END
+    $$;
+  `);
 }
 
 async function main() {

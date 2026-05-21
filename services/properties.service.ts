@@ -1,4 +1,5 @@
 import { apiFetch } from './api';
+import { uppercaseFields } from './text-normalization';
 
 export type PropertyStatus = 'Available' | 'Rented';
 
@@ -94,7 +95,7 @@ export async function getPropertyById(id: string) {
 export async function createProperty(data: CreatePropertyDto) {
   return apiFetch<Property>('/imoveis', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify(normalizePropertyPayload(data)),
   });
 }
 
@@ -104,7 +105,7 @@ export async function updateProperty(
 ) {
   return apiFetch<Property>(`/imoveis/${id}`, {
     method: 'PATCH',
-    body: JSON.stringify(data),
+    body: JSON.stringify(normalizePropertyPayload(data)),
   });
 }
 
@@ -112,4 +113,22 @@ export async function deleteProperty(id: string) {
   return apiFetch<Property>(`/imoveis/${id}`, {
     method: 'DELETE',
   });
+}
+
+function normalizePropertyPayload<
+  TData extends CreatePropertyDto | UpdatePropertyDto,
+>(data: TData) {
+  return uppercaseFields(data, [
+    'title',
+    'code',
+    'type',
+    'purpose',
+    'city',
+    'state',
+    'address',
+    'district',
+    'number',
+    'complement',
+    'description',
+  ]);
 }

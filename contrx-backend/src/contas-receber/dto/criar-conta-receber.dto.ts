@@ -2,12 +2,15 @@ import { FinancialAccountStatus, PaymentMethod, Prisma } from '@prisma/client';
 import {
   IsBoolean,
   IsEnum,
+  IsArray,
   IsNumber,
   IsOptional,
   IsString,
   IsUUID,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CriarContaReceberDto {
   @IsUUID()
@@ -88,4 +91,16 @@ export class ReceberPagamentoDto {
   @IsOptional()
   @IsString()
   note?: string | null;
+}
+
+export class ReceberPagamentoLoteItemDto extends ReceberPagamentoDto {
+  @IsUUID()
+  chargeId: string;
+}
+
+export class ReceberPagamentoLoteDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ReceberPagamentoLoteItemDto)
+  payments: ReceberPagamentoLoteItemDto[];
 }

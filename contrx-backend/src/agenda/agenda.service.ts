@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
+import { uppercaseFields } from '../common/text-normalization';
 import { PrismaService } from '../prisma/prisma.service';
 
 import { CriarAgendaItemDto } from './dto/criar-agenda-item.dto';
@@ -10,20 +11,22 @@ export class AgendaService {
   constructor(private readonly prisma: PrismaService) {}
 
   create(data: CriarAgendaItemDto, companyId: string) {
+    const normalizedData = this.normalizeScheduleData(data);
+
     return this.prisma.scheduleItem.create({
       data: {
         companyId,
-        title: data.title,
-        customerName: data.customerName,
-        propertyName: data.propertyName,
-        date: new Date(`${data.date}T00:00:00`),
-        time: data.time,
-        type: data.type,
-        status: data.status || 'scheduled',
-        priority: data.priority || 'medium',
-        responsibleName: data.responsibleName,
-        reminder: data.reminder,
-        notes: data.notes || null,
+        title: normalizedData.title,
+        customerName: normalizedData.customerName,
+        propertyName: normalizedData.propertyName,
+        date: new Date(`${normalizedData.date}T00:00:00`),
+        time: normalizedData.time,
+        type: normalizedData.type,
+        status: normalizedData.status || 'scheduled',
+        priority: normalizedData.priority || 'medium',
+        responsibleName: normalizedData.responsibleName,
+        reminder: normalizedData.reminder,
+        notes: normalizedData.notes || null,
       },
     });
   }
@@ -48,22 +51,26 @@ export class AgendaService {
   }
 
   async update(id: string, data: AtualizarAgendaItemDto, companyId: string) {
+    const normalizedData = this.normalizeScheduleData(data);
+
     await this.findOne(id, companyId);
 
     return this.prisma.scheduleItem.update({
       where: { id },
       data: {
-        title: data.title,
-        customerName: data.customerName,
-        propertyName: data.propertyName,
-        date: data.date ? new Date(`${data.date}T00:00:00`) : undefined,
-        time: data.time,
-        type: data.type,
-        status: data.status,
-        priority: data.priority,
-        responsibleName: data.responsibleName,
-        reminder: data.reminder,
-        notes: data.notes,
+        title: normalizedData.title,
+        customerName: normalizedData.customerName,
+        propertyName: normalizedData.propertyName,
+        date: normalizedData.date
+          ? new Date(`${normalizedData.date}T00:00:00`)
+          : undefined,
+        time: normalizedData.time,
+        type: normalizedData.type,
+        status: normalizedData.status,
+        priority: normalizedData.priority,
+        responsibleName: normalizedData.responsibleName,
+        reminder: normalizedData.reminder,
+        notes: normalizedData.notes,
       },
     });
   }
@@ -72,5 +79,19 @@ export class AgendaService {
     await this.findOne(id, companyId);
 
     return this.prisma.scheduleItem.delete({ where: { id } });
+  }
+
+  private normalizeScheduleData<
+    TData extends CriarAgendaItemDto | AtualizarAgendaItemDto,
+  >(data: TData) {
+    return uppercaseFields(data, [
+      'title',
+      'customerName',
+      'propertyName',
+      'type',
+      'responsibleName',
+      'reminder',
+      'notes',
+    ]);
   }
 }

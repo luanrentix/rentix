@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { Maximize2, X } from "lucide-react";
 import AuthGuard from "@/components/auth/auth-guard";
 import { useAuth } from "@/context/AuthContext";
 import { changePasswordRequest } from "@/services/auth";
@@ -19,6 +20,14 @@ import {
   getCachedUserSettings,
   setCachedAppSettings,
 } from "@/services/settings-cache";
+import {
+  clearMinimizedModalState,
+  dispatchCloseMinimizedModal,
+  dispatchRestoreMinimizedModal,
+  getMinimizedModalState,
+  MINIMIZED_MODAL_CHANGE_EVENT,
+  type MinimizedModalState,
+} from "@/services/minimized-modal.service";
 import { canAccessTool } from "@/services/tool-permissions";
 
 type AppShellProps = {
@@ -294,197 +303,6 @@ function isSystemOwnerRole(role?: string | null) {
 }
 
 
-const contrxThemeStyle = `
-  [data-contrx-theme="light"] {
-    color-scheme: light;
-    background-color: #f8fafc !important;
-    color: #0f172a !important;
-  }
-
-  [data-contrx-theme="black"] {
-    color-scheme: dark;
-    background-color: #020617 !important;
-    color: #f8fafc !important;
-  }
-
-  [data-contrx-theme="black"] main,
-  [data-contrx-theme="black"] header,
-  [data-contrx-theme="black"] aside,
-  [data-contrx-theme="black"] .min-h-screen,
-  [data-contrx-theme="black"] .flex-1 {
-    background-color: #020617 !important;
-  }
-
-  [data-contrx-theme="black"] [class*="bg-white"],
-  [data-contrx-theme="black"] [class*="bg-slate-50"],
-  [data-contrx-theme="black"] [class*="bg-slate-100"],
-  [data-contrx-theme="black"] [class*="bg-[#f8fafc]"],
-  [data-contrx-theme="black"] [class*="bg-\[\#f8fafc\]"],
-  [data-contrx-theme="black"] .bg-white,
-  [data-contrx-theme="black"] .bg-white\/90,
-  [data-contrx-theme="black"] .bg-slate-50,
-  [data-contrx-theme="black"] .bg-slate-100 {
-    background-color: #0f172a !important;
-  }
-
-  [data-contrx-theme="black"] [class*="from-orange-50"],
-  [data-contrx-theme="black"] [class*="via-white"],
-  [data-contrx-theme="black"] [class*="to-white"] {
-    --tw-gradient-from: #0f172a var(--tw-gradient-from-position) !important;
-    --tw-gradient-to: #0f172a var(--tw-gradient-to-position) !important;
-    --tw-gradient-stops: #0f172a, #0f172a, #0f172a !important;
-  }
-
-  [data-contrx-theme="black"] [class*="bg-orange-50"],
-  [data-contrx-theme="black"] [class*="bg-orange-100"],
-  [data-contrx-theme="black"] [class*="bg-amber-50"] {
-    background-color: rgba(249, 115, 22, 0.14) !important;
-  }
-
-  [data-contrx-theme="black"] [class*="bg-red-50"],
-  [data-contrx-theme="black"] [class*="bg-red-100"] {
-    background-color: rgba(239, 68, 68, 0.14) !important;
-  }
-
-  [data-contrx-theme="black"] [class*="bg-emerald-50"],
-  [data-contrx-theme="black"] [class*="bg-emerald-100"] {
-    background-color: rgba(16, 185, 129, 0.14) !important;
-  }
-
-  [data-contrx-theme="black"] [class*="bg-blue-50"],
-  [data-contrx-theme="black"] [class*="bg-blue-100"],
-  [data-contrx-theme="black"] [class*="bg-sky-50"],
-  [data-contrx-theme="black"] [class*="bg-sky-100"] {
-    background-color: rgba(14, 165, 233, 0.14) !important;
-  }
-
-  [data-contrx-theme="black"] [class*="text-slate-950"],
-  [data-contrx-theme="black"] [class*="text-slate-900"],
-  [data-contrx-theme="black"] [class*="text-slate-800"],
-  [data-contrx-theme="black"] [class*="text-slate-700"],
-  [data-contrx-theme="black"] .text-slate-950,
-  [data-contrx-theme="black"] .text-slate-900,
-  [data-contrx-theme="black"] .text-slate-800,
-  [data-contrx-theme="black"] .text-slate-700 {
-    color: #f8fafc !important;
-  }
-
-  [data-contrx-theme="black"] [class*="text-slate-600"],
-  [data-contrx-theme="black"] [class*="text-slate-500"],
-  [data-contrx-theme="black"] [class*="text-slate-400"],
-  [data-contrx-theme="black"] [class*="text-slate-300"],
-  [data-contrx-theme="black"] .text-slate-600,
-  [data-contrx-theme="black"] .text-slate-500,
-  [data-contrx-theme="black"] .text-slate-400,
-  [data-contrx-theme="black"] .text-slate-300 {
-    color: #cbd5e1 !important;
-  }
-
-  [data-contrx-theme="black"] [class*="text-orange-"],
-  [data-contrx-theme="black"] .text-orange-500,
-  [data-contrx-theme="black"] .text-orange-600,
-  [data-contrx-theme="black"] .text-orange-700,
-  [data-contrx-theme="black"] .text-orange-800 {
-    color: #fb923c !important;
-  }
-
-  [data-contrx-theme="black"] [class*="text-red-"] {
-    color: #fca5a5 !important;
-  }
-
-  [data-contrx-theme="black"] [class*="text-emerald-"] {
-    color: #6ee7b7 !important;
-  }
-
-  [data-contrx-theme="black"] [class*="text-blue-"],
-  [data-contrx-theme="black"] [class*="text-sky-"] {
-    color: #7dd3fc !important;
-  }
-
-  [data-contrx-theme="black"] [class*="border-slate-"],
-  [data-contrx-theme="black"] [class*="border-orange-"],
-  [data-contrx-theme="black"] [class*="border-amber-"],
-  [data-contrx-theme="black"] [class*="border-red-"],
-  [data-contrx-theme="black"] [class*="border-emerald-"],
-  [data-contrx-theme="black"] [class*="border-blue-"],
-  [data-contrx-theme="black"] [class*="border-sky-"] {
-    border-color: #1e293b !important;
-  }
-
-  [data-contrx-theme="black"] input,
-  [data-contrx-theme="black"] select,
-  [data-contrx-theme="black"] textarea {
-    background-color: #020617 !important;
-    border-color: #334155 !important;
-    color: #f8fafc !important;
-  }
-
-  [data-contrx-theme="black"] input::placeholder,
-  [data-contrx-theme="black"] textarea::placeholder {
-    color: #64748b !important;
-  }
-
-  [data-contrx-theme="black"] option {
-    background-color: #020617 !important;
-    color: #f8fafc !important;
-  }
-
-  [data-contrx-theme="black"] table {
-    background-color: #0f172a !important;
-    color: #f8fafc !important;
-  }
-
-  [data-contrx-theme="black"] thead,
-  [data-contrx-theme="black"] table thead,
-  [data-contrx-theme="black"] [class*="bg-orange-50"] table thead {
-    background-color: rgba(249, 115, 22, 0.16) !important;
-  }
-
-  [data-contrx-theme="black"] tbody tr,
-  [data-contrx-theme="black"] tr {
-    background-color: #0f172a !important;
-    border-color: #1e293b !important;
-  }
-
-  [data-contrx-theme="black"] tbody tr:hover,
-  [data-contrx-theme="black"] [class*="hover:bg-slate-50"]:hover,
-  [data-contrx-theme="black"] [class*="hover:bg-slate-100"]:hover {
-    background-color: #111c31 !important;
-  }
-
-  [data-contrx-theme="black"] .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
-  [data-contrx-theme="black"] .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
-    border-color: #1e293b !important;
-  }
-
-  [data-contrx-theme="black"] [class*="shadow-sm"],
-  [data-contrx-theme="black"] [class*="shadow-md"],
-  [data-contrx-theme="black"] [class*="shadow-lg"],
-  [data-contrx-theme="black"] [class*="shadow-xl"],
-  [data-contrx-theme="black"] [class*="shadow-2xl"] {
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42) !important;
-  }
-
-  [data-contrx-theme="black"] .recharts-cartesian-grid line {
-    stroke: #334155 !important;
-  }
-
-  [data-contrx-theme="black"] .recharts-text {
-    fill: #cbd5e1 !important;
-  }
-
-  [data-contrx-theme="black"] .recharts-tooltip-wrapper .recharts-default-tooltip {
-    background-color: #0f172a !important;
-    border-color: #334155 !important;
-    color: #f8fafc !important;
-  }
-
-  [data-contrx-theme="black"] .recharts-tooltip-label,
-  [data-contrx-theme="black"] .recharts-tooltip-item {
-    color: #f8fafc !important;
-  }
-`;
-
 function normalizeThemeMode(value: unknown): ThemeMode {
   const normalizedValue = String(value || "").toLowerCase();
 
@@ -540,6 +358,95 @@ function readThemeSettingsFromStorage(companyId?: string): ThemeSettings {
   return defaultThemeSettings;
 }
 
+function GlobalMinimizedModalDock() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const [modalState, setModalState] = useState<MinimizedModalState | null>(null);
+
+  useEffect(() => {
+    function syncMinimizedModalState() {
+      setModalState(getMinimizedModalState());
+    }
+
+    syncMinimizedModalState();
+
+    window.addEventListener("storage", syncMinimizedModalState);
+    window.addEventListener(MINIMIZED_MODAL_CHANGE_EVENT, syncMinimizedModalState);
+
+    return () => {
+      window.removeEventListener("storage", syncMinimizedModalState);
+      window.removeEventListener(MINIMIZED_MODAL_CHANGE_EVENT, syncMinimizedModalState);
+    };
+  }, []);
+
+  if (!modalState || pathname === modalState.href) {
+    return null;
+  }
+
+  function handleRestore() {
+    if (!modalState) return;
+
+    if (pathname === modalState.href) {
+      dispatchRestoreMinimizedModal(modalState.tool);
+      return;
+    }
+
+    router.push(modalState.href);
+  }
+
+  function handleClose() {
+    if (!modalState) return;
+
+    dispatchCloseMinimizedModal(modalState.tool);
+    clearMinimizedModalState(modalState.tool);
+  }
+
+  return (
+    <div className="contrx-minimized-modal fixed bottom-6 right-6 z-50 w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border-2 border-orange-300 bg-white shadow-2xl">
+      <div className="h-2 bg-orange-500" />
+      <div className="p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="rounded-full bg-orange-100 px-3 py-1 text-[0.68rem] font-black uppercase tracking-wide text-orange-700">
+                Minimizado
+              </span>
+              <span className="h-2 w-2 rounded-full bg-orange-500 shadow-[0_0_0_4px_rgb(249_115_22/0.16)]" />
+            </div>
+            <p className="truncate text-base font-black text-slate-950">
+              {modalState.title}
+            </p>
+            <p className="truncate text-sm font-semibold text-slate-500">
+              {modalState.subtitle || "Cadastro em andamento"}
+            </p>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={handleRestore}
+              className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-200 transition hover:bg-orange-600"
+              title="Restaurar modal"
+              aria-label="Restaurar modal"
+            >
+              <Maximize2 className="h-5 w-5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleClose}
+              className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-slate-200"
+              title="Fechar modal"
+              aria-label="Fechar modal"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -961,9 +868,9 @@ export default function AppShell({ children }: AppShellProps) {
   const isSidebarOpen = isSidebarExpanded || isSidebarLocked;
   const shellThemeClass =
     themeSettings.mode === "black"
-      ? "dark bg-slate-950 text-slate-100"
+      ? "bg-slate-950 text-slate-100"
       : themeSettings.mode === "graphite"
-        ? "dark bg-zinc-900 text-zinc-100"
+        ? "bg-zinc-900 text-zinc-100"
         : "bg-[#f8fafc] text-slate-900";
   const darkSurfaceClass =
     themeSettings.mode === "black"
@@ -992,7 +899,6 @@ export default function AppShell({ children }: AppShellProps) {
         data-contrx-theme={themeSettings.mode}
         className={`min-h-screen lg:flex ${shellThemeClass}`}
       >
-        <style>{contrxThemeStyle}</style>
         {isMobileSidebarOpen && (
           <button
             type="button"
@@ -1039,7 +945,7 @@ export default function AppShell({ children }: AppShellProps) {
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-lg font-black text-slate-600 transition hover:bg-red-50 hover:text-red-600 lg:hidden"
                 aria-label="Fechar menu"
               >
-                ×
+                <X className="h-5 w-5" />
               </button>
             </div>
           </div>
@@ -1250,6 +1156,8 @@ export default function AppShell({ children }: AppShellProps) {
               })}
             </div>
           </nav>
+
+          <GlobalMinimizedModalDock />
         </div>
 
         {isSettingsOpen && (
@@ -1275,7 +1183,7 @@ export default function AppShell({ children }: AppShellProps) {
                     className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-xl font-black text-slate-500 shadow-sm transition hover:bg-red-50 hover:text-red-600"
                     aria-label="Fechar configurações"
                   >
-                    ×
+                    <X className="h-5 w-5" />
                   </button>
                 </div>
               </div>
@@ -1346,7 +1254,7 @@ export default function AppShell({ children }: AppShellProps) {
                       onClick={handleOpenResetModal}
                       className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-red-500 px-4 py-3 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600"
                     >
-                      🗑?Resetar dados de teste
+                      🗑️ Resetar dados de teste
                     </button>
                   )}
                 </aside>
@@ -1842,7 +1750,8 @@ export default function AppShell({ children }: AppShellProps) {
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-start gap-4">
                     <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-red-100 text-2xl">
-                      🗑?                    </div>
+                      🗑️
+                    </div>
                     <div>
                       <div className="inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-black uppercase tracking-wide text-red-700">
                         Ação crítica
@@ -1862,7 +1771,7 @@ export default function AppShell({ children }: AppShellProps) {
                     className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-xl font-black text-slate-500 shadow-sm transition hover:bg-red-50 hover:text-red-600"
                     aria-label="Fechar reset de dados"
                   >
-                    ×
+                    <X className="h-5 w-5" />
                   </button>
                 </div>
               </div>
@@ -1870,24 +1779,24 @@ export default function AppShell({ children }: AppShellProps) {
               <div className="min-h-0 flex-1 overflow-y-auto p-6">
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   {resetModuleOptions.map((option) => (
-                    <button
-                      key={option.key}
-                      type="button"
-                      onClick={() => handleToggleResetOption(option.key)}
-                      className={`rounded-3xl border p-4 text-left transition ${
-                        resetOptions[option.key]
-                          ? "border-red-300 bg-red-50 shadow-sm shadow-red-100"
-                          : "border-slate-200 bg-white hover:border-red-200 hover:bg-red-50/40"
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div
-                          className={`flex h-11 w-11 items-center justify-center rounded-2xl text-xl ${
-                            resetOptions[option.key] ? "bg-red-500 text-white" : "bg-slate-100"
-                          }`}
-                        >
-                          {option.icon}
-                        </div>
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => handleToggleResetOption(option.key)}
+                        className={`rounded-3xl border p-4 text-left transition ${
+                          resetOptions[option.key]
+                            ? "border-red-300 bg-red-50 shadow-sm shadow-red-100"
+                            : "border-slate-200 bg-white hover:border-red-200 hover:bg-red-50/40"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={`flex h-11 w-11 items-center justify-center rounded-2xl text-xl ${
+                              resetOptions[option.key] ? "bg-red-500 text-white" : "bg-slate-100"
+                            }`}
+                          >
+                            {option.icon}
+                          </div>
 
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-3">
@@ -1901,14 +1810,15 @@ export default function AppShell({ children }: AppShellProps) {
                                   : "border-slate-300 bg-white text-transparent"
                               }`}
                             >
-                              ?                            </span>
+                              ✓
+                            </span>
                           </div>
                           <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
                             {option.description}
                           </p>
                         </div>
-                      </div>
-                    </button>
+                        </div>
+                      </button>
                   ))}
                 </div>
 

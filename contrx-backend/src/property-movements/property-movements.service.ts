@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 
+import { uppercaseFields } from '../common/text-normalization';
 import { PrismaService } from '../prisma/prisma.service';
 import { CriarPropertyMovementDto } from './dto/criar-property-movement.dto';
 
@@ -9,14 +10,19 @@ export class PropertyMovementsService {
 
   async create(data: CriarPropertyMovementDto, companyId: string) {
     await this.validateCompanyAndProperty(companyId, data.propertyId);
+    const normalizedData = uppercaseFields(data, [
+      'propertyName',
+      'type',
+      'description',
+    ]);
 
     return this.prisma.propertyMovement.create({
       data: {
         companyId,
-        propertyId: data.propertyId,
-        propertyName: data.propertyName,
-        type: data.type,
-        description: data.description,
+        propertyId: normalizedData.propertyId,
+        propertyName: normalizedData.propertyName,
+        type: normalizedData.type,
+        description: normalizedData.description,
       },
     });
   }

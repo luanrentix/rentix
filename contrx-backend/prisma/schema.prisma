@@ -164,6 +164,7 @@ model Property {
   owner     Person?    @relation(fields: [ownerId], references: [id])
   contracts Contract[]
   movements PropertyMovement[]
+  payableAccounts ContaPagar[]
 
   @@index([companyId])
   @@index([ownerId])
@@ -333,6 +334,7 @@ model ContaPagar {
   id         String  @id @default(uuid())
   companyId  String  @map("empresa_id")
   personId   String? @map("pessoa_id")
+  propertyId String? @map("imovel_id")
   personName String? @map("pessoa")
 
   description String                 @map("descricao")
@@ -353,10 +355,12 @@ model ContaPagar {
 
   company  Company              @relation(fields: [companyId], references: [id])
   person   Person?              @relation(fields: [personId], references: [id])
+  property Property?            @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   payments PagamentoRealizado[]
 
   @@index([companyId])
   @@index([personId])
+  @@index([propertyId])
   @@index([status])
   @@index([dueDate])
   @@map("contas_pagar")

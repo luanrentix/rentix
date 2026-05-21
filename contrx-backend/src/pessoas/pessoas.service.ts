@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { normalizeEmail, uppercaseFields } from '../common/text-normalization';
 
 import { CriarPessoaDto } from './dto/criar-pessoa.dto';
 import { AtualizarPessoaDto } from './dto/atualizar-pessoa.dto';
@@ -14,24 +15,26 @@ export class PessoasService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(data: CriarPessoaDto, companyId: string) {
-    await this.ensureDocumentIsAvailable(data.document, companyId);
+    const normalizedData = this.normalizePersonData(data);
+
+    await this.ensureDocumentIsAvailable(normalizedData.document, companyId);
 
     return this.prisma.person.create({
       data: {
         companyId,
-        type: data.type,
-        name: data.name,
-        document: data.document,
-        stateRegistration: data.stateRegistration,
-        identityNumber: data.identityNumber,
-        email: data.email,
-        phone: data.phone,
-        isTenant: data.isTenant ?? true,
-        zipCode: data.zipCode,
-        city: data.city,
-        state: data.state,
-        address: data.address,
-        status: data.status ?? 'ACTIVE',
+        type: normalizedData.type,
+        name: normalizedData.name,
+        document: normalizedData.document,
+        stateRegistration: normalizedData.stateRegistration,
+        identityNumber: normalizedData.identityNumber,
+        email: normalizeEmail(normalizedData.email),
+        phone: normalizedData.phone,
+        isTenant: normalizedData.isTenant ?? true,
+        zipCode: normalizedData.zipCode,
+        city: normalizedData.city,
+        state: normalizedData.state,
+        address: normalizedData.address,
+        status: normalizedData.status ?? 'ACTIVE',
       },
     });
   }
@@ -61,10 +64,12 @@ export class PessoasService {
   }
 
   async update(id: string, data: AtualizarPessoaDto, companyId: string) {
+    const normalizedData = this.normalizePersonData(data);
+
     await this.findOne(id, companyId);
 
-    if (data.document) {
-      await this.ensureDocumentIsAvailable(data.document, companyId, id);
+    if (normalizedData.document) {
+      await this.ensureDocumentIsAvailable(normalizedData.document, companyId, id);
     }
 
     return this.prisma.person.update({
@@ -72,7 +77,11 @@ export class PessoasService {
         id,
       },
       data: {
-        ...data,
+        ...normalizedData,
+        email:
+          normalizedData.email !== undefined
+            ? normalizeEmail(normalizedData.email)
+            : undefined,
         companyId,
       },
     });
@@ -152,5 +161,18 @@ export class PessoasService {
         'Esta pessoa possui movimentação no sistema e não pode ser excluída. Utilize a inativação para preservar o histórico.',
       );
     }
+  }
+
+  private normalizePersonData<TData extends CriarPessoaDto | AtualizarPessoaDto>(
+    data: TData,
+  ) {
+    return uppercaseFields(data, [
+      'name',
+      'stateRegistration',
+      'identityNumber',
+      'city',
+      'state',
+      'address',
+    ]);
   }
 }

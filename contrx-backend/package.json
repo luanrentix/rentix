@@ -8,6 +8,7 @@
   "scripts": {
     "build": "prisma generate && nest build",
     "ensure:schema": "node scripts/ensure-database-schema.js",
+    "normalize:text": "node scripts/normalize-existing-text.js",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "postinstall": "prisma generate",
     "start": "node scripts/ensure-local-postgres.js && nest start",
