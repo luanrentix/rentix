@@ -87,6 +87,21 @@ export class PrismaService
       ADD COLUMN IF NOT EXISTS "inquilino" BOOLEAN NOT NULL DEFAULT true
     `);
 
+    await this.$executeRawUnsafe(`
+      ALTER TABLE IF EXISTS "contas_pagar"
+      ADD COLUMN IF NOT EXISTS "imovel_id" TEXT
+    `);
+
+    await this.$executeRawUnsafe(`
+      ALTER TABLE IF EXISTS "agenda_itens"
+      ADD COLUMN IF NOT EXISTS "pessoa_id" TEXT
+    `);
+
+    await this.$executeRawUnsafe(`
+      ALTER TABLE IF EXISTS "agenda_itens"
+      ADD COLUMN IF NOT EXISTS "imovel_id" TEXT
+    `);
+
     console.log('Database schema guard completed.');
   }
 }

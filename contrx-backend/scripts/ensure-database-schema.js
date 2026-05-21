@@ -65,6 +65,16 @@ async function ensureSchema(client) {
   `);
 
   await client.query(`
+    ALTER TABLE IF EXISTS "agenda_itens"
+    ADD COLUMN IF NOT EXISTS "pessoa_id" TEXT
+  `);
+
+  await client.query(`
+    ALTER TABLE IF EXISTS "agenda_itens"
+    ADD COLUMN IF NOT EXISTS "imovel_id" TEXT
+  `);
+
+  await client.query(`
     DO $$
     BEGIN
       IF to_regclass('public.contas_pagar') IS NOT NULL THEN
