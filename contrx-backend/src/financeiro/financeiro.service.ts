@@ -63,7 +63,24 @@ export class FinanceiroService {
       this.prisma.contaPagar.findMany({
         where: this.buildPayableWhere(companyId, dateRange),
         orderBy: { dueDate: 'asc' },
-        include: { payments: { orderBy: { paidAt: 'desc' } } },
+        select: {
+          id: true,
+          personName: true,
+          description: true,
+          category: true,
+          dueDate: true,
+          amount: true,
+          status: true,
+          payments: {
+            orderBy: { paidAt: 'desc' },
+            select: {
+              paidAt: true,
+              amountPaid: true,
+              discount: true,
+              interest: true,
+            },
+          },
+        },
       }),
     ]);
 
