@@ -1,3 +1,5 @@
+const PUBLIC_API_BASE_URL = 'https://contrx-backend.onrender.com';
+
 function getApiBaseUrl() {
   const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
   const isBrowser = typeof window !== 'undefined';
@@ -17,7 +19,7 @@ function getApiBaseUrl() {
   }
 
   if (configuredApiUrl) {
-    if (!isBrowser || isLocalhost || !isLocalApiUrl(configuredApiUrl)) {
+    if (isLocalhost || !isLocalApiUrl(configuredApiUrl)) {
       return configuredApiUrl.replace(/\/$/, '');
     }
   }
@@ -26,14 +28,12 @@ function getApiBaseUrl() {
     return 'http://localhost:3001';
   }
 
-  if (isBrowser && window.location.hostname.endsWith('contrx.com.br')) {
-    return 'https://contrx-backend.onrender.com';
+  if (isBrowser) {
+    return PUBLIC_API_BASE_URL;
   }
 
   return '';
 }
-
-const API_BASE_URL = getApiBaseUrl();
 
 type RequestOptions = RequestInit & {
   auth?: boolean;
@@ -133,7 +133,9 @@ export async function apiFetch<TResponse>(
   endpoint: string,
   options: RequestOptions = {},
 ): Promise<TResponse> {
-  if (!API_BASE_URL) {
+  const apiBaseUrl = getApiBaseUrl();
+
+  if (!apiBaseUrl) {
     throw new Error(
       'Backend nao configurado. Configure NEXT_PUBLIC_API_URL na Vercel com a URL publica da API do Contrx no Render.',
     );
@@ -152,13 +154,13 @@ export async function apiFetch<TResponse>(
   let response: Response;
 
   try {
-    response = await fetchWithReadRetry(`${API_BASE_URL}${endpoint}`, {
+    response = await fetchWithReadRetry(`${apiBaseUrl}${endpoint}`, {
       ...options,
       headers,
     });
   } catch (error) {
     throw new Error(
-      `Nao foi possivel conectar a API em ${API_BASE_URL}. Verifique se o backend esta online e acessivel.`,
+      `Nao foi possivel conectar a API em ${apiBaseUrl}. Verifique se o backend esta online e acessivel.`,
       { cause: error },
     );
   }
@@ -183,4 +185,4 @@ export async function apiFetch<TResponse>(
   return response.json() as Promise<TResponse>;
 }
 
-export { API_BASE_URL };
+export { getApiBaseUrl };
