@@ -1,18 +1,33 @@
 function getApiBaseUrl() {
   const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
+  const isBrowser = typeof window !== 'undefined';
+  const isLocalhost =
+    isBrowser &&
+    (window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1');
 
-  if (configuredApiUrl) {
-    return configuredApiUrl.replace(/\/$/, '');
+  function isLocalApiUrl(value: string) {
+    try {
+      const url = new URL(value);
+
+      return url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+    } catch {
+      return value.includes('localhost') || value.includes('127.0.0.1');
+    }
   }
 
-  if (typeof window !== 'undefined') {
-    const isLocalhost =
-      window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1';
-
-    if (isLocalhost) {
-      return 'http://localhost:3001';
+  if (configuredApiUrl) {
+    if (!isBrowser || isLocalhost || !isLocalApiUrl(configuredApiUrl)) {
+      return configuredApiUrl.replace(/\/$/, '');
     }
+  }
+
+  if (isLocalhost) {
+    return 'http://localhost:3001';
+  }
+
+  if (isBrowser && window.location.hostname.endsWith('contrx.com.br')) {
+    return 'https://contrx-backend.onrender.com';
   }
 
   return '';
@@ -120,7 +135,7 @@ export async function apiFetch<TResponse>(
 ): Promise<TResponse> {
   if (!API_BASE_URL) {
     throw new Error(
-      'Backend nao configurado. Configure NEXT_PUBLIC_API_URL com a URL publica da API do Contrx no deploy do frontend.',
+      'Backend nao configurado. Configure NEXT_PUBLIC_API_URL na Vercel com a URL publica da API do Contrx no Render.',
     );
   }
 
