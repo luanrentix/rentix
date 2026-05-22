@@ -34,8 +34,8 @@ export const metadata: Metadata = {
     ],
   },
   icons: {
-    icon: '/logo-contrx.png',
-    apple: '/logo-contrx.png',
+    icon: '/logo-contrx.svg',
+    apple: '/icon.png',
   },
 };
 
