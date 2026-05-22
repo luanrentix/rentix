@@ -1,4 +1,4 @@
-const PUBLIC_API_BASE_URL = 'https://contrx-backend.onrender.com';
+const PUBLIC_API_BASE_URL = 'https://contrx.onrender.com';
 
 function getApiBaseUrl() {
   const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
