@@ -47,6 +47,7 @@ describe('ContratosService', () => {
         create: jest.fn(),
       },
       contract: {
+        create: jest.fn().mockResolvedValue(contract),
         update: jest.fn().mockResolvedValue({
           ...contract,
           status: ContractStatus.CANCELED,
@@ -105,6 +106,58 @@ describe('ContratosService', () => {
         tenant: true,
         company: true,
       },
+    });
+  });
+
+  it('cria contrato ativo sem gerar parcelas antes dos ajustes manuais', async () => {
+    const { service, tx } = createService({
+      company: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'company-1' }),
+      },
+      property: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'property-1',
+          companyId: 'company-1',
+          isActive: true,
+        }),
+      },
+      person: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'tenant-1',
+          companyId: 'company-1',
+          status: 'ACTIVE',
+          isTenant: true,
+        }),
+      },
+      contract: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+    } as Partial<PrismaService>);
+
+    await service.create(
+      {
+        companyId: 'company-1',
+        propertyId: 'property-1',
+        tenantId: 'tenant-1',
+        propertyName: 'Imovel',
+        tenantName: 'Inquilino',
+        startDate: '2026-05-01',
+        endDate: '2026-08-01',
+        rentValue: 1000,
+        status: ContractStatus.ACTIVE,
+      },
+      'company-1',
+    );
+
+    expect(tx.contract.create).toHaveBeenCalled();
+    expect(tx.contaReceber.create).not.toHaveBeenCalled();
+    expect(tx.scheduleItem.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        companyId: 'company-1',
+        title: 'Vencimento de contrato',
+        type: 'Contrato',
+        status: 'scheduled',
+      }),
     });
   });
 

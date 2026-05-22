@@ -3446,6 +3446,27 @@ export default function AccountsReceivablePage() {
     }
   }
 
+  function continueContractFlowAfterReceivableChargesSaved(
+    contractId: string | number | null | undefined,
+    carnetCharges: Charge[],
+  ) {
+    const linkedContract = getContractById(contractId);
+
+    if (linkedContract && carnetCharges.length > 0) {
+      setPendingContractCarnetRequest({
+        contract: linkedContract,
+        charges: carnetCharges,
+      });
+      return;
+    }
+
+    if (carnetCharges.length > 0) {
+      generatePaymentCarnet(carnetCharges);
+    }
+
+    handleAfterContractCarnetGenerated(contractId);
+  }
+
   async function continueContractFlowAfterDownPayment(
     receivedCharge: Charge,
   ) {
@@ -4567,16 +4588,20 @@ export default function AccountsReceivablePage() {
 
       setManualCharges(updatedManualCharges);
 
-      generatePaymentCarnet([
+      const carnetCharges = [
         {
           ...savedCharge,
           installmentNumber: 1,
           installmentTotal: 1,
           installmentGroupId: savedCharge.id,
         },
-      ]);
+      ];
+
       closeCreateModal();
-      await handleAfterContractCarnetGenerated(savedCharge.contractId);
+      continueContractFlowAfterReceivableChargesSaved(
+        savedCharge.contractId,
+        carnetCharges,
+      );
       return;
     }
 
@@ -4688,10 +4713,14 @@ export default function AccountsReceivablePage() {
     }
 
     if (carnetCharges.length > 0) {
-      generatePaymentCarnet(carnetCharges);
+      continueContractFlowAfterReceivableChargesSaved(
+        formContractId,
+        carnetCharges,
+      );
+      return;
     }
 
-    await handleAfterContractCarnetGenerated(formContractId);
+    handleAfterContractCarnetGenerated(formContractId);
   }
 
   const paymentModalCharges =

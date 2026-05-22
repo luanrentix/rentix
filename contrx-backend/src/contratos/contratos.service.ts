@@ -47,7 +47,11 @@ export class ContratosService {
         include: this.defaultInclude,
       });
 
-      await this.syncRelatedRecordsAfterContractChange(tx, contract);
+      if (contract.status === ContractStatus.ACTIVE) {
+        await this.upsertContractDueScheduleItem(tx, contract);
+      } else {
+        await this.syncRelatedRecordsAfterContractChange(tx, contract);
+      }
 
       return contract;
     });

@@ -1481,7 +1481,6 @@ export default function ContractsPage() {
       "ContractCreated",
       "Contrato criado e imóvel vinculado à locação."
     );
-    window.alert("Contrato criado, parcelas geradas e vencimento registrado na agenda.");
     resetForm();
     await openReceivableChargeFromContract(newContract);
     } finally {
