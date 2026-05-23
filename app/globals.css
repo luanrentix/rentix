@@ -477,7 +477,7 @@ textarea {
   :root {
     --contrx-mobile-nav-height: 5.85rem;
     --contrx-mobile-safe-bottom: calc(
-      var(--contrx-mobile-nav-height) + env(safe-area-inset-bottom) + 1.5rem
+      var(--contrx-mobile-nav-height) + env(safe-area-inset-bottom) + 3rem
     );
   }
 
@@ -485,8 +485,13 @@ textarea {
     scroll-padding-bottom: var(--contrx-mobile-safe-bottom);
   }
 
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
   .contrx-app-main {
     padding-bottom: var(--contrx-mobile-safe-bottom) !important;
+    scroll-padding-bottom: var(--contrx-mobile-safe-bottom);
   }
 
   .contrx-mobile-bottom-nav {
@@ -603,6 +608,7 @@ textarea {
     max-width: 100%;
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch;
+    scroll-padding-bottom: var(--contrx-mobile-safe-bottom);
   }
 
   div:has(> table) table,

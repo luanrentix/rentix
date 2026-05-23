@@ -3,7 +3,7 @@ services:
     name: contrx-backend
     env: node
     rootDir: contrx-backend
-    buildCommand: npm ci && npm run build && node scripts/apply-pending-migrations.js && npm run ensure:schema
+    buildCommand: npm ci && npm run build && node scripts/apply-pending-migrations.js && npm run ensure:schema && node scripts/cleanup-protected-production-users.js
     startCommand: npm run start:prod
     envVars:
       - key: NODE_ENV
@@ -16,3 +16,5 @@ services:
         sync: false
       - key: CORS_ORIGINS
         sync: false
+      - key: CONTRX_CLEAN_PRODUCTION_KEEP_PROTECTED_USERS
+        value: "true"

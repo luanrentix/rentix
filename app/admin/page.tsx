@@ -17,7 +17,6 @@ import {
   Settings2,
   ShieldCheck,
   SlidersHorizontal,
-  UserRoundCheck,
   UsersRound,
   X,
   XCircle,
@@ -73,9 +72,8 @@ function getCompanyName(company: AdminCompany | AdminUser["company"]) {
   return company.tradeName || company.companyName || "Empresa sem nome";
 }
 
-function getTotalCompanyRecords(company: AdminCompany) {
+function getOperationalCompanyRecords(company: AdminCompany) {
   return (
-    company._count.users +
     company._count.people +
     company._count.properties +
     company._count.contracts
@@ -100,6 +98,7 @@ export default function AdminPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [roleFilter, setRoleFilter] = useState("all");
+  const [hideEmptyCompanies, setHideEmptyCompanies] = useState(true);
 
   const isSystemOwner = isSystemOwnerRole(user?.role);
   const normalizedSearchTerm = normalizeText(searchTerm);
@@ -275,33 +274,38 @@ export default function AdminPage() {
     });
   }, [companies, normalizedSearchTerm, statusFilter]);
 
-  const recentUsers = useMemo(() => {
-    return [...filteredUsers]
-      .sort(
-        (firstUser, secondUser) =>
-          new Date(secondUser.createdAt).getTime() -
-          new Date(firstUser.createdAt).getTime(),
-      )
-      .slice(0, 5);
-  }, [filteredUsers]);
-
   const topCompanies = useMemo(() => {
-    return [...filteredCompanies].sort(
+    const visibleCompanies = hideEmptyCompanies
+      ? filteredCompanies.filter(
+          (company) => getOperationalCompanyRecords(company) > 0,
+        )
+      : filteredCompanies;
+
+    return [...visibleCompanies].sort(
       (firstCompany, secondCompany) =>
-        getTotalCompanyRecords(secondCompany) -
-        getTotalCompanyRecords(firstCompany),
+        getOperationalCompanyRecords(secondCompany) -
+        getOperationalCompanyRecords(firstCompany),
     );
-  }, [filteredCompanies]);
+  }, [filteredCompanies, hideEmptyCompanies]);
 
   const inactiveTotal =
     (summary?.inactiveUsers ?? 0) + (summary?.inactiveCompanies ?? 0);
   const totalOperationalRecords = companies.reduce(
-    (total, company) => total + getTotalCompanyRecords(company),
+    (total, company) => total + getOperationalCompanyRecords(company),
     0,
   );
-  const configuredCompaniesPercent = summary?.totalCompanies
-    ? Math.round(((summary.totalSettings ?? 0) / summary.totalCompanies) * 100)
-    : 0;
+  const operationalCompanies = companies.filter(
+    (company) => getOperationalCompanyRecords(company) > 0,
+  );
+  const operationalCompaniesTotal = operationalCompanies.length;
+  const activeOperationalCompanies = operationalCompanies.filter(
+    (company) => company.isActive,
+  ).length;
+  const inactiveOperationalCompanies =
+    operationalCompaniesTotal - activeOperationalCompanies;
+  const emptyCompaniesTotal = filteredCompanies.filter(
+    (company) => getOperationalCompanyRecords(company) === 0,
+  ).length;
 
   function clearFilters() {
     setSearchTerm("");
@@ -322,16 +326,16 @@ export default function AdminPage() {
                 </span>
                 <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700 ring-1 ring-emerald-100">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  {summary?.activeCompanies ?? 0} empresas ativas
+                  {activeOperationalCompanies} empresa ativa
                 </span>
               </div>
 
               <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-950 md:text-3xl">
-                Contas criadas no Contrx
+                Painel administrativo
               </h1>
               <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-slate-500">
-                Visão global de empresas, usuários, configurações e volume de uso
-                da plataforma.
+                Visão organizada de empresas, usuários e dados operacionais ativos
+                na plataforma.
               </p>
             </div>
 
@@ -349,13 +353,13 @@ export default function AdminPage() {
           <div className="grid gap-3 bg-slate-50/70 p-4 md:grid-cols-3">
             <HeaderSignal
               icon={<Database className="h-4 w-4" />}
-              label="Registros operacionais"
+              label="Dados operacionais"
               value={totalOperationalRecords}
             />
             <HeaderSignal
               icon={<Settings2 className="h-4 w-4" />}
-              label="Empresas configuradas"
-              value={`${configuredCompaniesPercent}%`}
+              label="Empresas com dados"
+              value={operationalCompaniesTotal}
             />
             <HeaderSignal
               icon={<CircleOff className="h-4 w-4" />}
@@ -403,15 +407,15 @@ export default function AdminPage() {
               <MetricCard
                 icon={<Building2 className="h-5 w-5" />}
                 label="Empresas"
-                value={summary?.totalCompanies ?? 0}
-                detail={`${summary?.activeCompanies ?? 0} contas ativas`}
+                value={operationalCompaniesTotal}
+                detail={`${activeOperationalCompanies} ativa com dados reais`}
                 tone="orange"
               />
               <MetricCard
                 icon={<Settings2 className="h-5 w-5" />}
-                label="Configurações"
-                value={summary?.totalSettings ?? 0}
-                detail={`${configuredCompaniesPercent}% das empresas`}
+                label="Dados operacionais"
+                value={totalOperationalRecords}
+                detail="Pessoas, imóveis e contratos"
                 tone="emerald"
               />
               <MetricCard
@@ -466,6 +470,16 @@ export default function AdminPage() {
                   ))}
                 </select>
 
+                <label className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={hideEmptyCompanies}
+                    onChange={(event) => setHideEmptyCompanies(event.target.checked)}
+                    className="h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+                  />
+                  Ocultar sem dados
+                </label>
+
                 <button
                   type="button"
                   onClick={clearFilters}
@@ -478,24 +492,36 @@ export default function AdminPage() {
 
               <div className="mt-3 flex flex-wrap gap-2 text-xs font-black text-slate-500">
                 <Pill>{filteredUsers.length} usuários</Pill>
-                <Pill>{filteredCompanies.length} empresas</Pill>
+                <Pill>{topCompanies.length} empresas exibidas</Pill>
+                {hideEmptyCompanies && emptyCompaniesTotal > 0 && (
+                  <Pill>{emptyCompaniesTotal} sem dados ocultas</Pill>
+                )}
                 <Pill>{roleOptions.length} perfis</Pill>
               </div>
             </section>
 
-            <section className="grid gap-5 xl:grid-cols-12">
-              <div className="rounded-2xl border border-slate-200 bg-white shadow-sm xl:col-span-8">
+            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <PanelHeader
                   title="Empresas"
-                  subtitle="Contas cadastradas e volume por módulo"
-                  action={<StatusSummary active={summary?.activeCompanies ?? 0} inactive={summary?.inactiveCompanies ?? 0} />}
+                  subtitle={
+                    hideEmptyCompanies
+                      ? "Exibindo empresas com pessoas, imóveis ou contratos cadastrados"
+                      : "Exibindo todas as empresas cadastradas"
+                  }
+                  action={<StatusSummary active={activeOperationalCompanies} inactive={inactiveOperationalCompanies} />}
                 />
 
-                <div className="grid max-h-[560px] gap-3 overflow-y-auto p-4 md:grid-cols-2">
+                <div className="grid max-h-[620px] gap-3 overflow-y-auto p-4 md:grid-cols-2 xl:grid-cols-3">
                   {isLoading ? (
                     <EmptyPanel message="Carregando empresas..." />
                   ) : topCompanies.length === 0 ? (
-                    <EmptyPanel message="Nenhuma empresa encontrada." />
+                    <EmptyPanel
+                      message={
+                        hideEmptyCompanies && filteredCompanies.length > 0
+                          ? "As empresas encontradas não possuem dados operacionais cadastrados."
+                          : "Nenhuma empresa encontrada."
+                      }
+                    />
                   ) : (
                     topCompanies.map((company) => (
                       <CompanyCard
@@ -507,47 +533,6 @@ export default function AdminPage() {
                     ))
                   )}
                 </div>
-              </div>
-
-              <div className="space-y-5 xl:col-span-4">
-                <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                  <PanelHeader
-                    title="Usuários recentes"
-                    subtitle="Últimos cadastros encontrados"
-                    action={<UserRoundCheck className="h-5 w-5 text-sky-600" />}
-                  />
-
-                  <div className="space-y-2 p-4">
-                    {isLoading ? (
-                      <EmptyPanel message="Carregando usuários..." />
-                    ) : recentUsers.length === 0 ? (
-                      <EmptyPanel message="Nenhum usuário encontrado." />
-                    ) : (
-                      recentUsers.map((item) => (
-                        <UserCompactCard key={item.id} user={item} />
-                      ))
-                    )}
-                  </div>
-                </section>
-
-                <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                  <PanelHeader
-                    title="Perfis de acesso"
-                    subtitle="Distribuição de usuários"
-                    action={<ShieldCheck className="h-5 w-5 text-emerald-600" />}
-                  />
-
-                  <div className="space-y-3 p-4">
-                    {(summary?.usersByRole ?? []).length === 0 ? (
-                      <EmptyPanel message="Nenhum perfil encontrado." />
-                    ) : (
-                      (summary?.usersByRole ?? []).map((item) => (
-                        <RoleRow key={item.role} role={item.role} total={item.total} />
-                      ))
-                    )}
-                  </div>
-                </section>
-              </div>
             </section>
 
             <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -760,14 +745,6 @@ function StatusBadge({ active }: { active: boolean }) {
   );
 }
 
-function RoleBadge({ role }: { role: string }) {
-  return (
-    <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700 ring-1 ring-slate-200">
-      {roleLabels[role] || role}
-    </span>
-  );
-}
-
 function Pill({ children }: { children: ReactNode }) {
   return (
     <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 ring-1 ring-slate-200">
@@ -803,7 +780,7 @@ function CompanyCard({
   isUpdating: boolean;
   onToggleStatus: (company: AdminCompany) => void;
 }) {
-  const totalRecords = getTotalCompanyRecords(company);
+  const totalRecords = getOperationalCompanyRecords(company);
 
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-orange-200 hover:shadow-md">
@@ -850,7 +827,7 @@ function CompanyCard({
           <Clock3 className="h-3.5 w-3.5 shrink-0 text-orange-600" />
           Criada em {formatDate(company.createdAt)}
         </span>
-        <strong className="shrink-0 text-slate-800">{totalRecords} registros</strong>
+        <strong className="shrink-0 text-slate-800">{totalRecords} dados</strong>
       </div>
     </article>
   );
@@ -862,41 +839,6 @@ function InfoLine({ icon, value }: { icon: ReactNode; value: string }) {
       <span className="shrink-0 text-slate-400">{icon}</span>
       <span className="truncate">{value}</span>
     </span>
-  );
-}
-
-function UserCompactCard({ user }: { user: AdminUser }) {
-  return (
-    <article className="rounded-xl border border-slate-200 bg-white p-3 transition hover:bg-slate-50">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-black text-slate-950">{user.name}</p>
-          <p className="mt-1 truncate text-xs font-semibold text-slate-500">
-            {user.email}
-          </p>
-        </div>
-        <StatusBadge active={user.isActive} />
-      </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <RoleBadge role={user.role} />
-        <span className="text-xs font-bold text-slate-500">
-          {formatDate(user.createdAt)}
-        </span>
-      </div>
-    </article>
-  );
-}
-
-function RoleRow({ role, total }: { role: string; total: number }) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-3 ring-1 ring-slate-100">
-      <span className="text-sm font-black text-slate-700">
-        {roleLabels[role] || role}
-      </span>
-      <strong className="rounded-full bg-white px-3 py-1 text-sm font-black text-slate-950 ring-1 ring-slate-200">
-        {total}
-      </strong>
-    </div>
   );
 }
 
