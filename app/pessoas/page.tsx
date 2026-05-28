@@ -870,7 +870,7 @@ export default function PeoplePage() {
         <section className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
-              Pessoas
+              **Pessoas-Teste**
             </h1>
             <p className="mt-2 text-sm font-medium text-slate-500">
               Gerencie as pessoas cadastradas
