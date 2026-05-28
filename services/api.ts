@@ -1,4 +1,4 @@
-const PUBLIC_API_BASE_URL = 'https://contrx.onrender.com';
+const PUBLIC_API_BASE_URL = 'https://api.contrx.com.br';
 
 function getApiBaseUrl() {
   const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -137,7 +137,7 @@ export async function apiFetch<TResponse>(
 
   if (!apiBaseUrl) {
     throw new Error(
-      'Backend nao configurado. Configure NEXT_PUBLIC_API_URL na Vercel com a URL publica da API do Contrx no Render.',
+      'Backend nao configurado. Configure NEXT_PUBLIC_API_URL com a URL publica da API do Contrx.',
     );
   }
 
