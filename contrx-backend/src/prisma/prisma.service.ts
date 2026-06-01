@@ -55,53 +55,9 @@ export class PrismaService
 
   async onModuleInit(): Promise<void> {
     await this.$connect();
-    await this.ensureDatabaseSchema();
   }
 
   async onModuleDestroy(): Promise<void> {
     await this.$disconnect();
-  }
-
-  private async ensureDatabaseSchema(): Promise<void> {
-    await this.$executeRawUnsafe(`
-      DO $$
-      BEGIN
-        IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'papel_usuario') THEN
-          ALTER TYPE "papel_usuario" ADD VALUE IF NOT EXISTS 'DONO_SISTEMA';
-        END IF;
-      END $$;
-    `);
-
-    await this.$executeRawUnsafe(`
-      ALTER TABLE IF EXISTS "usuarios"
-      ADD COLUMN IF NOT EXISTS "permissoes" JSONB
-    `);
-
-    await this.$executeRawUnsafe(`
-      ALTER TABLE IF EXISTS "usuarios"
-      ADD COLUMN IF NOT EXISTS "sessao_ativa_id" TEXT
-    `);
-
-    await this.$executeRawUnsafe(`
-      ALTER TABLE IF EXISTS "pessoas"
-      ADD COLUMN IF NOT EXISTS "inquilino" BOOLEAN NOT NULL DEFAULT true
-    `);
-
-    await this.$executeRawUnsafe(`
-      ALTER TABLE IF EXISTS "contas_pagar"
-      ADD COLUMN IF NOT EXISTS "imovel_id" TEXT
-    `);
-
-    await this.$executeRawUnsafe(`
-      ALTER TABLE IF EXISTS "agenda_itens"
-      ADD COLUMN IF NOT EXISTS "pessoa_id" TEXT
-    `);
-
-    await this.$executeRawUnsafe(`
-      ALTER TABLE IF EXISTS "agenda_itens"
-      ADD COLUMN IF NOT EXISTS "imovel_id" TEXT
-    `);
-
-    console.log('Database schema guard completed.');
   }
 }

@@ -18,6 +18,10 @@ import {
   RenovarContratoDto,
 } from './dto/acoes-contrato.dto';
 
+type CriarContratoDataWithCompany = CriarContratoDto & {
+  companyId: string;
+};
+
 @Injectable()
 export class ContratosService {
   constructor(private readonly prisma: PrismaService) {}
@@ -100,9 +104,11 @@ export class ContratosService {
       updateContractDto.propertyId ?? currentContract.propertyId;
     const nextTenantId = updateContractDto.tenantId ?? currentContract.tenantId;
     const nextStartDate =
-      updateContractDto.startDate ?? this.formatDateForInput(currentContract.startDate);
+      updateContractDto.startDate ??
+      this.formatDateForInput(currentContract.startDate);
     const nextEndDate =
-      updateContractDto.endDate ?? this.formatDateForInput(currentContract.endDate);
+      updateContractDto.endDate ??
+      this.formatDateForInput(currentContract.endDate);
     const nextRentValue =
       updateContractDto.rentValue ?? Number(currentContract.rentValue || 0);
 
@@ -747,7 +753,7 @@ export class ContratosService {
   }
 
   private buildCreateData(
-    createContractDto: CriarContratoDto,
+    createContractDto: CriarContratoDataWithCompany,
   ): Prisma.ContractCreateInput {
     return {
       company: { connect: { id: createContractDto.companyId } },
@@ -824,10 +830,7 @@ export class ContratosService {
           : undefined,
       startDate:
         normalizedData.startDate !== undefined
-          ? this.parseDate(
-              normalizedData.startDate,
-              'Data inicial invalida.',
-            )
+          ? this.parseDate(normalizedData.startDate, 'Data inicial invalida.')
           : undefined,
       endDate:
         normalizedData.endDate !== undefined

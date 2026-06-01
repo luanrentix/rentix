@@ -9,7 +9,17 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { LoaderCircle, Maximize2, Minimize2, Search, X } from "lucide-react";
+import {
+  Building2,
+  LoaderCircle,
+  Maximize2,
+  Minimize2,
+  Search,
+  UserCheck,
+  UserRound,
+  UserX,
+  X,
+} from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { PersonCreateModal } from "@/components/people/person-create-modal";
 import {
@@ -457,6 +467,11 @@ export default function PeoplePage() {
     });
   }, [people, searchTerm, statusFilter, typeFilter]);
 
+  const activePeople = people.filter((person) => person.status === "active").length;
+  const inactivePeople = people.filter((person) => person.status === "inactive").length;
+  const individualPeople = people.filter((person) => person.type === "individual").length;
+  const companyPeople = people.filter((person) => person.type === "company").length;
+
   const historyData = useMemo(() => {
     if (!historyPerson) {
       return {
@@ -744,10 +759,7 @@ export default function PeoplePage() {
         return;
       }
 
-      const createdPerson = await createPerson({
-        companyId,
-        ...personData,
-      });
+      const createdPerson = await createPerson(personData);
 
       setPeople((currentPeople) => [mapApiPersonToPerson(createdPerson), ...currentPeople]);
 
@@ -866,24 +878,51 @@ export default function PeoplePage() {
 
   return (
     <>
-      <div className="space-y-7">
-        <section className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+      <div className="space-y-5">
+        <section className="flex flex-col gap-5 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
               Pessoas
             </h1>
-            <p className="mt-2 text-sm font-medium text-slate-500">
-              Gerencie as pessoas cadastradas
+            <p className="mt-1 max-w-2xl text-sm font-medium leading-6 text-slate-500">
+              Gerencie clientes, inquilinos, fornecedores e pessoas vinculadas aos contratos.
             </p>
           </div>
 
           <button
             type="button"
             onClick={openCreateModal}
-            className="inline-flex items-center justify-center rounded-2xl bg-orange-500 px-6 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+            className="inline-flex h-12 items-center justify-center rounded-md bg-orange-500 px-6 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
           >
             + Nova pessoa
           </button>
+        </section>
+
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <PeopleStatCard
+            icon={<UserRound className="h-5 w-5" />}
+            label="Total cadastrado"
+            value={people.length}
+            detail={`${filteredPeople.length} visível(is) com filtros atuais`}
+          />
+          <PeopleStatCard
+            icon={<UserCheck className="h-5 w-5" />}
+            label="Ativos"
+            value={activePeople}
+            detail="Disponíveis para operações"
+          />
+          <PeopleStatCard
+            icon={<Building2 className="h-5 w-5" />}
+            label="Pessoa jurídica"
+            value={companyPeople}
+            detail={`${individualPeople} pessoa(s) física(s)`}
+          />
+          <PeopleStatCard
+            icon={<UserX className="h-5 w-5" />}
+            label="Inativos"
+            value={inactivePeople}
+            detail="Mantidos para histórico"
+          />
         </section>
 
         {pageError && !isModalOpen && (
@@ -892,11 +931,11 @@ export default function PeoplePage() {
           </section>
         )}
 
-        <section className="overflow-x-auto rounded-[1.65rem] border border-orange-100 bg-white shadow-sm">
-          <div className="grid gap-5 px-5 py-5 lg:grid-cols-[1fr_620px] lg:items-end">
+        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="grid gap-5 border-b border-slate-100 bg-white px-5 py-5 lg:grid-cols-[1fr_620px] lg:items-end">
             <div>
-              <h2 className="text-xl font-black text-slate-950">Pessoas</h2>
-              <p className="mt-2 text-xs font-medium text-slate-500">
+              <h2 className="text-lg font-black text-slate-950">Cadastros</h2>
+              <p className="mt-1 text-xs font-medium text-slate-500">
                 Exibindo {filteredPeople.length} de {people.length} pessoa(s).
               </p>
             </div>
@@ -904,12 +943,15 @@ export default function PeoplePage() {
             <div className="grid gap-3 sm:grid-cols-[1fr_150px_170px]">
               <label className="space-y-2">
                 <span className="text-xs font-black text-slate-400">Buscar</span>
-                <input
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Nome, CPF/CNPJ, RG/IE, cidade ou e-mail"
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                />
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={searchTerm}
+                    onChange={(event) => setSearchTerm(event.target.value)}
+                    placeholder="Nome, documento, cidade ou e-mail"
+                    className="h-11 w-full rounded-md border border-slate-200 bg-white pl-10 pr-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                  />
+                </div>
               </label>
 
               <label className="space-y-2">
@@ -919,7 +961,7 @@ export default function PeoplePage() {
                   onChange={(event) =>
                     setStatusFilter(event.target.value as "all" | PersonStatus)
                   }
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                  className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                 >
                   <option value="all">Todos</option>
                   <option value="active">Ativos</option>
@@ -932,7 +974,7 @@ export default function PeoplePage() {
                 <select
                   value={typeFilter}
                   onChange={(event) => setTypeFilter(event.target.value as PersonTypeFilter)}
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                  className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                 >
                   <option value="all">Todos</option>
                   <option value="individual">Pessoa física</option>
@@ -944,7 +986,7 @@ export default function PeoplePage() {
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1040px] border-collapse text-left text-sm">
-              <thead className="bg-orange-50/70 text-xs font-black text-slate-950">
+              <thead className="bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-5 py-4 font-black">Nome</th>
                   <th className="px-5 py-4 font-black">Telefone</th>
@@ -990,7 +1032,7 @@ export default function PeoplePage() {
 
                 {!isLoadingPeople &&
                   filteredPeople.map((person) => (
-                    <tr key={person.id} className="transition hover:bg-orange-50/30">
+                    <tr key={person.id} className="transition hover:bg-orange-50/25">
                       <td className="px-5 py-5">
                         <button
                           type="button"
@@ -1057,7 +1099,7 @@ export default function PeoplePage() {
                           <button
                             type="button"
                             onClick={() => openEditModal(person)}
-                            className="rounded-xl bg-slate-100 px-4 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+                            className="rounded-md bg-slate-100 px-4 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
                           >
                             Editar
                           </button>
@@ -1066,7 +1108,7 @@ export default function PeoplePage() {
                             <button
                               type="button"
                               onClick={() => openInactivateModal(person)}
-                              className="rounded-xl bg-red-50 px-4 py-2 text-xs font-black text-red-600 transition hover:bg-red-100"
+                              className="rounded-md bg-red-50 px-4 py-2 text-xs font-black text-red-600 transition hover:bg-red-100"
                             >
                               Inativar
                             </button>
@@ -1732,6 +1774,35 @@ function FormField({
       </span>
       {children}
     </label>
+  );
+}
+
+function PeopleStatCard({
+  icon,
+  label,
+  value,
+  detail,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string | number;
+  detail: string;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+            {label}
+          </p>
+          <p className="mt-2 text-2xl font-black text-slate-950">{value}</p>
+        </div>
+        <span className="flex h-10 w-10 items-center justify-center rounded-md bg-orange-50 text-orange-600">
+          {icon}
+        </span>
+      </div>
+      <p className="mt-2 text-xs font-semibold text-slate-500">{detail}</p>
+    </div>
   );
 }
 

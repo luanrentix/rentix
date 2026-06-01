@@ -181,7 +181,7 @@ const pixKeyTypeOptions: { label: string; value: PixKeyType }[] = [
 const resetModuleOptions: ResetModuleOption[] = [
   {
     key: "properties",
-    label: "Imóveis",
+    label: "Bens/Ativos",
     description: "Remove imóveis cadastrados e seus filtros locais.",
     icon: "🏢",
     storageKeys: [],
@@ -308,7 +308,7 @@ const defaultCompanySettings: CompanySettings = {
   contractDefaultNotes: "",
 };
 
-const maxCompanyLogoSizeInBytes = 1024 * 1024;
+const maxCompanyLogoSizeInBytes = 2 * 1024 * 1024;
 
 const defaultThemeSettings: ThemeSettings = {
   mode: "light",
@@ -1874,7 +1874,7 @@ export default function ConfiguracoesPage() {
     }
 
     if (file.size > maxCompanyLogoSizeInBytes) {
-      setLogoUploadError("A logo precisa ter no máximo 1 MB.");
+      setLogoUploadError("A logo precisa ter no máximo 2 MB.");
       event.target.value = "";
       return;
     }
@@ -2479,7 +2479,7 @@ export default function ConfiguracoesPage() {
                           Logo da empresa
                         </h3>
                         <p className="mt-1 text-sm font-medium leading-6 text-slate-500">
-                          Envie uma imagem PNG, JPG ou SVG com ate 1 MB para aparecer nos documentos e relatorios.
+                          Envie uma imagem PNG, JPG ou SVG com ate 2 MB para aparecer nos documentos e relatorios.
                         </p>
                         {logoUploadError && (
                           <p className="mt-2 text-xs font-bold text-red-600">

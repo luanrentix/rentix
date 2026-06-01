@@ -69,7 +69,11 @@ export class PessoasService {
     await this.findOne(id, companyId);
 
     if (normalizedData.document) {
-      await this.ensureDocumentIsAvailable(normalizedData.document, companyId, id);
+      await this.ensureDocumentIsAvailable(
+        normalizedData.document,
+        companyId,
+        id,
+      );
     }
 
     return this.prisma.person.update({
@@ -163,9 +167,9 @@ export class PessoasService {
     }
   }
 
-  private normalizePersonData<TData extends CriarPessoaDto | AtualizarPessoaDto>(
-    data: TData,
-  ) {
+  private normalizePersonData<
+    TData extends CriarPessoaDto | AtualizarPessoaDto,
+  >(data: TData) {
     return uppercaseFields(data, [
       'name',
       'stateRegistration',

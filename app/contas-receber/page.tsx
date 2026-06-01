@@ -4558,7 +4558,6 @@ export default function AccountsReceivablePage() {
                 manual: true,
               })
             : await createReceivableAccount({
-                companyId,
                 contractId: formContractId || null,
                 tenantId: tenant.id,
                 property: chargeProperty,
@@ -4660,7 +4659,6 @@ export default function AccountsReceivablePage() {
         const apiCharges = await Promise.all(
           newCharges.map((charge) =>
             createReceivableAccount({
-              companyId,
               contractId: formContractId || null,
               tenantId: tenant.id,
               property: charge.property,

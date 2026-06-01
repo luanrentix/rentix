@@ -10,9 +10,6 @@ import {
 } from 'class-validator';
 
 export class CriarContaPagarDto {
-  @IsUUID()
-  companyId: string;
-
   @IsOptional()
   @IsUUID()
   personId?: string | null;

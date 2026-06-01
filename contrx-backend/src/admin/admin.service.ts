@@ -4,7 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { ResetTestDataModule } from './dto/reset-test-data.dto';
 import type { UpdateAdminCompanyDto } from './dto/update-admin-company.dto';
@@ -128,11 +127,15 @@ export class AdminService {
 
     if (userId === currentUserId) {
       if (data.isActive === false) {
-        throw new ForbiddenException('Voce nao pode inativar seu proprio usuario master.');
+        throw new ForbiddenException(
+          'Voce nao pode inativar seu proprio usuario master.',
+        );
       }
 
       if (data.role && data.role !== 'SYSTEM_OWNER') {
-        throw new ForbiddenException('Voce nao pode remover seu proprio perfil master.');
+        throw new ForbiddenException(
+          'Voce nao pode remover seu proprio perfil master.',
+        );
       }
     }
 
@@ -145,14 +148,16 @@ export class AdminService {
       });
 
       if (activeSystemOwners <= 1) {
-        throw new ForbiddenException('Mantenha pelo menos um dono do sistema ativo.');
+        throw new ForbiddenException(
+          'Mantenha pelo menos um dono do sistema ativo.',
+        );
       }
     }
 
     return this.prisma.user.update({
       where: { id: userId },
       data: {
-        ...(data.role !== undefined ? { role: data.role as UserRole } : {}),
+        ...(data.role !== undefined ? { role: data.role } : {}),
         ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
       },
       select: {
@@ -310,7 +315,9 @@ export class AdminService {
       }
 
       if (shouldResetPeople) {
-        const deletedPeople = await tx.person.deleteMany({ where: { companyId } });
+        const deletedPeople = await tx.person.deleteMany({
+          where: { companyId },
+        });
         deletedRecords.people = deletedPeople.count;
       }
 

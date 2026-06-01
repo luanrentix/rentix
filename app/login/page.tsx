@@ -152,10 +152,10 @@ export default function LoginPage() {
           <div className="relative z-10 flex w-full max-w-[525px] justify-center">
             <div className="flex h-20 w-full max-w-[325px] shrink-0 items-center justify-center rounded-[18px] bg-white px-5 shadow-lg sm:h-28 sm:max-w-[430px] sm:rounded-[22px] sm:px-8">
               <Image
-                src="/logo-contrx.png"
+                src="/contrx-logo-horizontal.png"
                 alt="Contrx"
-                width={1536}
-                height={1024}
+                width={2250}
+                height={880}
                 className="h-full w-full object-contain"
                 priority
               />

@@ -43,7 +43,6 @@ export type ReceivableAccount = {
 };
 
 export type CreateReceivableAccountDto = {
-  companyId: string;
   contractId?: string | null;
   tenantId?: string | null;
   property: string;
@@ -86,7 +85,6 @@ export type PayableAccount = {
 };
 
 export type CreatePayableAccountDto = {
-  companyId: string;
   personId?: string | null;
   propertyId?: string | null;
   personName?: string | null;
@@ -116,9 +114,8 @@ export type RegisterPaymentDto = {
 };
 
 export async function getReceivableAccounts(companyId: string) {
-  return apiFetch<ReceivableAccount[]>(
-    `/contas-receber?companyId=${encodeURIComponent(companyId)}`,
-  );
+  void companyId;
+  return apiFetch<ReceivableAccount[]>('/contas-receber');
 }
 
 export async function createReceivableAccount(data: CreateReceivableAccountDto) {
@@ -179,9 +176,8 @@ export async function reverseReceivedAccount(id: string) {
 }
 
 export async function getPayableAccounts(companyId: string) {
-  return apiFetch<PayableAccount[]>(
-    `/contas-pagar?companyId=${encodeURIComponent(companyId)}`,
-  );
+  void companyId;
+  return apiFetch<PayableAccount[]>('/contas-pagar');
 }
 
 export async function createPayableAccount(data: CreatePayableAccountDto) {

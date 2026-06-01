@@ -97,6 +97,7 @@ describe('FinanceiroService', () => {
       endDate: '2026-05-31',
     });
 
+    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(prisma.contaReceber.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {

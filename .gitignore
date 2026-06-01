@@ -21,8 +21,9 @@
 /build
 
 # database backups
-rentix-backend/backups/
 /backups/
+contrx-backend/backups/
+contrx-backend/.local-postgres/
 
 # local dev logs
 /.next-dev*.log

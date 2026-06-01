@@ -13,9 +13,6 @@ import {
 import { Type } from 'class-transformer';
 
 export class CriarContaReceberDto {
-  @IsUUID()
-  companyId: string;
-
   @IsOptional()
   @IsUUID()
   contractId?: string | null;

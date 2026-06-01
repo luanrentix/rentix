@@ -763,13 +763,13 @@ export default function DashboardPage() {
   return (
     <>
         <style>{contrxDashboardThemeStyle}</style>
-        <div data-contrx-theme={dashboardTheme} className="contrx-dashboard-page space-y-8 pt-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div data-contrx-theme={dashboardTheme} className="contrx-dashboard-page space-y-6">
+          <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 md:flex-row md:items-end md:justify-between">
             <div>
               <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
                 Dashboard
               </h1>
-              <p className="mt-2 max-w-2xl text-slate-500">
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
                 Indicadores estratégicos para acompanhar ocupação, receita,
                 contratos e oportunidades da carteira de contratos.
               </p>
@@ -781,7 +781,7 @@ export default function DashboardPage() {
                 onChange={(event) =>
                   setFinancialPeriod(event.target.value as DashboardFinancialPeriod)
                 }
-                className="h-12 rounded-2xl border border-orange-100 bg-white px-4 text-sm font-black text-slate-600 shadow-sm outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-black text-slate-600 shadow-sm outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                 aria-label="Período financeiro da Dashboard"
               >
                 <option value="CurrentMonth">Mês atual</option>
@@ -789,7 +789,7 @@ export default function DashboardPage() {
                 <option value="All">Todos</option>
               </select>
 
-              <div className="rounded-2xl border border-orange-100 bg-white px-5 py-3 text-sm font-bold text-slate-600 shadow-sm">
+              <div className="flex h-11 items-center rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 shadow-sm">
                 <span className="inline-flex items-center gap-2">
                   <CalendarDays className="h-4 w-4 text-orange-500" />
                   Hoje, {new Date().toLocaleDateString("pt-BR")}
@@ -808,7 +808,7 @@ export default function DashboardPage() {
                 type="button"
                 onClick={refreshDashboardData}
                 disabled={!companyId || isDashboardLoading}
-                className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                className="h-11 rounded-md bg-orange-500 px-5 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isDashboardLoading ? "Atualizando..." : "Atualizar dados"}
               </button>
@@ -833,7 +833,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <MetricCard
               icon={<DollarSign className="h-5 w-5" />}
               title="Receita mensal prevista"
@@ -867,7 +867,7 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-3">
             <FinancialSummaryCard
               title="Recebido confirmado"
               value={formatCurrency(receivedTotal)}
@@ -1159,19 +1159,19 @@ type MetricCardProps = {
 
 function MetricCard({ icon, title, value, detail, trend }: MetricCardProps) {
   return (
-    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
+    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md">
       <div className="flex items-start justify-between gap-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-xl text-orange-600">
+        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-orange-50 text-orange-600">
           {icon}
         </div>
-        <span className="rounded-full bg-slate-50 px-3 py-1 text-xs font-black text-slate-500">
+        <span className="rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-black text-slate-500">
           {trend}
         </span>
       </div>
 
-      <p className="mt-5 text-sm font-bold text-slate-500">{title}</p>
+      <p className="mt-4 text-sm font-bold text-slate-500">{title}</p>
       <h3 className="mt-2 text-2xl font-black text-slate-950">{value}</h3>
-      <p className="mt-3 text-sm font-bold text-orange-600">{detail}</p>
+      <p className="mt-2 text-sm font-bold text-orange-600">{detail}</p>
     </div>
   );
 }
@@ -1238,7 +1238,7 @@ function FinancialSummaryCard({ title, value, detail, tone }: FinancialSummaryCa
   }[tone];
 
   return (
-    <div className={`rounded-2xl px-4 py-4 ${toneClassName}`}>
+    <div className={`rounded-lg px-4 py-3.5 ${toneClassName}`}>
       <p className="text-xs font-black uppercase tracking-wide opacity-80">
         {title}
       </p>

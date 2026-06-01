@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtGuardAutenticacao } from '../autenticacao/guards/jwt-autenticacao.guard';
 import { CurrentUser } from '../autenticacao/decorators/usuario-atual.decorator';
 import type { UsuarioAutenticado } from '../autenticacao/types/usuario-autenticado.type';
@@ -53,6 +61,10 @@ export class AdminController {
     @CurrentUser() user: UsuarioAutenticado,
     @Body() data: ResetTestDataDto,
   ) {
-    return this.adminService.resetTestData(user.companyId, user.id, data.modules);
+    return this.adminService.resetTestData(
+      user.companyId,
+      user.id,
+      data.modules,
+    );
   }
 }

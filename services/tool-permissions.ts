@@ -1,6 +1,6 @@
 export const toolPermissionOptions = [
   { key: 'dashboard', label: 'Dashboard', href: '/dashboard', icon: '🏠' },
-  { key: 'properties', label: 'Imóveis', href: '/imoveis', icon: '🏢' },
+  { key: 'properties', label: 'Bens/Ativos', href: '/imoveis', icon: '🏢' },
   { key: 'people', label: 'Pessoas', href: '/pessoas', icon: '👥' },
   { key: 'contracts', label: 'Contratos', href: '/contratos', icon: '📄' },
   { key: 'financial', label: 'Financeiro', href: '/financeiro', icon: '💰' },

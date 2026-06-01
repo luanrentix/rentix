@@ -21,7 +21,7 @@ const whatsappUrl = process.env.NEXT_PUBLIC_WHATSAPP_URL;
 
 const modules = [
   {
-    title: "Imóveis",
+    title: "Bens/Ativos",
     description: "Carteira organizada com status, dados do proprietário e histórico.",
     icon: Home,
   },
@@ -61,7 +61,7 @@ const overviewMetrics = [
 const previewRows = [
   { label: "Contratos vencendo", value: "6", tone: "bg-orange-50 text-orange-700" },
   { label: "Contas em atenção", value: "12", tone: "bg-red-50 text-red-700" },
-  { label: "Imóveis disponíveis", value: "14", tone: "bg-emerald-50 text-emerald-700" },
+  { label: "Bens/ativos disponíveis", value: "14", tone: "bg-emerald-50 text-emerald-700" },
 ];
 
 export default async function HomePage() {
@@ -77,14 +77,13 @@ export default async function HomePage() {
         <div className="mx-auto flex h-20 w-full max-w-7xl items-center justify-between px-5 sm:px-8">
           <Link href="/" className="flex items-center gap-3" aria-label="Contrx">
             <Image
-              src="/logo-contrx.svg"
-              alt=""
-              width={52}
-              height={52}
-              className="h-12 w-12 rounded-2xl object-contain shadow-sm"
+              src="/contrx-logo-horizontal-light.png"
+              alt="Contrx"
+              width={2250}
+              height={880}
+              className="h-14 w-36 object-contain sm:w-44"
               priority
             />
-            <span className="text-2xl font-black text-slate-950">Contrx</span>
           </Link>
 
           <nav className="hidden items-center gap-8 text-sm font-black text-slate-600 md:flex">
@@ -121,24 +120,24 @@ export default async function HomePage() {
         <div className="absolute inset-0 bg-[linear-gradient(110deg,#ffffff_0%,#f8fafc_48%,#fff1e8_100%)]" />
         <div className="absolute inset-x-0 bottom-0 h-28 bg-slate-950" />
 
-        <div className="relative mx-auto grid w-full max-w-7xl gap-10 px-5 py-12 sm:px-8 lg:min-h-[calc(100dvh-5rem)] lg:grid-cols-[minmax(0,1fr)_430px] lg:items-center lg:py-16">
+        <div className="relative mx-auto grid w-full max-w-7xl gap-10 px-5 py-10 sm:px-8 lg:min-h-[calc(100dvh-5rem)] lg:grid-cols-[minmax(0,1fr)_400px] lg:items-start lg:py-14">
           <div className="min-w-0">
             <div className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-4 py-2 text-xs font-black uppercase text-[#ff4b00]">
               <ShieldCheck size={16} />
               ERP de gestão de contratos online
             </div>
 
-            <h1 className="mt-7 max-w-4xl text-4xl font-black leading-[1.04] text-slate-950 sm:text-6xl lg:text-7xl">
-              Gestão de contratos mais clara, rápida e controlada.
+            <h1 className="mt-6 max-w-4xl text-4xl font-black leading-[1.04] text-slate-950 sm:text-5xl lg:text-6xl">
+              Controle contratos, cobranças e vencimentos em um só painel.
             </h1>
 
-            <p className="mt-6 max-w-2xl text-base font-semibold leading-8 text-slate-600 sm:text-xl">
-              O Contrx reúne imóveis, pessoas, contratos, agenda e financeiro
-              em uma operação única para sua equipe acompanhar tudo sem depender
-              de planilhas soltas.
+            <p className="mt-5 max-w-2xl text-base font-semibold leading-8 text-slate-600 sm:text-lg">
+              O Contrx organiza imóveis, pessoas, contratos, agenda e financeiro
+              para sua equipe acompanhar a operação sem depender de planilhas
+              soltas.
             </p>
 
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
               <a
                 href="#experimente"
                 className="inline-flex h-14 items-center justify-center gap-2 rounded-full bg-[#ff4b00] px-7 text-base font-black text-white shadow-[0_20px_45px_rgba(255,75,0,0.24)] transition hover:bg-[#e94400]"
@@ -154,23 +153,31 @@ export default async function HomePage() {
               </Link>
             </div>
 
-            <div className="mt-10 grid gap-3 sm:grid-cols-3">
-              {overviewMetrics.map((metric) => (
-                <div
-                  key={metric.label}
-                  className="rounded-[8px] border border-slate-200 bg-white px-5 py-4 shadow-sm"
-                >
-                  <p className="text-2xl font-black text-slate-950">
-                    {metric.value}
-                  </p>
-                  <p className="mt-1 text-xs font-black uppercase text-slate-500">
-                    {metric.label}
-                  </p>
-                </div>
-              ))}
+            <div className="mt-8 rounded-[8px] border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between gap-4">
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                  Exemplo de operação monitorada
+                </p>
+                <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgb(16_185_129/0.14)]" />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {overviewMetrics.map((metric) => (
+                  <div
+                    key={metric.label}
+                    className="rounded-[8px] border border-slate-100 bg-slate-50 px-4 py-3"
+                  >
+                    <p className="text-2xl font-black text-slate-950">
+                      {metric.value}
+                    </p>
+                    <p className="mt-1 text-xs font-black uppercase text-slate-500">
+                      {metric.label}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <div className="relative mt-10 overflow-hidden rounded-[24px] border border-slate-800 bg-slate-950 p-4 shadow-[0_30px_80px_rgba(15,23,42,0.22)] lg:mr-8">
+            <div className="relative mt-8 overflow-hidden rounded-[24px] border border-slate-800 bg-slate-950 p-4 shadow-[0_30px_80px_rgba(15,23,42,0.22)] lg:mr-8">
               <div className="rounded-[18px] bg-white p-4">
                 <div className="flex flex-col gap-4 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>

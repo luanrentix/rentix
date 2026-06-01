@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 
 import { AutenticacaoService } from './autenticacao.service';
 
@@ -44,7 +52,7 @@ export class AutenticacaoController {
 
   @Get('sessao')
   @UseGuards(JwtGuardAutenticacao)
-  async verifySession(@CurrentUser() user: UsuarioAutenticado) {
+  verifySession(@CurrentUser() user: UsuarioAutenticado) {
     return {
       active: true,
       userId: user.id,

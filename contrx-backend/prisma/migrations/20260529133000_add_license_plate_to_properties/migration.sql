@@ -1,0 +1,2 @@
+ALTER TABLE "imoveis"
+ADD COLUMN IF NOT EXISTS "placa" TEXT;

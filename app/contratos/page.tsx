@@ -374,6 +374,7 @@ type PropertyStatus = "Available" | "Rented";
 type Property = {
   id: string;
   name: string;
+  assetCategory?: string | null;
   rentValue?: number;
   status: PropertyStatus;
   isActive?: boolean;
@@ -1298,7 +1299,6 @@ export default function ContractsPage() {
     const createdAccounts = await Promise.all(
       missingSchedule.map((installment) =>
         createReceivableAccount({
-          companyId,
           contractId: String(contract.id),
           tenantId: String(contract.tenantId),
           property: contract.propertyName,
@@ -1351,12 +1351,12 @@ export default function ContractsPage() {
     const selectedTenant = tenants.find((tenant) => String(tenant.id) === String(tenantId));
 
     if (!selectedProperty) {
-      setFormError("Selecione um imóvel válido.");
+      setFormError("Selecione um bem/ativo válido.");
       return;
     }
 
     if (selectedProperty.isActive === false) {
-      setFormError("Este imóvel está inativo e não pode ser utilizado para criar ou alterar um contrato.");
+      setFormError("Este bem/ativo está inativo e não pode ser utilizado para criar ou alterar um contrato.");
       return;
     }
 
@@ -1369,7 +1369,7 @@ export default function ContractsPage() {
     });
 
     if (propertyHasAnotherActiveContract) {
-      setFormError("Este imóvel já possui contrato ativo e não pode ser usado em outro contrato.");
+      setFormError("Este bem/ativo já possui contrato ativo e não pode ser usado em outro contrato.");
       return;
     }
 
@@ -1463,7 +1463,7 @@ export default function ContractsPage() {
 
     try {
       const savedContract = await createContract(
-        buildContractPayload(newContract, companyId) as CreateContractDto,
+        buildContractPayload(newContract) as CreateContractDto,
       );
       Object.assign(newContract, mapApiContractToContract(savedContract));
     } catch (error) {
@@ -1479,7 +1479,7 @@ export default function ContractsPage() {
     registerPropertyMovementFromContract(
       newContract,
       "ContractCreated",
-      "Contrato criado e imóvel vinculado à locação."
+      "Contrato criado e bem/ativo vinculado à locação."
     );
     resetForm();
     await openReceivableChargeFromContract(newContract);
@@ -1645,7 +1645,7 @@ export default function ContractsPage() {
         `Olá, ${contract.tenantName || tenant?.name || "inquilino"}.`,
         "",
         `${companyName} informa sobre o contrato de locação:`,
-        `Imóvel: ${contract.propertyName || "Não informado"}`,
+        `Bem/Ativo: ${contract.propertyName || "Não informado"}`,
         `Período: ${formatDate(contract.startDate)} até ${formatDate(contract.endDate)}`,
         `Valor: ${formatCurrency(contract.rentValue)}`,
         `Status: ${getContractStatusLabel(getDisplayContractStatus(contract))}`,
@@ -1927,7 +1927,7 @@ export default function ContractsPage() {
       registerPropertyMovementFromContract(
         finishedContract,
         "ContractFinished",
-        "Contrato finalizado e imóvel liberado para nova locação."
+        "Contrato finalizado e bem/ativo liberado para nova locação."
       );
     } catch (error) {
       setFinishReasonError(
@@ -2398,7 +2398,7 @@ export default function ContractsPage() {
                   type="text"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Buscar por imóvel ou inquilino"
+                  placeholder="Buscar por bem/ativo ou inquilino"
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                 />
               </FormField>
@@ -2425,7 +2425,7 @@ export default function ContractsPage() {
             <table className="w-full min-w-[900px] text-left">
               <thead className="bg-orange-50">
                 <tr>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">Imóvel</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">Bem/Ativo</th>
                   <th className="px-6 py-4 text-sm font-black text-slate-700">Inquilino</th>
                   <th className="px-6 py-4 text-sm font-black text-slate-700">Início</th>
                   <th className="px-6 py-4 text-sm font-black text-slate-700">Fim</th>
@@ -2658,7 +2658,7 @@ export default function ContractsPage() {
                 <div className="min-h-0 flex-1 overflow-y-auto bg-white p-6">
                   {contractDetailsActiveTab === "Data" && (
                     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                      <DetailCard title="Imóvel" value={selectedContractDetails.propertyName || "Não informado"} detail={formatFullAddressForPrint({
+                      <DetailCard title="Bem/Ativo" value={selectedContractDetails.propertyName || "Não informado"} detail={formatFullAddressForPrint({
                         street: detailsProperty?.street,
                         number: detailsProperty?.number,
                         neighborhood: detailsProperty?.neighborhood,
@@ -2747,7 +2747,7 @@ export default function ContractsPage() {
 
                   {contractDetailsActiveTab === "History" && (
                     <div className="space-y-4">
-                      <TimelineItem icon={<FileText className="h-5 w-5" />} title="Contrato criado" description="Contrato registrado no módulo de contratos e imóvel vinculado à locação." date={formatDate(selectedContractDetails.startDate)} />
+                      <TimelineItem icon={<FileText className="h-5 w-5" />} title="Contrato criado" description="Contrato registrado no módulo de contratos e bem/ativo vinculado à locação." date={formatDate(selectedContractDetails.startDate)} />
 
                       {(selectedContractDetails.renewalHistory || []).map((renewal, index) => (
                         <TimelineItem
@@ -2932,7 +2932,7 @@ export default function ContractsPage() {
                   Finalizar contrato
                 </h3>
                 <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
-                  Ao confirmar, o contrato será finalizado e o imóvel ficará disponível para uma nova locação.
+                  Ao confirmar, o contrato será finalizado e o bem/ativo ficará disponível para uma nova locação.
                 </p>
               </div>
 
@@ -3337,14 +3337,14 @@ export default function ContractsPage() {
                   )}
 
                   <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                    <FormField label="Imóvel" required>
+                    <FormField label="Bem/Ativo" required>
                       <select
                         value={propertyId}
                         onChange={(event) => handlePropertyChange(event.target.value)}
                         required
                         className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                       >
-                        <option value="">Selecione um imóvel</option>
+                        <option value="">Selecione um bem/ativo</option>
 
                         {availableProperties.map((property) => (
                           <option key={property.id} value={property.id}>
@@ -3785,7 +3785,7 @@ function mapApiContractToContract(apiContract: ApiContract): Contract {
   const propertyName =
     apiContract.propertyName ||
     apiContract.property?.title ||
-    "IMÓVEL NÃO INFORMADO";
+    "BEM/ATIVO NÃO INFORMADO";
   const tenantName =
     apiContract.tenantName ||
     apiContract.tenant?.name ||
@@ -3862,6 +3862,7 @@ function mapApiPropertyToProperty(
   return {
     id: apiProperty.id,
     name: toUpperText(apiProperty.title || ""),
+    assetCategory: apiProperty.assetCategory || "PROPERTY",
     rentValue: Number(apiProperty.rentalValue || 0),
     status: hasActiveContract ? "Rented" : "Available",
     isActive: apiProperty.isActive ?? true,
@@ -3893,12 +3894,8 @@ function mapApiPersonToTenant(apiPerson: ApiPerson): ContrxTenant {
   };
 }
 
-function buildContractPayload(
-  contract: Contract,
-  companyId?: string,
-): CreateContractDto | UpdateContractDto {
+function buildContractPayload(contract: Contract): CreateContractDto | UpdateContractDto {
   return {
-    ...(companyId ? { companyId } : {}),
     propertyId: contract.propertyId,
     tenantId: contract.tenantId,
     propertyName: contract.propertyName,
@@ -4086,7 +4083,7 @@ function buildStandardResidentialContractHtml(
     zipCode: tenant?.zipCode,
     complement: tenant?.complement,
   });
-  const propertyName = contract.propertyName || property?.name || "IMÓVEL NÃO INFORMADO";
+  const propertyName = contract.propertyName || property?.name || "BEM/ATIVO NÃO INFORMADO";
   const propertyAddress = formatFullAddressForPrint({
     street: property?.street,
     number: property?.number,
@@ -4176,7 +4173,7 @@ function buildTemporaryRentalContractHtml(
     zipCode: tenant?.zipCode,
     complement: tenant?.complement,
   });
-  const propertyName = contract.propertyName || property?.name || "IMÓVEL NÃO INFORMADO";
+  const propertyName = contract.propertyName || property?.name || "BEM/ATIVO NÃO INFORMADO";
   const propertyAddress = formatFullAddressForPrint({
     street: property?.street,
     number: property?.number,
@@ -4598,7 +4595,23 @@ function escapeHtml(value: string) {
 }
 
 function getPropertyOptionLabel(property: Property) {
-  return toUpperText(property.name || "");
+  const categoryLabel = getAssetCategoryLabel(property.assetCategory);
+  const propertyName = toUpperText(property.name || "");
+
+  return categoryLabel ? `${propertyName} - ${categoryLabel}` : propertyName;
+}
+
+function getAssetCategoryLabel(value?: string | null) {
+  const labels: Record<string, string> = {
+    PROPERTY: "Imóvel",
+    EQUIPMENT: "Equipamento",
+    MACHINE: "Máquina",
+    VEHICLE: "Veículo",
+    TOOL: "Ferramenta",
+    OTHER: "Outro bem",
+  };
+
+  return labels[value || ""] || "";
 }
 
 function normalizeSearchText(value: string) {

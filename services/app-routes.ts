@@ -24,7 +24,7 @@ export const internalToolRoutes: AppToolRoute[] = [
     scope: "internal",
   },
   {
-    label: "Imóveis",
+    label: "Bens/Ativos",
     href: "/imoveis",
     icon: "🏢",
     permissionKey: "properties",

@@ -398,7 +398,9 @@ export class AutenticacaoService {
     }
 
     if (password && password.length < 6) {
-      throw new BadRequestException('A senha precisa ter pelo menos 6 caracteres.');
+      throw new BadRequestException(
+        'A senha precisa ter pelo menos 6 caracteres.',
+      );
     }
 
     const existingUser = await this.prisma.user.findFirst({

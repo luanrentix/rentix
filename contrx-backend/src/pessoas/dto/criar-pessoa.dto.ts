@@ -4,7 +4,6 @@ import {
   IsIn,
   IsOptional,
   IsString,
-  IsUUID,
   MinLength,
 } from 'class-validator';
 
@@ -13,9 +12,6 @@ export type PersonType = 'INDIVIDUAL' | 'COMPANY';
 export type PersonStatus = 'ACTIVE' | 'INACTIVE';
 
 export class CriarPessoaDto {
-  @IsUUID()
-  companyId: string;
-
   @IsIn(['INDIVIDUAL', 'COMPANY'])
   type: PersonType;
 

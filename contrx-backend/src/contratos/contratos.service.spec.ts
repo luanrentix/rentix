@@ -152,6 +152,7 @@ describe('ContratosService', () => {
     expect(tx.contract.create).toHaveBeenCalled();
     expect(tx.contaReceber.create).not.toHaveBeenCalled();
     expect(tx.scheduleItem.create).toHaveBeenCalledWith({
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       data: expect.objectContaining({
         companyId: 'company-1',
         title: 'Vencimento de contrato',

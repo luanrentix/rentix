@@ -9,6 +9,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CriarContaPagarDto, PagarContaDto } from './dto/criar-conta-pagar.dto';
 import { AtualizarContaPagarDto } from './dto/atualizar-conta-pagar.dto';
 
+type CriarContaPagarDataWithCompany = CriarContaPagarDto & {
+  companyId: string;
+};
+
+type AtualizarContaPagarDataWithCompany = AtualizarContaPagarDto & {
+  companyId: string;
+};
+
 @Injectable()
 export class ContasPagarService {
   constructor(private readonly prisma: PrismaService) {}
@@ -87,7 +95,9 @@ export class ContasPagarService {
     }
 
     if ((data.interest || 0) < 0 || (data.discount || 0) < 0) {
-      throw new BadRequestException('Juros e desconto nao podem ser negativos.');
+      throw new BadRequestException(
+        'Juros e desconto nao podem ser negativos.',
+      );
     }
 
     const account = await this.ensureExists(id, companyId);
@@ -154,7 +164,9 @@ export class ContasPagarService {
     }
 
     if ((data.interest || 0) < 0 || (data.discount || 0) < 0) {
-      throw new BadRequestException('Juros e desconto nao podem ser negativos.');
+      throw new BadRequestException(
+        'Juros e desconto nao podem ser negativos.',
+      );
     }
 
     const account = await this.ensureExists(id, companyId);
@@ -290,7 +302,7 @@ export class ContasPagarService {
   }
 
   private buildCreateData(
-    data: CriarContaPagarDto,
+    data: CriarContaPagarDataWithCompany,
   ): Prisma.ContaPagarCreateInput {
     const normalizedData = this.normalizeAccountData(data);
 
@@ -321,7 +333,7 @@ export class ContasPagarService {
   }
 
   private buildUpdateData(
-    data: AtualizarContaPagarDto,
+    data: AtualizarContaPagarDataWithCompany,
   ): Prisma.ContaPagarUpdateInput {
     const normalizedData = this.normalizeAccountData(data);
 
@@ -351,7 +363,9 @@ export class ContasPagarService {
           ? normalizedData.category || null
           : undefined,
       note:
-        normalizedData.note !== undefined ? normalizedData.note || null : undefined,
+        normalizedData.note !== undefined
+          ? normalizedData.note || null
+          : undefined,
       amount:
         normalizedData.amount !== undefined
           ? new Prisma.Decimal(normalizedData.amount)
@@ -379,7 +393,9 @@ export class ContasPagarService {
   }
 
   private normalizeAccountData<
-    TData extends CriarContaPagarDto | AtualizarContaPagarDto,
+    TData extends
+      | CriarContaPagarDataWithCompany
+      | AtualizarContaPagarDataWithCompany,
   >(data: TData) {
     return uppercaseFields(data, [
       'personName',

@@ -1,5 +1,3 @@
-const PUBLIC_API_BASE_URL = 'https://api.contrx.com.br';
-
 function getApiBaseUrl() {
   const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
   const isBrowser = typeof window !== 'undefined';
@@ -26,10 +24,6 @@ function getApiBaseUrl() {
 
   if (isLocalhost) {
     return 'http://localhost:3001';
-  }
-
-  if (isBrowser) {
-    return PUBLIC_API_BASE_URL;
   }
 
   return '';

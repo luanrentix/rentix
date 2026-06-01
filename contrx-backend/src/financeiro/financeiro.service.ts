@@ -268,7 +268,9 @@ export class FinanceiroService {
     }, 0);
 
     const paymentsInRange = dateRange
-      ? payments.filter((payment) => this.isDateInRange(payment.paidAt, dateRange))
+      ? payments.filter((payment) =>
+          this.isDateInRange(payment.paidAt, dateRange),
+        )
       : payments;
     const paidAmountInRange = paymentsInRange.reduce((total, payment) => {
       const amount = Number(payment.amountPaid || 0);
@@ -319,7 +321,9 @@ export class FinanceiroService {
 
     const parsedDate = value.includes('T')
       ? new Date(value)
-      : new Date(`${value}T${boundary === 'end' ? '23:59:59.999' : '00:00:00'}`);
+      : new Date(
+          `${value}T${boundary === 'end' ? '23:59:59.999' : '00:00:00'}`,
+        );
 
     if (Number.isNaN(parsedDate.getTime())) {
       throw new BadRequestException(errorMessage);

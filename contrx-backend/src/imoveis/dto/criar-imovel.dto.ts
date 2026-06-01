@@ -8,9 +8,6 @@ import {
 } from 'class-validator';
 
 export class CriarImovelDto {
-  @IsUUID()
-  companyId: string;
-
   @IsOptional()
   @IsUUID()
   ownerId?: string;
@@ -30,6 +27,38 @@ export class CriarImovelDto {
   @IsOptional()
   @IsString()
   purpose?: string;
+
+  @IsOptional()
+  @IsString()
+  assetCategory?: string;
+
+  @IsOptional()
+  @IsString()
+  brand?: string;
+
+  @IsOptional()
+  @IsString()
+  model?: string;
+
+  @IsOptional()
+  @IsString()
+  serialNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  licensePlate?: string;
+
+  @IsOptional()
+  @IsNumber()
+  manufactureYear?: number;
+
+  @IsOptional()
+  @IsString()
+  condition?: string;
+
+  @IsOptional()
+  @IsString()
+  patrimonyCode?: string;
 
   @IsOptional()
   @IsNumber()

@@ -36,4 +36,4 @@ COPY --from=builder /app/scripts ./scripts
 
 EXPOSE 3001
 
-CMD ["sh", "-c", "node scripts/apply-pending-migrations.js && npm run ensure:schema && node dist/src/main.js"]
+CMD ["sh", "-c", "node scripts/apply-pending-migrations.js && node dist/src/main.js"]

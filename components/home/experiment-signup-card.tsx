@@ -55,14 +55,14 @@ export default function ExperimentSignupCard() {
   return (
     <section
       id="experimente"
-      className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_28px_70px_rgba(15,23,42,0.16)] sm:p-6"
+      className="rounded-[18px] border border-slate-200 bg-white p-5 shadow-[0_22px_55px_rgba(15,23,42,0.12)] lg:mt-16"
       aria-label="Experimente grátis"
     >
-      <div className="mb-5">
+      <div className="mb-4">
         <p className="text-xs font-black uppercase text-[#ff4b00]">
           Experimente grátis
         </p>
-        <h2 className="mt-2 text-2xl font-black leading-tight text-slate-950">
+        <h2 className="mt-2 text-xl font-black leading-tight text-slate-950">
           Crie sua conta e acesse o Contrx
         </h2>
         <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
@@ -70,7 +70,7 @@ export default function ExperimentSignupCard() {
         </p>
       </div>
 
-      <div className="grid gap-3">
+      <div className="grid gap-2.5">
         <SignupInput
           icon={<User size={18} />}
           type="text"
@@ -124,7 +124,7 @@ export default function ExperimentSignupCard() {
         type="button"
         onClick={handleCreateAccount}
         disabled={isSubmitting || isLoading}
-        className="mt-5 flex h-[52px] min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-[#ff4b00] px-5 text-sm font-black text-white shadow-[0_18px_34px_rgba(255,75,0,0.24)] transition hover:bg-[#e94400] disabled:cursor-not-allowed disabled:opacity-70"
+        className="mt-4 flex h-12 min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#ff4b00] px-5 text-sm font-black text-white shadow-[0_16px_30px_rgba(255,75,0,0.22)] transition hover:bg-[#e94400] disabled:cursor-not-allowed disabled:opacity-70"
       >
         <UserPlus size={18} />
         {isSubmitting ? "Criando conta..." : "Começar grátis"}
@@ -157,7 +157,7 @@ function SignupInput({
   onEnter,
 }: SignupInputProps) {
   return (
-    <div className="flex h-12 items-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
+    <div className="flex h-11 items-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
       <div className="flex h-full w-12 shrink-0 items-center justify-center text-slate-500">
         {icon}
       </div>

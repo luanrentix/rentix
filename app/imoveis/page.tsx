@@ -34,6 +34,16 @@ type PropertyRegistrationFilterStatus = "All" | "Active" | "Inactive";
 
 type PropertyRentalFilterStatus = "All" | PropertyStatus;
 
+type PropertyCategoryFilterStatus = "All" | AssetCategory;
+
+type AssetCategory =
+  | "PROPERTY"
+  | "EQUIPMENT"
+  | "MACHINE"
+  | "VEHICLE"
+  | "TOOL"
+  | "OTHER";
+
 type PropertyType =
   | "Apartment"
   | "House"
@@ -46,8 +56,16 @@ type PropertyType =
 type Property = {
   id: string;
   code: string;
+  assetCategory: AssetCategory;
   type: PropertyType;
   name: string;
+  brand: string;
+  model: string;
+  serialNumber: string;
+  licensePlate: string;
+  manufactureYear: number;
+  condition: string;
+  patrimonyCode: string;
   zipCode: string;
   state: string;
   city: string;
@@ -130,8 +148,16 @@ type CompanySettings = {
 type PropertyModalDraft = {
   editingPropertyId: string | null;
   code: string;
+  assetCategory: AssetCategory;
   type: PropertyType;
   name: string;
+  brand: string;
+  model: string;
+  serialNumber: string;
+  licensePlate: string;
+  manufactureYear: string;
+  condition: string;
+  patrimonyCode: string;
   zipCode: string;
   state: string;
   city: string;
@@ -155,6 +181,23 @@ const propertyTypes: Array<{ label: string; value: PropertyType }> = [
   { label: "Comercial", value: "Commercial" },
   { label: "Terreno", value: "Land" },
   { label: "Outro", value: "Other" },
+];
+
+const assetCategories: Array<{ label: string; value: AssetCategory }> = [
+  { label: "Imóvel", value: "PROPERTY" },
+  { label: "Equipamento", value: "EQUIPMENT" },
+  { label: "Máquina", value: "MACHINE" },
+  { label: "Veículo", value: "VEHICLE" },
+  { label: "Ferramenta", value: "TOOL" },
+  { label: "Outro bem", value: "OTHER" },
+];
+
+const assetConditionOptions = [
+  "Novo",
+  "Excelente",
+  "Bom",
+  "Regular",
+  "Precisa de manutenção",
 ];
 
 const activeRentalStatuses = ["Active", "Expiring"];
@@ -218,8 +261,18 @@ function normalizeApiProperty(
   return {
     id: property.id,
     code: toUpperText(property.code || ""),
+    assetCategory: isValidAssetCategory(property.assetCategory)
+      ? property.assetCategory
+      : "PROPERTY",
     type: normalizedType,
     name: toUpperText(property.title || ""),
+    brand: toUpperText(property.brand || ""),
+    model: toUpperText(property.model || ""),
+    serialNumber: toUpperText(property.serialNumber || ""),
+    licensePlate: toUpperText(property.licensePlate || ""),
+    manufactureYear: Number(property.manufactureYear || 0),
+    condition: toUpperText(property.condition || ""),
+    patrimonyCode: toUpperText(property.patrimonyCode || ""),
     zipCode: property.zipCode || "",
     state: toUpperText(property.state || ""),
     city: toUpperText(property.city || ""),
@@ -264,8 +317,16 @@ export default function PropertiesPage() {
   const [reportMode, setReportMode] = useState<"General" | "Rental">("General");
 
   const [code, setCode] = useState("");
+  const [assetCategory, setAssetCategory] = useState<AssetCategory>("PROPERTY");
   const [type, setType] = useState<PropertyType>("Apartment");
   const [name, setName] = useState("");
+  const [brand, setBrand] = useState("");
+  const [model, setModel] = useState("");
+  const [serialNumber, setSerialNumber] = useState("");
+  const [licensePlate, setLicensePlate] = useState("");
+  const [manufactureYear, setManufactureYear] = useState("");
+  const [condition, setCondition] = useState("");
+  const [patrimonyCode, setPatrimonyCode] = useState("");
   const [zipCode, setZipCode] = useState("");
   const [state, setState] = useState("");
   const [city, setCity] = useState("");
@@ -284,6 +345,8 @@ export default function PropertiesPage() {
   const [zipCodeFeedback, setZipCodeFeedback] = useState("");
 
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] =
+    useState<PropertyCategoryFilterStatus>("All");
   const [registrationFilter, setRegistrationFilter] =
     useState<PropertyRegistrationFilterStatus>("Active");
   const [rentalFilter, setRentalFilter] = useState<PropertyRentalFilterStatus>("All");
@@ -360,12 +423,21 @@ export default function PropertiesPage() {
       const matchesRental =
         rentalFilter === "All" || property.status === rentalFilter;
 
-      return matchesSearch && matchesRegistration && matchesRental;
+      const matchesCategory =
+        categoryFilter === "All" || property.assetCategory === categoryFilter;
+
+      return matchesSearch && matchesRegistration && matchesRental && matchesCategory;
     });
-  }, [properties, registrationFilter, rentalFilter, search]);
+  }, [categoryFilter, properties, registrationFilter, rentalFilter, search]);
 
   const activeProperties = properties.filter((property) => property.isActive).length;
   const inactiveProperties = properties.filter((property) => !property.isActive).length;
+  const realEstateAssets = properties.filter(
+    (property) => property.assetCategory === "PROPERTY",
+  ).length;
+  const operationalAssets = properties.filter(
+    (property) => property.assetCategory !== "PROPERTY",
+  ).length;
   const rentedProperties = properties.filter(
     (property) => property.status === "Rented" && property.isActive,
   ).length;
@@ -515,8 +587,16 @@ export default function PropertiesPage() {
 
   function resetForm() {
     setCode("");
+    setAssetCategory("PROPERTY");
     setType("Apartment");
     setName("");
+    setBrand("");
+    setModel("");
+    setSerialNumber("");
+    setLicensePlate("");
+    setManufactureYear("");
+    setCondition("");
+    setPatrimonyCode("");
     setZipCode("");
     setState("");
     setCity("");
@@ -538,8 +618,16 @@ export default function PropertiesPage() {
     return {
       editingPropertyId,
       code,
+      assetCategory,
       type,
       name,
+      brand,
+      model,
+      serialNumber,
+      licensePlate,
+      manufactureYear,
+      condition,
+      patrimonyCode,
       zipCode,
       state,
       city,
@@ -559,8 +647,16 @@ export default function PropertiesPage() {
   function applyPropertyModalDraft(draft: PropertyModalDraft) {
     setEditingPropertyId(draft.editingPropertyId);
     setCode(draft.code || "");
+    setAssetCategory(draft.assetCategory || "PROPERTY");
     setType(draft.type || "Apartment");
     setName(draft.name || "");
+    setBrand(draft.brand || "");
+    setModel(draft.model || "");
+    setSerialNumber(draft.serialNumber || "");
+    setLicensePlate(draft.licensePlate || "");
+    setManufactureYear(draft.manufactureYear || "");
+    setCondition(draft.condition || "");
+    setPatrimonyCode(draft.patrimonyCode || "");
     setZipCode(draft.zipCode || "");
     setState(draft.state || "");
     setCity(draft.city || "");
@@ -581,7 +677,7 @@ export default function PropertiesPage() {
     setMinimizedModalState<PropertyModalDraft>({
       tool: "properties",
       href: "/imoveis",
-      title: editingPropertyId ? "Editar imovel" : "Novo imovel",
+      title: editingPropertyId ? "Editar bem/ativo" : "Novo bem/ativo",
       subtitle: name || "Cadastro em andamento",
       mode: editingPropertyId ? "edit" : "create",
       draft: getPropertyModalDraft(),
@@ -600,6 +696,17 @@ export default function PropertiesPage() {
     resetForm();
     setIsFormMinimized(false);
     setIsFormOpen(true);
+  }
+
+  function handleAssetCategoryChange(value: AssetCategory) {
+    setAssetCategory(value);
+
+    if (value === "PROPERTY") {
+      setType("Apartment");
+      return;
+    }
+
+    setType("Other");
   }
 
   function handleCloseForm() {
@@ -700,6 +807,12 @@ export default function PropertiesPage() {
 
     const formattedName = toUpperText(name);
     const formattedCode = toUpperText(code);
+    const formattedBrand = toUpperText(brand);
+    const formattedModel = toUpperText(model);
+    const formattedSerialNumber = toUpperText(serialNumber);
+    const formattedLicensePlate = toUpperText(licensePlate);
+    const formattedCondition = toUpperText(condition);
+    const formattedPatrimonyCode = toUpperText(patrimonyCode);
     const formattedState = toUpperText(state);
     const formattedCity = toUpperText(city);
     const formattedNeighborhood = toUpperText(neighborhood);
@@ -710,15 +823,19 @@ export default function PropertiesPage() {
     const parsedBedrooms = parsePositiveInteger(bedrooms);
     const parsedBathrooms = parsePositiveInteger(bathrooms);
     const parsedGarages = parsePositiveInteger(garages);
+    const parsedManufactureYear = parsePositiveInteger(manufactureYear);
+    const isPropertyAsset = assetCategory === "PROPERTY";
     if (
+      !assetCategory ||
       !type ||
       !formattedName ||
-      !zipCode ||
-      !formattedState ||
-      !formattedCity ||
-      !formattedNeighborhood ||
-      !formattedStreet ||
-      !formattedNumber ||
+      (isPropertyAsset &&
+        (!zipCode ||
+          !formattedState ||
+          !formattedCity ||
+          !formattedNeighborhood ||
+          !formattedStreet ||
+          !formattedNumber)) ||
       parsedRentValue <= 0
     ) {
       alert("Preencha todos os campos obrigatórios.");
@@ -748,10 +865,17 @@ export default function PropertiesPage() {
     }
 
     const payload = {
-      companyId,
       title: formattedName,
       code: formattedCode,
+      assetCategory,
       type,
+      brand: formattedBrand,
+      model: formattedModel,
+      serialNumber: formattedSerialNumber,
+      licensePlate: formattedLicensePlate,
+      manufactureYear: parsedManufactureYear,
+      condition: formattedCondition,
+      patrimonyCode: formattedPatrimonyCode,
       rentalValue: parsedRentValue,
       zipCode,
       state: formattedState,
@@ -807,8 +931,16 @@ export default function PropertiesPage() {
 
     setEditingPropertyId(property.id);
     setCode(property.code);
+    setAssetCategory(property.assetCategory);
     setType(property.type);
     setName(property.name);
+    setBrand(property.brand);
+    setModel(property.model);
+    setSerialNumber(property.serialNumber);
+    setLicensePlate(property.licensePlate);
+    setManufactureYear(property.manufactureYear ? String(property.manufactureYear) : "");
+    setCondition(property.condition);
+    setPatrimonyCode(property.patrimonyCode);
     setZipCode(property.zipCode);
     setState(property.state);
     setCity(property.city);
@@ -907,6 +1039,22 @@ export default function PropertiesPage() {
 
   function getPropertyTypeLabel(value: PropertyType) {
     return propertyTypes.find((item) => item.value === value)?.label || "Outro";
+  }
+
+  function getAssetCategoryLabel(value: AssetCategory) {
+    return assetCategories.find((item) => item.value === value)?.label || "Outro bem";
+  }
+
+  function getAssetTechnicalSummary(property: Property) {
+    const details = [
+      property.brand,
+      property.model,
+      property.serialNumber ? `Série ${property.serialNumber}` : "",
+      property.licensePlate ? `Placa ${property.licensePlate}` : "",
+      property.patrimonyCode ? `Patrimônio ${property.patrimonyCode}` : "",
+    ].filter(Boolean);
+
+    return details.join(" • ");
   }
 
   return (
@@ -1424,10 +1572,10 @@ export default function PropertiesPage() {
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
-              Imóveis
+              Bens/Ativos
             </h1>
             <p className="mt-2 text-slate-500">
-              Cadastre, acompanhe e gerencie os imóveis disponíveis para locação.
+              Cadastre, acompanhe e gerencie imóveis, equipamentos, máquinas e outros bens disponíveis para contratos.
             </p>
           </div>
 
@@ -1435,7 +1583,7 @@ export default function PropertiesPage() {
             onClick={handleOpenCreateForm}
             className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
           >
-            + Novo imóvel
+            + Novo bem/ativo
           </button>
         </div>
 
@@ -1443,22 +1591,22 @@ export default function PropertiesPage() {
           <SummaryCard icon="🏢" title="Cadastrados" value={properties.length} detail="Total no sistema" />
           <SummaryCard icon="✅" title="Ativos" value={activeProperties} detail="Prontos para uso" />
           <SummaryCard icon="🚫" title="Inativos" value={inactiveProperties} detail="Histórico preservado" />
-          <SummaryCard icon="🔑" title="Ocupação" value={`${occupancyRate}%`} detail={`${rentedProperties} alugado(s)`} />
-          <SummaryCard icon="💰" title="Receita mensal" value={formatCurrency(totalMonthlyRevenue)} detail="Contratos ativos" />
+          <SummaryCard icon="🔑" title="Imóveis" value={realEstateAssets} detail="Categoria imóvel" />
+          <SummaryCard icon="💰" title="Outros ativos" value={operationalAssets} detail="Equipamentos e bens" />
         </div>
 
         <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm">
           <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div>
               <h2 className="text-2xl font-black text-slate-950">
-                Imóveis cadastrados
+                Bens/Ativos cadastrados
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Exibindo {filteredProperties.length} de {properties.length} imóveis.
+                Exibindo {filteredProperties.length} de {properties.length} bens/ativos.
               </p>
             </div>
 
-            <div className="grid w-full gap-3 md:grid-cols-[minmax(260px,1fr)_180px_190px] xl:max-w-4xl">
+            <div className="grid w-full gap-3 md:grid-cols-2 xl:max-w-5xl xl:grid-cols-[minmax(260px,1fr)_180px_180px_190px]">
               <FormField label="Buscar">
                 <input
                   type="text"
@@ -1467,6 +1615,23 @@ export default function PropertiesPage() {
                   placeholder="Nome, endereço, cidade ou bairro"
                   className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                 />
+              </FormField>
+
+              <FormField label="Categoria">
+                <select
+                  value={categoryFilter}
+                  onChange={(event) =>
+                    setCategoryFilter(event.target.value as PropertyCategoryFilterStatus)
+                  }
+                  className="w-full appearance-auto rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                >
+                  <option value="All">Todas</option>
+                  {assetCategories.map((categoryOption) => (
+                    <option key={categoryOption.value} value={categoryOption.value}>
+                      {categoryOption.label}
+                    </option>
+                  ))}
+                </select>
               </FormField>
 
               <FormField label="Cadastro">
@@ -1536,8 +1701,8 @@ export default function PropertiesPage() {
               <table className="w-full min-w-[1050px] border-collapse bg-white text-left">
                 <thead className="bg-orange-50">
                   <tr>
-                    <th className="px-5 py-4 text-sm font-black text-slate-700">Imóvel</th>
-                    <th className="px-5 py-4 text-sm font-black text-slate-700">Tipo</th>
+                    <th className="px-5 py-4 text-sm font-black text-slate-700">Bem/Ativo</th>
+                    <th className="px-5 py-4 text-sm font-black text-slate-700">Categoria</th>
                     <th className="px-5 py-4 text-sm font-black text-slate-700">Localização</th>
                     <th className="px-5 py-4 text-sm font-black text-slate-700">Valor</th>
                     <th className="px-5 py-4 text-sm font-black text-slate-700">Cadastro</th>
@@ -1570,12 +1735,13 @@ export default function PropertiesPage() {
                           </p>
                         )}
                         <p className="text-xs font-semibold text-slate-500">
-                          CEP: {property.zipCode || "Não informado"}
+                          {getAssetTechnicalSummary(property) || `CEP: ${property.zipCode || "Não informado"}`}
                         </p>
                       </td>
 
                       <td className="px-5 py-4 text-sm font-semibold text-slate-700">
-                        {getPropertyTypeLabel(property.type)}
+                        <p className="font-black">{getAssetCategoryLabel(property.assetCategory)}</p>
+                        <p className="mt-1 text-xs text-slate-500">{getPropertyTypeLabel(property.type)}</p>
                       </td>
 
                       <td className="px-5 py-4 text-sm font-semibold text-slate-600">
@@ -1894,7 +2060,7 @@ export default function PropertiesPage() {
                     <span className="h-2 w-2 rounded-full bg-orange-500 shadow-[0_0_0_4px_rgb(249_115_22/0.16)]" />
                   </div>
                   <p className="truncate text-base font-black text-slate-950">
-                    {editingPropertyId ? "Editar imóvel" : "Novo imóvel"}
+                    {editingPropertyId ? "Editar bem/ativo" : "Novo bem/ativo"}
                   </p>
                   <p className="truncate text-sm font-semibold text-slate-500">
                     {name || "Cadastro em andamento"}
@@ -1933,10 +2099,10 @@ export default function PropertiesPage() {
               <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-8 py-6">
                 <div>
                   <h2 className="text-2xl font-black text-slate-950">
-                    {editingPropertyId ? "Editar imóvel" : "Novo imóvel"}
+                    {editingPropertyId ? "Editar bem/ativo" : "Novo bem/ativo"}
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Preencha os dados principais do imóvel para locação.
+                    Preencha os dados principais do bem ou ativo para contratos.
                   </p>
                 </div>
 
@@ -1963,9 +2129,37 @@ export default function PropertiesPage() {
                 </div>
               </div>
 
-              <div className="p-8">
-                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                  <FormField label="Código">
+              <div className="space-y-6 p-8">
+                <FormSection
+                  title="Identificação"
+                  description="Dados básicos usados para localizar e selecionar o bem nos contratos."
+                >
+                  <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                    <FormField label="Categoria do ativo" required>
+                      <select
+                        value={assetCategory}
+                        onChange={(event) => handleAssetCategoryChange(event.target.value as AssetCategory)}
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                      >
+                        {assetCategories.map((category) => (
+                          <option key={category.value} value={category.value}>
+                            {category.label}
+                          </option>
+                        ))}
+                      </select>
+                    </FormField>
+
+                    <FormField label="Nome do bem/ativo" required>
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(event) => setName(toUpperText(event.target.value))}
+                        placeholder={assetCategory === "PROPERTY" ? "Ex: APARTAMENTO CENTRO" : "Ex: ESCAVADEIRA CAT 320"}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                      />
+                    </FormField>
+
+                    <FormField label="Código">
                     <input
                       type="text"
                       value={code}
@@ -1973,81 +2167,81 @@ export default function PropertiesPage() {
                       placeholder="Ex: IMV-001"
                       className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                     />
-                  </FormField>
+                    </FormField>
 
-                  <FormField label="Tipo de imóvel" required>
-                    <select
-                      value={type}
-                      onChange={(event) => setType(event.target.value as PropertyType)}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                    >
-                      {propertyTypes.map((propertyType) => (
-                        <option key={propertyType.value} value={propertyType.value}>
-                          {propertyType.label}
-                        </option>
-                      ))}
-                    </select>
-                  </FormField>
+                    {assetCategory === "PROPERTY" && (
+                      <FormField label="Tipo de imóvel" required>
+                        <select
+                          value={type}
+                          onChange={(event) => setType(event.target.value as PropertyType)}
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        >
+                          {propertyTypes.map((propertyType) => (
+                            <option key={propertyType.value} value={propertyType.value}>
+                              {propertyType.label}
+                            </option>
+                          ))}
+                        </select>
+                      </FormField>
+                    )}
 
-                  <FormField label="Disponibilidade">
-                    <div className="min-h-[58px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-black text-slate-700">
-                          Status automático
-                        </span>
-                        <StatusBadge
-                          status={
-                            editingPropertyId &&
-                            propertyHasActiveContract(editingPropertyId, contracts)
-                              ? "Rented"
-                              : "Available"
-                          }
-                        />
+                    <FormField label="Situação do cadastro">
+                      <div className="space-y-2">
+                        <label
+                          className={`flex min-h-[58px] cursor-pointer items-center gap-3 rounded-2xl border px-4 py-4 text-sm font-black transition ${
+                            isActive
+                              ? "border-emerald-200 bg-emerald-50/50 text-emerald-800"
+                              : "border-red-200 bg-red-50 text-red-700"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isActive}
+                            onChange={(event) => handleActiveChange(event.target.checked)}
+                            className="h-5 w-5 rounded border-slate-300 accent-orange-500"
+                          />
+                          {isActive ? "Bem/ativo ativo" : "Bem/ativo inativo"}
+                        </label>
+
+                        {!isActive && (
+                          <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-bold leading-5 text-red-700">
+                            Atenção: bem/ativo inativo não poderá ser selecionado em novos contratos.
+                            O histórico será preservado para relatórios e auditoria.
+                          </div>
+                        )}
                       </div>
-                      <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
-                        O imóvel muda para alugado quando existe contrato ativo.
-                      </p>
-                    </div>
-                  </FormField>
+                    </FormField>
 
-                  <FormField label="Situação do cadastro">
-                    <div className="space-y-2">
-                      <label
-                        className={`flex min-h-[58px] cursor-pointer items-center gap-3 rounded-2xl border px-4 py-4 text-sm font-black transition ${
-                          isActive
-                            ? "border-emerald-200 bg-emerald-50/50 text-emerald-800"
-                            : "border-red-200 bg-red-50 text-red-700"
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isActive}
-                          onChange={(event) => handleActiveChange(event.target.checked)}
-                          className="h-5 w-5 rounded border-slate-300 accent-orange-500"
-                        />
-                        {isActive ? "Imóvel ativo" : "Imóvel inativo"}
-                      </label>
-
-                      {!isActive && (
-                        <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-bold leading-5 text-red-700">
-                          Atenção: imóvel inativo não poderá ser selecionado em novos contratos.
-                          O histórico será preservado para relatórios e auditoria.
+                    <FormField label="Disponibilidade">
+                      <div className="min-h-[58px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm font-black text-slate-700">
+                            Status automático
+                          </span>
+                          <StatusBadge
+                            status={
+                              editingPropertyId &&
+                              propertyHasActiveContract(editingPropertyId, contracts)
+                                ? "Rented"
+                                : "Available"
+                            }
+                          />
                         </div>
-                      )}
-                    </div>
-                  </FormField>
+                        <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
+                          Atualizado automaticamente quando existe contrato ativo.
+                        </p>
+                      </div>
+                    </FormField>
+                  </div>
+                </FormSection>
 
-                  <FormField label="Nome do imóvel" required>
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={(event) => setName(toUpperText(event.target.value))}
-                      placeholder="Ex: APARTAMENTO CENTRO"
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                    />
-                  </FormField>
-
-                  <FormField label="CEP" required>
+                {assetCategory === "PROPERTY" ? (
+                  <FormSection
+                    title="Dados do imóvel"
+                    description="Endereço e características físicas do imóvel."
+                  >
+                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                      <FormField label="CEP" required>
                     <div className="space-y-2">
                       <div className="flex gap-2">
                         <input
@@ -2081,9 +2275,9 @@ export default function PropertiesPage() {
                         <p className="text-xs font-bold text-slate-500">{zipCodeFeedback}</p>
                       )}
                     </div>
-                  </FormField>
+                      </FormField>
 
-                  <FormField label="Estado" required>
+                      <FormField label="Estado" required>
                     <input
                       type="text"
                       value={state}
@@ -2091,9 +2285,9 @@ export default function PropertiesPage() {
                       placeholder="UF"
                       className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                     />
-                  </FormField>
+                      </FormField>
 
-                  <FormField label="Cidade" required>
+                      <FormField label="Cidade" required>
                     <input
                       type="text"
                       value={city}
@@ -2101,9 +2295,9 @@ export default function PropertiesPage() {
                       placeholder="Cidade"
                       className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                     />
-                  </FormField>
+                      </FormField>
 
-                  <FormField label="Bairro" required>
+                      <FormField label="Bairro" required>
                     <input
                       type="text"
                       value={neighborhood}
@@ -2111,9 +2305,9 @@ export default function PropertiesPage() {
                       placeholder="Bairro"
                       className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                     />
-                  </FormField>
+                      </FormField>
 
-                  <FormField label="Logradouro" required>
+                      <FormField label="Logradouro" required>
                     <input
                       type="text"
                       value={street}
@@ -2121,9 +2315,9 @@ export default function PropertiesPage() {
                       placeholder="Rua, avenida..."
                       className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                     />
-                  </FormField>
+                      </FormField>
 
-                  <FormField label="Número" required>
+                      <FormField label="Número" required>
                     <input
                       type="text"
                       value={number}
@@ -2131,9 +2325,9 @@ export default function PropertiesPage() {
                       placeholder="Número"
                       className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                     />
-                  </FormField>
+                      </FormField>
 
-                  <FormField label="Complemento">
+                      <FormField label="Complemento">
                     <input
                       type="text"
                       value={complement}
@@ -2141,9 +2335,130 @@ export default function PropertiesPage() {
                       placeholder="Apartamento, bloco, referência..."
                       className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                     />
-                  </FormField>
+                      </FormField>
 
-                  <FormField label="Valor da locação mensal" required>
+                      <FormField label="Quartos">
+                        <input
+                          type="number"
+                          min="0"
+                          value={bedrooms}
+                          onChange={(event) => setBedrooms(event.target.value)}
+                          placeholder="0"
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        />
+                      </FormField>
+
+                      <FormField label="Banheiros">
+                        <input
+                          type="number"
+                          min="0"
+                          value={bathrooms}
+                          onChange={(event) => setBathrooms(event.target.value)}
+                          placeholder="0"
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        />
+                      </FormField>
+
+                      <FormField label="Vagas">
+                        <input
+                          type="number"
+                          min="0"
+                          value={garages}
+                          onChange={(event) => setGarages(event.target.value)}
+                          placeholder="0"
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        />
+                      </FormField>
+                    </div>
+                  </FormSection>
+                ) : (
+                  <FormSection
+                    title="Dados técnicos"
+                    description="Identificação técnica, conservação e controle patrimonial do equipamento ou bem."
+                  >
+                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                      <FormField label="Marca">
+                        <input
+                          type="text"
+                          value={brand}
+                          onChange={(event) => setBrand(toUpperText(event.target.value))}
+                          placeholder="Ex: CATERPILLAR"
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        />
+                      </FormField>
+
+                      <FormField label="Modelo">
+                        <input
+                          type="text"
+                          value={model}
+                          onChange={(event) => setModel(toUpperText(event.target.value))}
+                          placeholder="Ex: 320 GC"
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        />
+                      </FormField>
+
+                      <FormField label="Número de série">
+                        <input
+                          type="text"
+                          value={serialNumber}
+                          onChange={(event) => setSerialNumber(toUpperText(event.target.value))}
+                          placeholder="Ex: SN-123456"
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        />
+                      </FormField>
+
+                      <FormField label={assetCategory === "VEHICLE" ? "Placa" : "Placa / identificação"}>
+                        <input
+                          type="text"
+                          value={licensePlate}
+                          onChange={(event) => setLicensePlate(toUpperText(event.target.value))}
+                          placeholder={assetCategory === "VEHICLE" ? "Ex: ABC1D23" : "Ex: PLACA OU TAG"}
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        />
+                      </FormField>
+
+                      <FormField label="Código patrimonial">
+                        <input
+                          type="text"
+                          value={patrimonyCode}
+                          onChange={(event) => setPatrimonyCode(toUpperText(event.target.value))}
+                          placeholder="Ex: PAT-001"
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        />
+                      </FormField>
+
+                      <FormField label="Ano de fabricação">
+                        <input
+                          type="number"
+                          min="0"
+                          value={manufactureYear}
+                          onChange={(event) => setManufactureYear(event.target.value)}
+                          placeholder="Ex: 2024"
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        />
+                      </FormField>
+
+                      <FormField label="Condição">
+                        <select
+                          value={condition}
+                          onChange={(event) => setCondition(event.target.value)}
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        >
+                          <option value="">Selecione</option>
+                          {assetConditionOptions.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </FormField>
+                    </div>
+                  </FormSection>
+                )}
+
+                <FormSection title="Valores e observações">
+                  <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                    <FormField label="Valor da Locação" required>
                     <input
                       type="text"
                       value={rentValue}
@@ -2152,53 +2467,21 @@ export default function PropertiesPage() {
                       inputMode="numeric"
                       className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                     />
-                  </FormField>
+                    </FormField>
 
-                  <FormField label="Quartos">
-                    <input
-                      type="number"
-                      min="0"
-                      value={bedrooms}
-                      onChange={(event) => setBedrooms(event.target.value)}
-                      placeholder="0"
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                    />
-                  </FormField>
-
-                  <FormField label="Banheiros">
-                    <input
-                      type="number"
-                      min="0"
-                      value={bathrooms}
-                      onChange={(event) => setBathrooms(event.target.value)}
-                      placeholder="0"
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                    />
-                  </FormField>
-
-                  <FormField label="Vagas">
-                    <input
-                      type="number"
-                      min="0"
-                      value={garages}
-                      onChange={(event) => setGarages(event.target.value)}
-                      placeholder="0"
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                    />
-                  </FormField>
-
-                  <div className="md:col-span-2 xl:col-span-4">
-                    <FormField label="Descrição">
+                    <div className="md:col-span-2 xl:col-span-3">
+                      <FormField label="Descrição">
                       <textarea
                         value={description}
                         onChange={(event) => setDescription(event.target.value)}
-                        placeholder="Observações internas, características ou referências do imóvel"
+                        placeholder="Observações internas, características, acessórios inclusos ou referências do bem/ativo"
                         rows={3}
                         className="w-full resize-none rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                       />
-                    </FormField>
+                      </FormField>
+                    </div>
                   </div>
-                </div>
+                </FormSection>
               </div>
 
               <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-slate-100 bg-white px-8 py-6">
@@ -2220,7 +2503,7 @@ export default function PropertiesPage() {
                   disabled={isSavingProperty}
                   className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {editingPropertyId ? "Salvar alterações" : "Cadastrar imóvel"}
+                  {editingPropertyId ? "Salvar alterações" : "Cadastrar bem/ativo"}
                 </button>
               </div>
             </div>
@@ -2283,6 +2566,30 @@ function FormField({ label, children, required = false }: FormFieldProps) {
       </label>
       {children}
     </div>
+  );
+}
+
+type FormSectionProps = {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+};
+
+function FormSection({ title, description, children }: FormSectionProps) {
+  return (
+    <section className="rounded-3xl border border-slate-100 bg-slate-50/60 p-5">
+      <div className="mb-5">
+        <h3 className="text-sm font-black uppercase tracking-wide text-slate-700">
+          {title}
+        </h3>
+        {description ? (
+          <p className="mt-1 text-sm font-semibold leading-6 text-slate-500">
+            {description}
+          </p>
+        ) : null}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -2765,6 +3072,10 @@ function getCurrentCompanyId() {
 
 function isValidPropertyType(value: string | null | undefined): value is PropertyType {
   return propertyTypes.some((propertyType) => propertyType.value === value);
+}
+
+function isValidAssetCategory(value: string | null | undefined): value is AssetCategory {
+  return assetCategories.some((assetCategory) => assetCategory.value === value);
 }
 
 function getMovementTypeLabel(type: PropertyMovementType) {

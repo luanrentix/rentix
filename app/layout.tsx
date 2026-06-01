@@ -26,15 +26,15 @@ export const metadata: Metadata = {
     type: 'website',
     images: [
       {
-        url: '/logo-contrx.png',
-        width: 1536,
-        height: 1024,
+        url: '/logo-contrx-light.png',
+        width: 2250,
+        height: 880,
         alt: 'Contrx',
       },
     ],
   },
   icons: {
-    icon: '/logo-contrx.svg',
+    icon: '/icon.png',
     apple: '/icon.png',
   },
 };

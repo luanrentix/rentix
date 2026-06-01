@@ -45,9 +45,16 @@ export class ImoveisService {
         code: data.code || null,
         type: data.type || null,
         purpose: data.purpose || null,
+        assetCategory: data.assetCategory || 'PROPERTY',
+        brand: data.brand || null,
+        model: data.model || null,
+        serialNumber: data.serialNumber || null,
+        licensePlate: data.licensePlate || null,
+        manufactureYear: data.manufactureYear ?? null,
+        condition: data.condition || null,
+        patrimonyCode: data.patrimonyCode || null,
         rentalValue:
-          data.rentalValue !== undefined &&
-          data.rentalValue !== null
+          data.rentalValue !== undefined && data.rentalValue !== null
             ? new Prisma.Decimal(data.rentalValue)
             : null,
 
@@ -135,70 +142,66 @@ export class ImoveisService {
       data: {
         companyId,
         ownerId:
-          data.ownerId !== undefined
-            ? data.ownerId || null
-            : property.ownerId,
+          data.ownerId !== undefined ? data.ownerId || null : property.ownerId,
 
         title: data.title ?? property.title,
-        code:
-          data.code !== undefined
-            ? data.code || null
-            : property.code,
-        type:
-          data.type !== undefined
-            ? data.type || null
-            : property.type,
+        code: data.code !== undefined ? data.code || null : property.code,
+        type: data.type !== undefined ? data.type || null : property.type,
         purpose:
-          data.purpose !== undefined
-            ? data.purpose || null
-            : property.purpose,
+          data.purpose !== undefined ? data.purpose || null : property.purpose,
+        assetCategory:
+          data.assetCategory !== undefined
+            ? data.assetCategory || 'PROPERTY'
+            : property.assetCategory,
+        brand: data.brand !== undefined ? data.brand || null : property.brand,
+        model: data.model !== undefined ? data.model || null : property.model,
+        serialNumber:
+          data.serialNumber !== undefined
+            ? data.serialNumber || null
+            : property.serialNumber,
+        licensePlate:
+          data.licensePlate !== undefined
+            ? data.licensePlate || null
+            : property.licensePlate,
+        manufactureYear:
+          data.manufactureYear !== undefined
+            ? data.manufactureYear
+            : property.manufactureYear,
+        condition:
+          data.condition !== undefined
+            ? data.condition || null
+            : property.condition,
+        patrimonyCode:
+          data.patrimonyCode !== undefined
+            ? data.patrimonyCode || null
+            : property.patrimonyCode,
         rentalValue:
-          data.rentalValue !== undefined &&
-          data.rentalValue !== null
+          data.rentalValue !== undefined && data.rentalValue !== null
             ? new Prisma.Decimal(data.rentalValue)
             : property.rentalValue,
 
         zipCode:
-          data.zipCode !== undefined
-            ? data.zipCode || null
-            : property.zipCode,
-        city:
-          data.city !== undefined
-            ? data.city || null
-            : property.city,
-        state:
-          data.state !== undefined
-            ? data.state || null
-            : property.state,
+          data.zipCode !== undefined ? data.zipCode || null : property.zipCode,
+        city: data.city !== undefined ? data.city || null : property.city,
+        state: data.state !== undefined ? data.state || null : property.state,
         address:
-          data.address !== undefined
-            ? data.address || null
-            : property.address,
+          data.address !== undefined ? data.address || null : property.address,
         district:
           data.district !== undefined
             ? data.district || null
             : property.district,
         number:
-          data.number !== undefined
-            ? data.number || null
-            : property.number,
+          data.number !== undefined ? data.number || null : property.number,
         complement:
           data.complement !== undefined
             ? data.complement || null
             : property.complement,
 
         bedrooms:
-          data.bedrooms !== undefined
-            ? data.bedrooms
-            : property.bedrooms,
+          data.bedrooms !== undefined ? data.bedrooms : property.bedrooms,
         bathrooms:
-          data.bathrooms !== undefined
-            ? data.bathrooms
-            : property.bathrooms,
-        garages:
-          data.garages !== undefined
-            ? data.garages
-            : property.garages,
+          data.bathrooms !== undefined ? data.bathrooms : property.bathrooms,
+        garages: data.garages !== undefined ? data.garages : property.garages,
 
         description:
           data.description !== undefined
@@ -248,14 +251,21 @@ export class ImoveisService {
     });
   }
 
-  private normalizePropertyData<TData extends CriarImovelDto | AtualizarImovelDto>(
-    data: TData,
-  ) {
+  private normalizePropertyData<
+    TData extends CriarImovelDto | AtualizarImovelDto,
+  >(data: TData) {
     return uppercaseFields(data, [
       'title',
       'code',
       'type',
       'purpose',
+      'assetCategory',
+      'brand',
+      'model',
+      'serialNumber',
+      'licensePlate',
+      'condition',
+      'patrimonyCode',
       'city',
       'state',
       'address',

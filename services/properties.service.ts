@@ -3,6 +3,14 @@ import { uppercaseFields } from './text-normalization';
 
 export type PropertyStatus = 'Available' | 'Rented';
 
+export type AssetCategory =
+  | 'PROPERTY'
+  | 'EQUIPMENT'
+  | 'MACHINE'
+  | 'VEHICLE'
+  | 'TOOL'
+  | 'OTHER';
+
 export type PropertyType =
   | 'Apartment'
   | 'House'
@@ -22,6 +30,14 @@ export type Property = {
 
   type?: string | null;
   purpose?: string | null;
+  assetCategory?: AssetCategory | string | null;
+  brand?: string | null;
+  model?: string | null;
+  serialNumber?: string | null;
+  licensePlate?: string | null;
+  manufactureYear?: number | null;
+  condition?: string | null;
+  patrimonyCode?: string | null;
 
   rentalValue?: number | null;
 
@@ -52,7 +68,6 @@ export type Property = {
 };
 
 export type CreatePropertyDto = {
-  companyId: string;
   ownerId?: string | null;
 
   title: string;
@@ -60,6 +75,14 @@ export type CreatePropertyDto = {
 
   type?: string;
   purpose?: string;
+  assetCategory?: AssetCategory | string;
+  brand?: string;
+  model?: string;
+  serialNumber?: string;
+  licensePlate?: string;
+  manufactureYear?: number;
+  condition?: string;
+  patrimonyCode?: string;
 
   rentalValue?: number;
 
@@ -83,9 +106,8 @@ export type CreatePropertyDto = {
 export type UpdatePropertyDto = Partial<CreatePropertyDto>;
 
 export async function getProperties(companyId: string) {
-  return apiFetch<Property[]>(
-    `/imoveis?companyId=${companyId}`,
-  );
+  void companyId;
+  return apiFetch<Property[]>('/imoveis');
 }
 
 export async function getPropertyById(id: string) {
@@ -123,6 +145,13 @@ function normalizePropertyPayload<
     'code',
     'type',
     'purpose',
+    'assetCategory',
+    'brand',
+    'model',
+    'serialNumber',
+    'licensePlate',
+    'condition',
+    'patrimonyCode',
     'city',
     'state',
     'address',

@@ -109,8 +109,8 @@ const pixKeyTypeOptions: { label: string; value: PixKeyType }[] = [
 const resetModuleOptions: ResetModuleOption[] = [
   {
     key: "properties",
-    label: "Imóveis",
-    description: "Remove imóveis cadastrados e seus filtros locais.",
+    label: "Bens/Ativos",
+    description: "Remove bens/ativos cadastrados e seus filtros locais.",
     icon: "🏢",
     storageKeys: [],
   },
@@ -891,7 +891,6 @@ export default function AppShell({ children }: AppShellProps) {
     themeSettings.mode === "black"
       ? "bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-orange-300"
       : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-orange-300";
-
   return (
     <AuthGuard>
       <div
@@ -931,11 +930,11 @@ export default function AppShell({ children }: AppShellProps) {
                 className="flex min-w-0 flex-1 items-center justify-center transition hover:opacity-90"
               >
                 <Image
-                  src="/logo-contrx.png"
+                  src={isSidebarOpen ? "/contrx-logo-horizontal.png" : "/contrx-symbol.png"}
                   alt="Contrx"
-                  width={1536}
-                  height={1024}
-                  className={`object-contain transition-all duration-300 ease-in-out ${isSidebarOpen ? "h-24 w-56 lg:h-28 lg:w-60" : "h-12 w-14 lg:h-12 lg:w-14"}`}
+                  width={2250}
+                  height={880}
+                  className={`object-contain transition-all duration-300 ease-in-out ${isSidebarOpen ? "h-20 w-56 lg:h-24 lg:w-60" : "h-12 w-14 lg:h-12 lg:w-14"}`}
                 />
               </Link>
               <button

@@ -1248,7 +1248,6 @@ export default function AccountsPayablePage() {
                 manual: true,
               })
             : await createPayableAccount({
-                companyId,
                 personId: selectedTenant.id,
                 propertyId: selectedProperty?.id || null,
                 personName: selectedTenant.name,
@@ -1342,7 +1341,6 @@ export default function AccountsPayablePage() {
         const apiExpenses = await Promise.all(
           newExpenses.map((expense) =>
             createPayableAccount({
-              companyId,
               personId: selectedTenant.id,
               propertyId: selectedProperty?.id || null,
               personName: selectedTenant.name,

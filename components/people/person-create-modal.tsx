@@ -322,10 +322,7 @@ export function PersonCreateModal({
       setIsSaving(true);
       setFormError(null);
 
-      const createdPerson = await createPerson({
-        companyId,
-        ...personData,
-      });
+      const createdPerson = await createPerson(personData);
 
       onCreated(createdPerson);
       setFormData(emptyFormData);

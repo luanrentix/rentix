@@ -25,7 +25,6 @@ export type Person = {
 };
 
 export type CreatePersonDto = {
-  companyId: string;
   type: ApiPersonType;
   name: string;
   document: string;
@@ -41,10 +40,11 @@ export type CreatePersonDto = {
   status?: ApiPersonStatus;
 };
 
-export type UpdatePersonDto = Partial<Omit<CreatePersonDto, 'companyId'>>;
+export type UpdatePersonDto = Partial<CreatePersonDto>;
 
 export async function getPeople(companyId: string) {
-  return apiFetch<Person[]>(`/pessoas?companyId=${encodeURIComponent(companyId)}`);
+  void companyId;
+  return apiFetch<Person[]>('/pessoas');
 }
 
 export async function createPerson(data: CreatePersonDto) {

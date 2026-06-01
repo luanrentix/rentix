@@ -23,9 +23,6 @@ export type ContractRenewalRecord = {
 
 export class CriarContratoDto {
   @IsUUID()
-  companyId: string;
-
-  @IsUUID()
   propertyId: string;
 
   @IsUUID()

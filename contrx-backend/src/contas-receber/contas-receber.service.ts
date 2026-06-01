@@ -13,6 +13,14 @@ import {
 } from './dto/criar-conta-receber.dto';
 import { AtualizarContaReceberDto } from './dto/atualizar-conta-receber.dto';
 
+type CriarContaReceberDataWithCompany = CriarContaReceberDto & {
+  companyId: string;
+};
+
+type AtualizarContaReceberDataWithCompany = AtualizarContaReceberDto & {
+  companyId: string;
+};
+
 @Injectable()
 export class ContasReceberService {
   constructor(private readonly prisma: PrismaService) {}
@@ -88,7 +96,10 @@ export class ContasReceberService {
     data: ReceberPagamentoDto,
     companyId: string,
   ) {
-    this.validatePaymentInput(data, 'O valor recebido deve ser maior que zero.');
+    this.validatePaymentInput(
+      data,
+      'O valor recebido deve ser maior que zero.',
+    );
 
     const account = await this.ensureExists(id, companyId);
 
@@ -155,7 +166,10 @@ export class ContasReceberService {
     data: ReceberPagamentoDto,
     companyId: string,
   ) {
-    this.validatePaymentInput(data, 'O valor recebido deve ser maior que zero.');
+    this.validatePaymentInput(
+      data,
+      'O valor recebido deve ser maior que zero.',
+    );
     const account = await this.ensureExists(id, companyId);
     const nextSettlementAmount = this.getSettlementAmount(
       data.amountPaid,
@@ -390,7 +404,7 @@ export class ContasReceberService {
   }
 
   private buildCreateData(
-    data: CriarContaReceberDto,
+    data: CriarContaReceberDataWithCompany,
   ): Prisma.ContaReceberCreateInput {
     const normalizedData = this.normalizeAccountData(data);
 
@@ -420,7 +434,7 @@ export class ContasReceberService {
   }
 
   private buildUpdateData(
-    data: AtualizarContaReceberDto,
+    data: AtualizarContaReceberDataWithCompany,
   ): Prisma.ContaReceberUpdateInput {
     const normalizedData = this.normalizeAccountData(data);
 
@@ -470,7 +484,9 @@ export class ContasReceberService {
   }
 
   private normalizeAccountData<
-    TData extends CriarContaReceberDto | AtualizarContaReceberDto,
+    TData extends
+      | CriarContaReceberDataWithCompany
+      | AtualizarContaReceberDataWithCompany,
   >(data: TData) {
     return uppercaseFields(data, ['property', 'tenant']);
   }
@@ -509,13 +525,18 @@ export class ContasReceberService {
     );
   }
 
-  private validatePaymentInput(data: ReceberPagamentoDto, amountMessage: string) {
+  private validatePaymentInput(
+    data: ReceberPagamentoDto,
+    amountMessage: string,
+  ) {
     if (data.amountPaid <= 0) {
       throw new BadRequestException(amountMessage);
     }
 
     if ((data.interest || 0) < 0 || (data.discount || 0) < 0) {
-      throw new BadRequestException('Juros e desconto nao podem ser negativos.');
+      throw new BadRequestException(
+        'Juros e desconto nao podem ser negativos.',
+      );
     }
   }
 

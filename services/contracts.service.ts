@@ -66,7 +66,6 @@ export type Contract = {
 };
 
 export type CreateContractDto = {
-  companyId: string;
   propertyId: string;
   tenantId: string;
 
@@ -95,12 +94,11 @@ export type CreateContractDto = {
   finishReason?: string | null;
 };
 
-export type UpdateContractDto = Partial<Omit<CreateContractDto, 'companyId'>>;
+export type UpdateContractDto = Partial<CreateContractDto>;
 
 export async function getContracts(companyId: string) {
-  return apiFetch<Contract[]>(
-    `/contratos?companyId=${encodeURIComponent(companyId)}`,
-  );
+  void companyId;
+  return apiFetch<Contract[]>('/contratos');
 }
 
 export async function getContractById(id: string) {
