@@ -275,17 +275,17 @@ const contrxFinancialThemeStyle = `
   }
 
   .contrx-financial-page-graphite {
-    color: #f4f4f5;
+    color: #f8fafc;
     color-scheme: dark;
   }
 
   .contrx-financial-page-graphite .bg-white {
-    background: linear-gradient(145deg, #27272a 0%, #1f1f23 100%) !important;
+    background: linear-gradient(145deg, #0d1b2e 0%, #07111f 100%) !important;
   }
 
   .contrx-financial-page-graphite .bg-slate-50,
   .contrx-financial-page-graphite .bg-slate-100 {
-    background-color: #27272a !important;
+    background-color: #0d1b2e !important;
   }
 
   .contrx-financial-page-graphite .bg-orange-50,
@@ -307,18 +307,18 @@ const contrxFinancialThemeStyle = `
   .contrx-financial-page-graphite .text-slate-900,
   .contrx-financial-page-graphite .text-slate-800,
   .contrx-financial-page-graphite .text-slate-700 {
-    color: #f4f4f5 !important;
+    color: #f8fafc !important;
   }
 
   .contrx-financial-page-graphite .text-slate-600,
   .contrx-financial-page-graphite .text-slate-500,
   .contrx-financial-page-graphite .text-slate-400 {
-    color: #d4d4d8 !important;
+    color: #b6c6dc !important;
   }
 
   .contrx-financial-page-graphite .text-orange-600,
   .contrx-financial-page-graphite .text-orange-700 {
-    color: #fb923c !important;
+    color: #ff8a3d !important;
   }
 
   .contrx-financial-page-graphite .text-red-600,
@@ -338,19 +338,19 @@ const contrxFinancialThemeStyle = `
   .contrx-financial-page-graphite .border-slate-100,
   .contrx-financial-page-graphite .border-slate-200,
   .contrx-financial-page-graphite .border-slate-700 {
-    border-color: #52525b !important;
+    border-color: #24405f !important;
   }
 
   .contrx-financial-page-graphite input,
   .contrx-financial-page-graphite select {
-    background-color: #18181b !important;
-    border-color: #52525b !important;
-    color: #f4f4f5 !important;
+    background-color: #07111f !important;
+    border-color: #24405f !important;
+    color: #f8fafc !important;
   }
 
   .contrx-financial-page-graphite option {
-    background-color: #18181b !important;
-    color: #f4f4f5 !important;
+    background-color: #07111f !important;
+    color: #f8fafc !important;
   }
 
   .contrx-financial-page-graphite .shadow-sm,
@@ -361,7 +361,7 @@ const contrxFinancialThemeStyle = `
   .contrx-financial-page-graphite .hover\\:bg-slate-50:hover,
   .contrx-financial-page-graphite .hover\\:bg-slate-100:hover,
   .contrx-financial-page-graphite .hover\\:bg-slate-200:hover {
-    background-color: #3f3f46 !important;
+    background-color: #162a44 !important;
   }
 `;
 
@@ -1036,7 +1036,7 @@ function mapReceivableToStatementItem(receivable: FinancialReceivable): Statemen
   return {
     id: receivable.id,
     title: receivable.tenantName || "Pessoa não informada",
-    subtitle: receivable.propertyName || "Sem imóvel vinculado",
+    subtitle: receivable.propertyName || "Sem bem/ativo vinculado",
     date: receivable.dueDate,
     amount: receivable.remainingAmount,
     status: receivable.status,

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   Building2,
+  ChevronDown,
   CheckCircle2,
   CircleOff,
   Clock3,
@@ -24,15 +25,20 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import {
   getAdminCompanies,
+  getAdminCompanyCommercialHistory,
   getAdminSummary,
   getAdminUsers,
+  reprocessAdminCommercialExpirations,
   updateAdminCompany,
   updateAdminUser,
+  type AdminCommercialHistory,
   type AdminCompany,
   type AdminSummary,
   type AdminUser,
   type AdminUserRole,
+  type SubscriptionStatus,
 } from "@/services/admin.service";
+import { getWhatsAppUrl } from "@/services/whatsapp.service";
 
 const roleLabels: Record<string, string> = {
   SYSTEM_OWNER: "Dono do sistema",
@@ -51,6 +57,25 @@ const adminRoleOptions: AdminUserRole[] = [
 ];
 
 type StatusFilter = "all" | "active" | "inactive";
+type CommercialFilter = "all" | SubscriptionStatus;
+type DueFilter = "all" | "today" | "threeDays" | "sevenDays" | "expired" | "noDueDate";
+type QuickCommercialAction = "extend7" | "extend15" | "active30" | "active365" | "suspend";
+
+const commercialStatusOptions: SubscriptionStatus[] = [
+  "TRIAL",
+  "ACTIVE",
+  "EXPIRED",
+  "SUSPENDED",
+  "CANCELED",
+];
+
+type TrialCompany = {
+  subscriptionStatus?: AdminCompany["subscriptionStatus"];
+  trialEndsAt?: string | null;
+  trialExtendedUntil?: string | null;
+  subscriptionEndsAt?: string | null;
+  accessState?: AdminCompany["accessState"];
+};
 
 function normalizeText(value: string) {
   return value
@@ -68,8 +93,120 @@ function formatDate(value: string) {
   });
 }
 
+function addDays(date: Date, days: number) {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+
+  return nextDate;
+}
+
+function toDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getTrialAccessEndsAt(company: TrialCompany) {
+  if (company.accessState) {
+    return company.accessState.endsAt;
+  }
+
+  if (company.subscriptionStatus === "ACTIVE") {
+    return company.subscriptionEndsAt || null;
+  }
+
+  if (company.subscriptionStatus === "TRIAL") {
+    return company.trialExtendedUntil || company.trialEndsAt || null;
+  }
+
+  return company.subscriptionEndsAt || company.trialExtendedUntil || company.trialEndsAt || null;
+}
+
+function getTrialDaysRemaining(company: TrialCompany) {
+  if (company.accessState) {
+    return company.accessState.daysRemaining;
+  }
+
+  const trialAccessEndsAt = getTrialAccessEndsAt(company);
+
+  if (!trialAccessEndsAt) return null;
+
+  const remainingMilliseconds =
+    new Date(trialAccessEndsAt).getTime() - new Date().getTime();
+
+  return Math.ceil(remainingMilliseconds / 86_400_000);
+}
+
+function getTrialDateInputValue(company: TrialCompany) {
+  const trialAccessEndsAt = getTrialAccessEndsAt(company);
+
+  if (!trialAccessEndsAt) return "";
+
+  return toDateInputValue(new Date(trialAccessEndsAt));
+}
+
+function getTrialDaysLabel(company: TrialCompany) {
+  const daysRemaining = getTrialDaysRemaining(company);
+
+  if (daysRemaining === null) return "Sem vencimento";
+  if (daysRemaining < 0) return `Vencido há ${Math.abs(daysRemaining)} dia${Math.abs(daysRemaining) === 1 ? "" : "s"}`;
+  if (daysRemaining === 0) return "Vence hoje";
+  if (daysRemaining === 1) return "1 dia restante";
+
+  return `${daysRemaining} dias restantes`;
+}
+
+function matchesDueFilter(company: TrialCompany, dueFilter: DueFilter) {
+  if (dueFilter === "all") return true;
+
+  const daysRemaining = getTrialDaysRemaining(company);
+
+  if (dueFilter === "noDueDate") return daysRemaining === null;
+  if (daysRemaining === null) return false;
+  if (dueFilter === "expired") return daysRemaining <= 0;
+  if (dueFilter === "today") return daysRemaining === 0;
+  if (dueFilter === "threeDays") return daysRemaining <= 3;
+  if (dueFilter === "sevenDays") return daysRemaining <= 7;
+
+  return true;
+}
+
+function getSubscriptionLabel(company: { subscriptionStatus?: SubscriptionStatus }) {
+  const labels: Record<SubscriptionStatus, string> = {
+    TRIAL: "Teste",
+    ACTIVE: "Ativo",
+    EXPIRED: "Vencido",
+    SUSPENDED: "Suspenso",
+    CANCELED: "Cancelado",
+  };
+
+  return company.subscriptionStatus
+    ? labels[company.subscriptionStatus] || company.subscriptionStatus
+    : "Sem status";
+}
+
 function getCompanyName(company: AdminCompany | AdminUser["company"]) {
   return company.tradeName || company.companyName || "Empresa sem nome";
+}
+
+function getWhatsappUrl(company: AdminCompany | AdminUser["company"], messageType: "welcome" | "due" | "expired") {
+  const phoneDigits = (company.phone || "").replace(/\D/g, "");
+
+  if (!phoneDigits) return "";
+
+  const companyName = getCompanyName(company);
+  const messages = {
+    welcome: `Olá, ${companyName}! Seja bem-vindo ao Contrx. Seu acesso profissional já está disponível para configuração e uso.`,
+    due: `Olá, ${companyName}! Passando para lembrar sobre o vencimento do seu acesso ao Contrx. Podemos ajudar com a renovação ou prorrogação.`,
+    expired: `Olá, ${companyName}! Identificamos que seu acesso ao Contrx está vencido. Fale conosco para regularizar e continuar usando o sistema.`,
+  };
+
+  return getWhatsAppUrl({
+    phone: phoneDigits,
+    message: messages[messageType],
+  });
 }
 
 function getOperationalCompanyRecords(company: AdminCompany) {
@@ -98,7 +235,13 @@ export default function AdminPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [roleFilter, setRoleFilter] = useState("all");
+  const [commercialFilter, setCommercialFilter] = useState<CommercialFilter>("all");
+  const [dueFilter, setDueFilter] = useState<DueFilter>("all");
   const [hideEmptyCompanies, setHideEmptyCompanies] = useState(true);
+  const [historyCompany, setHistoryCompany] = useState<AdminCompany | null>(null);
+  const [commercialHistory, setCommercialHistory] = useState<AdminCommercialHistory[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [openUserActionsId, setOpenUserActionsId] = useState("");
 
   const isSystemOwner = isSystemOwnerRole(user?.role);
   const normalizedSearchTerm = normalizeText(searchTerm);
@@ -232,6 +375,263 @@ export default function AdminPage() {
     }
   }
 
+  async function handleExtendCompanyTrial(companyToUpdate: AdminCompany) {
+    if (!window.confirm("Prorrogar o teste desta empresa por 7 dias?")) {
+      return;
+    }
+
+    try {
+      setUpdatingCompanyId(companyToUpdate.id);
+      setErrorMessage("");
+      const updatedCompany = await updateAdminCompany(companyToUpdate.id, {
+        trialExtensionDays: 7,
+      });
+      setCompanies((currentCompanies) =>
+        currentCompanies.map((company) =>
+          company.id === companyToUpdate.id ? updatedCompany : company,
+        ),
+      );
+      await refreshAdminDataAfterChange("Teste prorrogado por 7 dias.");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Nao foi possivel prorrogar o teste da empresa.",
+      );
+    } finally {
+      setUpdatingCompanyId("");
+    }
+  }
+
+  async function handleUpdateCompanyAccessEndDate(
+    company: TrialCompany & { id: string },
+    accessEndsAt: string,
+  ) {
+    if (!accessEndsAt) return;
+
+    const statusLabel = getSubscriptionLabel(company);
+
+    if (
+      !window.confirm(
+        `Alterar o vencimento comercial de ${statusLabel} para ${formatDate(accessEndsAt)}?`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setUpdatingCompanyId(company.id);
+      setErrorMessage("");
+
+      const updatedCompany = await updateAdminCompany(
+        company.id,
+        company.subscriptionStatus === "ACTIVE"
+          ? {
+              subscriptionStatus: "ACTIVE",
+              subscriptionEndsAt: accessEndsAt,
+            }
+          : {
+              trialEndsAt: accessEndsAt,
+            },
+      );
+
+      syncUpdatedCompany(updatedCompany);
+
+      await refreshAdminDataAfterChange("Vencimento da empresa atualizado.");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar o vencimento da empresa.",
+      );
+    } finally {
+      setUpdatingCompanyId("");
+    }
+  }
+
+  async function handleUpdateCompanyCommercialStatus(
+    company: TrialCompany & { id: string },
+    subscriptionStatus: SubscriptionStatus,
+  ) {
+    if (company.subscriptionStatus === subscriptionStatus) return;
+
+    if (
+      !window.confirm(
+        `Alterar o status comercial para ${getSubscriptionLabel({ subscriptionStatus })}?`,
+      )
+    ) {
+      return;
+    }
+
+    const payload =
+      subscriptionStatus === "ACTIVE"
+        ? {
+            subscriptionStatus,
+            subscriptionEndsAt:
+              company.subscriptionEndsAt || toDateInputValue(addDays(new Date(), 30)),
+          }
+        : subscriptionStatus === "TRIAL"
+          ? {
+              subscriptionStatus,
+              trialEndsAt:
+                company.trialExtendedUntil ||
+                company.trialEndsAt ||
+                toDateInputValue(addDays(new Date(), 30)),
+            }
+          : subscriptionStatus === "SUSPENDED" || subscriptionStatus === "CANCELED"
+            ? {
+                subscriptionStatus,
+                isActive: false,
+              }
+            : {
+                subscriptionStatus,
+              };
+
+    try {
+      setUpdatingCompanyId(company.id);
+      setErrorMessage("");
+      const updatedCompany = await updateAdminCompany(company.id, payload);
+
+      syncUpdatedCompany(updatedCompany);
+      await refreshAdminDataAfterChange("Status comercial atualizado.");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar o status comercial.",
+      );
+    } finally {
+      setUpdatingCompanyId("");
+    }
+  }
+
+  async function handleQuickCommercialAction(
+    company: TrialCompany & { id: string },
+    action: QuickCommercialAction,
+  ) {
+    const actionLabels: Record<QuickCommercialAction, string> = {
+      extend7: "prorrogar o teste por 7 dias",
+      extend15: "prorrogar o teste por 15 dias",
+      active30: "ativar o plano por 30 dias",
+      active365: "ativar o plano por 1 ano",
+      suspend: "suspender a empresa",
+    };
+
+    if (!window.confirm(`Confirmar ação comercial: ${actionLabels[action]}?`)) {
+      return;
+    }
+
+    const payload =
+      action === "extend7"
+        ? { trialExtensionDays: 7, note: "Teste prorrogado por 7 dias." }
+        : action === "extend15"
+          ? { trialExtensionDays: 15, note: "Teste prorrogado por 15 dias." }
+          : action === "active30"
+            ? {
+                subscriptionStatus: "ACTIVE" as SubscriptionStatus,
+                subscriptionEndsAt: toDateInputValue(addDays(new Date(), 30)),
+                note: "Plano ativado por 30 dias.",
+              }
+            : action === "active365"
+              ? {
+                  subscriptionStatus: "ACTIVE" as SubscriptionStatus,
+                  subscriptionEndsAt: toDateInputValue(addDays(new Date(), 365)),
+                  note: "Plano ativado por 1 ano.",
+                }
+              : {
+                  subscriptionStatus: "SUSPENDED" as SubscriptionStatus,
+                  isActive: false,
+                  note: "Empresa suspensa pelo painel master.",
+                };
+
+    try {
+      setUpdatingCompanyId(company.id);
+      setErrorMessage("");
+      const updatedCompany = await updateAdminCompany(company.id, payload);
+      syncUpdatedCompany(updatedCompany);
+      await refreshAdminDataAfterChange("Ação comercial aplicada.");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível aplicar a ação comercial.",
+      );
+    } finally {
+      setUpdatingCompanyId("");
+    }
+  }
+
+  async function handleOpenCommercialHistory(company: AdminCompany) {
+    try {
+      setHistoryCompany(company);
+      setIsHistoryLoading(true);
+      setCommercialHistory([]);
+      const history = await getAdminCompanyCommercialHistory(company.id);
+      setCommercialHistory(history);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível carregar o histórico comercial.",
+      );
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  }
+
+  async function handleReprocessCommercialExpirations() {
+    if (
+      !window.confirm(
+        "Reprocessar vencimentos agora? Empresas vencidas podem ser marcadas como vencidas automaticamente.",
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setErrorMessage("");
+      const result = await reprocessAdminCommercialExpirations();
+      await refreshAdminDataAfterChange(
+        `${result.expired} empresa(s) vencida(s) em ${result.processed} processada(s).`,
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível reprocessar os vencimentos.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  function syncUpdatedCompany(updatedCompany: AdminCompany) {
+    setCompanies((currentCompanies) =>
+      currentCompanies.map((company) =>
+        company.id === updatedCompany.id ? updatedCompany : company,
+      ),
+    );
+    setUsers((currentUsers) =>
+      currentUsers.map((item) =>
+        item.company.id === updatedCompany.id
+          ? {
+              ...item,
+              company: {
+                ...item.company,
+                isActive: updatedCompany.isActive,
+                subscriptionStatus: updatedCompany.subscriptionStatus,
+                trialStartsAt: updatedCompany.trialStartsAt,
+                trialEndsAt: updatedCompany.trialEndsAt,
+                trialExtendedUntil: updatedCompany.trialExtendedUntil,
+                subscriptionEndsAt: updatedCompany.subscriptionEndsAt,
+              },
+            }
+          : item,
+      ),
+    );
+  }
+
   const roleOptions = useMemo(() => {
     const roles = new Set<string>(adminRoleOptions);
 
@@ -246,6 +646,13 @@ export default function AdminPage() {
       if (statusFilter === "active" && !item.isActive) return false;
       if (statusFilter === "inactive" && item.isActive) return false;
       if (roleFilter !== "all" && item.role !== roleFilter) return false;
+      if (
+        commercialFilter !== "all" &&
+        item.company.subscriptionStatus !== commercialFilter
+      ) {
+        return false;
+      }
+      if (!matchesDueFilter(item.company, dueFilter)) return false;
       if (!normalizedSearchTerm) return true;
 
       return [
@@ -256,12 +663,19 @@ export default function AdminPage() {
         item.company.email || "",
       ].some((value) => normalizeText(value).includes(normalizedSearchTerm));
     });
-  }, [normalizedSearchTerm, roleFilter, statusFilter, users]);
+  }, [commercialFilter, dueFilter, normalizedSearchTerm, roleFilter, statusFilter, users]);
 
   const filteredCompanies = useMemo(() => {
     return companies.filter((company) => {
       if (statusFilter === "active" && !company.isActive) return false;
       if (statusFilter === "inactive" && company.isActive) return false;
+      if (
+        commercialFilter !== "all" &&
+        company.subscriptionStatus !== commercialFilter
+      ) {
+        return false;
+      }
+      if (!matchesDueFilter(company, dueFilter)) return false;
       if (!normalizedSearchTerm) return true;
 
       return [
@@ -272,7 +686,7 @@ export default function AdminPage() {
         company.phone || "",
       ].some((value) => normalizeText(value).includes(normalizedSearchTerm));
     });
-  }, [companies, normalizedSearchTerm, statusFilter]);
+  }, [commercialFilter, companies, dueFilter, normalizedSearchTerm, statusFilter]);
 
   const topCompanies = useMemo(() => {
     const visibleCompanies = hideEmptyCompanies
@@ -311,6 +725,8 @@ export default function AdminPage() {
     setSearchTerm("");
     setStatusFilter("all");
     setRoleFilter("all");
+    setCommercialFilter("all");
+    setDueFilter("all");
   }
 
   return (
@@ -339,15 +755,25 @@ export default function AdminPage() {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={loadAdminData}
-              disabled={!isSystemOwner || isLoading}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-              Atualizar dados
-            </button>
+            <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
+              <button
+                type="button"
+                onClick={loadAdminData}
+                disabled={!isSystemOwner || isLoading}
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+                Atualizar dados
+              </button>
+              <button
+                type="button"
+                onClick={handleReprocessCommercialExpirations}
+                disabled={!isSystemOwner || isLoading}
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Reprocessar vencimentos
+              </button>
+            </div>
           </div>
 
           <div className="grid gap-3 bg-slate-50/70 p-4 md:grid-cols-3">
@@ -415,7 +841,7 @@ export default function AdminPage() {
                 icon={<Settings2 className="h-5 w-5" />}
                 label="Dados operacionais"
                 value={totalOperationalRecords}
-                detail="Pessoas, imóveis e contratos"
+                detail="Pessoas, bens/ativos e contratos"
                 tone="emerald"
               />
               <MetricCard
@@ -470,6 +896,34 @@ export default function AdminPage() {
                   ))}
                 </select>
 
+                <select
+                  value={commercialFilter}
+                  onChange={(event) =>
+                    setCommercialFilter(event.target.value as CommercialFilter)
+                  }
+                  className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 xl:w-48"
+                >
+                  <option value="all">Todos comerciais</option>
+                  {commercialStatusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {getSubscriptionLabel({ subscriptionStatus: status })}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={dueFilter}
+                  onChange={(event) => setDueFilter(event.target.value as DueFilter)}
+                  className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 xl:w-52"
+                >
+                  <option value="all">Todos vencimentos</option>
+                  <option value="today">Vencem hoje</option>
+                  <option value="threeDays">Até 3 dias</option>
+                  <option value="sevenDays">Até 7 dias</option>
+                  <option value="expired">Vencidos</option>
+                  <option value="noDueDate">Sem vencimento</option>
+                </select>
+
                 <label className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700">
                   <input
                     type="checkbox"
@@ -505,7 +959,7 @@ export default function AdminPage() {
                   title="Empresas"
                   subtitle={
                     hideEmptyCompanies
-                      ? "Exibindo empresas com pessoas, imóveis ou contratos cadastrados"
+                      ? "Exibindo empresas com pessoas, bens/ativos ou contratos cadastrados"
                       : "Exibindo todas as empresas cadastradas"
                   }
                   action={<StatusSummary active={activeOperationalCompanies} inactive={inactiveOperationalCompanies} />}
@@ -528,6 +982,7 @@ export default function AdminPage() {
                         key={company.id}
                         company={company}
                         isUpdating={updatingCompanyId === company.id}
+                        onExtendTrial={handleExtendCompanyTrial}
                         onToggleStatus={handleToggleCompanyStatus}
                       />
                     ))
@@ -543,22 +998,23 @@ export default function AdminPage() {
               />
 
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[820px] text-left text-sm">
+                <table className="w-full min-w-[1040px] text-left text-sm">
                   <thead className="border-y border-slate-100 bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
                     <tr>
                       <th className="px-5 py-3">Usuário</th>
                       <th className="px-5 py-3">Empresa</th>
                       <th className="px-5 py-3">Perfil</th>
                       <th className="px-5 py-3">Criado em</th>
+                      <th className="px-5 py-3">Vencimento</th>
                       <th className="px-5 py-3">Status</th>
                       <th className="px-5 py-3">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {isLoading ? (
-                      <TableState colSpan={6} message="Carregando usuários..." />
+                      <TableState colSpan={7} message="Carregando usuários..." />
                     ) : filteredUsers.length === 0 ? (
-                      <TableState colSpan={6} message="Nenhum usuário encontrado." />
+                      <TableState colSpan={7} message="Nenhum usuário encontrado." />
                     ) : (
                       filteredUsers.map((item) => (
                         <tr key={item.id} className="bg-white transition hover:bg-slate-50">
@@ -594,25 +1050,65 @@ export default function AdminPage() {
                             {formatDate(item.createdAt)}
                           </td>
                           <td className="px-5 py-4">
-                            <StatusBadge active={item.isActive} />
+                            <div className="grid gap-2">
+                              <input
+                                type="date"
+                                value={getTrialDateInputValue(item.company)}
+                                onChange={(event) =>
+                                  handleUpdateCompanyAccessEndDate(
+                                    item.company,
+                                    event.target.value,
+                                  )
+                                }
+                                disabled={updatingCompanyId === item.company.id}
+                                className="h-10 w-40 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              />
+                              <TrialDaysBadge company={item.company} />
+                              <select
+                                value={item.company.subscriptionStatus || "TRIAL"}
+                                onChange={(event) =>
+                                  handleUpdateCompanyCommercialStatus(
+                                    item.company,
+                                    event.target.value as SubscriptionStatus,
+                                  )
+                                }
+                                disabled={updatingCompanyId === item.company.id}
+                                className="h-9 w-40 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {commercialStatusOptions.map((status) => (
+                                  <option key={status} value={status}>
+                                    {getSubscriptionLabel({ subscriptionStatus: status })}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
                           </td>
                           <td className="px-5 py-4">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleUserStatus(item)}
-                              disabled={updatingUserId === item.id}
-                              className={`inline-flex h-10 items-center justify-center rounded-xl px-4 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                                item.isActive
-                                  ? "bg-red-50 text-red-700 hover:bg-red-100"
-                                  : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                              }`}
-                            >
-                              {updatingUserId === item.id
-                                ? "Salvando..."
-                                : item.isActive
-                                  ? "Inativar"
-                                  : "Ativar"}
-                            </button>
+                            <StatusBadge active={item.isActive} />
+                          </td>
+                          <td className="relative px-5 py-4">
+                            <AdminUserActionsMenu
+                              isOpen={openUserActionsId === item.id}
+                              isUpdatingCompany={updatingCompanyId === item.company.id}
+                              isUpdatingUser={updatingUserId === item.id}
+                              item={item}
+                              onClose={() => setOpenUserActionsId("")}
+                              onOpenChange={(isOpen) =>
+                                setOpenUserActionsId(isOpen ? item.id : "")
+                              }
+                              onOpenHistory={(company) => {
+                                setOpenUserActionsId("");
+                                void handleOpenCommercialHistory(company);
+                              }}
+                              onQuickAction={(company, action) => {
+                                setOpenUserActionsId("");
+                                void handleQuickCommercialAction(company, action);
+                              }}
+                              onToggleUserStatus={(userItem) => {
+                                setOpenUserActionsId("");
+                                void handleToggleUserStatus(userItem);
+                              }}
+                            />
                           </td>
                         </tr>
                       ))
@@ -624,6 +1120,63 @@ export default function AdminPage() {
           </>
         )}
       </div>
+
+      {historyCompany && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm">
+          <div className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-orange-600">
+                  Histórico comercial
+                </p>
+                <h2 className="mt-1 text-xl font-black text-slate-950">
+                  {getCompanyName(historyCompany)}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setHistoryCompany(null);
+                  setCommercialHistory([]);
+                }}
+                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-red-50 hover:text-red-600"
+                aria-label="Fechar histórico"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto p-5">
+              {isHistoryLoading ? (
+                <EmptyPanel message="Carregando histórico..." />
+              ) : commercialHistory.length === 0 ? (
+                <EmptyPanel message="Nenhum histórico comercial registrado." />
+              ) : (
+                <div className="space-y-3">
+                  {commercialHistory.map((item) => (
+                    <div
+                      key={item.id}
+                      className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-black text-slate-900">
+                          {item.description}
+                        </p>
+                        <span className="rounded-full bg-white px-3 py-1 text-[11px] font-black text-slate-500 ring-1 ring-slate-200">
+                          {formatDate(item.createdAt)}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs font-bold uppercase tracking-wide text-orange-600">
+                        {item.action}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -745,6 +1298,259 @@ function StatusBadge({ active }: { active: boolean }) {
   );
 }
 
+function AdminUserActionsMenu({
+  isOpen,
+  isUpdatingCompany,
+  isUpdatingUser,
+  item,
+  onClose,
+  onOpenChange,
+  onOpenHistory,
+  onQuickAction,
+  onToggleUserStatus,
+}: {
+  isOpen: boolean;
+  isUpdatingCompany: boolean;
+  isUpdatingUser: boolean;
+  item: AdminUser;
+  onClose: () => void;
+  onOpenChange: (isOpen: boolean) => void;
+  onOpenHistory: (company: AdminCompany) => void;
+  onQuickAction: (company: TrialCompany & { id: string }, action: QuickCommercialAction) => void;
+  onToggleUserStatus: (item: AdminUser) => void;
+}) {
+  const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [menuPosition, setMenuPosition] = useState({
+    top: 0,
+    left: 0,
+    maxHeight: 288,
+  });
+  const whatsappLinks = [
+    { href: getWhatsappUrl(item.company, "welcome"), label: "WhatsApp boas-vindas" },
+    { href: getWhatsappUrl(item.company, "due"), label: "WhatsApp vencimento" },
+    { href: getWhatsappUrl(item.company, "expired"), label: "WhatsApp vencido" },
+  ];
+  const hasWhatsapp = whatsappLinks.some((link) => Boolean(link.href));
+  const historyCompany = {
+    ...item.company,
+    document: null,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    _count: {
+      users: 0,
+      people: 0,
+      properties: 0,
+      contracts: 0,
+    },
+  } as AdminCompany;
+
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+
+    const triggerButton = triggerButtonRef.current;
+    const menuElement = menuRef.current;
+
+    if (!triggerButton || !menuElement) return;
+
+    const triggerRect = triggerButton.getBoundingClientRect();
+    const viewportPadding = 16;
+    const menuGap = 8;
+    const menuWidth = 256;
+    const menuHeight = menuElement.offsetHeight;
+    const maxHeight = Math.max(window.innerHeight - viewportPadding * 2, 160);
+    const topBelowTrigger = triggerRect.bottom + menuGap;
+    const topAboveTrigger = triggerRect.top - menuHeight - menuGap;
+    const wouldOverflowBelow =
+      topBelowTrigger + menuHeight > window.innerHeight - viewportPadding;
+    const hasSpaceAbove = topAboveTrigger >= viewportPadding;
+    const nextTop =
+      wouldOverflowBelow && hasSpaceAbove
+        ? topAboveTrigger
+        : Math.min(
+            Math.max(viewportPadding, topBelowTrigger),
+            window.innerHeight - Math.min(menuHeight, maxHeight) - viewportPadding,
+          );
+    const nextLeft = Math.min(
+      Math.max(viewportPadding, triggerRect.right - menuWidth),
+      window.innerWidth - menuWidth - viewportPadding,
+    );
+
+    setMenuPosition({
+      top: nextTop,
+      left: nextLeft,
+      maxHeight,
+    });
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    window.addEventListener("resize", onClose);
+    window.addEventListener("scroll", onClose, true);
+
+    return () => {
+      window.removeEventListener("resize", onClose);
+      window.removeEventListener("scroll", onClose, true);
+    };
+  }, [isOpen, onClose]);
+
+  return (
+    <div className={`relative inline-flex justify-end ${isOpen ? "z-50" : "z-10"}`}>
+      {isOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 cursor-default"
+          aria-label="Fechar ações"
+          onClick={onClose}
+        />
+      )}
+
+      <button
+        ref={triggerButtonRef}
+        type="button"
+        onClick={() => onOpenChange(!isOpen)}
+        className={`relative inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-slate-100 px-3 text-xs font-black text-slate-700 transition hover:bg-slate-200 ${
+          isOpen ? "z-[70] ring-2 ring-slate-900" : "z-10"
+        }`}
+        aria-expanded={isOpen}
+        aria-haspopup="menu"
+      >
+        Ações
+        <ChevronDown
+          className={`h-4 w-4 transition ${isOpen ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {isOpen && (
+        <div
+          ref={menuRef}
+          className="fixed z-[70] w-64 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white py-1 text-left shadow-[0_18px_45px_rgba(15,23,42,0.18)]"
+          style={{
+            top: menuPosition.top,
+            left: menuPosition.left,
+            maxHeight: menuPosition.maxHeight,
+          }}
+          role="menu"
+        >
+          <AdminActionMenuButton
+            disabled={isUpdatingUser}
+            label={isUpdatingUser ? "Salvando..." : item.isActive ? "Inativar usuário" : "Ativar usuário"}
+            tone={item.isActive ? "danger" : "success"}
+            onClick={() => onToggleUserStatus(item)}
+          />
+          <MenuSeparator />
+          <AdminActionMenuButton
+            disabled={isUpdatingCompany}
+            label="Prorrogar +7 dias"
+            onClick={() => onQuickAction(item.company, "extend7")}
+          />
+          <AdminActionMenuButton
+            disabled={isUpdatingCompany}
+            label="Prorrogar +15 dias"
+            onClick={() => onQuickAction(item.company, "extend15")}
+          />
+          <AdminActionMenuButton
+            disabled={isUpdatingCompany}
+            label="Ativar por 30 dias"
+            onClick={() => onQuickAction(item.company, "active30")}
+          />
+          <AdminActionMenuButton
+            disabled={isUpdatingCompany}
+            label="Ativar por 1 ano"
+            onClick={() => onQuickAction(item.company, "active365")}
+          />
+          <AdminActionMenuButton
+            disabled={isUpdatingCompany}
+            label="Suspender empresa"
+            tone="danger"
+            onClick={() => onQuickAction(item.company, "suspend")}
+          />
+          <AdminActionMenuButton
+            label="Histórico comercial"
+            onClick={() => onOpenHistory(historyCompany)}
+          />
+          <MenuSeparator />
+          {hasWhatsapp ? (
+            whatsappLinks.map((link) =>
+              link.href ? (
+                <a
+                  key={link.label}
+                  href={link.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block px-3 py-2 text-xs font-black leading-5 text-emerald-700 transition hover:bg-emerald-50"
+                  role="menuitem"
+                  onClick={onClose}
+                >
+                  {link.label}
+                </a>
+              ) : null,
+            )
+          ) : (
+            <span className="block px-3 py-2 text-xs font-black leading-5 text-slate-400">
+              WhatsApp indisponível: sem telefone
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminActionMenuButton({
+  disabled,
+  label,
+  onClick,
+  tone = "default",
+}: {
+  disabled?: boolean;
+  label: string;
+  onClick: () => void;
+  tone?: "default" | "danger" | "success";
+}) {
+  const toneClassName =
+    tone === "danger"
+      ? "text-red-700 hover:bg-red-50"
+      : tone === "success"
+        ? "text-emerald-700 hover:bg-emerald-50"
+        : "text-slate-700 hover:bg-slate-50";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`block w-full px-3 py-2 text-left text-xs font-black leading-5 transition disabled:cursor-not-allowed disabled:text-slate-400 disabled:hover:bg-white ${toneClassName}`}
+      role="menuitem"
+    >
+      {label}
+    </button>
+  );
+}
+
+function MenuSeparator() {
+  return <div className="my-1 h-px bg-slate-100" />;
+}
+
+function TrialDaysBadge({ company }: { company: TrialCompany }) {
+  const daysRemaining = getTrialDaysRemaining(company);
+  const toneClassName =
+    daysRemaining === null
+      ? "bg-slate-50 text-slate-600 ring-slate-200"
+      : daysRemaining <= 3
+        ? "bg-red-50 text-red-700 ring-red-100"
+        : daysRemaining <= 7
+          ? "bg-amber-50 text-amber-700 ring-amber-100"
+          : "bg-emerald-50 text-emerald-700 ring-emerald-100";
+
+  return (
+    <span className={`inline-flex w-fit rounded-full px-3 py-1 text-[11px] font-black ring-1 ${toneClassName}`}>
+      {getTrialDaysLabel(company)}
+    </span>
+  );
+}
+
 function Pill({ children }: { children: ReactNode }) {
   return (
     <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 ring-1 ring-slate-200">
@@ -774,13 +1580,23 @@ function EmptyPanel({ message }: { message: string }) {
 function CompanyCard({
   company,
   isUpdating,
+  onExtendTrial,
   onToggleStatus,
 }: {
   company: AdminCompany;
   isUpdating: boolean;
+  onExtendTrial: (company: AdminCompany) => void;
   onToggleStatus: (company: AdminCompany) => void;
 }) {
   const totalRecords = getOperationalCompanyRecords(company);
+  const trialAccessEndsAt = getTrialAccessEndsAt(company);
+  const trialDaysRemaining = getTrialDaysRemaining(company);
+  const accessLabel =
+    company.subscriptionStatus === "ACTIVE"
+      ? "Plano ativo até"
+      : company.subscriptionStatus === "TRIAL"
+        ? "Teste até"
+        : "Acesso até";
 
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-orange-200 hover:shadow-md">
@@ -795,6 +1611,7 @@ function CompanyCard({
         </div>
         <div className="flex shrink-0 flex-col items-end gap-2">
           <StatusBadge active={company.isActive} />
+          <SubscriptionBadge company={company} />
           <button
             type="button"
             onClick={() => onToggleStatus(company)}
@@ -810,6 +1627,27 @@ function CompanyCard({
         </div>
       </div>
 
+      <div className="mt-4 rounded-xl bg-orange-50 px-3 py-2 text-xs font-bold text-orange-800 ring-1 ring-orange-100">
+        <p className="font-black">Plano: {getSubscriptionLabel(company)}</p>
+        <p className="mt-1 text-orange-700">
+          {trialAccessEndsAt
+            ? `${accessLabel} ${formatDate(trialAccessEndsAt)}${
+                trialDaysRemaining !== null ? `, ${trialDaysRemaining} dias restantes` : ""
+              }`
+            : "Vencimento comercial ainda nao definido"}
+        </p>
+        {company.subscriptionStatus === "TRIAL" && (
+          <button
+            type="button"
+            onClick={() => onExtendTrial(company)}
+            disabled={isUpdating}
+            className="mt-2 inline-flex h-8 items-center justify-center rounded-lg bg-white px-3 text-[11px] font-black text-orange-700 ring-1 ring-orange-200 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Prorrogar 7 dias
+          </button>
+        )}
+      </div>
+
       <div className="mt-4 grid grid-cols-2 gap-2 text-xs font-bold text-slate-500">
         <InfoLine icon={<Mail className="h-3.5 w-3.5" />} value={company.email || "Sem e-mail"} />
         <InfoLine icon={<Phone className="h-3.5 w-3.5" />} value={company.phone || "Sem telefone"} />
@@ -818,7 +1656,7 @@ function CompanyCard({
       <div className="mt-4 grid grid-cols-4 gap-2 text-center text-xs font-black text-slate-600">
         <SmallCount label="Usuários" value={company._count.users} />
         <SmallCount label="Pessoas" value={company._count.people} />
-        <SmallCount label="Imóveis" value={company._count.properties} />
+        <SmallCount label="Bens/Ativos" value={company._count.properties} />
         <SmallCount label="Contratos" value={company._count.contracts} />
       </div>
 
@@ -830,6 +1668,21 @@ function CompanyCard({
         <strong className="shrink-0 text-slate-800">{totalRecords} dados</strong>
       </div>
     </article>
+  );
+}
+
+function SubscriptionBadge({ company }: { company: AdminCompany }) {
+  const toneClassName =
+    company.subscriptionStatus === "TRIAL"
+      ? "bg-orange-50 text-orange-700 ring-orange-100"
+      : company.subscriptionStatus === "ACTIVE"
+        ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
+        : "bg-red-50 text-red-700 ring-red-100";
+
+  return (
+    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-black ring-1 ${toneClassName}`}>
+      {getSubscriptionLabel(company)}
+    </span>
   );
 }
 

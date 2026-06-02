@@ -2202,32 +2202,32 @@ GERADO EM: {currentDate}`;
         .contrx-accounts-payable-page-graphite table,
         .contrx-accounts-payable-page-graphite tbody,
         .contrx-accounts-payable-page-graphite tbody tr {
-          background-color: #27272a !important;
+          background-color: #0d1b2e !important;
         }
 
         .contrx-accounts-payable-page-graphite .bg-gradient-to-r {
-          background-image: linear-gradient(to right, #27272a, #3f3f46) !important;
+          background-image: linear-gradient(to right, #0d1b2e, #162a44) !important;
         }
 
         .contrx-accounts-payable-page-graphite .text-slate-950,
         .contrx-accounts-payable-page-graphite .text-slate-900,
         .contrx-accounts-payable-page-graphite .text-slate-800,
         .contrx-accounts-payable-page-graphite .text-slate-700 {
-          color: #f4f4f5 !important;
+          color: #f8fafc !important;
         }
 
         .contrx-accounts-payable-page-graphite .text-slate-600,
         .contrx-accounts-payable-page-graphite .text-slate-500,
         .contrx-accounts-payable-page-graphite .text-slate-400 {
-          color: #d4d4d8 !important;
+          color: #b6c6dc !important;
         }
 
         .contrx-accounts-payable-page-graphite input,
         .contrx-accounts-payable-page-graphite select,
         .contrx-accounts-payable-page-graphite textarea {
-          background-color: #18181b !important;
-          border-color: #52525b !important;
-          color: #f4f4f5 !important;
+          background-color: #07111f !important;
+          border-color: #24405f !important;
+          color: #f8fafc !important;
           color-scheme: dark !important;
         }
 
@@ -2236,7 +2236,7 @@ GERADO EM: {currentDate}`;
         }
 
         .contrx-accounts-payable-page-graphite tbody tr:hover {
-          background-color: #3f3f46 !important;
+          background-color: #162a44 !important;
         }
       `}</style>
 
@@ -2381,7 +2381,7 @@ GERADO EM: {currentDate}`;
                   </th>
 
                   <th className="px-5 py-4 text-left text-sm font-black text-slate-900 dark:text-slate-100">
-                    Imóvel
+                    Bem/Ativo
                   </th>
 
                   <th className="px-5 py-4 text-left text-sm font-black text-slate-900 dark:text-slate-100">
@@ -2431,7 +2431,7 @@ GERADO EM: {currentDate}`;
                       </td>
 
                       <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500">
-                        {expense.propertyName || "Sem imóvel vinculado"}
+                        {expense.propertyName || "Sem bem/ativo vinculado"}
                       </td>
 
                       <td className="px-5 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
@@ -2684,7 +2684,7 @@ GERADO EM: {currentDate}`;
 
               <div>
                 <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                  Imóvel
+                  Bem/Ativo
                 </label>
 
                 <select
@@ -2700,7 +2700,7 @@ GERADO EM: {currentDate}`;
                       : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                   }`}
                 >
-                  <option value="">Sem imóvel vinculado</option>
+                  <option value="">Sem bem/ativo vinculado</option>
                   {properties.map((property) => (
                     <option key={property.id} value={property.id}>
                       {property.name}

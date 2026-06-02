@@ -153,11 +153,11 @@ const financialReportThemeStyle = `
   .contrx-financial-report-page-black,
   .contrx-financial-report-page-graphite { color: #f8fafc; }
   .contrx-financial-report-page-black .bg-white { background: linear-gradient(145deg, #0f172a 0%, #111827 100%) !important; }
-  .contrx-financial-report-page-graphite .bg-white { background: linear-gradient(145deg, #1f2937 0%, #334155 100%) !important; }
+  .contrx-financial-report-page-graphite .bg-white { background: linear-gradient(145deg, #0d1b2e 0%, #07111f 100%) !important; }
   .contrx-financial-report-page-black .bg-slate-50,
   .contrx-financial-report-page-black .bg-slate-100,
   .contrx-financial-report-page-graphite .bg-slate-50,
-  .contrx-financial-report-page-graphite .bg-slate-100 { background-color: #111827 !important; }
+  .contrx-financial-report-page-graphite .bg-slate-100 { background-color: #0d1b2e !important; }
   .contrx-financial-report-page-black .text-slate-950,
   .contrx-financial-report-page-black .text-slate-900,
   .contrx-financial-report-page-black .text-slate-800,
@@ -169,13 +169,13 @@ const financialReportThemeStyle = `
   .contrx-financial-report-page-black .text-slate-600,
   .contrx-financial-report-page-black .text-slate-500,
   .contrx-financial-report-page-graphite .text-slate-600,
-  .contrx-financial-report-page-graphite .text-slate-500 { color: #cbd5e1 !important; }
+  .contrx-financial-report-page-graphite .text-slate-500 { color: #b6c6dc !important; }
   .contrx-financial-report-page-black input,
   .contrx-financial-report-page-black select,
   .contrx-financial-report-page-graphite input,
-  .contrx-financial-report-page-graphite select { background-color: #020617 !important; border-color: #475569 !important; color: #f8fafc !important; }
+  .contrx-financial-report-page-graphite select { background-color: #07111f !important; border-color: #24405f !important; color: #f8fafc !important; }
   .contrx-financial-report-page-black option,
-  .contrx-financial-report-page-graphite option { background-color: #020617 !important; color: #f8fafc !important; }
+  .contrx-financial-report-page-graphite option { background-color: #07111f !important; color: #f8fafc !important; }
   @media print {
     @page { size: A4; margin: 12mm; }
     html,
@@ -578,7 +578,7 @@ export default function FinancialReportsPage() {
     const highestDebtor = getTopRankingRow(
       overdueReceivables.map((item) => ({
         label: item.tenantName || "Pessoa não informada",
-        detail: item.propertyName || "Sem imóvel vinculado",
+        detail: item.propertyName || "Sem bem/ativo vinculado",
         amount: item.remainingAmount,
       })),
     );
@@ -609,7 +609,7 @@ export default function FinancialReportsPage() {
     const debtorRanking = buildRankingRows(
       overdueReceivables.map((item) => ({
         label: item.tenantName || "Pessoa não informada",
-        detail: item.propertyName || "Sem imóvel vinculado",
+        detail: item.propertyName || "Sem bem/ativo vinculado",
         amount: item.remainingAmount,
       })),
     ).slice(0, 6);
@@ -1009,7 +1009,7 @@ export default function FinancialReportsPage() {
             />
             <label className="md:col-span-2">
               <span className="mb-2 block text-xs font-black uppercase text-slate-500 dark:text-slate-400">
-                Buscar pessoa, imóvel, descrição ou categoria
+                Buscar pessoa, bem/ativo, descrição ou categoria
               </span>
               <input
                 type="search"

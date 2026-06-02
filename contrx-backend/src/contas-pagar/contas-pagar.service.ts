@@ -297,7 +297,9 @@ export class ContasPagarService {
     });
 
     if (!property) {
-      throw new BadRequestException('Imovel nao encontrado para esta empresa.');
+      throw new BadRequestException(
+        'Bem/ativo nao encontrado para esta empresa.',
+      );
     }
   }
 

@@ -97,7 +97,7 @@ export class FinanceiroService {
         return {
           id: account.id,
           tenantName: account.tenantName || 'Pessoa nao informada',
-          propertyName: account.propertyName || 'Sem imovel vinculado',
+          propertyName: account.propertyName || 'Sem bem/ativo vinculado',
           dueDate: this.toDateOnly(account.dueDate),
           amount,
           status: this.getStatus(

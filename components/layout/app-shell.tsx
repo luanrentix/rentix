@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Loader2, Maximize2, X } from "lucide-react";
+import { AlertTriangle, CalendarDays, Clock3, Loader2, Maximize2, X } from "lucide-react";
 import AuthGuard from "@/components/auth/auth-guard";
 import { useAuth } from "@/context/AuthContext";
 import { changePasswordRequest } from "@/services/auth";
@@ -276,6 +276,32 @@ function getPixKeyPlaceholder(pixKeyType: PixKeyType) {
   return placeholders[pixKeyType];
 }
 
+function formatTrialDate(value?: string | null) {
+  if (!value) return "";
+
+  return new Date(value).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function getTrialDaysRemaining(user: { trialAccessEndsAt?: string | null; trialDaysRemaining?: number | null }) {
+  if (!user.trialAccessEndsAt) return user.trialDaysRemaining ?? null;
+
+  const remainingMilliseconds =
+    new Date(user.trialAccessEndsAt).getTime() - new Date().getTime();
+
+  return Math.ceil(remainingMilliseconds / 86_400_000);
+}
+
+function getTrialBannerTone(daysRemaining: number | null) {
+  if (daysRemaining === null) return "neutral";
+  if (daysRemaining <= 3) return "danger";
+  if (daysRemaining <= 7) return "warning";
+  return "normal";
+}
+
 function isSystemOwnerRole(role?: string | null) {
   return role === "SYSTEM_OWNER" || role === "DONO_SISTEMA";
 }
@@ -425,6 +451,62 @@ function GlobalMinimizedModalDock() {
     </div>
   );
 }
+
+function CommercialAccessBlockedPanel({
+  status,
+  trialEndsAtLabel,
+}: {
+  status?: string;
+  trialEndsAtLabel: string;
+}) {
+  const title =
+    status === "SUSPENDED"
+      ? "Acesso suspenso"
+      : status === "CANCELED"
+        ? "Acesso cancelado"
+        : "Período de acesso encerrado";
+
+  const description =
+    status === "SUSPENDED"
+      ? "Esta empresa está suspensa no controle comercial do Contrx."
+      : status === "CANCELED"
+        ? "Esta empresa está cancelada no controle comercial do Contrx."
+        : `O teste profissional desta empresa foi encerrado${
+            trialEndsAtLabel ? ` em ${trialEndsAtLabel}` : ""
+          }.`;
+
+  return (
+    <section className="mx-auto flex min-h-[60vh] max-w-3xl items-center justify-center">
+      <div className="w-full rounded-[24px] border border-orange-100 bg-white p-6 text-center shadow-sm">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50 text-orange-700 ring-1 ring-orange-100">
+          <AlertTriangle className="h-8 w-8" />
+        </div>
+        <h1 className="mt-5 text-2xl font-black text-slate-950">{title}</h1>
+        <p className="mx-auto mt-3 max-w-xl text-sm font-semibold leading-6 text-slate-500">
+          {description} Entre em contato para ativar, prorrogar ou regularizar o
+          acesso.
+        </p>
+        <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+          <a
+            href="https://wa.me/"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-12 items-center justify-center rounded-2xl bg-[#ff4b00] px-5 text-sm font-black text-white transition hover:bg-[#e94400]"
+          >
+            Falar no WhatsApp
+          </a>
+          <Link
+            href="/configuracoes"
+            prefetch={menuLinkPrefetch}
+            className="inline-flex h-12 items-center justify-center rounded-2xl bg-slate-100 px-5 text-sm font-black text-slate-800 transition hover:bg-slate-200"
+          >
+            Ver configurações
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
 export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -454,6 +536,7 @@ export default function AppShell({ children }: AppShellProps) {
   const [resetOptions, setResetOptions] = useState<ResetOptions>(defaultResetOptions);
   const [resetConfirmationText, setResetConfirmationText] = useState("");
   const [resetError, setResetError] = useState("");
+  const [isTrialLoginNoticeOpen, setIsTrialLoginNoticeOpen] = useState(false);
 
   const lockedUserEmail = user?.email || userSettings.email;
   const companyDisplayName =
@@ -474,6 +557,27 @@ export default function AppShell({ children }: AppShellProps) {
     [user?.permissions, user?.role],
   );
   const isSystemOwner = isSystemOwnerRole(user?.role);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || isSystemOwner) {
+      return;
+    }
+
+    if (user?.subscriptionStatus !== "TRIAL") {
+      return;
+    }
+
+    const shouldShowTrialNotice = localStorage.getItem(
+      "contrx_show_trial_login_notice",
+    );
+
+    if (shouldShowTrialNotice !== "true") {
+      return;
+    }
+
+    localStorage.removeItem("contrx_show_trial_login_notice");
+    setIsTrialLoginNoticeOpen(true);
+  }, [isSystemOwner, user?.subscriptionStatus]);
 
   useEffect(() => {
     const currentToolKey = toolKeyByHref[pathname];
@@ -865,32 +969,53 @@ export default function AppShell({ children }: AppShellProps) {
   }
 
   const isSidebarOpen = isSidebarExpanded || isSidebarLocked;
+  const trialDaysRemaining = user ? getTrialDaysRemaining(user) : null;
+  const trialNoticeTone = getTrialBannerTone(trialDaysRemaining);
+  const trialEndsAtLabel = formatTrialDate(user?.trialAccessEndsAt);
+  const trialLoginNoticeText =
+    trialDaysRemaining === null
+      ? "Seu teste profissional de 30 dias está ativo."
+      : trialDaysRemaining === 0
+        ? "Seu teste profissional termina hoje."
+        : trialDaysRemaining === 1
+          ? "Seu teste profissional termina em 1 dia."
+          : `Seu teste profissional termina em ${trialDaysRemaining} dias.`;
+  const isTrialExpired =
+    user?.subscriptionStatus === "TRIAL" &&
+    trialDaysRemaining !== null &&
+    trialDaysRemaining < 0;
+  const isCommercialAccessBlocked =
+    !isSystemOwner &&
+    (isTrialExpired ||
+      user?.subscriptionStatus === "EXPIRED" ||
+      user?.subscriptionStatus === "SUSPENDED" ||
+      user?.subscriptionStatus === "CANCELED");
   const shellThemeClass =
     themeSettings.mode === "black"
       ? "bg-slate-950 text-slate-100"
-      : themeSettings.mode === "graphite"
-        ? "bg-zinc-900 text-zinc-100"
+    : themeSettings.mode === "graphite"
+        ? "bg-[#07111f] text-slate-100"
         : "bg-[#f8fafc] text-slate-900";
   const darkSurfaceClass =
     themeSettings.mode === "black"
       ? "border-slate-700 bg-slate-900 shadow-black/40"
-      : "border-zinc-700 bg-zinc-800 shadow-black/30";
+      : "border-[#24405f] bg-[#0d1b2e] shadow-black/30";
   const darkInsetSurfaceClass =
     themeSettings.mode === "black"
       ? "border border-slate-700 bg-slate-800"
-      : "border border-zinc-700 bg-zinc-900";
+      : "border border-[#24405f] bg-[#07111f]";
   const darkMenuItemClass =
     themeSettings.mode === "black"
       ? "text-slate-200 hover:bg-slate-800 hover:text-orange-400"
-      : "text-zinc-200 hover:bg-zinc-700 hover:text-orange-300";
+      : "text-[#b6c6dc] hover:bg-[#162a44] hover:text-orange-300";
   const darkMobileNavClass =
     themeSettings.mode === "black"
       ? "border-slate-800 bg-slate-950/95"
-      : "border-zinc-700 bg-zinc-900/95";
+      : "border-[#24405f] bg-[#07111f]/95";
   const darkMobileItemClass =
     themeSettings.mode === "black"
       ? "bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-orange-300"
-      : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-orange-300";
+      : "bg-[#0d1b2e] text-[#b6c6dc] hover:bg-[#162a44] hover:text-orange-300";
   return (
     <AuthGuard>
       <div
@@ -1119,7 +1244,14 @@ export default function AppShell({ children }: AppShellProps) {
           </header>
 
           <main className="contrx-app-main min-w-0 flex-1 overflow-x-hidden px-3 pb-32 pt-4 sm:px-5 lg:px-8 lg:py-8">
-            {children}
+            {isCommercialAccessBlocked ? (
+              <CommercialAccessBlockedPanel
+                status={user?.subscriptionStatus}
+                trialEndsAtLabel={trialEndsAtLabel}
+              />
+            ) : (
+              children
+            )}
           </main>
 
           <nav
@@ -1157,6 +1289,85 @@ export default function AppShell({ children }: AppShellProps) {
 
           <GlobalMinimizedModalDock />
         </div>
+
+        {isTrialLoginNoticeOpen && (
+          <div
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="trial-login-notice-title"
+          >
+            <div className="w-full max-w-md rounded-[18px] border border-slate-200 bg-white p-6 text-slate-950 shadow-[0_28px_80px_rgba(15,23,42,0.28)]">
+              <div
+                className={`flex h-14 w-14 items-center justify-center rounded-2xl ring-1 ${
+                  trialNoticeTone === "danger"
+                    ? "bg-red-50 text-red-700 ring-red-100"
+                    : trialNoticeTone === "warning"
+                      ? "bg-amber-50 text-amber-700 ring-amber-100"
+                      : "bg-orange-50 text-orange-700 ring-orange-100"
+                }`}
+              >
+                {trialNoticeTone === "danger" ? (
+                  <AlertTriangle className="h-7 w-7" />
+                ) : (
+                  <Clock3 className="h-7 w-7" />
+                )}
+              </div>
+
+              <h2
+                id="trial-login-notice-title"
+                className="mt-5 text-2xl font-black leading-tight text-slate-950"
+              >
+                Acesso profissional ativo
+              </h2>
+              <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
+                {trialLoginNoticeText}
+              </p>
+              <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+                {trialEndsAtLabel
+                  ? `Seu acesso está válido até ${trialEndsAtLabel}.`
+                  : "Seu acesso é válido por 30 dias a partir do cadastro."}
+              </p>
+
+              <div className="mt-5 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-100">
+                <div className="flex items-center gap-3">
+                  <CalendarDays className="h-5 w-5 text-orange-600" />
+                  <div>
+                    <p className="text-sm font-black text-slate-900">
+                      Dias disponíveis para uso
+                    </p>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">
+                      {trialDaysRemaining === null
+                        ? "Período de teste em andamento."
+                        : `${trialDaysRemaining} dia${trialDaysRemaining === 1 ? "" : "s"} restante${
+                            trialDaysRemaining === 1 ? "" : "s"
+                          }.`}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setIsTrialLoginNoticeOpen(false)}
+                  className="flex h-12 items-center justify-center rounded-2xl bg-[#ff4b00] px-5 text-sm font-black text-white shadow-[0_16px_30px_rgba(255,75,0,0.22)] transition hover:bg-[#e94400]"
+                >
+                  Continuar
+                </button>
+
+                <Link
+                  href="/configuracoes"
+                  prefetch={menuLinkPrefetch}
+                  onClick={() => setIsTrialLoginNoticeOpen(false)}
+                  className="flex h-12 items-center justify-center rounded-2xl bg-slate-100 px-5 text-sm font-black text-slate-800 transition hover:bg-slate-200"
+                >
+                  Configurar empresa
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
 
         {isSettingsOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm">

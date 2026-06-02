@@ -26,17 +26,14 @@ export class SettingsService {
       where: { companyId },
       create: {
         company: { connect: { id: companyId } },
-        userSettings: this.toJsonValue(normalizedData.userSettings),
-        companySettings: this.toJsonValue(normalizedData.companySettings),
-        themeSettings: this.toJsonValue(normalizedData.themeSettings),
-        printTemplates: this.toJsonValue(normalizedData.printTemplates),
+        userSettings: this.toRequiredJsonValue(normalizedData.userSettings),
+        companySettings: this.toRequiredJsonValue(
+          normalizedData.companySettings,
+        ),
+        themeSettings: this.toRequiredJsonValue(normalizedData.themeSettings),
+        printTemplates: this.toRequiredJsonValue(normalizedData.printTemplates),
       },
-      update: {
-        userSettings: this.toJsonValue(normalizedData.userSettings),
-        companySettings: this.toJsonValue(normalizedData.companySettings),
-        themeSettings: this.toJsonValue(normalizedData.themeSettings),
-        printTemplates: this.toJsonValue(normalizedData.printTemplates),
-      },
+      update: this.getSettingsUpdateData(normalizedData),
     });
   }
 
@@ -64,10 +61,33 @@ export class SettingsService {
     };
   }
 
-  private toJsonValue(value?: Record<string, unknown>) {
+  private toRequiredJsonValue(value?: Record<string, unknown>) {
     return value === undefined
       ? Prisma.JsonNull
       : (value as Prisma.InputJsonValue);
+  }
+
+  private getSettingsUpdateData(data: UpsertSettingsDto) {
+    const updateData: Prisma.AppSettingsUpdateInput = {};
+
+    if (data.userSettings !== undefined) {
+      updateData.userSettings = data.userSettings as Prisma.InputJsonValue;
+    }
+
+    if (data.companySettings !== undefined) {
+      updateData.companySettings =
+        data.companySettings as Prisma.InputJsonValue;
+    }
+
+    if (data.themeSettings !== undefined) {
+      updateData.themeSettings = data.themeSettings as Prisma.InputJsonValue;
+    }
+
+    if (data.printTemplates !== undefined) {
+      updateData.printTemplates = data.printTemplates as Prisma.InputJsonValue;
+    }
+
+    return updateData;
   }
 
   private normalizeSettingsData(data: UpsertSettingsDto): UpsertSettingsDto {

@@ -113,6 +113,7 @@ type ThemeSettings = {
 type PrintDocumentKey =
   | "temporaryContract"
   | "standardContract"
+  | "assetContract"
   | "paymentBooklet"
   | "accountsPayableReport";
 
@@ -153,6 +154,16 @@ type ResetModuleOption = {
   storageKeys: string[];
 };
 
+type CompanyAccessProfileKey = "admin" | "manager" | "operator" | "readOnly";
+
+type CompanyAccessProfile = {
+  key: CompanyAccessProfileKey;
+  label: string;
+  description: string;
+  role: CompanyUserRole;
+  permissions: UserToolPermission[];
+};
+
 function canResetTestDataRole(role?: string | null) {
   return role === "SYSTEM_OWNER" || role === "DONO_SISTEMA";
 }
@@ -182,7 +193,7 @@ const resetModuleOptions: ResetModuleOption[] = [
   {
     key: "properties",
     label: "Bens/Ativos",
-    description: "Remove imóveis cadastrados e seus filtros locais.",
+    description: "Remove bens/ativos cadastrados e seus filtros locais.",
     icon: "🏢",
     storageKeys: [],
   },
@@ -314,6 +325,63 @@ const defaultThemeSettings: ThemeSettings = {
   mode: "light",
 };
 
+const settingsStorageKeys = {
+  user: "contrx_user_settings",
+  company: "contrx_company_settings",
+  print: "contrx_print_templates",
+  theme: "contrx_theme_settings",
+};
+
+const companyAccessProfiles: CompanyAccessProfile[] = [
+  {
+    key: "admin",
+    label: "Administrador",
+    description: "Libera gestão completa da empresa, usuários e configurações.",
+    role: "ADMIN",
+    permissions: [
+      "dashboard",
+      "properties",
+      "people",
+      "contracts",
+      "financial",
+      "accountsReceivable",
+      "accountsPayable",
+      "schedule",
+      "settings",
+    ],
+  },
+  {
+    key: "manager",
+    label: "Gerente",
+    description: "Libera operação completa sem gestão administrativa sensível.",
+    role: "MANAGER",
+    permissions: [
+      "dashboard",
+      "properties",
+      "people",
+      "contracts",
+      "financial",
+      "accountsReceivable",
+      "accountsPayable",
+      "schedule",
+    ],
+  },
+  {
+    key: "operator",
+    label: "Operador",
+    description: "Foca em cadastros, contratos e agenda do dia a dia.",
+    role: "USER",
+    permissions: ["dashboard", "properties", "people", "contracts", "schedule"],
+  },
+  {
+    key: "readOnly",
+    label: "Consulta",
+    description: "Mantém acesso básico para consulta do painel inicial.",
+    role: "USER",
+    permissions: ["dashboard"],
+  },
+];
+
 function normalizeThemeMode(value: unknown): ThemeMode {
   const normalizedValue = String(value || "").toLowerCase();
 
@@ -367,7 +435,7 @@ function readThemeSettingsFromStorage(companyId?: string): ThemeSettings {
   return defaultThemeSettings;
 }
 
-const legacyTemporaryContractTemplateContent = 'CONTRATO TEMPORÁRIO\n\nLOCADOR: {companyName}\nLOCATÁRIO: {personName}\nIMÓVEL: {propertyName}\nPERÍODO: {startDate} até {endDate}\nHORÁRIO: Entrada {entryTime} / Saída {exitTime}\n\nCLÁUSULAS E CONDIÇÕES:\n1. O presente contrato tem finalidade de locação temporária.\n2. O locatário declara estar ciente das regras de uso do imóvel.\n3. As informações financeiras e condições acordadas deverão constar no documento final.\n\n{contractDefaultNotes}\n\n{contractCity}, {currentDate}.\n\n__________________________________\nLOCADOR\n\n__________________________________\nLOCATÁRIO';
+const legacyTemporaryContractTemplateContent = 'CONTRATO TEMPORÁRIO\n\nLOCADOR: {companyName}\nLOCATÁRIO: {personName}\nBEM/ATIVO: {propertyName}\nPERÍODO: {startDate} até {endDate}\nHORÁRIO: Entrada {entryTime} / Saída {exitTime}\n\nCLÁUSULAS E CONDIÇÕES:\n1. O presente contrato tem finalidade de locação temporária.\n2. O locatário declara estar ciente das regras de uso do bem/ativo.\n3. As informações financeiras e condições acordadas deverão constar no documento final.\n\n{contractDefaultNotes}\n\n{contractCity}, {currentDate}.\n\n__________________________________\nLOCADOR\n\n__________________________________\nLOCATÁRIO';
 
 const defaultTemporaryContractTemplateContent = `INSTRUMENTO PARTICULAR DE CONTRATO DE LOCAÇÃO IMOBILIÁRIA TEMPORÁRIA
 
@@ -550,6 +618,66 @@ __________________________________
 Nome: ______________________________
 CPF: ______________________________`;
 
+const defaultAssetContractTemplateContent = `CONTRATO DE LOCAÇÃO DE BEM/ATIVO
+
+I - LOCADOR:
+{landlordName}, inscrito(a) no CPF/CNPJ nº {landlordDocument}, com endereço em {landlordAddress}, telefone {companyPhone}, e-mail {companyEmail}, a seguir denominado(a) LOCADOR.
+
+II - LOCATÁRIO:
+{tenantName}, inscrito(a) no CPF/CNPJ nº {tenantDocument}, residente e domiciliado(a) em {tenantAddress}, telefone {tenantPhone}, e-mail {tenantEmail}, a seguir denominado(a) LOCATÁRIO.
+
+CLÁUSULA PRIMEIRA - DO BEM/ATIVO E DO PRAZO
+O LOCADOR dá em locação ao LOCATÁRIO o bem/ativo denominado {propertyName}, classificado como {assetCategory}, pelo prazo de {contractMonths} mês(es), com início em {startDate} e término em {endDate}.
+
+Parágrafo Primeiro - O LOCATÁRIO declara ter recebido o bem/ativo em condições adequadas de uso, comprometendo-se a utilizá-lo exclusivamente para a finalidade contratada e a devolvê-lo ao final da locação no mesmo estado de conservação, salvo desgaste natural de uso.
+
+Parágrafo Segundo - Quando houver local de entrega, guarda ou operação informado, considera-se como referência: {propertyAddress}.
+
+CLÁUSULA SEGUNDA - DO VALOR E FORMA DE PAGAMENTO
+O valor da locação será de {amount}, com vencimento conforme acordado entre as partes. O pagamento poderá ser realizado por depósito, transferência, dinheiro ou Pix, utilizando a chave {pixKey}, salvo outra forma expressamente acordada.
+
+CLÁUSULA TERCEIRA - DA GUARDA, USO E CONSERVAÇÃO
+O LOCATÁRIO será responsável pela guarda, conservação, uso adequado e segurança do bem/ativo durante todo o período de locação, respondendo por perdas, danos, mau uso, extravio, furto, roubo ou avarias que não decorram de desgaste natural.
+
+CLÁUSULA QUARTA - DA MANUTENÇÃO E DEVOLUÇÃO
+O LOCATÁRIO deverá comunicar imediatamente ao LOCADOR qualquer defeito, dano, acidente, perda de desempenho ou necessidade de manutenção. A devolução deverá ocorrer na data final contratada, acompanhada de acessórios, documentos, peças, componentes ou itens entregues junto com o bem/ativo, quando houver.
+
+CLÁUSULA QUINTA - DAS PROIBIÇÕES
+É vedado ao LOCATÁRIO ceder, transferir, sublocar, emprestar, vender, modificar, desmontar ou alterar o bem/ativo sem autorização prévia e por escrito do LOCADOR.
+
+CLÁUSULA SEXTA - DA INADIMPLÊNCIA E RESCISÃO
+O descumprimento de qualquer obrigação contratual poderá acarretar rescisão, cobrança dos valores devidos, multa, perdas e danos, além das medidas administrativas, extrajudiciais ou judiciais cabíveis.
+
+CLÁUSULA SÉTIMA - DA MULTA CONTRATUAL
+Fica estipulada multa equivalente a 03 (três) períodos de locação vigentes na data da infração, facultando à parte inocente considerar rescindido o contrato e cobrar eventuais prejuízos adicionais.
+
+CLÁUSULA OITAVA - DO FORO
+As partes elegem o foro da comarca de {contractCity} para dirimir dúvidas ou questões oriundas deste contrato, com renúncia de qualquer outro, por mais privilegiado que seja.
+
+{contractDefaultNotes}
+
+E assim, por estarem justas e contratadas, as partes assinam o presente instrumento particular de CONTRATO DE LOCAÇÃO DE BEM/ATIVO, em 2 (duas) vias de igual teor.
+
+{contractCity}, {currentDate}.
+
+LOCADOR:
+__________________________________
+{landlordName}
+
+LOCATÁRIO:
+__________________________________
+{tenantName}
+
+TESTEMUNHA:
+__________________________________
+Nome: ______________________________
+CPF: ______________________________
+
+TESTEMUNHA:
+__________________________________
+Nome: ______________________________
+CPF: ______________________________`;
+
 const legacyPaymentBookletTemplateContent = `CARNÊ DE PAGAMENTO
 
 EMPRESA: {companyName}
@@ -602,6 +730,14 @@ const defaultPrintTemplates: PrintTemplates = {
     icon: "🏠",
     isEditable: true,
     content: defaultStandardContractTemplateContent,
+  },
+  assetContract: {
+    title: "Contrato de bem/ativo",
+    description: "Modelo usado quando o contrato é de equipamento, máquina, veículo, ferramenta ou outro bem não imobiliário.",
+    moduleName: "Contratos",
+    icon: "⚙️",
+    isEditable: true,
+    content: defaultAssetContractTemplateContent,
   },
   paymentBooklet: {
     title: "Carnê",
@@ -656,10 +792,11 @@ const printTemplateVariableGroups = [
     ],
   },
   {
-    title: "Imóvel / Contrato",
+    title: "Bem/Ativo / Contrato",
     variables: [
-      { label: "Nome do imóvel", value: "{propertyName}" },
-      { label: "Endereço do imóvel", value: "{propertyAddress}" },
+      { label: "Nome do bem/ativo", value: "{propertyName}" },
+      { label: "Categoria do bem/ativo", value: "{assetCategory}" },
+      { label: "Endereço do bem/ativo", value: "{propertyAddress}" },
       { label: "Data inicial", value: "{startDate}" },
       { label: "Data final", value: "{endDate}" },
       { label: "Dias do contrato", value: "{contractDays}" },
@@ -728,6 +865,10 @@ function normalizeStoredPrintTemplates(storedTemplates: Partial<PrintTemplates>)
     ...defaultPrintTemplates.standardContract,
     ...(storedTemplates.standardContract || {}),
   };
+  const assetContract = {
+    ...defaultPrintTemplates.assetContract,
+    ...(storedTemplates.assetContract || {}),
+  };
   const paymentBooklet = {
     ...defaultPrintTemplates.paymentBooklet,
     ...(storedTemplates.paymentBooklet || {}),
@@ -745,6 +886,10 @@ function normalizeStoredPrintTemplates(storedTemplates: Partial<PrintTemplates>)
     standardContract.content = defaultStandardContractTemplateContent;
   }
 
+  if (!assetContract.content.trim()) {
+    assetContract.content = defaultAssetContractTemplateContent;
+  }
+
   if (!paymentBooklet.content.trim()) {
     paymentBooklet.content = legacyPaymentBookletTemplateContent;
   }
@@ -752,6 +897,7 @@ function normalizeStoredPrintTemplates(storedTemplates: Partial<PrintTemplates>)
   return {
     temporaryContract,
     standardContract,
+    assetContract,
     paymentBooklet,
     accountsPayableReport,
   };
@@ -1345,6 +1491,34 @@ export default function ConfiguracoesPage() {
       : defaultEditCompanyUserForm.permissions;
   }
 
+  function isCompanyUserAdmin(companyUser: Pick<CompanyUser, "role" | "isActive">) {
+    return companyUser.isActive && (companyUser.role === "OWNER" || companyUser.role === "ADMIN");
+  }
+
+  function isLastActiveCompanyAdmin(companyUser: CompanyUser) {
+    if (!isCompanyUserAdmin(companyUser)) return false;
+
+    return companyUsers.filter(isCompanyUserAdmin).length <= 1;
+  }
+
+  function applyAccessProfileToNewUser(profile: CompanyAccessProfile) {
+    setCompanyUserError("");
+    setNewCompanyUserForm((currentForm) => ({
+      ...currentForm,
+      role: profile.role,
+      permissions: [...profile.permissions],
+    }));
+  }
+
+  function applyAccessProfileToEditingUser(profile: CompanyAccessProfile) {
+    setCompanyUserError("");
+    setEditCompanyUserForm((currentForm) => ({
+      ...currentForm,
+      role: profile.role,
+      permissions: [...profile.permissions],
+    }));
+  }
+
   const saveChangeSummary = useMemo(
     () =>
       getChangedSections(
@@ -1374,8 +1548,8 @@ export default function ConfiguracoesPage() {
   const loadSettingsFromLocalStorage = useCallback(() => {
     const storedUserSettings = getCompanyStorageItem(
       companyId,
-      "contrx_user_settings",
-      "contrx_user_settings",
+      settingsStorageKeys.user,
+      settingsStorageKeys.user,
     );
     if (storedUserSettings) {
       const parsedUserSettings = {
@@ -1386,6 +1560,35 @@ export default function ConfiguracoesPage() {
 
       setUserSettings(parsedUserSettings);
       setInitialUserSettings(parsedUserSettings);
+    }
+
+    const storedCompanySettings = getCompanyStorageItem(
+      companyId,
+      settingsStorageKeys.company,
+      settingsStorageKeys.company,
+    );
+    if (storedCompanySettings) {
+      const parsedCompanySettings = {
+        ...defaultCompanySettings,
+        ...JSON.parse(storedCompanySettings),
+      };
+
+      setCompanySettings(parsedCompanySettings);
+      setInitialCompanySettings(parsedCompanySettings);
+    }
+
+    const storedPrintTemplates = getCompanyStorageItem(
+      companyId,
+      settingsStorageKeys.print,
+      settingsStorageKeys.print,
+    );
+    if (storedPrintTemplates) {
+      const parsedPrintTemplates = normalizeStoredPrintTemplates(
+        JSON.parse(storedPrintTemplates) as Partial<PrintTemplates>,
+      );
+
+      setPrintTemplates(parsedPrintTemplates);
+      setInitialPrintTemplates(parsedPrintTemplates);
     }
 
     const parsedThemeSettings = readThemeSettingsFromStorage(companyId);
@@ -1681,11 +1884,6 @@ export default function ConfiguracoesPage() {
       return;
     }
 
-    if (newCompanyUserForm.password.length < 6) {
-      setCompanyUserError("A senha precisa ter pelo menos 6 caracteres.");
-      return;
-    }
-
     if (newCompanyUserForm.permissions.length === 0) {
       setCompanyUserError("Selecione pelo menos uma ferramenta para o usuário.");
       return;
@@ -1730,13 +1928,17 @@ export default function ConfiguracoesPage() {
       return;
     }
 
-    if (password && password.length < 6) {
-      setCompanyUserError("A senha precisa ter pelo menos 6 caracteres.");
+    if (editCompanyUserForm.permissions.length === 0) {
+      setCompanyUserError("Selecione pelo menos uma ferramenta para o usuário.");
       return;
     }
 
-    if (editCompanyUserForm.permissions.length === 0) {
-      setCompanyUserError("Selecione pelo menos uma ferramenta para o usuário.");
+    if (
+      isLastActiveCompanyAdmin(editingCompanyUser) &&
+      (!editCompanyUserForm.isActive ||
+        (editCompanyUserForm.role !== "OWNER" && editCompanyUserForm.role !== "ADMIN"))
+    ) {
+      setCompanyUserError("Mantenha pelo menos um administrador ativo na empresa.");
       return;
     }
 
@@ -1933,11 +2135,6 @@ export default function ConfiguracoesPage() {
 
     if (!passwordSettings.newPassword) {
       setPasswordError("Informe a nova senha.");
-      return false;
-    }
-
-    if (passwordSettings.newPassword.length < 6) {
-      setPasswordError("A nova senha precisa ter no mínimo 6 caracteres.");
       return false;
     }
 
@@ -2245,7 +2442,7 @@ export default function ConfiguracoesPage() {
 
     setCompanyStorageItem(
       companyId,
-      "contrx_user_settings",
+      settingsStorageKeys.user,
       JSON.stringify({
         ...userSettings,
         email: lockedUserEmail,
@@ -2253,7 +2450,17 @@ export default function ConfiguracoesPage() {
     );
     setCompanyStorageItem(
       companyId,
-      "contrx_theme_settings",
+      settingsStorageKeys.company,
+      JSON.stringify(companySettings),
+    );
+    setCompanyStorageItem(
+      companyId,
+      settingsStorageKeys.print,
+      JSON.stringify(printTemplates),
+    );
+    setCompanyStorageItem(
+      companyId,
+      settingsStorageKeys.theme,
       JSON.stringify(themeSettings),
     );
     setCachedAppSettings({
@@ -2297,7 +2504,7 @@ export default function ConfiguracoesPage() {
       data-contrx-theme={themeSettings.mode}
       className={`min-h-screen px-3 py-3 sm:px-6 sm:py-6 lg:px-8 ${
         themeSettings.mode === "graphite"
-          ? "bg-zinc-900 text-zinc-100"
+          ? "bg-[#07111f] text-slate-100"
           : themeSettings.mode === "black"
             ? "bg-slate-950 text-slate-100"
             : "bg-slate-100"
@@ -3257,6 +3464,35 @@ export default function ConfiguracoesPage() {
                             </div>
 
                             <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-6">
+                              <div className="mb-5 rounded-3xl border border-slate-200 bg-white p-4">
+                                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                                  Perfis rápidos
+                                </p>
+                                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                                  {companyAccessProfiles.map((profile) => (
+                                    <button
+                                      key={profile.key}
+                                      type="button"
+                                      onClick={() => applyAccessProfileToEditingUser(profile)}
+                                      className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left transition hover:border-orange-200 hover:bg-orange-50"
+                                    >
+                                      <span className="block text-sm font-black text-slate-900">
+                                        {profile.label}
+                                      </span>
+                                      <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500">
+                                        {profile.description}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {isLastActiveCompanyAdmin(editingCompanyUser) && (
+                                <div className="mb-5 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+                                  Este é o último administrador ativo da empresa. Mantenha o perfil como administrador ou dono e o acesso ativo.
+                                </div>
+                              )}
+
                               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                                 <label className="space-y-2">
                                   <span className="text-xs font-black uppercase tracking-wide text-slate-500">
@@ -3451,6 +3687,29 @@ export default function ConfiguracoesPage() {
                           </div>
 
                             <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-6">
+                          <div className="mb-5 rounded-3xl border border-slate-200 bg-white p-4">
+                            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                              Perfis rápidos
+                            </p>
+                            <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                              {companyAccessProfiles.map((profile) => (
+                                <button
+                                  key={profile.key}
+                                  type="button"
+                                  onClick={() => applyAccessProfileToNewUser(profile)}
+                                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left transition hover:border-orange-200 hover:bg-orange-50"
+                                >
+                                  <span className="block text-sm font-black text-slate-900">
+                                    {profile.label}
+                                  </span>
+                                  <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500">
+                                    {profile.description}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
                           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                             <label className="space-y-2">
                               <span className="text-xs font-black uppercase tracking-wide text-slate-500">
@@ -3683,20 +3942,20 @@ export default function ConfiguracoesPage() {
                       onClick={() => setThemeSettings({ mode: "graphite" })}
                       className={`contrx-theme-choice rounded-3xl border p-5 text-left transition ${
                         themeSettings.mode === "graphite"
-                          ? "border-orange-300 bg-zinc-800 shadow-md shadow-zinc-950/30"
+                          ? "border-[#24405f] bg-[#0d1b2e] shadow-md shadow-slate-950/30"
                           : "border-slate-200 bg-white hover:border-orange-200 hover:bg-orange-50/40"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-800 text-lg font-black text-orange-300 ring-1 ring-orange-400/50">
-                            G
+                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#07111f] text-lg font-black text-orange-300 ring-1 ring-[#24405f]">
+                            AN
                           </div>
                           <h3 className={`mt-4 text-lg font-black ${themeSettings.mode === "graphite" ? "text-white" : "text-slate-950"}`}>
-                            Tema grafite
+                            Azul Noturno
                           </h3>
-                          <p className={`mt-1 text-sm font-semibold leading-6 ${themeSettings.mode === "graphite" ? "text-zinc-200" : "text-slate-500"}`}>
-                            Usa cinzas profundos com contraste suave, mantendo o laranja como ponto de ação.
+                          <p className={`mt-1 text-sm font-semibold leading-6 ${themeSettings.mode === "graphite" ? "text-[#b6c6dc]" : "text-slate-500"}`}>
+                            Usa azul profundo com painéis elegantes, contraste confortável e laranja como ponto de ação.
                           </p>
                         </div>
 
@@ -3848,7 +4107,7 @@ export default function ConfiguracoesPage() {
                       Campos dinâmicos disponíveis
                     </p>
                     <p className="mt-1 text-sm font-semibold leading-6 text-amber-700">
-                      Use variáveis como {"{landlordName}"}, {"{tenantName}"}, {"{propertyName}"}, {"{propertyAddress}"}, {"{startDate}"}, {"{endDate}"}, {"{amount}"}, {"{pixKey}"}, {"{contractCity}"} e {"{currentDate}"}.
+                      Use variáveis como {"{landlordName}"}, {"{tenantName}"}, {"{propertyName}"}, {"{assetCategory}"}, {"{propertyAddress}"}, {"{startDate}"}, {"{endDate}"}, {"{amount}"}, {"{pixKey}"}, {"{contractCity}"} e {"{currentDate}"}.
                       Elas serão substituídas pelos dados reais no momento da geração do PDF.
                     </p>
                   </div>

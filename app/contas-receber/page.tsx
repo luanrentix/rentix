@@ -50,13 +50,13 @@ const LEGACY_SETTINGS_TEMPORARY_CONTRACT_CONTENT = `CONTRATO TEMPORÁRIO
 
 LOCADOR: {companyName}
 LOCATÁRIO: {personName}
-IMÓVEL: {propertyName}
+BEM/ATIVO: {propertyName}
 PERÍODO: {startDate} até {endDate}
 HORÁRIO: Entrada {entryTime} / Saída {exitTime}
 
 CLÁUSULAS E CONDIÇÕES:
 1. O presente contrato tem finalidade de locação temporária.
-2. O locatário declara estar ciente das regras de uso do imóvel.
+2. O locatário declara estar ciente das regras de uso do bem/ativo.
 3. As informações financeiras e condições acordadas deverão constar no documento final.
 
 {contractDefaultNotes}
@@ -341,6 +341,56 @@ Testemunha:
 Nome: ______________________________
 CPF: ______________________________`;
 
+const DEFAULT_ASSET_CONTRACT_TEMPLATE = `CONTRATO DE LOCAÇÃO DE BEM/ATIVO
+
+I - LOCADOR:
+{landlordName}, inscrito(a) no CPF/CNPJ nº {landlordDocument}, com endereço em {landlordAddress}, telefone {companyPhone}, e-mail {companyEmail}, a seguir denominado(a) LOCADOR.
+
+II - LOCATÁRIO:
+{tenantName}, inscrito(a) no CPF/CNPJ nº {tenantDocument}, residente e domiciliado(a) em {tenantAddress}, telefone {tenantPhone}, e-mail {tenantEmail}, a seguir denominado(a) LOCATÁRIO.
+
+CLÁUSULA PRIMEIRA - DO BEM/ATIVO E DO PRAZO
+O LOCADOR dá em locação ao LOCATÁRIO o bem/ativo denominado {propertyName}, classificado como {assetCategory}, pelo prazo de {contractMonths} mês(es), com início em {startDate} e término em {endDate}.
+
+Parágrafo Primeiro - O LOCATÁRIO declara ter recebido o bem/ativo em condições adequadas de uso, comprometendo-se a utilizá-lo exclusivamente para a finalidade contratada e a devolvê-lo ao final da locação no mesmo estado de conservação, salvo desgaste natural de uso.
+
+Parágrafo Segundo - Quando houver local de entrega, guarda ou operação informado, considera-se como referência: {propertyAddress}.
+
+CLÁUSULA SEGUNDA - DO VALOR E FORMA DE PAGAMENTO
+O valor da locação será de {amount}, com vencimento conforme acordado entre as partes. O pagamento poderá ser realizado por depósito, transferência, dinheiro ou Pix, utilizando a chave {pixKey}, salvo outra forma expressamente acordada.
+
+CLÁUSULA TERCEIRA - DA GUARDA, USO E CONSERVAÇÃO
+O LOCATÁRIO será responsável pela guarda, conservação, uso adequado e segurança do bem/ativo durante todo o período de locação, respondendo por perdas, danos, mau uso, extravio, furto, roubo ou avarias que não decorram de desgaste natural.
+
+CLÁUSULA QUARTA - DA MANUTENÇÃO E DEVOLUÇÃO
+O LOCATÁRIO deverá comunicar imediatamente ao LOCADOR qualquer defeito, dano, acidente, perda de desempenho ou necessidade de manutenção. A devolução deverá ocorrer na data final contratada, acompanhada de acessórios, documentos, peças, componentes ou itens entregues junto com o bem/ativo, quando houver.
+
+CLÁUSULA QUINTA - DAS PROIBIÇÕES
+É vedado ao LOCATÁRIO ceder, transferir, sublocar, emprestar, vender, modificar, desmontar ou alterar o bem/ativo sem autorização prévia e por escrito do LOCADOR.
+
+CLÁUSULA SEXTA - DA INADIMPLÊNCIA E RESCISÃO
+O descumprimento de qualquer obrigação contratual poderá acarretar rescisão, cobrança dos valores devidos, multa, perdas e danos, além das medidas administrativas, extrajudiciais ou judiciais cabíveis.
+
+CLÁUSULA SÉTIMA - DO FORO
+As partes elegem o foro da comarca de {contractCity} para dirimir dúvidas ou questões oriundas deste contrato, com renúncia de qualquer outro, por mais privilegiado que seja.
+
+{contractDefaultNotes}
+
+{contractCity}, {currentDate}.
+
+LOCADOR:
+__________________________________
+{landlordName}
+
+LOCATÁRIO:
+__________________________________
+{tenantName}
+
+TESTEMUNHA:
+__________________________________
+Nome: ______________________________
+CPF: ______________________________`;
+
 
 type Contract = {
   id: string;
@@ -363,6 +413,7 @@ type Contract = {
 type Property = {
   id: string;
   name: string;
+  assetCategory?: string | null;
   zipCode?: string;
   state?: string;
   city?: string;
@@ -942,7 +993,7 @@ export default function AccountsReceivablePage() {
 
         return {
           id,
-          property: property?.name || "Imóvel",
+          property: property?.name || "Bem/Ativo",
           tenant: tenant?.name || "Inquilino",
           dueDate: dueDate.toISOString(),
           amount: getContractAmount(contract),
@@ -1332,7 +1383,7 @@ export default function AccountsReceivablePage() {
         `Olá, ${charge.tenant}.`,
         "",
         `${companyName} informa sobre a cobrança${installmentLabel}:`,
-        `Imóvel: ${charge.property || "Não informado"}`,
+        `Bem/Ativo: ${charge.property || "Não informado"}`,
         `Vencimento: ${formatDate(charge.dueDate)}`,
         `Valor: ${formatCurrency(chargeAmount)}`,
         `Status: ${getChargeStatusLabel(charge)}`,
@@ -2142,7 +2193,7 @@ export default function AccountsReceivablePage() {
               </div>
 
               <div class="field full">
-                <span>Imóvel</span>
+                <span>Bem/Ativo</span>
                 <strong>${escapeHtml(charge.property)}</strong>
               </div>
 
@@ -2261,7 +2312,7 @@ export default function AccountsReceivablePage() {
                   <div class="brand">${escapeHtml(companyName)} · Financeiro</div>
                   <h1>Carnê de Pagamento</h1>
                   <p>Inquilino: <strong>${escapeHtml(firstCharge.tenant)}</strong></p>
-                  <p>Imóvel: <strong>${escapeHtml(firstCharge.property)}</strong></p>
+                  <p>Bem/Ativo: <strong>${escapeHtml(firstCharge.property)}</strong></p>
                 </div>
                 <div class="summary-meta">
                   Parcelas: <strong>${carnetCharges.length}</strong><br />
@@ -2275,7 +2326,7 @@ export default function AccountsReceivablePage() {
                   <tr>
                     <th>Parcela</th>
                     <th>Inquilino</th>
-                    <th>Imóvel</th>
+                    <th>Bem/Ativo</th>
                     <th>Vencimento</th>
                     <th>Valor</th>
                   </tr>
@@ -2475,7 +2526,7 @@ export default function AccountsReceivablePage() {
           <table>
             <thead>
               <tr>
-                <th>Imóvel</th>
+                <th>Bem/Ativo</th>
                 <th>Inquilino/Pessoa</th>
                 <th>Vencimento</th>
                 <th>Valor</th>
@@ -3396,7 +3447,7 @@ export default function AccountsReceivablePage() {
     const propertyName =
       contract.propertyName ||
       properties.find((property) => String(property.id) === String(contract.propertyId))?.name ||
-      "Imovel nao informado";
+      "Bem/ativo nao informado";
 
     try {
       const currentScheduleItems = await getScheduleItems();
@@ -3741,6 +3792,37 @@ export default function AccountsReceivablePage() {
     }
   }
 
+  function getConfiguredAssetContractTemplateContentForReceivable() {
+    try {
+      const parsedTemplates = getCachedPrintTemplates();
+
+      if (!parsedTemplates) return null;
+      const assetContractTemplate = (parsedTemplates as { assetContract?: unknown }).assetContract;
+      let templateContent = "";
+
+      if (
+        assetContractTemplate &&
+        typeof assetContractTemplate === "object" &&
+        !Array.isArray(assetContractTemplate) &&
+        typeof (assetContractTemplate as { content?: unknown }).content === "string"
+      ) {
+        templateContent = (assetContractTemplate as { content: string }).content;
+      }
+
+      const cleanTemplateContent = templateContent.trim();
+
+      if (!cleanTemplateContent) return null;
+
+      if (normalizeContractTemplateContent(cleanTemplateContent) === normalizeContractTemplateContent(DEFAULT_ASSET_CONTRACT_TEMPLATE)) {
+        return null;
+      }
+
+      return templateContent;
+    } catch {
+      return null;
+    }
+  }
+
   function renderContractPrintTemplate(templateContent: string, templateData: Record<string, string>) {
     return Object.entries(templateData).reduce((renderedContent, [key, value]) => {
       return renderedContent.replace(new RegExp(`{${key}}`, "g"), value);
@@ -3877,8 +3959,10 @@ export default function AccountsReceivablePage() {
     const landlordDocument = formatDocumentForContractPrint(companySettings.document || "");
     const tenantName = contract.tenantName || tenant?.name || "LOCATÁRIO NÃO INFORMADO";
     const tenantDocument = formatDocumentForContractPrint(tenant?.cpf || tenant?.document || "");
-    const propertyName = contract.propertyName || property?.name || "IMÓVEL NÃO INFORMADO";
+    const propertyName = contract.propertyName || property?.name || "BEM/ATIVO NÃO INFORMADO";
+    const assetCategory = property ? getAssetCategoryLabel(property.assetCategory) : "Bem/Ativo";
     const propertyAddress = formatContractPrintAddress(property || {});
+    const isRealEstateContract = !property || property.assetCategory === "PROPERTY";
     const locationText =
       companySettings.contractCity ||
       (property?.city && property?.state
@@ -3902,6 +3986,7 @@ export default function AccountsReceivablePage() {
       tenantPhone: tenant?.phone || "não informado",
       tenantEmail: tenant?.email || "não informado",
       propertyName,
+      assetCategory,
       propertyAddress: propertyAddress || "endereço não informado",
       startDate: formatContractDateForTemplate(contract.startDate),
       endDate: formatContractDateForTemplate(contract.endDate),
@@ -3926,9 +4011,11 @@ export default function AccountsReceivablePage() {
       contractDefaultNotes: companySettings.contractDefaultNotes || "",
     };
 
-    const templateContent = contract.isTemporaryRental
-      ? getConfiguredTemporaryContractTemplateContentForReceivable() || DEFAULT_SETTINGS_TEMPORARY_CONTRACT_CONTENT
-      : getConfiguredStandardContractTemplateContentForReceivable() || ORIGINAL_STANDARD_RESIDENTIAL_CONTRACT_TEMPLATE;
+    const templateContent = !isRealEstateContract
+      ? getConfiguredAssetContractTemplateContentForReceivable() || DEFAULT_ASSET_CONTRACT_TEMPLATE
+      : contract.isTemporaryRental
+        ? getConfiguredTemporaryContractTemplateContentForReceivable() || DEFAULT_SETTINGS_TEMPORARY_CONTRACT_CONTENT
+        : getConfiguredStandardContractTemplateContentForReceivable() || ORIGINAL_STANDARD_RESIDENTIAL_CONTRACT_TEMPLATE;
 
     return buildConfiguredContractPrintHtml(templateContent, templateData);
   }
@@ -4523,7 +4610,7 @@ export default function AccountsReceivablePage() {
       return;
     }
 
-    const chargeProperty = property?.name || "Sem imóvel vinculado";
+    const chargeProperty = property?.name || "Sem bem/ativo vinculado";
     const issueDate = new Date(`${formIssueDate}T00:00:00`).toISOString();
 
     if (formLaunchType === "single") {
@@ -5220,32 +5307,32 @@ export default function AccountsReceivablePage() {
         .contrx-accounts-receivable-page-graphite .bg-slate-50,
         .contrx-accounts-receivable-page-graphite .bg-slate-100,
         .contrx-accounts-receivable-page-graphite .bg-white {
-          background-color: #27272a !important;
+          background-color: #0d1b2e !important;
         }
 
         .contrx-accounts-receivable-page-graphite .bg-gradient-to-r {
-          background-image: linear-gradient(to right, #27272a, #3f3f46) !important;
+          background-image: linear-gradient(to right, #0d1b2e, #162a44) !important;
         }
 
         .contrx-accounts-receivable-page-graphite .text-slate-950,
         .contrx-accounts-receivable-page-graphite .text-slate-900,
         .contrx-accounts-receivable-page-graphite .text-slate-800,
         .contrx-accounts-receivable-page-graphite .text-slate-700 {
-          color: #f4f4f5 !important;
+          color: #f8fafc !important;
         }
 
         .contrx-accounts-receivable-page-graphite .text-slate-600,
         .contrx-accounts-receivable-page-graphite .text-slate-500,
         .contrx-accounts-receivable-page-graphite .text-slate-400 {
-          color: #d4d4d8 !important;
+          color: #b6c6dc !important;
         }
 
         .contrx-accounts-receivable-page-graphite input,
         .contrx-accounts-receivable-page-graphite select,
         .contrx-accounts-receivable-page-graphite textarea {
-          background-color: #18181b !important;
-          border-color: #52525b !important;
-          color: #f4f4f5 !important;
+          background-color: #07111f !important;
+          border-color: #24405f !important;
+          color: #f8fafc !important;
           color-scheme: dark !important;
         }
 
@@ -5453,7 +5540,7 @@ export default function AccountsReceivablePage() {
                   </th>
 
                   <th className="px-5 py-4 text-left text-sm font-black text-slate-900 dark:text-slate-100">
-                    Imóvel
+                    Bem/Ativo
                   </th>
 
                   <th className="px-5 py-4 text-left text-sm font-black text-slate-900 dark:text-slate-100">
@@ -6242,7 +6329,7 @@ export default function AccountsReceivablePage() {
 
               <div>
                 <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                  Imóvel
+                  Bem/Ativo
                   <span className="ml-1 text-xs font-semibold text-slate-400 dark:text-slate-500">
                     opcional
                   </span>
@@ -6261,7 +6348,7 @@ export default function AccountsReceivablePage() {
                       : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                   }`}
                 >
-                  <option value="">Sem imóvel vinculado</option>
+                  <option value="">Sem bem/ativo vinculado</option>
                   {properties.map((property) => (
                     <option key={property.id} value={property.id}>
                       {property.name}
@@ -6643,8 +6730,8 @@ export default function AccountsReceivablePage() {
                   </p>
 
                   <p>
-                    <span className="font-black text-slate-950 dark:text-white">Imóvel:</span>{" "}
-                    {isBatchPayment ? "Vários imóveis" : chargePendingPaymentReceipt.property}
+                    <span className="font-black text-slate-950 dark:text-white">Bem/Ativo:</span>{" "}
+                    {isBatchPayment ? "Vários bens/ativos" : chargePendingPaymentReceipt.property}
                   </p>
 
                   <p>
@@ -7040,9 +7127,9 @@ export default function AccountsReceivablePage() {
           details={
             <>
               <p>
-                Imóvel:{" "}
+                Bem/Ativo:{" "}
                 {isBatchPayment
-                  ? "Vários imóveis"
+                  ? "Vários bens/ativos"
                   : chargePendingPaymentReceipt.property}
               </p>
               <p>
@@ -7090,7 +7177,7 @@ export default function AccountsReceivablePage() {
           itemValue={chargePendingDeletion.tenant}
           details={
             <>
-              <p>Imóvel: {chargePendingDeletion.property}</p>
+              <p>Bem/Ativo: {chargePendingDeletion.property}</p>
               <p>Vencimento: {formatDate(chargePendingDeletion.dueDate)}</p>
               <p>Valor: {formatCurrency(chargePendingDeletion.amount)}</p>
             </>
@@ -7114,7 +7201,7 @@ export default function AccountsReceivablePage() {
           itemValue={chargePendingPaymentReversal.tenant}
           details={
             <>
-              <p>Imóvel: {chargePendingPaymentReversal.property}</p>
+              <p>Bem/Ativo: {chargePendingPaymentReversal.property}</p>
               <p>Vencimento: {formatDate(chargePendingPaymentReversal.dueDate)}</p>
               <p>Valor: {formatCurrency(chargePendingPaymentReversal.amount)}</p>
             </>
@@ -7331,6 +7418,7 @@ function mapApiPropertyToReceivableProperty(property: ApiProperty): Property {
   return {
     id: property.id,
     name: property.title,
+    assetCategory: property.assetCategory || "PROPERTY",
     zipCode: property.zipCode || "",
     state: property.state || "",
     city: property.city || "",
@@ -7340,6 +7428,19 @@ function mapApiPropertyToReceivableProperty(property: ApiProperty): Property {
     neighborhood: property.district || "",
     complement: property.complement || "",
   };
+}
+
+function getAssetCategoryLabel(value?: string | null) {
+  const labels: Record<string, string> = {
+    PROPERTY: "Imóvel",
+    EQUIPMENT: "Equipamento",
+    MACHINE: "Máquina",
+    VEHICLE: "Veículo",
+    TOOL: "Ferramenta",
+    OTHER: "Outro bem",
+  };
+
+  return labels[String(value || "OTHER")] || "Outro bem";
 }
 
 function mapApiPersonToReceivableTenant(person: Person): Tenant {

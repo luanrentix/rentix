@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { LoaderCircle, Minimize2, Search, X } from "lucide-react";
+import { LoaderCircle, Minus, Search, X } from "lucide-react";
 import { createPerson, type Person } from "@/services/people.service";
 
 type PersonType = "individual" | "company";
@@ -361,7 +361,7 @@ export function PersonCreateModal({
                 title="Minimizar modal"
                 aria-label="Minimizar modal"
               >
-                <Minimize2 className="h-5 w-5" />
+                <Minus className="h-5 w-5" />
               </button>
             )}
 

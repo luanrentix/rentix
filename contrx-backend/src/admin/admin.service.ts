@@ -4,10 +4,45 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
+import { getCompanyAccessState } from '../common/company-access-state';
 import { PrismaService } from '../prisma/prisma.service';
 import type { ResetTestDataModule } from './dto/reset-test-data.dto';
 import type { UpdateAdminCompanyDto } from './dto/update-admin-company.dto';
 import type { UpdateAdminUserDto } from './dto/update-admin-user.dto';
+
+function addDays(date: Date, days: number) {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+
+  return nextDate;
+}
+
+function parseTrialEndDate(value: string) {
+  return new Date(`${value.slice(0, 10)}T23:59:59.999`);
+}
+
+function parseEndDate(value: string) {
+  return new Date(`${value.slice(0, 10)}T23:59:59.999`);
+}
+
+function getStringValue(source: unknown, key: string) {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) {
+    return '';
+  }
+
+  const value = (source as Record<string, unknown>)[key];
+
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function getConfiguredCompanyPhone(settings: unknown) {
+  return getStringValue(settings, 'phone');
+}
+
+function toPrismaJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
 
 @Injectable()
 export class AdminService {
@@ -50,8 +85,8 @@ export class AdminService {
     };
   }
 
-  findUsers() {
-    return this.prisma.user.findMany({
+  async findUsers() {
+    const users = await this.prisma.user.findMany({
       orderBy: {
         createdAt: 'desc',
       },
@@ -69,15 +104,42 @@ export class AdminService {
             tradeName: true,
             companyName: true,
             email: true,
+            phone: true,
             isActive: true,
+            subscriptionStatus: true,
+            trialStartsAt: true,
+            trialEndsAt: true,
+            trialExtendedUntil: true,
+            subscriptionEndsAt: true,
+            settings: {
+              select: {
+                companySettings: true,
+              },
+            },
           },
         },
       },
     });
+
+    return users.map((user) => {
+      const { settings, ...company } = user.company;
+      const configuredPhone = getConfiguredCompanyPhone(
+        settings?.companySettings,
+      );
+
+      return {
+        ...user,
+        company: {
+          ...company,
+          phone: configuredPhone || company.phone,
+          accessState: getCompanyAccessState(company),
+        },
+      };
+    });
   }
 
-  findCompanies() {
-    return this.prisma.company.findMany({
+  async findCompanies() {
+    const companies = await this.prisma.company.findMany({
       orderBy: {
         createdAt: 'desc',
       },
@@ -89,6 +151,16 @@ export class AdminService {
         phone: true,
         email: true,
         isActive: true,
+        subscriptionStatus: true,
+        trialStartsAt: true,
+        trialEndsAt: true,
+        trialExtendedUntil: true,
+        subscriptionEndsAt: true,
+        settings: {
+          select: {
+            companySettings: true,
+          },
+        },
         createdAt: true,
         updatedAt: true,
         _count: {
@@ -101,6 +173,82 @@ export class AdminService {
         },
       },
     });
+
+    return companies.map((company) => {
+      const { settings, ...companyData } = company;
+      const configuredPhone = getConfiguredCompanyPhone(
+        settings?.companySettings,
+      );
+
+      return {
+        ...companyData,
+        phone: configuredPhone || companyData.phone,
+        accessState: getCompanyAccessState(companyData),
+      };
+    });
+  }
+
+  findCompanyCommercialHistory(companyId: string) {
+    return this.prisma.commercialHistory.findMany({
+      where: { companyId },
+      orderBy: { createdAt: 'desc' },
+      take: 40,
+    });
+  }
+
+  async reprocessCommercialExpirations(currentUserId?: string) {
+    const now = new Date();
+    const companies = await this.prisma.company.findMany({
+      where: {
+        subscriptionStatus: {
+          in: ['TRIAL', 'ACTIVE'],
+        },
+      },
+      select: {
+        id: true,
+        tradeName: true,
+        subscriptionStatus: true,
+        trialEndsAt: true,
+        trialExtendedUntil: true,
+        subscriptionEndsAt: true,
+      },
+    });
+
+    const expiredCompanies = companies.filter((company) => {
+      const expiresAt =
+        company.subscriptionStatus === 'ACTIVE'
+          ? company.subscriptionEndsAt
+          : company.trialExtendedUntil || company.trialEndsAt;
+
+      return Boolean(expiresAt && expiresAt.getTime() < now.getTime());
+    });
+
+    for (const company of expiredCompanies) {
+      await this.prisma.company.update({
+        where: { id: company.id },
+        data: {
+          subscriptionStatus: 'EXPIRED',
+        },
+      });
+
+      await this.prisma.commercialHistory.create({
+        data: {
+          companyId: company.id,
+          userId: currentUserId,
+          action: 'AUTO_EXPIRED',
+          description: `${company.tradeName || 'Empresa'} marcada como vencida automaticamente.`,
+          metadata: toPrismaJson({
+            previous: company,
+            processedAt: now,
+          }),
+        },
+      });
+    }
+
+    return {
+      processed: companies.length,
+      expired: expiredCompanies.length,
+    };
   }
 
   async updateUser(
@@ -174,32 +322,118 @@ export class AdminService {
             tradeName: true,
             companyName: true,
             email: true,
+            phone: true,
             isActive: true,
+            subscriptionStatus: true,
+            trialStartsAt: true,
+            trialEndsAt: true,
+            trialExtendedUntil: true,
+            subscriptionEndsAt: true,
           },
         },
       },
     });
   }
 
-  async updateCompany(companyId: string, data: UpdateAdminCompanyDto) {
-    if (data.isActive === undefined) {
+  async updateCompany(
+    companyId: string,
+    data: UpdateAdminCompanyDto,
+    currentUserId?: string,
+  ) {
+    if (
+      data.isActive === undefined &&
+      data.trialExtensionDays === undefined &&
+      data.trialEndsAt === undefined &&
+      data.subscriptionStatus === undefined &&
+      data.subscriptionEndsAt === undefined
+    ) {
       throw new BadRequestException('Informe ao menos uma alteração.');
     }
 
     const existingCompany = await this.prisma.company.findUnique({
       where: { id: companyId },
-      select: { id: true },
+      select: {
+        id: true,
+        trialEndsAt: true,
+        trialExtendedUntil: true,
+        trialStartsAt: true,
+        subscriptionStatus: true,
+        subscriptionEndsAt: true,
+      },
     });
 
     if (!existingCompany) {
       throw new NotFoundException('Empresa nao encontrada.');
     }
 
-    return this.prisma.company.update({
+    const shouldExtendTrial = data.trialExtensionDays !== undefined;
+    const shouldSetTrialEndDate = data.trialEndsAt !== undefined;
+    const shouldSetSubscriptionEndDate = data.subscriptionEndsAt !== undefined;
+    const shouldActivateSubscription = data.subscriptionStatus === 'ACTIVE';
+    const shouldUseTrialStatus = data.subscriptionStatus === 'TRIAL';
+    const shouldDisableCompany =
+      data.subscriptionStatus === 'SUSPENDED' ||
+      data.subscriptionStatus === 'CANCELED';
+    const subscriptionEndsAt = shouldSetSubscriptionEndDate
+      ? parseEndDate(data.subscriptionEndsAt as string)
+      : existingCompany.subscriptionEndsAt || addDays(new Date(), 30);
+    const trialExtensionBase =
+      existingCompany.trialExtendedUntil ||
+      existingCompany.trialEndsAt ||
+      new Date();
+    const trialExtensionStartsAt =
+      trialExtensionBase.getTime() > Date.now()
+        ? trialExtensionBase
+        : new Date();
+
+    const updateData = {
+      ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
+      ...(data.subscriptionStatus !== undefined
+        ? { subscriptionStatus: data.subscriptionStatus }
+        : {}),
+      ...(shouldSetSubscriptionEndDate ? { subscriptionEndsAt } : {}),
+      ...(shouldActivateSubscription
+        ? {
+            isActive: data.isActive ?? true,
+            subscriptionEndsAt,
+          }
+        : {}),
+      ...(shouldUseTrialStatus
+        ? {
+            isActive: data.isActive ?? true,
+            trialStartsAt: existingCompany.trialStartsAt || new Date(),
+            trialEndsAt: existingCompany.trialEndsAt || addDays(new Date(), 30),
+            trialExtendedUntil: null,
+            subscriptionEndsAt: null,
+          }
+        : {}),
+      ...(shouldDisableCompany ? { isActive: false } : {}),
+      ...(shouldExtendTrial
+        ? {
+            isActive: true,
+            subscriptionStatus: 'TRIAL' as const,
+            trialStartsAt: existingCompany.trialStartsAt || new Date(),
+            trialExtendedUntil: addDays(
+              trialExtensionStartsAt,
+              data.trialExtensionDays as number,
+            ),
+            subscriptionEndsAt: null,
+          }
+        : {}),
+      ...(shouldSetTrialEndDate
+        ? {
+            subscriptionStatus: 'TRIAL' as const,
+            trialStartsAt: existingCompany.trialStartsAt || new Date(),
+            trialEndsAt: parseTrialEndDate(data.trialEndsAt as string),
+            trialExtendedUntil: null,
+            subscriptionEndsAt: null,
+          }
+        : {}),
+    };
+
+    const updatedCompany = await this.prisma.company.update({
       where: { id: companyId },
-      data: {
-        isActive: data.isActive,
-      },
+      data: updateData,
       select: {
         id: true,
         tradeName: true,
@@ -208,6 +442,11 @@ export class AdminService {
         phone: true,
         email: true,
         isActive: true,
+        subscriptionStatus: true,
+        trialStartsAt: true,
+        trialEndsAt: true,
+        trialExtendedUntil: true,
+        subscriptionEndsAt: true,
         createdAt: true,
         updatedAt: true,
         _count: {
@@ -220,6 +459,66 @@ export class AdminService {
         },
       },
     });
+
+    const action = shouldExtendTrial
+      ? 'TRIAL_EXTENDED'
+      : shouldSetTrialEndDate
+        ? 'TRIAL_END_UPDATED'
+        : data.subscriptionStatus
+          ? 'STATUS_UPDATED'
+          : shouldSetSubscriptionEndDate
+            ? 'SUBSCRIPTION_END_UPDATED'
+            : data.isActive !== undefined
+              ? 'COMPANY_ACTIVE_UPDATED'
+              : 'COMPANY_UPDATED';
+
+    await this.prisma.commercialHistory.create({
+      data: {
+        companyId,
+        userId: currentUserId,
+        action,
+        description:
+          data.note ||
+          this.buildCommercialHistoryDescription(action, updatedCompany),
+        metadata: toPrismaJson({
+          request: data,
+          previous: existingCompany,
+          current: {
+            subscriptionStatus: updatedCompany.subscriptionStatus,
+            trialEndsAt: updatedCompany.trialEndsAt,
+            trialExtendedUntil: updatedCompany.trialExtendedUntil,
+            subscriptionEndsAt: updatedCompany.subscriptionEndsAt,
+            isActive: updatedCompany.isActive,
+          },
+        }),
+      },
+    });
+
+    return {
+      ...updatedCompany,
+      accessState: getCompanyAccessState(updatedCompany),
+    };
+  }
+
+  private buildCommercialHistoryDescription(
+    action: string,
+    company: { tradeName: string; subscriptionStatus: string },
+  ) {
+    const companyName = company.tradeName || 'Empresa';
+
+    if (action === 'TRIAL_EXTENDED') {
+      return `${companyName} teve o teste prorrogado.`;
+    }
+
+    if (action === 'TRIAL_END_UPDATED') {
+      return `${companyName} teve a data de vencimento do teste atualizada.`;
+    }
+
+    if (action === 'STATUS_UPDATED') {
+      return `${companyName} teve o status comercial alterado para ${company.subscriptionStatus}.`;
+    }
+
+    return `${companyName} teve o controle comercial atualizado.`;
   }
 
   async resetTestData(

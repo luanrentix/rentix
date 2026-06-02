@@ -507,30 +507,30 @@ export default function AgendaPage() {
         : "contrx-agenda-page-light";
   const cardClass =
     themeMode === "graphite"
-      ? "border-[#52525b] bg-[#27272a] text-[#f4f4f5]"
+      ? "border-[#24405f] bg-[#0d1b2e] text-[#f8fafc]"
       : isBlackTheme
         ? "border-[#334155] bg-[#0f172a] text-[#f8fafc]"
         : "border-[#e2e8f0] bg-[#ffffff] text-[#0f172a]";
   const mutedTextClass = isBlackTheme
     ? themeMode === "graphite"
-      ? "text-[#d4d4d8]"
+      ? "text-[#b6c6dc]"
       : "text-[#cbd5e1]"
     : "text-[#64748b]";
   const strongTextClass = isBlackTheme
     ? themeMode === "graphite"
-      ? "text-[#f4f4f5]"
+      ? "text-[#f8fafc]"
       : "text-[#f8fafc]"
     : "text-[#0f172a]";
   const inputClass =
     themeMode === "graphite"
-      ? "h-12 w-full rounded-xl border border-[#52525b] bg-[#18181b] px-4 text-sm font-bold text-[#f4f4f5] outline-none transition placeholder:text-[#a1a1aa] focus:border-[#71717a] focus:ring-4 focus:ring-[#52525b]/40"
+      ? "h-12 w-full rounded-xl border border-[#24405f] bg-[#07111f] px-4 text-sm font-bold text-[#f8fafc] outline-none transition placeholder:text-[#7f92ad] focus:border-[#ff8a3d] focus:ring-4 focus:ring-[#24405f]/45"
       : isBlackTheme
         ? "h-12 w-full rounded-xl border border-[#334155] bg-[#020617] px-4 text-sm font-bold text-[#f8fafc] outline-none transition placeholder:text-[#64748b] focus:border-[#64748b] focus:ring-4 focus:ring-[#334155]/40"
         : "h-12 w-full rounded-xl border border-[#cbd5e1] bg-[#ffffff] px-4 text-sm font-bold text-[#0f172a] outline-none transition placeholder:text-[#94a3b8] focus:border-[#0f172a] focus:ring-4 focus:ring-[#e2e8f0]";
   const textareaClass = inputClass.replace("h-12", "min-h-28 py-3");
   const secondaryButtonClass =
     themeMode === "graphite"
-      ? "rounded-xl bg-[#3f3f46] px-4 py-3 text-sm font-bold text-[#d4d4d8] transition hover:bg-[#52525b] hover:text-[#ffffff]"
+      ? "rounded-xl bg-[#162a44] px-4 py-3 text-sm font-bold text-[#b6c6dc] transition hover:bg-[#24405f] hover:text-[#ffffff]"
       : isBlackTheme
         ? "rounded-xl bg-[#1e293b] px-4 py-3 text-sm font-bold text-[#cbd5e1] transition hover:bg-[#334155] hover:text-[#ffffff]"
         : "rounded-xl bg-[#f1f5f9] px-4 py-3 text-sm font-bold text-[#475569] transition hover:bg-[#e2e8f0] hover:text-[#0f172a]";
@@ -1099,7 +1099,7 @@ export default function AgendaPage() {
             </span>
           </p>
           <p className="min-w-0 truncate">
-            Imóvel: {item.propertyName || "Sem imóvel vinculado"}
+            Bem/Ativo: {item.propertyName || "Sem bem/ativo vinculado"}
           </p>
           <p className="min-w-0 truncate">Responsável: {item.responsibleName}</p>
           <p className="flex min-w-0 items-center gap-2">
@@ -1186,28 +1186,28 @@ export default function AgendaPage() {
         .contrx-agenda-page-graphite .bg-white,
         .contrx-agenda-page-graphite .bg-slate-50,
         .contrx-agenda-page-graphite .bg-slate-100 {
-          background-color: #27272a !important;
+          background-color: #0d1b2e !important;
         }
 
         .contrx-agenda-page-graphite .text-slate-950,
         .contrx-agenda-page-graphite .text-slate-900,
         .contrx-agenda-page-graphite .text-slate-800,
         .contrx-agenda-page-graphite .text-slate-700 {
-          color: #f4f4f5 !important;
+          color: #f8fafc !important;
         }
 
         .contrx-agenda-page-graphite .text-slate-600,
         .contrx-agenda-page-graphite .text-slate-500,
         .contrx-agenda-page-graphite .text-slate-400 {
-          color: #d4d4d8 !important;
+          color: #b6c6dc !important;
         }
 
         .contrx-agenda-page-graphite input,
         .contrx-agenda-page-graphite select,
         .contrx-agenda-page-graphite textarea {
-          background-color: #18181b !important;
-          border-color: #52525b !important;
-          color: #f4f4f5 !important;
+          background-color: #07111f !important;
+          border-color: #24405f !important;
+          color: #f8fafc !important;
         }
       `}</style>
 
@@ -1219,7 +1219,7 @@ export default function AgendaPage() {
           <div>
             <p className="text-sm font-semibold text-orange-600">Operacional</p>
             <h1 className={`mt-1 text-2xl font-black sm:text-3xl ${strongTextClass}`}>
-              AGENDA TESTE
+              AGENDA
             </h1>
             <p className={`mt-2 max-w-3xl text-sm leading-6 ${mutedTextClass}`}>
               Organize compromissos, vistorias, cobranças, entregas e manutenções
@@ -1327,7 +1327,7 @@ export default function AgendaPage() {
                   type="text"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Cliente, imóvel, responsável, título ou observação..."
+                  placeholder="Cliente, bem/ativo, responsável, título ou observação..."
                   className={`${inputClass} pl-11`}
                 />
               </div>
@@ -1752,7 +1752,7 @@ export default function AgendaPage() {
                       </p>
                       <p className={`mt-1 truncate text-xs font-semibold ${mutedTextClass}`}>
                         {item.customerName || "Sem pessoa vinculada"} ·{" "}
-                        {item.propertyName || "Sem imóvel vinculado"}
+                        {item.propertyName || "Sem bem/ativo vinculado"}
                       </p>
                     </button>
                   ))
@@ -1981,7 +1981,7 @@ export default function AgendaPage() {
                   </select>
                 </Field>
 
-                <Field label="Imóvel" isBlackTheme={isBlackTheme}>
+                <Field label="Bem/Ativo" isBlackTheme={isBlackTheme}>
                   <select
                     value={formData.propertyId || ""}
                     onChange={(event) => {
@@ -1998,7 +1998,7 @@ export default function AgendaPage() {
                     }}
                     className={inputClass}
                   >
-                    <option value="">Sem imóvel vinculado</option>
+                    <option value="">Sem bem/ativo vinculado</option>
                     {properties.map((property) => (
                       <option key={property.id} value={property.id}>
                         {property.name}
@@ -2202,7 +2202,7 @@ export default function AgendaPage() {
               </p>
               <p className={`mt-1 text-sm font-semibold ${mutedTextClass}`}>
                 {scheduleToDelete.customerName || "Sem pessoa vinculada"} ·{" "}
-                {scheduleToDelete.propertyName || "Sem imóvel vinculado"}
+                {scheduleToDelete.propertyName || "Sem bem/ativo vinculado"}
               </p>
             </div>
 

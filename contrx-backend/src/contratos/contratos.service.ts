@@ -547,7 +547,7 @@ export class ContratosService {
     const data = {
       title: 'Vencimento de contrato',
       customerName: contract.tenantName || 'Inquilino nao informado',
-      propertyName: contract.propertyName || 'Imovel nao informado',
+      propertyName: contract.propertyName || 'Bem/ativo nao informado',
       date: contract.endDate,
       time: existingScheduleItem?.time || '08:00',
       type: 'Contrato',
@@ -699,11 +699,11 @@ export class ContratosService {
     });
 
     if (!property) {
-      throw new BadRequestException('Imovel nao encontrado.');
+      throw new BadRequestException('Bem/ativo nao encontrado.');
     }
 
     if (!property.isActive) {
-      throw new BadRequestException('Imovel inativo nao pode ser alugado.');
+      throw new BadRequestException('Bem/ativo inativo nao pode ser alugado.');
     }
 
     const tenant = await this.prisma.person.findFirst({
@@ -748,7 +748,7 @@ export class ContratosService {
     });
 
     if (existingContract) {
-      throw new BadRequestException('Este imovel ja possui contrato ativo.');
+      throw new BadRequestException('Este bem/ativo ja possui contrato ativo.');
     }
   }
 

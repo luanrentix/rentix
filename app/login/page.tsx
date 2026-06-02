@@ -3,12 +3,15 @@
 import Image from "next/image";
 import {
   AlertTriangle,
+  Building2,
+  CalendarCheck,
   Eye,
   EyeOff,
-  Home,
+  FileText,
   LockKeyhole,
   LogIn,
   Mail,
+  Sparkles,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -28,7 +31,9 @@ function getAuthErrorPresentation(
   const isBackendConfigurationError =
     message.includes("NEXT_PUBLIC_API_URL") ||
     normalizedMessage.includes("backend não configurado") ||
-    normalizedMessage.includes("backend nao configurado") ||
+    normalizedMessage.includes("backend nao configurado");
+  const isBackendUnavailableError =
+    normalizedMessage.includes("nao foi possivel conectar a api") ||
     normalizedMessage.includes("api em");
   const isDatabaseConfigurationError =
     normalizedMessage.includes("credenciais do banco") ||
@@ -41,6 +46,14 @@ function getAuthErrorPresentation(
       title: "Backend não configurado",
       message,
       subtitle: "Configure a API para continuar.",
+    };
+  }
+
+  if (isBackendUnavailableError) {
+    return {
+      title: "Backend indisponível",
+      message,
+      subtitle: "Verifique se a API está online.",
     };
   }
 
@@ -170,7 +183,7 @@ export default function LoginPage() {
               </h1>
 
               <p className="mx-auto mt-3 max-w-sm text-center text-sm font-semibold leading-6 text-slate-500">
-                Acesse sua conta para continuar gerenciando imóveis, contratos
+                Acesse sua conta para continuar gerenciando bens/ativos, contratos
                 e financeiro.
               </p>
 
@@ -256,18 +269,75 @@ export default function LoginPage() {
         </section>
 
         <section className="hidden min-h-screen items-center justify-center bg-white px-10 lg:flex">
-          <div className="w-full max-w-[705px] rounded-[32px] bg-[#fff6ec] p-10">
-            <div className="rounded-[30px] border border-slate-100 bg-white px-8 pb-8 pt-0 text-center shadow-sm">
-              <div className="mx-auto -mt-2 mb-9 flex h-32 w-32 items-center justify-center rounded-[30px] bg-[#ffedd2] text-[#ff4b00]">
-                <Home size={70} strokeWidth={2.4} />
+          <div className="relative w-full max-w-[720px] overflow-hidden rounded-[32px] border border-slate-100 bg-[#f8fafc] px-10 pb-10 pt-9 shadow-[0_24px_70px_rgba(15,23,42,0.10)]">
+            <div className="absolute inset-x-0 top-0 h-24 bg-[linear-gradient(135deg,rgba(255,75,0,0.10),rgba(20,184,166,0.08),rgba(99,102,241,0.08))]" />
+            <div className="absolute inset-x-10 top-24 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
+
+            <div className="relative mx-auto mb-8 flex h-[260px] max-w-[545px] items-center justify-center">
+              <div className="absolute inset-x-10 bottom-2 h-24 rounded-[28px] bg-slate-200/70 blur-xl" />
+
+              <div className="absolute left-5 top-9 flex h-20 w-36 items-center gap-3 rounded-[22px] border border-white/80 bg-white/90 px-4 shadow-[0_18px_38px_rgba(15,23,42,0.10)]">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#e8fff7] text-[#059669]">
+                  <CalendarCheck size={23} strokeWidth={2.4} />
+                </div>
+                <div>
+                  <p className="text-xs font-black text-slate-900">Agenda</p>
+                  <p className="mt-1 text-[11px] font-bold text-slate-400">
+                    24 visitas
+                  </p>
+                </div>
               </div>
 
+              <div className="absolute right-3 top-16 flex h-20 w-40 items-center gap-3 rounded-[22px] border border-white/80 bg-white/90 px-4 shadow-[0_18px_38px_rgba(15,23,42,0.10)]">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f46e5]">
+                  <FileText size={23} strokeWidth={2.4} />
+                </div>
+                <div>
+                  <p className="text-xs font-black text-slate-900">
+                    Contratos
+                  </p>
+                  <p className="mt-1 text-[11px] font-bold text-slate-400">
+                    Em dia
+                  </p>
+                </div>
+              </div>
+
+              <div className="relative flex h-[205px] w-[300px] flex-col items-center justify-center rounded-[36px] border border-white bg-white shadow-[0_28px_60px_rgba(15,23,42,0.14)]">
+                <div className="absolute -top-5 flex h-11 items-center gap-2 rounded-full border border-orange-100 bg-white px-4 text-[#ff4b00] shadow-lg shadow-orange-500/10">
+                  <Sparkles size={16} fill="currentColor" />
+                  <span className="text-xs font-black text-slate-800">
+                    Contrx
+                  </span>
+                </div>
+
+                <div className="relative flex h-28 w-28 items-center justify-center rounded-[30px] bg-[#fff1df] text-[#ff4b00] shadow-[inset_0_0_0_1px_rgba(255,75,0,0.08)]">
+                  <div className="absolute -right-4 -top-4 h-10 w-10 rounded-2xl bg-[#d9f99d]" />
+                  <div className="absolute -bottom-3 -left-3 h-9 w-9 rounded-2xl bg-[#bae6fd]" />
+                  <Building2 size={66} strokeWidth={2.2} />
+                </div>
+
+                <div className="mt-5 grid w-full grid-cols-3 gap-2 px-8">
+                  <div className="h-2 rounded-full bg-[#ff4b00]" />
+                  <div className="h-2 rounded-full bg-[#14b8a6]" />
+                  <div className="h-2 rounded-full bg-[#6366f1]" />
+                </div>
+              </div>
+
+              <div className="absolute bottom-8 left-16 flex h-16 w-32 items-center justify-center rounded-[20px] border border-white/80 bg-white/85 text-sm font-black text-slate-700 shadow-[0_16px_34px_rgba(15,23,42,0.08)]">
+                Ativos
+              </div>
+              <div className="absolute bottom-4 right-20 flex h-16 w-36 items-center justify-center rounded-[20px] border border-white/80 bg-white/85 text-sm font-black text-slate-700 shadow-[0_16px_34px_rgba(15,23,42,0.08)]">
+                Financeiro
+              </div>
+            </div>
+
+            <div className="relative text-center">
               <h2 className="mx-auto max-w-[650px] text-[34px] font-black leading-tight text-slate-950">
                 Gestão de locações simples, rápida e inteligente.
               </h2>
 
-              <p className="mx-auto mt-7 max-w-[620px] text-lg leading-8 text-slate-600">
-                Controle imóveis, inquilinos, contratos, vencimentos e receitas
+              <p className="mx-auto mt-6 max-w-[620px] text-lg leading-8 text-slate-600">
+                Controle bens/ativos, clientes, contratos, vencimentos e receitas
                 em uma plataforma moderna e profissional.
               </p>
             </div>

@@ -39,6 +39,18 @@ export class AdminController {
     return this.adminService.findCompanies();
   }
 
+  @Get('empresas/:id/historico-comercial')
+  @UseGuards(SystemOwnerGuard)
+  findCompanyCommercialHistory(@Param('id') id: string) {
+    return this.adminService.findCompanyCommercialHistory(id);
+  }
+
+  @Post('comercial/reprocessar-vencimentos')
+  @UseGuards(SystemOwnerGuard)
+  reprocessCommercialExpirations(@CurrentUser() user: UsuarioAutenticado) {
+    return this.adminService.reprocessCommercialExpirations(user.id);
+  }
+
   @Patch('usuarios/:id')
   @UseGuards(SystemOwnerGuard)
   updateUser(
@@ -51,8 +63,12 @@ export class AdminController {
 
   @Patch('empresas/:id')
   @UseGuards(SystemOwnerGuard)
-  updateCompany(@Param('id') id: string, @Body() data: UpdateAdminCompanyDto) {
-    return this.adminService.updateCompany(id, data);
+  updateCompany(
+    @CurrentUser() user: UsuarioAutenticado,
+    @Param('id') id: string,
+    @Body() data: UpdateAdminCompanyDto,
+  ) {
+    return this.adminService.updateCompany(id, data, user.id);
   }
 
   @Post('reset-test-data')

@@ -6,6 +6,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { getCompanyAccessState } from '../../common/company-access-state';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsuarioAutenticado } from '../types/usuario-autenticado.type';
 
@@ -88,6 +89,18 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       permissions: unknown;
       isActive: boolean;
       activeSessionId: string | null;
+      company: {
+        isActive: boolean;
+        subscriptionStatus:
+          | 'TRIAL'
+          | 'ACTIVE'
+          | 'EXPIRED'
+          | 'SUSPENDED'
+          | 'CANCELED';
+        trialEndsAt: Date | null;
+        trialExtendedUntil: Date | null;
+        subscriptionEndsAt: Date | null;
+      };
     } | null;
 
     try {
@@ -104,6 +117,15 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
           permissions: true,
           isActive: true,
           activeSessionId: true,
+          company: {
+            select: {
+              isActive: true,
+              subscriptionStatus: true,
+              trialEndsAt: true,
+              trialExtendedUntil: true,
+              subscriptionEndsAt: true,
+            },
+          },
         },
       });
     } catch (error) {
@@ -115,6 +137,12 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException(
         'Invalid or expired authentication token.',
       );
+    }
+
+    const accessState = getCompanyAccessState(user.company);
+
+    if (!accessState.canAccess) {
+      throw new UnauthorizedException(accessState.reason);
     }
 
     if (!payload.sessionId || user.activeSessionId !== payload.sessionId) {

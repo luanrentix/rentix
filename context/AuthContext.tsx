@@ -164,6 +164,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     localStorage.setItem(TOKEN_STORAGE_KEY, response.accessToken);
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.user));
+    if (response.user.subscriptionStatus === 'TRIAL') {
+      localStorage.setItem('contrx_show_trial_login_notice', 'true');
+    }
 
     isHandlingSessionReplacementRef.current = false;
     setToken(response.accessToken);
@@ -186,9 +189,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     isHandlingSessionReplacementRef.current = false;
     setToken(response.accessToken);
     setUser(response.user);
-
-    router.push('/configuracoes?onboarding=1');
-  }, [router]);
+  }, []);
 
   const logout = useCallback(() => {
     clearStoredAuth();

@@ -8,7 +8,7 @@ const DEFAULT_TEMPLATES: PrintTemplates = {
 
 LOCADOR: {companyName}
 LOCATÁRIO: {personName}
-IMÓVEL: {propertyName}
+BEM/ATIVO: {propertyName}
 
 VALOR: {amount}
 VENCIMENTO: {dueDate}

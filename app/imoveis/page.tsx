@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { LoaderCircle, Maximize2, Minimize2, Search, X } from "lucide-react";
+import { LoaderCircle, Maximize2, Minus, Search, X } from "lucide-react";
 import {
   createProperty,
   getProperties,
@@ -438,16 +438,6 @@ export default function PropertiesPage() {
   const operationalAssets = properties.filter(
     (property) => property.assetCategory !== "PROPERTY",
   ).length;
-  const rentedProperties = properties.filter(
-    (property) => property.status === "Rented" && property.isActive,
-  ).length;
-  const totalMonthlyRevenue = properties
-    .filter((property) => property.status === "Rented" && property.isActive)
-    .reduce((total, property) => total + property.rentValue, 0);
-
-  const occupancyRate =
-    activeProperties > 0 ? Math.round((rentedProperties / activeProperties) * 100) : 0;
-
   const visibleTimelineMovements = propertyMovements.filter((movement) => {
     if (!historyProperty) return false;
 
@@ -489,11 +479,11 @@ export default function PropertiesPage() {
       setPropertyMovements(apiMovements.map(mapApiPropertyMovementToPropertyMovement));
       setProperties(normalizedProperties);
     } catch (error) {
-      console.error("Erro ao carregar imóveis:", error);
+      console.error("Erro ao carregar bens/ativos:", error);
       if (isSessionReplacedError(error)) {
         return;
       }
-      alert("Não foi possível carregar os imóveis.");
+      alert("Não foi possível carregar os bens/ativos.");
     } finally {
       setIsLoadingProperties(false);
     }
@@ -581,7 +571,7 @@ export default function PropertiesPage() {
       type: typeValue,
       description,
     }).catch((error) => {
-      console.warn("Não foi possível registrar movimentação do imóvel no backend.", error);
+      console.warn("Não foi possível registrar movimentação do bem/ativo no backend.", error);
     });
   }
 
@@ -781,7 +771,7 @@ export default function PropertiesPage() {
       registerPropertyMovement(
         property,
         "InactivationBlocked",
-        "Tentativa de inativação bloqueada porque o imóvel possui contrato ativo."
+        "Tentativa de inativação bloqueada porque o bem/ativo possui contrato ativo."
       );
       setBlockedInactiveProperty(property);
       return;
@@ -849,7 +839,7 @@ export default function PropertiesPage() {
         registerPropertyMovement(
           property,
           "InactivationBlocked",
-          "Tentativa de salvar imóvel inativo bloqueada porque existe contrato ativo."
+          "Tentativa de salvar bem/ativo inativo bloqueada porque existe contrato ativo."
         );
         setBlockedInactiveProperty(property);
       }
@@ -911,14 +901,14 @@ export default function PropertiesPage() {
       registerPropertyMovement(
         normalizedProperty,
         editingPropertyId ? "Updated" : "Created",
-        editingPropertyId ? "Cadastro do imóvel atualizado." : "Novo imóvel cadastrado.",
+        editingPropertyId ? "Cadastro do bem/ativo atualizado." : "Novo bem/ativo cadastrado.",
       );
 
       handleCloseForm();
       void loadProperties();
     } catch (error) {
-      console.error("Erro ao salvar imóvel:", error);
-      alert("Não foi possível salvar o imóvel.");
+      console.error("Erro ao salvar bem/ativo:", error);
+      alert("Não foi possível salvar o bem/ativo.");
     } finally {
       setIsSavingProperty(false);
     }
@@ -973,8 +963,8 @@ export default function PropertiesPage() {
 
     document.title =
       reportMode === "Rental"
-        ? `RELATORIO_ALUGUEL_IMOVEL_${sanitizeFileName(historyProperty.name)}`
-        : `RELATORIO_HISTORICO_GERAL_IMOVEL_${sanitizeFileName(historyProperty.name)}`;
+        ? `RELATORIO_ALUGUEL_BEM_ATIVO_${sanitizeFileName(historyProperty.name)}`
+        : `RELATORIO_HISTORICO_GERAL_BEM_ATIVO_${sanitizeFileName(historyProperty.name)}`;
 
     setTimeout(() => {
       window.print();
@@ -992,7 +982,7 @@ export default function PropertiesPage() {
       registerPropertyMovement(
         property,
         "InactivationBlocked",
-        "Tentativa de inativação bloqueada porque o imóvel possui contrato ativo."
+        "Tentativa de inativação bloqueada porque o bem/ativo possui contrato ativo."
       );
       setBlockedInactiveProperty(property);
       return;
@@ -1026,14 +1016,14 @@ export default function PropertiesPage() {
       registerPropertyMovement(
         updatedProperty,
         "Inactivated",
-        "Imóvel inativado no lugar de exclusão para manter histórico e integridade.",
+        "Bem/ativo inativado no lugar de exclusão para manter histórico e integridade.",
       );
 
       await loadProperties();
       setPropertyToInactivate(null);
     } catch (error) {
-      console.error("Erro ao inativar imóvel:", error);
-      alert("Não foi possível inativar o imóvel.");
+      console.error("Erro ao inativar bem/ativo:", error);
+      alert("Não foi possível inativar o bem/ativo.");
     }
   }
 
@@ -1575,7 +1565,7 @@ export default function PropertiesPage() {
               Bens/Ativos
             </h1>
             <p className="mt-2 text-slate-500">
-              Cadastre, acompanhe e gerencie imóveis, equipamentos, máquinas e outros bens disponíveis para contratos.
+              Cadastre, acompanhe e gerencie bens, ativos, equipamentos e máquinas disponíveis para contratos.
             </p>
           </div>
 
@@ -1591,7 +1581,7 @@ export default function PropertiesPage() {
           <SummaryCard icon="🏢" title="Cadastrados" value={properties.length} detail="Total no sistema" />
           <SummaryCard icon="✅" title="Ativos" value={activeProperties} detail="Prontos para uso" />
           <SummaryCard icon="🚫" title="Inativos" value={inactiveProperties} detail="Histórico preservado" />
-          <SummaryCard icon="🔑" title="Imóveis" value={realEstateAssets} detail="Categoria imóvel" />
+          <SummaryCard icon="🔑" title="Imóveis" value={realEstateAssets} detail="Categoria imobiliária" />
           <SummaryCard icon="💰" title="Outros ativos" value={operationalAssets} detail="Equipamentos e bens" />
         </div>
 
@@ -1690,10 +1680,10 @@ export default function PropertiesPage() {
           ) : filteredProperties.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-300 p-10 text-center">
               <h3 className="text-lg font-black text-slate-800">
-                Nenhum imóvel encontrado
+                Nenhum bem/ativo encontrado
               </h3>
               <p className="mt-2 text-sm text-slate-500">
-                Cadastre um novo imóvel ou ajuste os filtros aplicados.
+                Cadastre um novo bem/ativo ou ajuste os filtros aplicados.
               </p>
             </div>
           ) : (
@@ -1724,8 +1714,8 @@ export default function PropertiesPage() {
                         <button
                           type="button"
                           onClick={() => handleOpenPropertyHistory(property)}
-                          className="text-left font-black text-slate-900 transition hover:text-orange-600 hover:underline"
-                          title="Clique para ver o histórico deste imóvel"
+                          className="block max-w-[300px] truncate text-left text-sm font-black uppercase text-orange-600 underline-offset-4 transition hover:text-orange-700 hover:underline"
+                          title="Clique para ver o histórico deste bem/ativo"
                         >
                           {property.name}
                         </button>
@@ -1804,7 +1794,7 @@ export default function PropertiesPage() {
               <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-100 bg-white px-8 py-6 print:hidden">
                 <div>
                   <h2 className="text-2xl font-black text-slate-950">
-                    Relatórios do imóvel
+                    Relatórios do bem/ativo
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
                     Consulte o histórico geral ou apenas o histórico de aluguéis.
@@ -1877,8 +1867,8 @@ export default function PropertiesPage() {
                         </p>
                         <h1 className="report-title">
                           {reportMode === "Rental"
-                            ? "Histórico de Aluguel do Imóvel"
-                            : "Histórico Geral do Imóvel"}
+                            ? "Histórico de Aluguel do Bem/Ativo"
+                            : "Histórico Geral do Bem/Ativo"}
                         </h1>
                         <p className="report-small font-black">
                           {getCompanyDisplayName(companySettings)}
@@ -1903,9 +1893,9 @@ export default function PropertiesPage() {
                   </div>
 
                   <div className="report-section">
-                    <h2 className="report-section-title">Dados do imóvel</h2>
+                    <h2 className="report-section-title">Dados do bem/ativo</h2>
                     <div className="report-grid">
-                      <ReportInfo label="Imóvel" value={historyProperty.name} wide />
+                      <ReportInfo label="Bem/Ativo" value={historyProperty.name} wide />
                       <ReportInfo label="Código" value={historyProperty.code || "Não informado"} />
                       <ReportInfo label="Valor mensal" value={formatCurrency(historyProperty.rentValue)} />
                       <ReportInfo label="Cadastro" value={historyProperty.isActive ? "Ativo" : "Inativo"} />
@@ -1938,7 +1928,7 @@ export default function PropertiesPage() {
                       <div data-report-section="general">
                         {visibleTimelineMovements.length === 0 ? (
                           <div className="mt-4 rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm font-semibold text-slate-500">
-                            Nenhuma movimentação registrada para este imóvel.
+                            Nenhuma movimentação registrada para este bem/ativo.
                           </div>
                         ) : (
                           <div className="mt-4 space-y-2">
@@ -1998,7 +1988,7 @@ export default function PropertiesPage() {
 
                         {rentalHistoryRecords.length === 0 ? (
                           <div className="mt-4 rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm font-semibold text-slate-500">
-                            Nenhum histórico de aluguel encontrado para este imóvel.
+                            Nenhum histórico de aluguel encontrado para este bem/ativo.
                           </div>
                         ) : (
                           <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 print:overflow-visible print:rounded-none print:border-0">
@@ -2035,7 +2025,7 @@ export default function PropertiesPage() {
 
                   <div className="report-footer">
                     <span>
-                      {getCompanyDisplayName(companySettings)} • {reportMode === "Rental" ? "Histórico de aluguel do imóvel" : "Histórico geral do imóvel"}
+                      {getCompanyDisplayName(companySettings)} • {reportMode === "Rental" ? "Histórico de aluguel do bem/ativo" : "Histórico geral do bem/ativo"}
                     </span>
                     <span>
                       Gerado em {formatDateTime(new Date().toISOString())}
@@ -2114,7 +2104,7 @@ export default function PropertiesPage() {
                     title="Minimizar modal"
                     aria-label="Minimizar modal"
                   >
-                    <Minimize2 className="h-5 w-5" />
+                    <Minus className="h-5 w-5" />
                   </button>
 
                   <button
@@ -2513,8 +2503,8 @@ export default function PropertiesPage() {
         {propertyToInactivate && (
           <ConfirmationModal
             icon="🚫"
-            title="Inativar imóvel?"
-            description="Este imóvel não será excluído. Ele ficará inativo para preservar o histórico e manter a integridade dos relatórios."
+            title="Inativar bem/ativo?"
+            description="Este bem/ativo não será excluído. Ele ficará inativo para preservar o histórico e manter a integridade dos relatórios."
             itemTitle={propertyToInactivate.name}
             itemDetail={propertyToInactivate.address || "Endereço não informado"}
             confirmLabel="Sim, inativar"
@@ -2527,7 +2517,7 @@ export default function PropertiesPage() {
           <ConfirmationModal
             icon="⚠️"
             title="Confirmar inativação?"
-            description="Ao desativar este imóvel, ele não poderá ser utilizado em novos contratos. O cadastro continuará salvo e todo o histórico será mantido para relatórios, auditoria e consultas futuras."
+            description="Ao desativar este bem/ativo, ele não poderá ser utilizado em novos contratos. O cadastro continuará salvo e todo o histórico será mantido para relatórios, auditoria e consultas futuras."
             itemTitle={pendingInactiveConfirmation.name}
             itemDetail={pendingInactiveConfirmation.address || "Endereço não informado"}
             confirmLabel="Confirmar inativação"
@@ -2539,8 +2529,8 @@ export default function PropertiesPage() {
         {blockedInactiveProperty && (
           <AlertModal
             icon="⚠️"
-            title="Imóvel vinculado a contrato ativo"
-            description="Este imóvel possui contrato ativo e não pode ser inativado. Encerre, cancele ou finalize o contrato antes de alterar a situação do cadastro."
+            title="Bem/ativo vinculado a contrato ativo"
+            description="Este bem/ativo possui contrato ativo e não pode ser inativado. Encerre, cancele ou finalize o contrato antes de alterar a situação do cadastro."
             itemTitle={blockedInactiveProperty.name}
             itemDetail={blockedInactiveProperty.address || "Endereço não informado"}
             onClose={handleCloseBlockedInactiveProperty}
@@ -3082,7 +3072,7 @@ function getMovementTypeLabel(type: PropertyMovementType) {
   const movementLabels: Record<PropertyMovementType, string> = {
     Created: "Cadastro criado",
     Updated: "Cadastro atualizado",
-    Inactivated: "Imóvel inativado",
+    Inactivated: "Bem/ativo inativado",
     DeletionBlocked: "Exclusão bloqueada",
     InactivationBlocked: "Inativação bloqueada",
   };

@@ -13,7 +13,7 @@ import {
   Building2,
   LoaderCircle,
   Maximize2,
-  Minimize2,
+  Minus,
   Search,
   UserCheck,
   UserRound,
@@ -878,13 +878,13 @@ export default function PeoplePage() {
 
   return (
     <>
-      <div className="space-y-5">
-        <section className="flex flex-col gap-5 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <div className="contrx-module-page contrx-properties-page space-y-8">
+        <section className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
               Pessoas
             </h1>
-            <p className="mt-1 max-w-2xl text-sm font-medium leading-6 text-slate-500">
+            <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-500">
               Gerencie clientes, inquilinos, fornecedores e pessoas vinculadas aos contratos.
             </p>
           </div>
@@ -892,13 +892,13 @@ export default function PeoplePage() {
           <button
             type="button"
             onClick={openCreateModal}
-            className="inline-flex h-12 items-center justify-center rounded-md bg-orange-500 px-6 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+            className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
           >
             + Nova pessoa
           </button>
         </section>
 
-        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           <PeopleStatCard
             icon={<UserRound className="h-5 w-5" />}
             label="Total cadastrado"
@@ -931,37 +931,37 @@ export default function PeoplePage() {
           </section>
         )}
 
-        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          <div className="grid gap-5 border-b border-slate-100 bg-white px-5 py-5 lg:grid-cols-[1fr_620px] lg:items-end">
+        <section className="contrx-module-panel rounded-3xl border border-orange-100 bg-white p-6 shadow-sm">
+          <div className="mb-6 grid gap-5 lg:grid-cols-[1fr_620px] lg:items-end">
             <div>
-              <h2 className="text-lg font-black text-slate-950">Cadastros</h2>
-              <p className="mt-1 text-xs font-medium text-slate-500">
+              <h2 className="text-2xl font-black text-slate-950">Cadastros</h2>
+              <p className="mt-1 text-sm font-medium text-slate-500">
                 Exibindo {filteredPeople.length} de {people.length} pessoa(s).
               </p>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-[1fr_150px_170px]">
               <label className="space-y-2">
-                <span className="text-xs font-black text-slate-400">Buscar</span>
+                <span className="text-sm font-black text-slate-700">Buscar</span>
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
                     value={searchTerm}
                     onChange={(event) => setSearchTerm(event.target.value)}
                     placeholder="Nome, documento, cidade ou e-mail"
-                    className="h-11 w-full rounded-md border border-slate-200 bg-white pl-10 pr-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                   />
                 </div>
               </label>
 
               <label className="space-y-2">
-                <span className="text-xs font-black text-slate-400">Status</span>
+                <span className="text-sm font-black text-slate-700">Status</span>
                 <select
                   value={statusFilter}
                   onChange={(event) =>
                     setStatusFilter(event.target.value as "all" | PersonStatus)
                   }
-                  className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                  className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                 >
                   <option value="all">Todos</option>
                   <option value="active">Ativos</option>
@@ -970,11 +970,11 @@ export default function PeoplePage() {
               </label>
 
               <label className="space-y-2">
-                <span className="text-xs font-black text-slate-400">Tipo</span>
+                <span className="text-sm font-black text-slate-700">Tipo</span>
                 <select
                   value={typeFilter}
                   onChange={(event) => setTypeFilter(event.target.value as PersonTypeFilter)}
-                  className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                  className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                 >
                   <option value="all">Todos</option>
                   <option value="individual">Pessoa física</option>
@@ -984,9 +984,9 @@ export default function PeoplePage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1040px] border-collapse text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
+          <div className="overflow-x-auto rounded-2xl border border-slate-200">
+            <table className="w-full min-w-[1040px] border-collapse bg-white text-left text-sm">
+              <thead className="bg-orange-50 text-sm font-black text-slate-700">
                 <tr>
                   <th className="px-5 py-4 font-black">Nome</th>
                   <th className="px-5 py-4 font-black">Telefone</th>
@@ -1099,7 +1099,7 @@ export default function PeoplePage() {
                           <button
                             type="button"
                             onClick={() => openEditModal(person)}
-                            className="rounded-md bg-slate-100 px-4 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+                            className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-orange-50 hover:text-orange-700"
                           >
                             Editar
                           </button>
@@ -1108,7 +1108,7 @@ export default function PeoplePage() {
                             <button
                               type="button"
                               onClick={() => openInactivateModal(person)}
-                              className="rounded-md bg-red-50 px-4 py-2 text-xs font-black text-red-600 transition hover:bg-red-100"
+                              className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600 transition hover:bg-red-100"
                             >
                               Inativar
                             </button>
@@ -1174,8 +1174,8 @@ export default function PeoplePage() {
               </div>
 
               <HistorySection
-                title="Imóveis como proprietário"
-                emptyMessage="Nenhum imóvel vinculado como proprietário."
+                title="Bens/Ativos como proprietário"
+                emptyMessage="Nenhum bem/ativo vinculado como proprietário."
               >
                 {historyData.ownedProperties.map((property) => (
                   <HistoryRow
@@ -1194,7 +1194,7 @@ export default function PeoplePage() {
                 {historyData.tenantContracts.map((contract) => (
                   <HistoryRow
                     key={contract.id}
-                    title={contract.propertyName || contract.property?.title || "Imóvel não informado"}
+                    title={contract.propertyName || contract.property?.title || "Bem/ativo não informado"}
                     detail={`${formatDate(contract.startDate)} até ${formatDate(contract.endDate)} · ${formatCurrency(Number(contract.rentValue || 0))}`}
                     meta={getContractStatusLabel(contract.status)}
                   />
@@ -1208,7 +1208,7 @@ export default function PeoplePage() {
                 {historyData.receivables.map((account) => (
                   <HistoryRow
                     key={account.id}
-                    title={account.propertyName || "Imóvel não informado"}
+                    title={account.propertyName || "Bem/ativo não informado"}
                     detail={`${formatDate(account.dueDate)} · ${formatCurrency(Number(account.amount || 0))}`}
                     meta={getFinancialStatusLabel(account.status)}
                   />
@@ -1321,7 +1321,7 @@ export default function PeoplePage() {
                   title="Minimizar modal"
                   aria-label="Minimizar modal"
                 >
-                  <Minimize2 className="h-5 w-5" />
+                  <Minus className="h-5 w-5" />
                 </button>
 
                 <button
@@ -1789,19 +1789,14 @@ function PeopleStatCard({
   detail: string;
 }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-black uppercase tracking-wide text-slate-400">
-            {label}
-          </p>
-          <p className="mt-2 text-2xl font-black text-slate-950">{value}</p>
-        </div>
-        <span className="flex h-10 w-10 items-center justify-center rounded-md bg-orange-50 text-orange-600">
-          {icon}
-        </span>
+    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
+      <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-orange-600">
+        {icon}
       </div>
-      <p className="mt-2 text-xs font-semibold text-slate-500">{detail}</p>
+
+      <p className="text-sm font-bold text-slate-500">{label}</p>
+      <p className="mt-2 text-2xl font-black text-slate-950">{value}</p>
+      <p className="mt-3 text-sm font-bold text-orange-600">{detail}</p>
     </div>
   );
 }

@@ -680,9 +680,9 @@ export default function DashboardPage() {
     if (totalProperties === 0) {
       alerts.push({
         id: "no-properties",
-        title: "Nenhum imóvel cadastrado",
+        title: "Nenhum bem/ativo cadastrado",
         description:
-          "Cadastre imóveis para iniciar a gestão operacional e financeira.",
+          "Cadastre bens/ativos para iniciar a gestão operacional e financeira.",
         level: "critical",
       });
     }
@@ -690,7 +690,7 @@ export default function DashboardPage() {
     if (availableProperties > 0) {
       alerts.push({
         id: "available-properties",
-        title: `${availableProperties} imóvel(is) disponível(is)`,
+        title: `${availableProperties} bem(ns)/ativo(s) disponível(is)`,
         description: `${formatCurrency(availablePotentialRevenue)} em potencial mensal ainda sem contrato ativo.`,
         level: "warning",
       });
@@ -733,7 +733,7 @@ export default function DashboardPage() {
         id: "high-occupation",
         title: "Alta ocupação da carteira",
         description:
-          "A carteira está performando bem. Avalie expansão de imóveis disponíveis.",
+          "A carteira está performando bem. Avalie expansão de bens/ativos disponíveis.",
         level: "success",
       });
     }
@@ -846,7 +846,7 @@ export default function DashboardPage() {
               icon={<ChartLine className="h-5 w-5" />}
               title="Taxa de ocupação"
               value={`${occupancyRate}%`}
-              detail={`${rentedProperties} de ${totalProperties} imóveis alugados`}
+              detail={`${rentedProperties} de ${totalProperties} bens/ativos alugados`}
               trend={`${vacancyRate}% disponível`}
             />
 
@@ -883,7 +883,7 @@ export default function DashboardPage() {
             <FinancialSummaryCard
               title="Potencial disponível"
               value={formatCurrency(availablePotentialRevenue)}
-              detail={`${availableProperties} imóvel(is) sem contrato ativo`}
+              detail={`${availableProperties} bem(ns)/ativo(s) sem contrato ativo`}
               tone="slate"
             />
           </div>
@@ -1325,7 +1325,7 @@ function mapApiPropertyToDashboardProperty(
 
   return {
     id: property.id,
-    name: property.title || "Imóvel sem nome",
+    name: property.title || "Bem/ativo sem nome",
     address,
     rentValue: Number(property.rentalValue || 0),
     status: activePropertyIds.has(property.id) ? "Rented" : "Available",
@@ -1503,7 +1503,7 @@ function getFinancialMovementsFromReceivables(
       return {
         id: String(charge.id),
         title: charge.tenant || "Pessoa não informada",
-        subtitle: charge.property || "Sem imóvel vinculado",
+        subtitle: charge.property || "Sem bem/ativo vinculado",
         dueDate,
         amount: normalizeAmount(charge.amount),
         status,

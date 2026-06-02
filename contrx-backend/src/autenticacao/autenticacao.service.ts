@@ -11,10 +11,11 @@ import { JwtService } from '@nestjs/jwt';
 
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
-import type { User } from '@prisma/client';
+import type { Company, User } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { toUpperText } from '../common/text-normalization';
+import { getCompanyAccessState } from '../common/company-access-state';
 
 import { RegisterDto } from './dto/registro.dto';
 import { LoginDto } from './dto/login.dto';
@@ -36,6 +37,64 @@ const DATABASE_CONNECTION_ERROR_MESSAGE =
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+function formatPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '').slice(0, 11);
+
+  if (digits.length <= 10) {
+    return digits
+      .replace(/(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{4})(\d)/, '$1-$2');
+  }
+
+  return digits
+    .replace(/(\d{2})(\d)/, '($1) $2')
+    .replace(/(\d{5})(\d)/, '$1-$2');
+}
+
+function addDays(date: Date, days: number) {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+
+  return nextDate;
+}
+
+type AuthenticatedUserWithCompany = User & {
+  company: Pick<
+    Company,
+    | 'isActive'
+    | 'subscriptionStatus'
+    | 'trialStartsAt'
+    | 'trialEndsAt'
+    | 'trialExtendedUntil'
+    | 'subscriptionEndsAt'
+  >;
+};
+
+function buildAuthenticatedUserPayload(user: AuthenticatedUserWithCompany) {
+  const accessState = getCompanyAccessState(user.company);
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    companyId: user.companyId,
+    role: user.role,
+    permissions: user.permissions,
+    companyIsActive: user.company.isActive,
+    subscriptionStatus: user.company.subscriptionStatus,
+    trialStartsAt: user.company.trialStartsAt,
+    trialEndsAt: user.company.trialEndsAt,
+    trialExtendedUntil: user.company.trialExtendedUntil,
+    trialAccessEndsAt: accessState.endsAt,
+    trialDaysRemaining:
+      accessState.daysRemaining === null
+        ? null
+        : Math.max(0, accessState.daysRemaining),
+    subscriptionEndsAt: user.company.subscriptionEndsAt,
+    accessState,
+  };
 }
 
 function normalizePermissions(permissions: string[]) {
@@ -126,13 +185,25 @@ export class AutenticacaoService {
   }
 
   async login(data: LoginDto) {
-    let user: User | null;
+    let user: AuthenticatedUserWithCompany | null;
     const email = normalizeEmail(data.email);
 
     try {
       user = await this.prisma.user.findUnique({
         where: {
           email,
+        },
+        include: {
+          company: {
+            select: {
+              isActive: true,
+              subscriptionStatus: true,
+              trialStartsAt: true,
+              trialEndsAt: true,
+              trialExtendedUntil: true,
+              subscriptionEndsAt: true,
+            },
+          },
         },
       });
     } catch (error) {
@@ -157,6 +228,12 @@ export class AutenticacaoService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    const accessState = getCompanyAccessState(user.company);
+
+    if (!accessState.canAccess) {
+      throw new UnauthorizedException(accessState.reason);
+    }
+
     const sessionId = randomUUID();
     const authenticatedUser = await this.prisma.user.update({
       where: {
@@ -164,6 +241,18 @@ export class AutenticacaoService {
       },
       data: {
         activeSessionId: sessionId,
+      },
+      include: {
+        company: {
+          select: {
+            isActive: true,
+            subscriptionStatus: true,
+            trialStartsAt: true,
+            trialEndsAt: true,
+            trialExtendedUntil: true,
+            subscriptionEndsAt: true,
+          },
+        },
       },
     });
 
@@ -177,14 +266,7 @@ export class AutenticacaoService {
 
     return {
       accessToken: token,
-      user: {
-        id: authenticatedUser.id,
-        name: authenticatedUser.name,
-        email: authenticatedUser.email,
-        companyId: authenticatedUser.companyId,
-        role: authenticatedUser.role,
-        permissions: authenticatedUser.permissions,
-      },
+      user: buildAuthenticatedUserPayload(authenticatedUser),
     };
   }
 
@@ -193,14 +275,24 @@ export class AutenticacaoService {
     const email = normalizeEmail(data.email || '');
     const password = data.password;
     const companyName = data.companyName ? toUpperText(data.companyName) : '';
+    const phoneDigits = (data.phone || '').replace(/\D/g, '');
+    const phone = formatPhone(data.phone || '');
 
-    if (!name || !email || !password || !companyName) {
-      throw new BadRequestException('Preencha nome, e-mail, senha e empresa.');
+    if (!name || !email || !password || !companyName || !phone) {
+      throw new BadRequestException(
+        'Preencha nome, empresa, telefone, e-mail e senha.',
+      );
+    }
+
+    if (phoneDigits.length < 10) {
+      throw new BadRequestException('Informe um telefone com DDD valido.');
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
+    const trialStartsAt = new Date();
+    const trialEndsAt = addDays(trialStartsAt, 30);
 
-    let user: User;
+    let user: AuthenticatedUserWithCompany;
 
     try {
       const userExists = await this.prisma.user.findUnique({
@@ -223,7 +315,11 @@ export class AutenticacaoService {
           data: {
             tradeName: companyName,
             companyName,
+            phone,
             email,
+            subscriptionStatus: 'TRIAL',
+            trialStartsAt,
+            trialEndsAt,
           },
         });
 
@@ -235,6 +331,18 @@ export class AutenticacaoService {
             passwordHash,
             role: 'ADMIN',
             permissions: [...userToolPermissions],
+          },
+          include: {
+            company: {
+              select: {
+                isActive: true,
+                subscriptionStatus: true,
+                trialStartsAt: true,
+                trialEndsAt: true,
+                trialExtendedUntil: true,
+                subscriptionEndsAt: true,
+              },
+            },
           },
         });
 
@@ -248,6 +356,7 @@ export class AutenticacaoService {
             companySettings: {
               companyName,
               tradeName: companyName,
+              phone,
               email,
             },
             themeSettings: {
@@ -280,6 +389,18 @@ export class AutenticacaoService {
       data: {
         activeSessionId: sessionId,
       },
+      include: {
+        company: {
+          select: {
+            isActive: true,
+            subscriptionStatus: true,
+            trialStartsAt: true,
+            trialEndsAt: true,
+            trialExtendedUntil: true,
+            subscriptionEndsAt: true,
+          },
+        },
+      },
     });
 
     const token = await this.jwtService.signAsync({
@@ -292,14 +413,7 @@ export class AutenticacaoService {
 
     return {
       accessToken: token,
-      user: {
-        id: authenticatedUser.id,
-        name: authenticatedUser.name,
-        email: authenticatedUser.email,
-        companyId: authenticatedUser.companyId,
-        role: authenticatedUser.role,
-        permissions: authenticatedUser.permissions,
-      },
+      user: buildAuthenticatedUserPayload(authenticatedUser),
     };
   }
 
@@ -397,12 +511,6 @@ export class AutenticacaoService {
       throw new BadRequestException('Selecione ao menos uma ferramenta.');
     }
 
-    if (password && password.length < 6) {
-      throw new BadRequestException(
-        'A senha precisa ter pelo menos 6 caracteres.',
-      );
-    }
-
     const existingUser = await this.prisma.user.findFirst({
       where: {
         id: userId,
@@ -411,6 +519,7 @@ export class AutenticacaoService {
       select: {
         id: true,
         role: true,
+        isActive: true,
       },
     });
 
@@ -422,6 +531,30 @@ export class AutenticacaoService {
       throw new BadRequestException(
         'O dono do sistema nao pode ser editado neste cadastro.',
       );
+    }
+
+    const currentUserIsCompanyAdmin =
+      existingUser.isActive &&
+      (existingUser.role === 'OWNER' || existingUser.role === 'ADMIN');
+    const nextUserIsCompanyAdmin =
+      data.isActive && (data.role === 'OWNER' || data.role === 'ADMIN');
+
+    if (currentUserIsCompanyAdmin && !nextUserIsCompanyAdmin) {
+      const activeCompanyAdminsCount = await this.prisma.user.count({
+        where: {
+          companyId: user.companyId,
+          isActive: true,
+          role: {
+            in: ['OWNER', 'ADMIN'],
+          },
+        },
+      });
+
+      if (activeCompanyAdminsCount <= 1) {
+        throw new BadRequestException(
+          'Mantenha pelo menos um administrador ativo na empresa.',
+        );
+      }
     }
 
     const updatedUser = await this.prisma.user.update({

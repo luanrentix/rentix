@@ -104,7 +104,7 @@ export class ImoveisService {
     });
 
     if (!property) {
-      throw new NotFoundException('Imóvel não encontrado.');
+      throw new NotFoundException('Bem/ativo não encontrado.');
     }
 
     return property;
@@ -121,7 +121,7 @@ export class ImoveisService {
     });
 
     if (!property) {
-      throw new NotFoundException('Imóvel não encontrado.');
+      throw new NotFoundException('Bem/ativo não encontrado.');
     }
 
     if (data.ownerId) {
@@ -222,7 +222,7 @@ export class ImoveisService {
     });
 
     if (!property) {
-      throw new NotFoundException('Imóvel não encontrado.');
+      throw new NotFoundException('Bem/ativo não encontrado.');
     }
 
     const activeContract = await this.prisma.contract.findFirst({
@@ -235,7 +235,7 @@ export class ImoveisService {
 
     if (activeContract) {
       throw new BadRequestException(
-        'Imóvel com contrato ativo não pode ser inativado.',
+        'Bem/ativo com contrato ativo não pode ser inativado.',
       );
     }
 

@@ -15,4 +15,8 @@ export class CriarContaDto {
   @IsString()
   @MinLength(2)
   companyName: string;
+
+  @IsString()
+  @MinLength(10)
+  phone: string;
 }

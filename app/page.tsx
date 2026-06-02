@@ -132,7 +132,7 @@ export default async function HomePage() {
             </h1>
 
             <p className="mt-5 max-w-2xl text-base font-semibold leading-8 text-slate-600 sm:text-lg">
-              O Contrx organiza imóveis, pessoas, contratos, agenda e financeiro
+              O Contrx organiza bens/ativos, pessoas, contratos, agenda e financeiro
               para sua equipe acompanhar a operação sem depender de planilhas
               soltas.
             </p>
@@ -291,7 +291,7 @@ export default async function HomePage() {
           <div className="grid gap-4 sm:grid-cols-2">
             {[
               "Contas a receber com status e pagamentos",
-              "Contas a pagar vinculadas a pessoas e imóveis",
+              "Contas a pagar vinculadas a pessoas e bens/ativos",
               "Relatórios financeiros por período",
               "Alertas para pendências operacionais",
             ].map((item) => (

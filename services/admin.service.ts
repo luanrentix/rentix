@@ -14,6 +14,21 @@ export type AdminSummary = {
   }[];
 };
 
+export type CompanyAccessState = {
+  canAccess: boolean;
+  status: SubscriptionStatus;
+  reason: string;
+  blockReason:
+    | 'COMPANY_INACTIVE'
+    | 'TRIAL_EXPIRED'
+    | 'SUBSCRIPTION_EXPIRED'
+    | 'SUBSCRIPTION_SUSPENDED'
+    | 'SUBSCRIPTION_CANCELED'
+    | null;
+  endsAt: string | null;
+  daysRemaining: number | null;
+};
+
 export type AdminUser = {
   id: string;
   name: string;
@@ -27,9 +42,23 @@ export type AdminUser = {
     tradeName: string;
     companyName?: string | null;
     email?: string | null;
+    phone?: string | null;
     isActive: boolean;
+    subscriptionStatus?: SubscriptionStatus;
+    trialStartsAt?: string | null;
+    trialEndsAt?: string | null;
+    trialExtendedUntil?: string | null;
+    subscriptionEndsAt?: string | null;
+    accessState?: CompanyAccessState;
   };
 };
+
+export type SubscriptionStatus =
+  | 'TRIAL'
+  | 'ACTIVE'
+  | 'EXPIRED'
+  | 'SUSPENDED'
+  | 'CANCELED';
 
 export type AdminCompany = {
   id: string;
@@ -39,6 +68,12 @@ export type AdminCompany = {
   phone?: string | null;
   email?: string | null;
   isActive: boolean;
+  subscriptionStatus: SubscriptionStatus;
+  trialStartsAt?: string | null;
+  trialEndsAt?: string | null;
+  trialExtendedUntil?: string | null;
+  subscriptionEndsAt?: string | null;
+  accessState?: CompanyAccessState;
   createdAt: string;
   updatedAt: string;
   _count: {
@@ -47,6 +82,16 @@ export type AdminCompany = {
     properties: number;
     contracts: number;
   };
+};
+
+export type AdminCommercialHistory = {
+  id: string;
+  companyId: string;
+  userId?: string | null;
+  action: string;
+  description: string;
+  metadata?: unknown;
+  createdAt: string;
 };
 
 export type AdminUserRole = 'SYSTEM_OWNER' | 'OWNER' | 'ADMIN' | 'MANAGER' | 'USER';
@@ -84,12 +129,35 @@ export async function updateAdminUser(
 
 export async function updateAdminCompany(
   companyId: string,
-  data: { isActive: boolean },
+  data: {
+    isActive?: boolean;
+    trialExtensionDays?: number;
+    trialEndsAt?: string;
+    subscriptionStatus?: SubscriptionStatus;
+    subscriptionEndsAt?: string;
+    note?: string;
+  },
 ) {
   return apiFetch<AdminCompany>(`/admin/empresas/${companyId}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
   });
+}
+
+export async function getAdminCompanyCommercialHistory(companyId: string) {
+  return apiFetch<AdminCommercialHistory[]>(
+    `/admin/empresas/${companyId}/historico-comercial`,
+  );
+}
+
+export async function reprocessAdminCommercialExpirations() {
+  return apiFetch<{ processed: number; expired: number }>(
+    '/admin/comercial/reprocessar-vencimentos',
+    {
+      method: 'POST',
+      body: JSON.stringify({}),
+    },
+  );
 }
 
 export async function resetTestData(modules: ResetTestDataModule[]) {

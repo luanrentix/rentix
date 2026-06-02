@@ -11,6 +11,7 @@ export type CreateAccountRequest = {
   email: string;
   password: string;
   companyName: string;
+  phone: string;
 };
 
 export type ChangePasswordRequest = {
@@ -25,6 +26,30 @@ export type AuthUser = {
   email: string;
   role: string;
   permissions?: string[] | null;
+  companyIsActive?: boolean;
+  subscriptionStatus?: 'TRIAL' | 'ACTIVE' | 'EXPIRED' | 'SUSPENDED' | 'CANCELED';
+  trialStartsAt?: string | null;
+  trialEndsAt?: string | null;
+  trialExtendedUntil?: string | null;
+  trialAccessEndsAt?: string | null;
+  trialDaysRemaining?: number | null;
+  subscriptionEndsAt?: string | null;
+  accessState?: CompanyAccessState | null;
+};
+
+export type CompanyAccessState = {
+  canAccess: boolean;
+  status: 'TRIAL' | 'ACTIVE' | 'EXPIRED' | 'SUSPENDED' | 'CANCELED';
+  reason: string;
+  blockReason:
+    | 'COMPANY_INACTIVE'
+    | 'TRIAL_EXPIRED'
+    | 'SUBSCRIPTION_EXPIRED'
+    | 'SUBSCRIPTION_SUSPENDED'
+    | 'SUBSCRIPTION_CANCELED'
+    | null;
+  endsAt: string | null;
+  daysRemaining: number | null;
 };
 
 export type LoginResponse = {

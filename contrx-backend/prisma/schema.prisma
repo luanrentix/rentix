@@ -16,6 +16,16 @@ enum UserRole {
   @@map("papel_usuario")
 }
 
+enum SubscriptionStatus {
+  TRIAL     @map("TESTE")
+  ACTIVE    @map("ATIVO")
+  EXPIRED   @map("VENCIDO")
+  SUSPENDED @map("SUSPENSO")
+  CANCELED  @map("CANCELADO")
+
+  @@map("status_assinatura_empresa")
+}
+
 enum PersonType {
   INDIVIDUAL @map("PESSOA_FISICA")
   COMPANY    @map("PESSOA_JURIDICA")
@@ -38,6 +48,11 @@ model Company {
   phone       String? @map("telefone")
   email       String?
   isActive    Boolean @default(true) @map("ativo")
+  subscriptionStatus SubscriptionStatus @default(TRIAL) @map("status_assinatura")
+  trialStartsAt      DateTime?          @map("teste_inicia_em")
+  trialEndsAt        DateTime?          @map("teste_termina_em")
+  trialExtendedUntil DateTime?          @map("teste_prorrogado_ate")
+  subscriptionEndsAt DateTime?          @map("assinatura_termina_em")
 
   createdAt DateTime @default(now()) @map("criado_em")
   updatedAt DateTime @updatedAt @map("atualizado_em")
@@ -51,8 +66,27 @@ model Company {
   scheduleItems       ScheduleItem[]
   propertyMovements   PropertyMovement[]
   settings           AppSettings?
+  commercialHistories CommercialHistory[]
 
   @@map("empresas")
+}
+
+model CommercialHistory {
+  id        String @id @default(uuid())
+  companyId String @map("empresa_id")
+  userId    String? @map("usuario_id")
+
+  action      String @map("acao")
+  description String @map("descricao")
+  metadata    Json?  @map("metadados")
+
+  createdAt DateTime @default(now()) @map("criado_em")
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@index([companyId])
+  @@index([createdAt])
+  @@map("historico_comercial")
 }
 
 model AppSettings {

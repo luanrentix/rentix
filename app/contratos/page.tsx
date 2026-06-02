@@ -12,7 +12,7 @@ import {
   MapPin,
   Maximize2,
   MessageCircle,
-  Minimize2,
+  Minus,
   Pencil,
   RefreshCw,
   Trash2,
@@ -35,10 +35,8 @@ import {
   type UpdateContractDto,
 } from "@/services/contracts.service";
 import {
-  createReceivableAccount,
   deleteReceivableAccount,
   getReceivableAccounts,
-  updateReceivableAccount,
   type ReceivableAccount,
 } from "@/services/financial.service";
 import { getProperties, type Property as ApiProperty } from "@/services/properties.service";
@@ -78,13 +76,13 @@ const LEGACY_SETTINGS_TEMPORARY_CONTRACT_CONTENT = `CONTRATO TEMPORÁRIO
 
 LOCADOR: {companyName}
 LOCATÁRIO: {personName}
-IMÓVEL: {propertyName}
+BEM/ATIVO: {propertyName}
 PERÍODO: {startDate} até {endDate}
 HORÁRIO: Entrada {entryTime} / Saída {exitTime}
 
 CLÁUSULAS E CONDIÇÕES:
 1. O presente contrato tem finalidade de locação temporária.
-2. O locatário declara estar ciente das regras de uso do imóvel.
+2. O locatário declara estar ciente das regras de uso do bem/ativo.
 3. As informações financeiras e condições acordadas deverão constar no documento final.
 
 {contractDefaultNotes}
@@ -366,6 +364,66 @@ CPF: ______________________________
 
 ____________________________________
 Testemunha:
+Nome: ______________________________
+CPF: ______________________________`;
+
+const DEFAULT_ASSET_CONTRACT_TEMPLATE = `CONTRATO DE LOCAÇÃO DE BEM/ATIVO
+
+I - LOCADOR:
+{landlordName}, inscrito(a) no CPF/CNPJ nº {landlordDocument}, com endereço em {landlordAddress}, telefone {companyPhone}, e-mail {companyEmail}, a seguir denominado(a) LOCADOR.
+
+II - LOCATÁRIO:
+{tenantName}, inscrito(a) no CPF/CNPJ nº {tenantDocument}, residente e domiciliado(a) em {tenantAddress}, telefone {tenantPhone}, e-mail {tenantEmail}, a seguir denominado(a) LOCATÁRIO.
+
+CLÁUSULA PRIMEIRA - DO BEM/ATIVO E DO PRAZO
+O LOCADOR dá em locação ao LOCATÁRIO o bem/ativo denominado {propertyName}, classificado como {assetCategory}, pelo prazo de {contractMonths} mês(es), com início em {startDate} e término em {endDate}.
+
+Parágrafo Primeiro - O LOCATÁRIO declara ter recebido o bem/ativo em condições adequadas de uso, comprometendo-se a utilizá-lo exclusivamente para a finalidade contratada e a devolvê-lo ao final da locação no mesmo estado de conservação, salvo desgaste natural de uso.
+
+Parágrafo Segundo - Quando houver local de entrega, guarda ou operação informado, considera-se como referência: {propertyAddress}.
+
+CLÁUSULA SEGUNDA - DO VALOR E FORMA DE PAGAMENTO
+O valor da locação será de {amount}, com vencimento conforme acordado entre as partes. O pagamento poderá ser realizado por depósito, transferência, dinheiro ou Pix, utilizando a chave {pixKey}, salvo outra forma expressamente acordada.
+
+CLÁUSULA TERCEIRA - DA GUARDA, USO E CONSERVAÇÃO
+O LOCATÁRIO será responsável pela guarda, conservação, uso adequado e segurança do bem/ativo durante todo o período de locação, respondendo por perdas, danos, mau uso, extravio, furto, roubo ou avarias que não decorram de desgaste natural.
+
+CLÁUSULA QUARTA - DA MANUTENÇÃO E DEVOLUÇÃO
+O LOCATÁRIO deverá comunicar imediatamente ao LOCADOR qualquer defeito, dano, acidente, perda de desempenho ou necessidade de manutenção. A devolução deverá ocorrer na data final contratada, acompanhada de acessórios, documentos, peças, componentes ou itens entregues junto com o bem/ativo, quando houver.
+
+CLÁUSULA QUINTA - DAS PROIBIÇÕES
+É vedado ao LOCATÁRIO ceder, transferir, sublocar, emprestar, vender, modificar, desmontar ou alterar o bem/ativo sem autorização prévia e por escrito do LOCADOR.
+
+CLÁUSULA SEXTA - DA INADIMPLÊNCIA E RESCISÃO
+O descumprimento de qualquer obrigação contratual poderá acarretar rescisão, cobrança dos valores devidos, multa, perdas e danos, além das medidas administrativas, extrajudiciais ou judiciais cabíveis.
+
+CLÁUSULA SÉTIMA - DA MULTA CONTRATUAL
+Fica estipulada multa equivalente a 03 (três) períodos de locação vigentes na data da infração, facultando à parte inocente considerar rescindido o contrato e cobrar eventuais prejuízos adicionais.
+
+CLÁUSULA OITAVA - DO FORO
+As partes elegem o foro da comarca de {contractCity} para dirimir dúvidas ou questões oriundas deste contrato, com renúncia de qualquer outro, por mais privilegiado que seja.
+
+{contractDefaultNotes}
+
+E assim, por estarem justas e contratadas, as partes assinam o presente instrumento particular de CONTRATO DE LOCAÇÃO DE BEM/ATIVO, em 2 (duas) vias de igual teor.
+
+{contractCity}, {currentDate}.
+
+LOCADOR:
+__________________________________
+{landlordName}
+
+LOCATÁRIO:
+__________________________________
+{tenantName}
+
+TESTEMUNHA:
+__________________________________
+Nome: ______________________________
+CPF: ______________________________
+
+TESTEMUNHA:
+__________________________________
 Nome: ______________________________
 CPF: ______________________________`;
 
@@ -1046,7 +1104,7 @@ export default function ContractsPage() {
       type,
       description,
     }).catch((error) => {
-      console.warn("Nao foi possivel registrar movimentacao do imovel no backend.", error);
+      console.warn("Nao foi possivel registrar movimentacao do bem/ativo no backend.", error);
     });
   }
 
@@ -1097,7 +1155,10 @@ export default function ContractsPage() {
           : "Contrato cancelado e parcelas vinculadas removidas."
       );
     } else {
-      await syncOpenReceivableChargesFromContract(contractToSave);
+      if (user?.companyId) {
+        setReceivableAccounts(await getReceivableAccounts(user.companyId));
+      }
+
       registerPropertyMovementFromContract(
         contractToSave,
         "ContractUpdated",
@@ -1251,86 +1312,6 @@ export default function ContractsPage() {
     window.location.href = `/contas-receber?fromContract=1&contractId=${encodeURIComponent(
       String(contract.id),
     )}`;
-  }
-
-  async function syncOpenReceivableChargesFromContract(contract: Contract) {
-    const companyId = user?.companyId;
-
-    if (!companyId) return;
-
-    const receivableSchedule = getContractReceivableSchedule(contract);
-    const linkedAccounts = receivableAccounts
-      .filter((account) => String(account.contractId || "") === String(contract.id))
-      .sort((firstAccount, secondAccount) => {
-        const firstNumber = firstAccount.installmentNumber || 0;
-        const secondNumber = secondAccount.installmentNumber || 0;
-
-        return firstNumber - secondNumber;
-      });
-    const paidAccounts = linkedAccounts.filter((account) => account.status === "PAID");
-    const openAccounts = linkedAccounts.filter((account) => account.status !== "PAID");
-    const openReceivableSchedule = receivableSchedule.slice(paidAccounts.length);
-    const installmentGroupId = `${contract.id}-installments`;
-
-    const updatedAccounts = await Promise.all(
-      openAccounts.slice(0, openReceivableSchedule.length).map((account, index) => {
-        const installment = openReceivableSchedule[index];
-
-        return updateReceivableAccount(account.id, {
-          tenantId: String(contract.tenantId),
-          property: contract.propertyName,
-          tenant: contract.tenantName,
-          issueDate: contract.startDate,
-          dueDate: installment.dueDate,
-          amount: installment.amount,
-          manual: false,
-          installmentNumber: installment.installmentNumber,
-          installmentTotal: installment.installmentTotal,
-          installmentGroupId,
-          isDownPayment: false,
-        });
-      }),
-    );
-
-    const extraOpenAccounts = openAccounts.slice(openReceivableSchedule.length);
-    await Promise.all(extraOpenAccounts.map((account) => deleteReceivableAccount(account.id)));
-
-    const missingSchedule = openReceivableSchedule.slice(openAccounts.length);
-    const createdAccounts = await Promise.all(
-      missingSchedule.map((installment) =>
-        createReceivableAccount({
-          contractId: String(contract.id),
-          tenantId: String(contract.tenantId),
-          property: contract.propertyName,
-          tenant: contract.tenantName,
-          issueDate: contract.startDate,
-          dueDate: installment.dueDate,
-          amount: installment.amount,
-          status: "PENDING",
-          manual: false,
-          installmentNumber: installment.installmentNumber,
-          installmentTotal: installment.installmentTotal,
-          installmentGroupId,
-          isDownPayment: false,
-        }),
-      ),
-    );
-
-    const changedAccountIds = new Set([
-      ...updatedAccounts.map((account) => account.id),
-      ...extraOpenAccounts.map((account) => account.id),
-    ]);
-
-    setReceivableAccounts((currentAccounts) => [
-      ...createdAccounts,
-      ...updatedAccounts,
-      ...paidAccounts,
-      ...currentAccounts.filter(
-        (account) =>
-          String(account.contractId || "") !== String(contract.id) &&
-          !changedAccountIds.has(account.id),
-      ),
-    ]);
   }
 
   async function handleSubmitContract(event: React.FormEvent<HTMLFormElement>) {
@@ -1743,7 +1724,7 @@ export default function ContractsPage() {
     const schedulePayload = {
       title: "Vencimento de contrato",
       customerName: contract.tenantName || "Inquilino nao informado",
-      propertyName: contract.propertyName || "Imovel nao informado",
+      propertyName: contract.propertyName || "Bem/ativo nao informado",
       date: contract.endDate,
       time: existingScheduleItem?.time || "08:00",
       type: "Contrato",
@@ -1971,6 +1952,41 @@ export default function ContractsPage() {
     printableFrameWindow.print();
   }
 
+  function getPropertyForContract(contract: Contract) {
+    return properties.find((property) => String(property.id) === String(contract.propertyId));
+  }
+
+  function isRealEstateContract(contract: Contract) {
+    const contractProperty = getPropertyForContract(contract);
+
+    return !contractProperty || contractProperty.assetCategory === "PROPERTY";
+  }
+
+  function getPrintableContractTitle(contract: Contract) {
+    if (!isRealEstateContract(contract)) {
+      return "Visualização do contrato de bem/ativo";
+    }
+
+    if (contract.isTemporaryRental) {
+      return "Visualização do contrato temporário";
+    }
+
+    return "Visualização do contrato padrão residencial";
+  }
+
+  function buildPrintableContractHtml(contract: Contract, showToolbar = false) {
+    const contractProperty = getPropertyForContract(contract);
+    const contractTenant = tenants.find((tenant) => String(tenant.id) === String(contract.tenantId));
+
+    if (contractProperty && contractProperty.assetCategory !== "PROPERTY") {
+      return buildAssetContractHtml(contract, contractProperty, contractTenant, showToolbar);
+    }
+
+    return contract.isTemporaryRental
+      ? buildTemporaryRentalContractHtml(contract, contractProperty, contractTenant, showToolbar)
+      : buildStandardResidentialContractHtml(contract, contractProperty, contractTenant, showToolbar);
+  }
+
   const contractsThemeClass =
     themeMode === "graphite"
       ? "contrx-graphite-theme"
@@ -2101,7 +2117,7 @@ export default function ContractsPage() {
         }
 
         .contrx-contracts-page.contrx-graphite-theme {
-          color: #f4f4f5;
+          color: #f8fafc;
         }
 
         .contrx-contracts-page.contrx-graphite-theme .bg-white,
@@ -2110,7 +2126,7 @@ export default function ContractsPage() {
         .contrx-contracts-page.contrx-graphite-theme table,
         .contrx-contracts-page.contrx-graphite-theme tbody,
         .contrx-contracts-page.contrx-graphite-theme tr {
-          background-color: #27272a !important;
+          background-color: #0d1b2e !important;
         }
 
         .contrx-contracts-page.contrx-graphite-theme .bg-orange-50,
@@ -2125,13 +2141,13 @@ export default function ContractsPage() {
         .contrx-contracts-page.contrx-graphite-theme .text-slate-900,
         .contrx-contracts-page.contrx-graphite-theme .text-slate-800,
         .contrx-contracts-page.contrx-graphite-theme .text-slate-700 {
-          color: #f4f4f5 !important;
+          color: #f8fafc !important;
         }
 
         .contrx-contracts-page.contrx-graphite-theme .text-slate-600,
         .contrx-contracts-page.contrx-graphite-theme .text-slate-500,
         .contrx-contracts-page.contrx-graphite-theme .text-slate-400 {
-          color: #d4d4d8 !important;
+          color: #b6c6dc !important;
         }
 
         .contrx-contracts-page.contrx-graphite-theme .border-orange-100,
@@ -2142,15 +2158,15 @@ export default function ContractsPage() {
         .contrx-contracts-page.contrx-graphite-theme .border-slate-100,
         .contrx-contracts-page.contrx-graphite-theme .border-slate-200,
         .contrx-contracts-page.contrx-graphite-theme .border-slate-300 {
-          border-color: #52525b !important;
+          border-color: #24405f !important;
         }
 
         .contrx-contracts-page.contrx-graphite-theme input,
         .contrx-contracts-page.contrx-graphite-theme select,
         .contrx-contracts-page.contrx-graphite-theme textarea {
-          background-color: #18181b !important;
-          border-color: #52525b !important;
-          color: #f4f4f5 !important;
+          background-color: #07111f !important;
+          border-color: #24405f !important;
+          color: #f8fafc !important;
         }
 
         .contrx-contracts-page.contrx-graphite-theme thead {
@@ -2158,7 +2174,7 @@ export default function ContractsPage() {
         }
 
         .contrx-contracts-page.contrx-graphite-theme tbody tr:hover {
-          background-color: #3f3f46 !important;
+          background-color: #162a44 !important;
         }
 
         .contrx-contracts-page.contrx-force-light,
@@ -3035,26 +3051,8 @@ export default function ContractsPage() {
               <div className="min-h-0 flex-1 bg-slate-100 p-4">
                 <iframe
                   ref={printableContractFrameRef}
-                  title={
-                    printableContract.isTemporaryRental
-                        ? "Visualização do contrato temporário"
-                      : "Visualização do contrato padrão residencial"
-                  }
-                  srcDoc={
-                    printableContract.isTemporaryRental
-                         ? buildTemporaryRentalContractHtml(
-                          printableContract,
-                          properties.find((property) => String(property.id) === String(printableContract.propertyId)),
-                          tenants.find((tenant) => String(tenant.id) === String(printableContract.tenantId)),
-                          false
-                        )
-                      : buildStandardResidentialContractHtml(
-                          printableContract,
-                          properties.find((property) => String(property.id) === String(printableContract.propertyId)),
-                          tenants.find((tenant) => String(tenant.id) === String(printableContract.tenantId)),
-                          false
-                        )
-                  }
+                  title={getPrintableContractTitle(printableContract)}
+                  srcDoc={buildPrintableContractHtml(printableContract, false)}
                   className="h-[72vh] w-full rounded-2xl border border-slate-200 bg-white shadow-sm"
                 />
               </div>
@@ -3313,7 +3311,7 @@ export default function ContractsPage() {
                     title="Minimizar modal"
                     aria-label="Minimizar modal"
                   >
-                    <Minimize2 className="h-5 w-5" />
+                    <Minus className="h-5 w-5" />
                   </button>
 
                   <button
@@ -4084,6 +4082,7 @@ function buildStandardResidentialContractHtml(
     complement: tenant?.complement,
   });
   const propertyName = contract.propertyName || property?.name || "BEM/ATIVO NÃO INFORMADO";
+  const assetCategory = property ? getAssetCategoryLabel(property.assetCategory) : "Imóvel";
   const propertyAddress = formatFullAddressForPrint({
     street: property?.street,
     number: property?.number,
@@ -4119,6 +4118,7 @@ function buildStandardResidentialContractHtml(
     tenantPhone: tenant?.phone || "não informado",
     tenantEmail: tenant?.email || "não informado",
     propertyName,
+    assetCategory,
     propertyAddress: propertyAddress || "endereço não informado",
     startDate: formatDate(contract.startDate),
     endDate: formatDate(contract.endDate),
@@ -4138,6 +4138,95 @@ function buildStandardResidentialContractHtml(
 
   return buildConfiguredContractHtml(
     configuredTemplateContent || ORIGINAL_STANDARD_RESIDENTIAL_CONTRACT_TEMPLATE,
+    templateData,
+    showToolbar
+  );
+}
+
+function buildAssetContractHtml(
+  contract: Contract,
+  property?: Property,
+  tenant?: ContrxTenant,
+  showToolbar = true
+) {
+  const companySettings = getCompanySettingsForContractPrint();
+  const landlordName =
+    companySettings.legalName || companySettings.name || "LOCADOR NÃO INFORMADO";
+  const landlordDocument = formatDocumentForPrint(companySettings.document || "");
+  const landlordAddress = formatFullAddressForPrint({
+    street: companySettings.street,
+    number: companySettings.number,
+    neighborhood: companySettings.neighborhood,
+    city: companySettings.city,
+    state: companySettings.state,
+    zipCode: companySettings.zipCode,
+    complement: companySettings.complement,
+  });
+  const tenantName = contract.tenantName || tenant?.name || "LOCATÁRIO NÃO INFORMADO";
+  const tenantDocument = formatDocumentForPrint(tenant?.cpf || tenant?.document || "");
+  const tenantAddress = formatFullAddressForPrint({
+    street: tenant?.street,
+    number: tenant?.number,
+    neighborhood: tenant?.neighborhood,
+    city: tenant?.city,
+    state: tenant?.state,
+    zipCode: tenant?.zipCode,
+    complement: tenant?.complement,
+  });
+  const propertyName = contract.propertyName || property?.name || "BEM/ATIVO NÃO INFORMADO";
+  const assetCategory = property ? getAssetCategoryLabel(property.assetCategory) : "Bem/Ativo";
+  const propertyAddress = formatFullAddressForPrint({
+    street: property?.street,
+    number: property?.number,
+    neighborhood: property?.neighborhood,
+    city: property?.city,
+    state: property?.state,
+    zipCode: property?.zipCode,
+    complement: property?.complement,
+  });
+  const currentDate = new Date();
+  const locationText =
+    property?.city && property?.state
+      ? `${property.city}/${property.state}`
+      : companySettings.city && companySettings.state
+        ? `${companySettings.city}/${companySettings.state}`
+        : "______/__";
+  const monthlyAmount = formatCurrency(contract.rentValue);
+  const templateData: TemplateData = {
+    companyName: landlordName,
+    tradeName: companySettings.name || landlordName,
+    landlordName,
+    landlordDocument: landlordDocument || "não informado",
+    landlordAddress: landlordAddress || "endereço não informado",
+    companyEmail: companySettings.email || "não informado",
+    companyPhone: companySettings.phone || "não informado",
+    personName: tenantName,
+    tenantName,
+    tenantDocument: tenantDocument || "não informado",
+    tenantAddress: tenantAddress || "endereço não informado",
+    tenantPhone: tenant?.phone || "não informado",
+    tenantEmail: tenant?.email || "não informado",
+    propertyName,
+    assetCategory,
+    propertyAddress: propertyAddress || "não informado",
+    startDate: formatDate(contract.startDate),
+    endDate: formatDate(contract.endDate),
+    contractMonths: String(getContractDurationInMonths(contract.startDate, contract.endDate)),
+    contractDays: String(getContractDurationInDays(contract.startDate, contract.endDate)),
+    amount: monthlyAmount,
+    rentValue: monthlyAmount,
+    monthlyAmount,
+    penaltyAmount: formatCurrency(Number(contract.rentValue || 0) * 3),
+    dueDay: String(getContractRentDueDay(contract.startDate)),
+    pixKey: companySettings.pixKey || "não informado",
+    contractCity: companySettings.contractCity || locationText,
+    currentDate: formatLongDateForPrint(currentDate),
+    contractDefaultNotes: companySettings.contractDefaultNotes || "",
+  };
+  const configuredTemplateContent = getConfiguredAssetContractTemplateContent();
+
+  return buildConfiguredContractHtml(
+    configuredTemplateContent || DEFAULT_ASSET_CONTRACT_TEMPLATE,
     templateData,
     showToolbar
   );
@@ -4174,6 +4263,7 @@ function buildTemporaryRentalContractHtml(
     complement: tenant?.complement,
   });
   const propertyName = contract.propertyName || property?.name || "BEM/ATIVO NÃO INFORMADO";
+  const assetCategory = property ? getAssetCategoryLabel(property.assetCategory) : "Bem/Ativo";
   const propertyAddress = formatFullAddressForPrint({
     street: property?.street,
     number: property?.number,
@@ -4207,6 +4297,7 @@ function buildTemporaryRentalContractHtml(
     tenantPhone: tenant?.phone || "não informado",
     tenantEmail: tenant?.email || "não informado",
     propertyName,
+    assetCategory,
     propertyAddress: propertyAddress || "endereço não informado",
     startDate: formatDate(contract.startDate),
     endDate: formatDate(contract.endDate),
@@ -4314,6 +4405,37 @@ function getConfiguredStandardContractTemplateContent() {
       normalizedTemplateContent === normalizedLegacyTemplateContent ||
       normalizedTemplateContent === normalizedOriginalTemplateContent
     ) {
+      return null;
+    }
+
+    return templateContent;
+  } catch {
+    return null;
+  }
+}
+
+function getConfiguredAssetContractTemplateContent() {
+  try {
+    const parsedTemplates = getCachedPrintTemplates();
+
+    if (!parsedTemplates) return null;
+    const assetContractTemplate = (parsedTemplates as { assetContract?: unknown }).assetContract;
+    let templateContent = "";
+
+    if (
+      assetContractTemplate &&
+      typeof assetContractTemplate === "object" &&
+      !Array.isArray(assetContractTemplate) &&
+      typeof (assetContractTemplate as { content?: unknown }).content === "string"
+    ) {
+      templateContent = (assetContractTemplate as { content: string }).content;
+    }
+
+    const cleanTemplateContent = templateContent.trim();
+
+    if (!cleanTemplateContent) return null;
+
+    if (normalizeTemplateContent(cleanTemplateContent) === normalizeTemplateContent(DEFAULT_ASSET_CONTRACT_TEMPLATE)) {
       return null;
     }
 
