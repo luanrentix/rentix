@@ -2,6 +2,7 @@
 
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import JSZip from "jszip";
 import { useAuth } from "@/context/AuthContext";
 import { resetTestData, type ResetTestDataModule } from "@/services/admin.service";
 import { changePasswordRequest } from "@/services/auth";
@@ -127,6 +128,8 @@ type PrintDocumentTemplate = {
   icon: string;
   isEditable: boolean;
   content: string;
+  importedFileName?: string;
+  importedAt?: string;
 };
 
 type PrintTemplates = Record<PrintDocumentKey, PrintDocumentTemplate>;
@@ -836,6 +839,269 @@ const printTemplateVariableGroups = [
   },
 ];
 
+const printTemplateAliasMap: Record<string, string> = {
+  aluguel: "amount",
+  assinante_cidade: "contractCity",
+  bem: "propertyName",
+  bem_ativo: "propertyName",
+  bem_endereco: "propertyAddress",
+  bem_nome: "propertyName",
+  categoria_bem: "assetCategory",
+  cep_locador: "landlordAddress",
+  cidade: "contractCity",
+  cidade_assinatura: "contractCity",
+  cliente: "tenantName",
+  cliente_documento: "tenantDocument",
+  cliente_email: "tenantEmail",
+  cliente_endereco: "tenantAddress",
+  cliente_nome: "tenantName",
+  cliente_telefone: "tenantPhone",
+  cnpj_empresa: "landlordDocument",
+  contrato_data_final: "endDate",
+  contrato_data_inicio: "startDate",
+  contrato_fim: "endDate",
+  contrato_inicio: "startDate",
+  contrato_meses: "contractMonths",
+  contrato_numero: "contractNumber",
+  data_atual: "currentDate",
+  data_assinatura: "currentDate",
+  data_final: "endDate",
+  data_inicio: "startDate",
+  dia_vencimento: "dueDay",
+  documento_empresa: "landlordDocument",
+  documento_inquilino: "tenantDocument",
+  email_empresa: "companyEmail",
+  email_inquilino: "tenantEmail",
+  endereco_empresa: "landlordAddress",
+  endereco_imovel: "propertyAddress",
+  endereco_inquilino: "tenantAddress",
+  endereco_locador: "landlordAddress",
+  empresa: "landlordName",
+  empresa_cnpj: "landlordDocument",
+  empresa_documento: "landlordDocument",
+  empresa_email: "companyEmail",
+  empresa_endereco: "landlordAddress",
+  empresa_nome: "landlordName",
+  empresa_telefone: "companyPhone",
+  fim: "endDate",
+  imovel: "propertyName",
+  imovel_endereco: "propertyAddress",
+  imovel_nome: "propertyName",
+  inicio: "startDate",
+  inquilino: "tenantName",
+  inquilino_documento: "tenantDocument",
+  inquilino_email: "tenantEmail",
+  inquilino_endereco: "tenantAddress",
+  inquilino_nome: "tenantName",
+  inquilino_telefone: "tenantPhone",
+  locador: "landlordName",
+  locador_documento: "landlordDocument",
+  locador_email: "companyEmail",
+  locador_endereco: "landlordAddress",
+  locador_nome: "landlordName",
+  locador_telefone: "companyPhone",
+  locatario: "tenantName",
+  locatario_documento: "tenantDocument",
+  locatario_email: "tenantEmail",
+  locatario_endereco: "tenantAddress",
+  locatario_nome: "tenantName",
+  locatario_telefone: "tenantPhone",
+  multa: "penaltyAmount",
+  nome_empresa: "landlordName",
+  nome_imovel: "propertyName",
+  nome_inquilino: "tenantName",
+  nome_locador: "landlordName",
+  nome_locatario: "tenantName",
+  observacoes: "contractDefaultNotes",
+  pix: "pixKey",
+  telefone_empresa: "companyPhone",
+  telefone_inquilino: "tenantPhone",
+  valor: "amount",
+  valor_aluguel: "amount",
+  valor_contrato: "amount",
+};
+
+const requiredPrintTemplateVariables: Partial<Record<PrintDocumentKey, string[]>> = {
+  temporaryContract: [
+    "{landlordName}",
+    "{tenantName}",
+    "{propertyName}",
+    "{startDate}",
+    "{endDate}",
+    "{amount}",
+  ],
+  standardContract: [
+    "{landlordName}",
+    "{tenantName}",
+    "{tenantDocument}",
+    "{propertyName}",
+    "{propertyAddress}",
+    "{startDate}",
+    "{endDate}",
+    "{amount}",
+  ],
+  assetContract: [
+    "{landlordName}",
+    "{tenantName}",
+    "{propertyName}",
+    "{assetCategory}",
+    "{startDate}",
+    "{endDate}",
+    "{amount}",
+  ],
+};
+
+const knownPrintTemplateVariables = new Set(
+  printTemplateVariableGroups.flatMap((group) => group.variables.map((variable) => variable.value)),
+);
+
+function normalizeTemplateVariableName(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/[{}]/g, "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toLowerCase();
+}
+
+function convertImportedTemplateVariables(content: string) {
+  const replaceVariable = (rawVariable: string) => {
+    const cleanVariable = rawVariable.trim();
+    const normalizedVariable = normalizeTemplateVariableName(cleanVariable);
+    const mappedVariable = printTemplateAliasMap[normalizedVariable];
+
+    if (mappedVariable) {
+      return `{${mappedVariable}}`;
+    }
+
+    const directVariable = `{${cleanVariable.replace(/[{}\s]/g, "")}}`;
+
+    return knownPrintTemplateVariables.has(directVariable) ? directVariable : `{${cleanVariable}}`;
+  };
+
+  return content
+    .replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (_match, variableName: string) =>
+      replaceVariable(variableName),
+    )
+    .replace(/\[\[\s*([^[\]]+?)\s*\]\]/g, (_match, variableName: string) =>
+      replaceVariable(variableName),
+    )
+    .replace(/\{\s*([a-zA-ZÀ-ÿ0-9_ -]+?)\s*\}/g, (_match, variableName: string) =>
+      replaceVariable(variableName),
+    );
+}
+
+function normalizeImportedTemplateText(content: string) {
+  return convertImportedTemplateVariables(content)
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function getRequiredPrintTemplateVariables(documentKey: PrintDocumentKey | null) {
+  return documentKey ? requiredPrintTemplateVariables[documentKey] || [] : [];
+}
+
+function getMissingPrintTemplateVariables(content: string, documentKey: PrintDocumentKey | null) {
+  const variables = getPrintTemplateStats(content).variables;
+  const variableSet = new Set(variables);
+
+  return getRequiredPrintTemplateVariables(documentKey).filter(
+    (variable) => !variableSet.has(variable),
+  );
+}
+
+function getXmlElementsByLocalName(element: Element | Document, localName: string) {
+  return Array.from(element.getElementsByTagName("*")).filter(
+    (childElement) => childElement.localName === localName,
+  );
+}
+
+function getDocxParagraphText(paragraphElement: Element) {
+  const textParts: string[] = [];
+
+  getXmlElementsByLocalName(paragraphElement, "r").forEach((runElement) => {
+    getXmlElementsByLocalName(runElement, "t").forEach((textElement) => {
+      textParts.push(textElement.textContent || "");
+    });
+
+    if (getXmlElementsByLocalName(runElement, "tab").length > 0) {
+      textParts.push("\t");
+    }
+
+    if (getXmlElementsByLocalName(runElement, "br").length > 0) {
+      textParts.push("\n");
+    }
+  });
+
+  return textParts.join("").trim();
+}
+
+function getDocxTableText(tableElement: Element) {
+  return getXmlElementsByLocalName(tableElement, "tr")
+    .map((rowElement) =>
+      getXmlElementsByLocalName(rowElement, "tc")
+        .map((cellElement) =>
+          getXmlElementsByLocalName(cellElement, "p")
+            .map(getDocxParagraphText)
+            .filter(Boolean)
+            .join(" "),
+        )
+        .filter(Boolean)
+        .join(" | "),
+    )
+    .filter(Boolean)
+    .join("\n");
+}
+
+async function extractTextFromDocx(file: File) {
+  const zip = await JSZip.loadAsync(await file.arrayBuffer());
+  const documentXml = await zip.file("word/document.xml")?.async("string");
+
+  if (!documentXml) {
+    throw new Error("Não foi possível localizar o conteúdo principal do DOCX.");
+  }
+
+  const xmlDocument = new DOMParser().parseFromString(documentXml, "application/xml");
+  const parseError = xmlDocument.querySelector("parsererror");
+
+  if (parseError) {
+    throw new Error("Não foi possível ler o conteúdo XML do DOCX.");
+  }
+
+  const bodyElement = getXmlElementsByLocalName(xmlDocument, "body")[0];
+
+  if (!bodyElement) {
+    throw new Error("O arquivo DOCX não possui corpo de documento válido.");
+  }
+
+  const textBlocks = Array.from(bodyElement.children)
+    .map((childElement) => {
+      if (childElement.localName === "p") {
+        return getDocxParagraphText(childElement);
+      }
+
+      if (childElement.localName === "tbl") {
+        return getDocxTableText(childElement);
+      }
+
+      return "";
+    })
+    .filter(Boolean);
+
+  const textContent = textBlocks.join("\n\n").trim();
+
+  if (!textContent) {
+    throw new Error("Não encontrei texto editável no DOCX. Verifique se o arquivo não é apenas imagem ou PDF convertido.");
+  }
+
+  return textContent;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function extractPaymentBookletInstructions(content: string) {
   const cleanContent = String(content || "").trim();
@@ -1412,6 +1678,9 @@ export default function ConfiguracoesPage() {
   const [initialPrintTemplates, setInitialPrintTemplates] = useState<PrintTemplates>(defaultPrintTemplates);
   const [printModalState, setPrintModalState] = useState<PrintModalState>(defaultPrintModalState);
   const [printEditorViewMode, setPrintEditorViewMode] = useState<PrintEditorViewMode>("split");
+  const [printImportMessage, setPrintImportMessage] = useState("");
+  const [printImportError, setPrintImportError] = useState("");
+  const [isImportingPrintTemplate, setIsImportingPrintTemplate] = useState(false);
   const [restorePrintModalState, setRestorePrintModalState] = useState<RestorePrintModalState>(defaultRestorePrintModalState);
   const [passwordSettings, setPasswordSettings] = useState<PasswordSettings>(defaultPasswordSettings);
   const [validationErrors, setValidationErrors] = useState<SettingsValidationErrors>({});
@@ -1467,6 +1736,15 @@ export default function ConfiguracoesPage() {
   const selectedPrintTemplateStats = useMemo(
     () => getPrintTemplateStats(selectedPrintTemplate?.content || ""),
     [selectedPrintTemplate]
+  );
+
+  const selectedPrintTemplateMissingVariables = useMemo(
+    () =>
+      getMissingPrintTemplateVariables(
+        selectedPrintTemplate?.content || "",
+        printModalState.documentKey,
+      ),
+    [selectedPrintTemplate, printModalState.documentKey],
   );
 
   const selectedRestorePrintTemplate = restorePrintModalState.documentKey
@@ -2211,6 +2489,8 @@ export default function ConfiguracoesPage() {
       setPrintEditorViewMode("split");
     }
 
+    setPrintImportError("");
+    setPrintImportMessage("");
     setPrintModalState({
       isOpen: true,
       mode,
@@ -2220,6 +2500,8 @@ export default function ConfiguracoesPage() {
 
   function handleClosePrintModal() {
     setPrintEditorViewMode("split");
+    setPrintImportError("");
+    setPrintImportMessage("");
     setPrintModalState(defaultPrintModalState);
   }
 
@@ -2231,6 +2513,61 @@ export default function ConfiguracoesPage() {
         content,
       },
     }));
+  }
+
+  async function handleImportPrintTemplateFromDocx(documentKey: PrintDocumentKey, file?: File | null) {
+    if (!file) return;
+
+    setPrintImportError("");
+    setPrintImportMessage("");
+
+    if (!file.name.toLowerCase().endsWith(".docx")) {
+      setPrintImportError("Envie um arquivo .docx do Word.");
+      return;
+    }
+
+    if (file.size > 8 * 1024 * 1024) {
+      setPrintImportError("O arquivo deve ter até 8 MB.");
+      return;
+    }
+
+    try {
+      setIsImportingPrintTemplate(true);
+
+      const importedContent = normalizeImportedTemplateText(await extractTextFromDocx(file));
+      const missingVariables = getMissingPrintTemplateVariables(importedContent, documentKey);
+      const importedStats = getPrintTemplateStats(importedContent);
+
+      setPrintTemplates((currentTemplates) => ({
+        ...currentTemplates,
+        [documentKey]: {
+          ...currentTemplates[documentKey],
+          content: importedContent,
+          importedFileName: file.name,
+          importedAt: new Date().toISOString(),
+        },
+      }));
+
+      setPrintModalState({
+        isOpen: true,
+        mode: "edit",
+        documentKey,
+      });
+      setPrintEditorViewMode("split");
+      setPrintImportMessage(
+        missingVariables.length > 0
+          ? `Modelo importado com ${importedStats.variables.length} campo(s). Revise os campos obrigatórios ausentes: ${missingVariables.join(", ")}.`
+          : `Modelo importado com ${importedStats.variables.length} campo(s) reconhecido(s). Revise a prévia e salve as configurações.`,
+      );
+    } catch (error) {
+      setPrintImportError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível importar o modelo DOCX.",
+      );
+    } finally {
+      setIsImportingPrintTemplate(false);
+    }
   }
 
   function handleInsertPrintTemplateVariable(variableValue: string) {
@@ -4025,6 +4362,8 @@ export default function ConfiguracoesPage() {
                     {(Object.keys(printTemplates) as PrintDocumentKey[]).map((documentKey) => {
                       const template = printTemplates[documentKey];
                       const templateStats = getPrintTemplateStats(template.content);
+                      const missingVariables = getMissingPrintTemplateVariables(template.content, documentKey);
+                      const canImportDocx = template.isEditable && documentKey !== "paymentBooklet" && documentKey !== "accountsPayableReport";
 
                       return (
                         <div
@@ -4052,6 +4391,12 @@ export default function ConfiguracoesPage() {
                                 </span>
                               </div>
 
+                              {template.importedFileName && (
+                                <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700">
+                                  Modelo importado: {template.importedFileName}
+                                </div>
+                              )}
+
                             </div>
                           </div>
 
@@ -4071,6 +4416,12 @@ export default function ConfiguracoesPage() {
                               </div>
                             </div>
 
+                            {missingVariables.length > 0 && (
+                              <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-bold leading-5 text-amber-800">
+                                Campos recomendados ausentes: {missingVariables.join(", ")}.
+                              </div>
+                            )}
+
                             <div className="flex items-center justify-end gap-2 overflow-x-auto">
                               <button
                                 type="button"
@@ -4088,6 +4439,23 @@ export default function ConfiguracoesPage() {
                                 Editar modelo
                               </button>
 
+                              {canImportDocx && (
+                                <label className="shrink-0 cursor-pointer whitespace-nowrap rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-md shadow-slate-100 transition hover:bg-slate-800">
+                                  {isImportingPrintTemplate ? "Importando..." : "Importar DOCX"}
+                                  <input
+                                    type="file"
+                                    accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                    className="sr-only"
+                                    disabled={isImportingPrintTemplate}
+                                    onChange={(event) => {
+                                      const file = event.target.files?.[0] || null;
+                                      void handleImportPrintTemplateFromDocx(documentKey, file);
+                                      event.target.value = "";
+                                    }}
+                                  />
+                                </label>
+                              )}
+
                               <button
                                 type="button"
                                 onClick={() => handleOpenRestorePrintModal(documentKey)}
@@ -4101,6 +4469,18 @@ export default function ConfiguracoesPage() {
                       );
                     })}
                   </div>
+
+                  {(printImportMessage || printImportError) && (
+                    <div
+                      className={`rounded-3xl border px-5 py-4 text-sm font-bold leading-6 ${
+                        printImportError
+                          ? "border-red-100 bg-red-50 text-red-700"
+                          : "border-emerald-100 bg-emerald-50 text-emerald-700"
+                      }`}
+                    >
+                      {printImportError || printImportMessage}
+                    </div>
+                  )}
 
                   <div className="rounded-3xl border border-amber-100 bg-amber-50 px-5 py-4">
                     <p className="text-sm font-black text-amber-800">
@@ -4436,6 +4816,20 @@ export default function ConfiguracoesPage() {
                       </div>
                     </div>
 
+                    {(printImportMessage || printImportError || selectedPrintTemplate.importedFileName) && (
+                      <div
+                        className={`border-b px-4 py-3 text-xs font-bold leading-5 ${
+                          printImportError
+                            ? "border-red-100 bg-red-50 text-red-700"
+                            : "border-emerald-100 bg-emerald-50 text-emerald-700"
+                        }`}
+                      >
+                        {printImportError ||
+                          printImportMessage ||
+                          `Modelo importado de ${selectedPrintTemplate.importedFileName}.`}
+                      </div>
+                    )}
+
                     <div className="grid min-h-[70vh] grid-cols-1 gap-0 xl:grid-cols-[minmax(0,1fr)_320px]">
                       <div className="min-w-0 overflow-auto p-3 sm:p-5">
                         <div
@@ -4506,6 +4900,39 @@ export default function ConfiguracoesPage() {
                         </div>
 
                         <div className="space-y-4">
+                          {printModalState.documentKey !== "paymentBooklet" &&
+                            printModalState.documentKey !== "accountsPayableReport" && (
+                              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                                  Importar contrato Word
+                                </p>
+                                <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                                  Envie um .docx com marcadores como {"{{inquilino_nome}}"}, {"{{bem_nome}}"} ou {"{{valor_aluguel}}"}.
+                                </p>
+
+                                <label className="mt-3 flex cursor-pointer items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-xs font-black text-white transition hover:bg-slate-800">
+                                  {isImportingPrintTemplate ? "Importando..." : "Selecionar DOCX"}
+                                  <input
+                                    type="file"
+                                    accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                    className="sr-only"
+                                    disabled={isImportingPrintTemplate}
+                                    onChange={(event) => {
+                                      const file = event.target.files?.[0] || null;
+                                      void handleImportPrintTemplateFromDocx(printModalState.documentKey!, file);
+                                      event.target.value = "";
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                            )}
+
+                          {selectedPrintTemplateMissingVariables.length > 0 && (
+                            <div className="rounded-3xl border border-amber-100 bg-amber-50 p-4 text-xs font-bold leading-5 text-amber-800">
+                              Campos recomendados ausentes: {selectedPrintTemplateMissingVariables.join(", ")}.
+                            </div>
+                          )}
+
                           {printTemplateVariableGroups.map((group) => (
                             <div key={group.title}>
                               <p className="mb-2 text-[11px] font-black uppercase tracking-wide text-slate-400">
