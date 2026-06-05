@@ -19,6 +19,23 @@ export type ChangePasswordRequest = {
   newPassword: string;
 };
 
+export type PasswordResetRequest = {
+  email: string;
+};
+
+export type PasswordResetResponse = {
+  success: boolean;
+  message: string;
+  expiresAt?: string;
+  resetToken?: string;
+  resetUrl?: string;
+};
+
+export type ResetPasswordRequest = {
+  token: string;
+  newPassword: string;
+};
+
 export type AuthUser = {
   id: string;
   companyId: string;
@@ -80,6 +97,26 @@ export async function changePasswordRequest(
 ): Promise<{ success: boolean }> {
   return apiFetch<{ success: boolean }>('/autenticacao/me/senha', {
     method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function requestPasswordResetRequest(
+  data: PasswordResetRequest,
+): Promise<PasswordResetResponse> {
+  return apiFetch<PasswordResetResponse>('/autenticacao/recuperar-senha', {
+    method: 'POST',
+    auth: false,
+    body: JSON.stringify(data),
+  });
+}
+
+export async function resetPasswordRequest(
+  data: ResetPasswordRequest,
+): Promise<{ success: boolean }> {
+  return apiFetch<{ success: boolean }>('/autenticacao/redefinir-senha', {
+    method: 'POST',
+    auth: false,
     body: JSON.stringify(data),
   });
 }

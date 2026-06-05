@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
 import AppFrame from '@/components/layout/app-frame';
@@ -37,6 +37,12 @@ export const metadata: Metadata = {
     icon: '/icon.png',
     apple: '/icon.png',
   },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#ffffff',
 };
 
 export default function RootLayout({

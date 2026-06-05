@@ -630,6 +630,7 @@ export class AdminService {
       if (selectedModules.has('masterPanel')) {
         const deletedMasterPanelUsers = await tx.user.deleteMany({
           where: {
+            companyId,
             id: { not: currentUserId },
             email: { not: 'adm@contrx.com' },
           },

@@ -50,7 +50,7 @@ function createService() {
 }
 
 describe('AdminService', () => {
-  it('apaga usuarios do painel master preservando o usuario atual e o dono do sistema', async () => {
+  it('apaga usuarios do painel master somente da empresa atual', async () => {
     const { service, tx } = createService();
 
     const result = await service.resetTestData('company-1', 'current-user', [
@@ -59,6 +59,7 @@ describe('AdminService', () => {
 
     expect(tx.user.deleteMany).toHaveBeenCalledWith({
       where: {
+        companyId: 'company-1',
         id: { not: 'current-user' },
         email: { not: 'adm@contrx.com' },
       },

@@ -25,10 +25,36 @@ echo Projeto: %CD%
 echo VPS: %VPS_USER%@%VPS_HOST%:%VPS_PATH%
 echo.
 
-echo === Build local ===
+echo === Validacoes frontend ===
+call npm run lint
+if errorlevel 1 (
+  echo Lint do frontend falhou. Deploy cancelado.
+  exit /b 1
+)
+
 call npm run build
 if errorlevel 1 (
-  echo Build local falhou. Deploy cancelado.
+  echo Build do frontend falhou. Deploy cancelado.
+  exit /b 1
+)
+
+echo.
+echo === Validacoes backend ===
+call npm --prefix contrx-backend run lint
+if errorlevel 1 (
+  echo Lint do backend falhou. Deploy cancelado.
+  exit /b 1
+)
+
+call npm --prefix contrx-backend run test
+if errorlevel 1 (
+  echo Testes do backend falharam. Deploy cancelado.
+  exit /b 1
+)
+
+call npm --prefix contrx-backend run build
+if errorlevel 1 (
+  echo Build do backend falhou. Deploy cancelado.
   exit /b 1
 )
 

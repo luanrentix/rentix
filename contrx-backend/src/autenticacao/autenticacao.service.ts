@@ -10,7 +10,8 @@ import {
 import { JwtService } from '@nestjs/jwt';
 
 import * as bcrypt from 'bcrypt';
-import { randomUUID } from 'crypto';
+import { createHash, randomBytes, randomUUID } from 'crypto';
+import nodemailer from 'nodemailer';
 import type { Company, User } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -21,6 +22,8 @@ import { RegisterDto } from './dto/registro.dto';
 import { LoginDto } from './dto/login.dto';
 import { CriarContaDto } from './dto/criar-conta.dto';
 import { AlterarSenhaDto } from './dto/alterar-senha.dto';
+import { RecuperarSenhaDto } from './dto/recuperar-senha.dto';
+import { RedefinirSenhaDto } from './dto/redefinir-senha.dto';
 import {
   AtualizarUsuarioEmpresaDto,
   CriarUsuarioEmpresaDto,
@@ -58,6 +61,30 @@ function addDays(date: Date, days: number) {
   nextDate.setDate(nextDate.getDate() + days);
 
   return nextDate;
+}
+
+function addMinutes(date: Date, minutes: number) {
+  const nextDate = new Date(date);
+  nextDate.setMinutes(nextDate.getMinutes() + minutes);
+
+  return nextDate;
+}
+
+function hashPasswordResetToken(token: string) {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+function shouldExposePasswordResetToken() {
+  return (
+    process.env.NODE_ENV !== 'production' ||
+    process.env.CONTRX_EXPOSE_PASSWORD_RESET_TOKEN === 'true'
+  );
+}
+
+function isSmtpConfigured() {
+  return Boolean(
+    process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS,
+  );
 }
 
 type AuthenticatedUserWithCompany = User & {
@@ -414,6 +441,167 @@ export class AutenticacaoService {
     return {
       accessToken: token,
       user: buildAuthenticatedUserPayload(authenticatedUser),
+    };
+  }
+
+  async requestPasswordReset(data: RecuperarSenhaDto) {
+    const email = normalizeEmail(data.email || '');
+    const canExposeToken = shouldExposePasswordResetToken();
+    const genericResponse = {
+      success: true,
+      message:
+        'Se este e-mail estiver cadastrado, as instrucoes de recuperacao serao enviadas.',
+    };
+
+    if (!email) {
+      return genericResponse;
+    }
+
+    if (!canExposeToken && !isSmtpConfigured()) {
+      throw new ServiceUnavailableException(
+        'Recuperacao de senha por e-mail nao configurada. Configure SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS e SMTP_FROM.',
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: {
+        email,
+      },
+      select: {
+        id: true,
+        isActive: true,
+      },
+    });
+
+    if (!user || !user.isActive) {
+      return genericResponse;
+    }
+
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = addMinutes(new Date(), 30);
+
+    await this.prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        passwordResetTokenHash: hashPasswordResetToken(token),
+        passwordResetExpiresAt: expiresAt,
+      },
+    });
+
+    const frontendUrl =
+      process.env.CONTRX_FRONTEND_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      'http://localhost:3000';
+    const resetUrl = `${frontendUrl.replace(/\/$/, '')}/login?resetToken=${token}&email=${encodeURIComponent(email)}`;
+
+    if (!canExposeToken) {
+      await this.sendPasswordResetEmail(email, resetUrl);
+    }
+
+    return {
+      ...genericResponse,
+      expiresAt,
+      ...(canExposeToken
+        ? {
+            resetToken: token,
+            resetUrl,
+          }
+        : {}),
+    };
+  }
+
+  private async sendPasswordResetEmail(email: string, resetUrl: string) {
+    const smtpPort = process.env.SMTP_PORT
+      ? Number(process.env.SMTP_PORT)
+      : 587;
+    const smtpFrom =
+      process.env.SMTP_FROM ||
+      process.env.SMTP_USER ||
+      'Contrx <no-reply@contrx.com.br>';
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+
+    await transporter.sendMail({
+      from: smtpFrom,
+      to: email,
+      subject: 'Recuperacao de senha - Contrx',
+      text: [
+        'Recebemos uma solicitacao para redefinir sua senha no Contrx.',
+        '',
+        `Acesse o link abaixo para criar uma nova senha. O link expira em 30 minutos:`,
+        resetUrl,
+        '',
+        'Se voce nao solicitou esta recuperacao, ignore este e-mail.',
+      ].join('\n'),
+      html: `
+        <div style="font-family: Arial, sans-serif; color: #0f172a; line-height: 1.6;">
+          <h2 style="margin: 0 0 12px;">Recuperacao de senha - Contrx</h2>
+          <p>Recebemos uma solicitacao para redefinir sua senha no Contrx.</p>
+          <p>Use o botao abaixo para criar uma nova senha. O link expira em 30 minutos.</p>
+          <p>
+            <a href="${resetUrl}" style="display:inline-block;background:#ff4b00;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:12px;font-weight:700;">
+              Redefinir senha
+            </a>
+          </p>
+          <p style="font-size:13px;color:#64748b;">Se voce nao solicitou esta recuperacao, ignore este e-mail.</p>
+        </div>
+      `,
+    });
+  }
+
+  async resetPassword(data: RedefinirSenhaDto) {
+    const token = data.token?.trim();
+    const newPassword = data.newPassword;
+
+    if (!token || !newPassword) {
+      throw new BadRequestException('Informe o codigo e a nova senha.');
+    }
+
+    const tokenHash = hashPasswordResetToken(token);
+    const user = await this.prisma.user.findFirst({
+      where: {
+        passwordResetTokenHash: tokenHash,
+        passwordResetExpiresAt: {
+          gt: new Date(),
+        },
+        isActive: true,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!user) {
+      throw new BadRequestException(
+        'Codigo de recuperacao invalido ou expirado.',
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        passwordHash,
+        passwordResetTokenHash: null,
+        passwordResetExpiresAt: null,
+        activeSessionId: null,
+      },
+    });
+
+    return {
+      success: true,
     };
   }
 

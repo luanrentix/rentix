@@ -523,17 +523,17 @@ export default function AgendaPage() {
     : "text-[#0f172a]";
   const inputClass =
     themeMode === "graphite"
-      ? "h-12 w-full rounded-xl border border-[#24405f] bg-[#07111f] px-4 text-sm font-bold text-[#f8fafc] outline-none transition placeholder:text-[#7f92ad] focus:border-[#ff8a3d] focus:ring-4 focus:ring-[#24405f]/45"
+      ? "h-11 w-full rounded-xl border border-[#24405f] bg-[#07111f] px-3.5 text-sm font-bold text-[#f8fafc] outline-none transition placeholder:text-[#7f92ad] focus:border-[#ff8a3d] focus:ring-4 focus:ring-[#24405f]/45"
       : isBlackTheme
-        ? "h-12 w-full rounded-xl border border-[#334155] bg-[#020617] px-4 text-sm font-bold text-[#f8fafc] outline-none transition placeholder:text-[#64748b] focus:border-[#64748b] focus:ring-4 focus:ring-[#334155]/40"
-        : "h-12 w-full rounded-xl border border-[#cbd5e1] bg-[#ffffff] px-4 text-sm font-bold text-[#0f172a] outline-none transition placeholder:text-[#94a3b8] focus:border-[#0f172a] focus:ring-4 focus:ring-[#e2e8f0]";
-  const textareaClass = inputClass.replace("h-12", "min-h-28 py-3");
+        ? "h-11 w-full rounded-xl border border-[#334155] bg-[#020617] px-3.5 text-sm font-bold text-[#f8fafc] outline-none transition placeholder:text-[#64748b] focus:border-[#64748b] focus:ring-4 focus:ring-[#334155]/40"
+        : "h-11 w-full rounded-xl border border-[#cbd5e1] bg-[#ffffff] px-3.5 text-sm font-bold text-[#0f172a] outline-none transition placeholder:text-[#94a3b8] focus:border-[#0f172a] focus:ring-4 focus:ring-[#e2e8f0]";
+  const textareaClass = inputClass.replace("h-11", "min-h-24 py-2.5");
   const secondaryButtonClass =
     themeMode === "graphite"
-      ? "rounded-xl bg-[#162a44] px-4 py-3 text-sm font-bold text-[#b6c6dc] transition hover:bg-[#24405f] hover:text-[#ffffff]"
+      ? "rounded-xl bg-[#162a44] px-3.5 py-2.5 text-sm font-bold text-[#b6c6dc] transition hover:bg-[#24405f] hover:text-[#ffffff]"
       : isBlackTheme
-        ? "rounded-xl bg-[#1e293b] px-4 py-3 text-sm font-bold text-[#cbd5e1] transition hover:bg-[#334155] hover:text-[#ffffff]"
-        : "rounded-xl bg-[#f1f5f9] px-4 py-3 text-sm font-bold text-[#475569] transition hover:bg-[#e2e8f0] hover:text-[#0f172a]";
+        ? "rounded-xl bg-[#1e293b] px-3.5 py-2.5 text-sm font-bold text-[#cbd5e1] transition hover:bg-[#334155] hover:text-[#ffffff]"
+        : "rounded-xl bg-[#f1f5f9] px-3.5 py-2.5 text-sm font-bold text-[#475569] transition hover:bg-[#e2e8f0] hover:text-[#0f172a]";
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -1218,7 +1218,7 @@ export default function AgendaPage() {
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
           <div>
             <p className="text-sm font-semibold text-orange-600">Operacional</p>
-            <h1 className={`mt-1 text-2xl font-black sm:text-3xl ${strongTextClass}`}>
+            <h1 className={`mt-1 text-2xl font-black ${strongTextClass}`}>
               AGENDA
             </h1>
             <p className={`mt-2 max-w-3xl text-sm leading-6 ${mutedTextClass}`}>
@@ -1888,14 +1888,14 @@ export default function AgendaPage() {
           className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm ${pageThemeClass}`}
         >
           <div
-            className={`flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl shadow-2xl ring-1 ${
+            className={`flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl shadow-2xl ring-1 ${
               isBlackTheme
                 ? "bg-[#0f172a] ring-[#334155]"
                 : "bg-[#ffffff] ring-[#dbe4ef]"
             }`}
           >
             <div
-              className={`border-b p-6 ${
+              className={`border-b p-5 ${
                 isBlackTheme
                   ? "border-[#334155] bg-[#111827]"
                   : "border-[#e2e8f0] bg-[#ffffff]"
@@ -1928,7 +1928,7 @@ export default function AgendaPage() {
               </div>
             </div>
 
-            <div className="flex-1 space-y-5 overflow-y-auto p-6">
+            <div className="flex-1 space-y-4 overflow-y-auto p-5">
               {formError && (
                 <div
                   className={`rounded-2xl border px-4 py-3 text-sm font-bold ${
@@ -2171,13 +2171,13 @@ export default function AgendaPage() {
           className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${pageThemeClass}`}
         >
           <div
-            className={`w-full max-w-md rounded-3xl p-6 text-center shadow-2xl ring-1 ${
+            className={`w-full max-w-md rounded-2xl p-5 text-center shadow-2xl ring-1 ${
               isBlackTheme
                 ? "bg-[#0f172a] text-[#f8fafc] ring-[#334155]"
                 : "bg-[#ffffff] text-[#0f172a] ring-[#e2e8f0]"
             }`}
           >
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600">
               <AlertTriangle className="h-7 w-7" />
             </div>
             <h2 className={`mt-4 text-2xl font-black ${strongTextClass}`}>
@@ -2358,14 +2358,14 @@ function EmptyDayState({
 }) {
   return (
     <div
-      className={`rounded-2xl border border-dashed p-10 text-center ${
+      className={`rounded-2xl border border-dashed p-8 text-center ${
         isBlackTheme
           ? "border-orange-900/60 bg-orange-950/20"
           : "border-orange-200 bg-orange-50/60"
       }`}
     >
       <div
-        className={`mx-auto flex h-14 w-14 items-center justify-center rounded-2xl ${
+        className={`mx-auto flex h-12 w-12 items-center justify-center rounded-2xl ${
           isBlackTheme
             ? "bg-[#020617] text-orange-300"
             : "bg-[#ffffff] text-orange-600 shadow-sm"

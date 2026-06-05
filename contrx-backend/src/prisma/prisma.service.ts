@@ -25,6 +25,10 @@ function removeSslMode(databaseUrl: string): string {
   }
 }
 
+function shouldRejectUnauthorizedTls() {
+  return process.env.CONTRX_DB_SSL_REJECT_UNAUTHORIZED !== 'false';
+}
+
 @Injectable()
 export class PrismaService
   extends PrismaClient
@@ -42,7 +46,9 @@ export class PrismaService
       connectionString: isSupabaseConnection
         ? removeSslMode(databaseUrl)
         : databaseUrl,
-      ssl: isSupabaseConnection ? { rejectUnauthorized: false } : undefined,
+      ssl: isSupabaseConnection
+        ? { rejectUnauthorized: shouldRejectUnauthorizedTls() }
+        : undefined,
     });
     const adapter = new PrismaPg(pool, {
       disposeExternalPool: true,

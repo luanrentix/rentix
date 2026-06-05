@@ -2,7 +2,7 @@
 
 Servidor alvo:
 
-- IP publico: `163.176.209.66`
+- IP publico: `163.176.163.165`
 - Usuario SSH: `ubuntu`
 - Sistema: Ubuntu 24.04 ARM64
 - Banco: Supabase mantido fora da VPS
@@ -12,9 +12,9 @@ Servidor alvo:
 No provedor DNS do dominio, aponte:
 
 ```txt
-A  @    163.176.209.66
-A  www  163.176.209.66
-A  api  163.176.209.66
+A  @    163.176.163.165
+A  www  163.176.163.165
+A  api  163.176.163.165
 ```
 
 Aguarde a propagacao antes de emitir os certificados.
@@ -75,7 +75,7 @@ DATABASE_URL="SUA_DATABASE_URL_DO_SUPABASE"
 DIRECT_URL="SUA_DIRECT_URL_DO_SUPABASE"
 JWT_SECRET="UMA_CHAVE_GRANDE_E_FORTE"
 JWT_EXPIRES_IN="1d"
-CORS_ORIGINS="https://www.contrx.com.br,https://contrx.com.br"
+CORS_ORIGINS="https://www.contrx.com.br,https://contrx.com.br,https://app.contrx.com.br"
 CONTRX_CLEAN_PRODUCTION_KEEP_PROTECTED_USERS="true"
 ```
 

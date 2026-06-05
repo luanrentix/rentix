@@ -1059,7 +1059,7 @@ export default function AppShell({ children }: AppShellProps) {
                   alt="Contrx"
                   width={2250}
                   height={880}
-                  className={`object-contain transition-all duration-300 ease-in-out ${isSidebarOpen ? "h-20 w-56 lg:h-24 lg:w-60" : "h-12 w-14 lg:h-12 lg:w-14"}`}
+                  className={`object-contain transition-all duration-300 ease-in-out ${isSidebarOpen ? "h-[4.5rem] w-52 lg:h-20 lg:w-56" : "h-11 w-14 lg:h-11 lg:w-14"}`}
                 />
               </Link>
               <button
@@ -1146,7 +1146,7 @@ export default function AppShell({ children }: AppShellProps) {
             isSidebarOpen ? "lg:ml-72" : "lg:ml-20"
           }`}
         >
-          <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-3 py-3 backdrop-blur sm:px-4 lg:h-24 lg:px-8 lg:py-0">
+          <header className="sticky top-0 z-20 flex min-h-14 items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-3 py-2.5 backdrop-blur sm:px-4 lg:h-20 lg:px-6 lg:py-0">
             <div className="flex min-w-0 items-center gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-orange-600 lg:text-sm">
@@ -1243,7 +1243,7 @@ export default function AppShell({ children }: AppShellProps) {
             </div>
           </header>
 
-          <main className="contrx-app-main min-w-0 flex-1 overflow-x-hidden px-3 pb-32 pt-4 sm:px-5 lg:px-8 lg:py-8">
+          <main className="contrx-app-main min-w-0 flex-1 overflow-x-hidden px-3 pb-28 pt-4 sm:px-5 lg:px-6 lg:py-6">
             {isCommercialAccessBlocked ? (
               <CommercialAccessBlockedPanel
                 status={user?.subscriptionStatus}

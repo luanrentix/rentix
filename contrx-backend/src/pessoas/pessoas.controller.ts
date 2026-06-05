@@ -10,15 +10,18 @@ import {
 } from '@nestjs/common';
 
 import { PessoasService } from './pessoas.service';
+import { RequireToolPermission } from '../autenticacao/decorators/tool-permission.decorator';
 import { CurrentUser } from '../autenticacao/decorators/usuario-atual.decorator';
 import { JwtGuardAutenticacao } from '../autenticacao/guards/jwt-autenticacao.guard';
+import { ToolPermissionGuard } from '../autenticacao/guards/tool-permission.guard';
 import type { UsuarioAutenticado } from '../autenticacao/types/usuario-autenticado.type';
 
 import { CriarPessoaDto } from './dto/criar-pessoa.dto';
 import { AtualizarPessoaDto } from './dto/atualizar-pessoa.dto';
 
 @Controller('pessoas')
-@UseGuards(JwtGuardAutenticacao)
+@RequireToolPermission('people')
+@UseGuards(JwtGuardAutenticacao, ToolPermissionGuard)
 export class PessoasController {
   constructor(private readonly peopleService: PessoasService) {}
 

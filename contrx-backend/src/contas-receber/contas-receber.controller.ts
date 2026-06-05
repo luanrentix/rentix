@@ -15,12 +15,15 @@ import {
   ReceberPagamentoDto,
 } from './dto/criar-conta-receber.dto';
 import { AtualizarContaReceberDto } from './dto/atualizar-conta-receber.dto';
+import { RequireToolPermission } from '../autenticacao/decorators/tool-permission.decorator';
 import { CurrentUser } from '../autenticacao/decorators/usuario-atual.decorator';
 import { JwtGuardAutenticacao } from '../autenticacao/guards/jwt-autenticacao.guard';
+import { ToolPermissionGuard } from '../autenticacao/guards/tool-permission.guard';
 import type { UsuarioAutenticado } from '../autenticacao/types/usuario-autenticado.type';
 
 @Controller('contas-receber')
-@UseGuards(JwtGuardAutenticacao)
+@RequireToolPermission('accountsReceivable')
+@UseGuards(JwtGuardAutenticacao, ToolPermissionGuard)
 export class ContasReceberController {
   constructor(private readonly contasReceberService: ContasReceberService) {}
 

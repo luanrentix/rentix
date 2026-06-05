@@ -11,12 +11,15 @@ import {
 import { CriarImovelDto } from './dto/criar-imovel.dto';
 import { AtualizarImovelDto } from './dto/atualizar-imovel.dto';
 import { ImoveisService } from './imoveis.service';
+import { RequireToolPermission } from '../autenticacao/decorators/tool-permission.decorator';
 import { CurrentUser } from '../autenticacao/decorators/usuario-atual.decorator';
 import { JwtGuardAutenticacao } from '../autenticacao/guards/jwt-autenticacao.guard';
+import { ToolPermissionGuard } from '../autenticacao/guards/tool-permission.guard';
 import type { UsuarioAutenticado } from '../autenticacao/types/usuario-autenticado.type';
 
 @Controller('imoveis')
-@UseGuards(JwtGuardAutenticacao)
+@RequireToolPermission('properties')
+@UseGuards(JwtGuardAutenticacao, ToolPermissionGuard)
 export class ImoveisController {
   constructor(private readonly propertiesService: ImoveisService) {}
 

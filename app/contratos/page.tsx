@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertTriangle,
   Ban,
   ChevronDown,
   CheckCircle,
@@ -496,9 +497,9 @@ type ContractStatus =
   | "Finished"
   | "Deleted";
 
-type ContractDisplayStatus = ContractStatus | "Expiring";
+type ContractDisplayStatus = ContractStatus | "Expiring" | "Expired";
 
-type ContractFilterStatus = "All" | ContractStatus | "Expiring";
+type ContractFilterStatus = "All" | ContractStatus | "Expiring" | "Expired";
 
 type ContractDetailsTab = "Data" | "Financial" | "History" | "Prints" | "Notes";
 
@@ -846,6 +847,10 @@ export default function ContractsPage() {
 
   const expiringContracts = contracts.filter(
     (contract) => getDisplayContractStatus(contract) === "Expiring"
+  ).length;
+
+  const expiredContracts = contracts.filter(
+    (contract) => getDisplayContractStatus(contract) === "Expired"
   ).length;
 
   const monthlyRevenue = contracts
@@ -1672,7 +1677,7 @@ export default function ContractsPage() {
   }
 
   function canRenewContract(displayStatus: ContractDisplayStatus) {
-    return ["Active", "Expiring", "Inactive"].includes(displayStatus);
+    return ["Active", "Expiring", "Expired", "Inactive"].includes(displayStatus);
   }
 
   function canFinishContract(displayStatus: ContractDisplayStatus) {
@@ -2391,9 +2396,10 @@ export default function ContractsPage() {
           </button>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <SummaryCard icon={<FileText className="h-5 w-5" />} title="Contratos ativos" value={activeContracts} detail="Inclui vencendo" />
           <SummaryCard icon={<Clock className="h-5 w-5" />} title="Vencendo" value={expiringContracts} detail={`Até ${EXPIRING_CONTRACT_DAYS_LIMIT} dias`} />
+          <SummaryCard icon={<AlertTriangle className="h-5 w-5" />} title="Vencidos" value={expiredContracts} detail="Aguardam operação" />
           <SummaryCard icon={<DollarSign className="h-5 w-5" />} title="Receita mensal" value={formatCurrency(monthlyRevenue)} detail="Contratos ativos" />
         </div>
 
@@ -2427,6 +2433,7 @@ export default function ContractsPage() {
                 >
                   <option value="Active">Ativos</option>
                   <option value="Expiring">Vencendo</option>
+                  <option value="Expired">Vencidos</option>
                   <option value="Inactive">Inativos</option>
                   <option value="Canceled">Cancelados</option>
                   <option value="Finished">Finalizados</option>
@@ -2455,6 +2462,10 @@ export default function ContractsPage() {
               <tbody className="divide-y divide-slate-100">
                 {filteredContracts.map((contract) => {
                   const displayStatus = getDisplayContractStatus(contract);
+                  const receivableSummary = getContractReceivableSummary(contract);
+                  const hasLinkedReceivables = receivableSummary.charges.length > 0;
+                  const shouldShowExpiredReceivableAlert =
+                    displayStatus === "Expired" && hasLinkedReceivables;
 
                   return (
                     <tr
@@ -2462,7 +2473,9 @@ export default function ContractsPage() {
                       className={`transition hover:bg-slate-50 ${
                         displayStatus === "Deleted"
                           ? "bg-slate-50 opacity-70"
-                          : displayStatus === "Expiring"
+                          : displayStatus === "Expired"
+                            ? "bg-red-50/70"
+                            : displayStatus === "Expiring"
                             ? "bg-amber-50"
                             : ""
                       }`}
@@ -2485,6 +2498,11 @@ export default function ContractsPage() {
                           {displayStatus === "Expiring" && (
                             <span className="text-xs font-black text-amber-700">
                               Vence em {getDaysUntilDate(contract.endDate)} dia(s)
+                            </span>
+                          )}
+                          {displayStatus === "Expired" && (
+                            <span className="text-xs font-black text-red-700">
+                              Vencido há {Math.abs(getDaysUntilDate(contract.endDate))} dia(s)
                             </span>
                           )}
                         </div>
@@ -2515,6 +2533,18 @@ export default function ContractsPage() {
                                 Motivo: {contract.statusReason}
                               </span>
                             )}
+                          {shouldShowExpiredReceivableAlert && (
+                            <span className="inline-flex max-w-[260px] items-start gap-1.5 rounded-xl bg-red-50 px-2.5 py-2 text-xs font-bold leading-5 text-red-700 ring-1 ring-red-100">
+                              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                              <span>
+                                Vencido com {receivableSummary.charges.length} conta(s) a receber vinculada(s)
+                                {receivableSummary.pendingCharges.length > 0
+                                  ? `, ${receivableSummary.pendingCharges.length} em aberto`
+                                  : ""}
+                                .
+                              </span>
+                            </span>
+                          )}
                         </div>
                       </td>
 
@@ -2606,6 +2636,8 @@ export default function ContractsPage() {
           const detailsProperty = properties.find((property) => String(property.id) === String(selectedContractDetails.propertyId));
           const detailsTenant = tenants.find((tenant) => String(tenant.id) === String(selectedContractDetails.tenantId));
           const receivableSummary = getContractReceivableSummary(selectedContractDetails);
+          const shouldShowExpiredReceivableAlert =
+            detailsDisplayStatus === "Expired" && receivableSummary.charges.length > 0;
           const detailsTabs: { id: ContractDetailsTab; label: string; icon: React.ReactNode }[] = [
             { id: "Data", label: "Dados", icon: <MapPin className="h-4 w-4" /> },
             { id: "Financial", label: "Financeiro", icon: <DollarSign className="h-4 w-4" /> },
@@ -2672,6 +2704,24 @@ export default function ContractsPage() {
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-y-auto bg-white p-6">
+                  {shouldShowExpiredReceivableAlert && (
+                    <div className="mb-5 rounded-3xl border border-red-100 bg-red-50 px-5 py-4 text-red-800">
+                      <div className="flex gap-3">
+                        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+                        <div>
+                          <p className="text-sm font-black uppercase tracking-wide">
+                            Contrato vencido com contas a receber vinculadas
+                          </p>
+                          <p className="mt-1 text-sm font-semibold leading-6">
+                            Existem {receivableSummary.charges.length} cobrança(s) ligada(s) a este contrato,
+                            sendo {receivableSummary.pendingCharges.length} em aberto. Revise o financeiro antes de
+                            finalizar, renovar, cancelar ou excluir.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {contractDetailsActiveTab === "Data" && (
                     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                       <DetailCard title="Bem/Ativo" value={selectedContractDetails.propertyName || "Não informado"} detail={formatFullAddressForPrint({
@@ -2695,7 +2745,17 @@ export default function ContractsPage() {
                             : "Modelo residencial padrão"
                         }
                       />
-                      <DetailCard title="Status atual" value={getContractStatusLabel(detailsDisplayStatus)} detail={detailsDisplayStatus === "Expiring" ? `Vence em ${getDaysUntilDate(selectedContractDetails.endDate)} dia(s)` : "Controle operacional do contrato"} />
+                      <DetailCard
+                        title="Status atual"
+                        value={getContractStatusLabel(detailsDisplayStatus)}
+                        detail={
+                          detailsDisplayStatus === "Expiring"
+                            ? `Vence em ${getDaysUntilDate(selectedContractDetails.endDate)} dia(s)`
+                            : detailsDisplayStatus === "Expired"
+                              ? `Vencido há ${Math.abs(getDaysUntilDate(selectedContractDetails.endDate))} dia(s). Aguardando operação manual.`
+                              : "Controle operacional do contrato"
+                        }
+                      />
                     </div>
                   )}
 
@@ -3708,6 +3768,7 @@ function getContractStatusLabel(status: ContractDisplayStatus) {
   const statusConfig = {
     Active: "Ativo",
     Expiring: "Vencendo",
+    Expired: "Vencido",
     Inactive: "Inativo",
     Canceled: "Cancelado",
     Finished: "Finalizado",
@@ -3721,6 +3782,7 @@ function StatusBadge({ status }: { status: ContractDisplayStatus }) {
   const statusConfig = {
     Active: { label: "Ativo", className: "bg-emerald-100 text-emerald-700" },
     Expiring: { label: "Vencendo", className: "bg-amber-100 text-amber-700" },
+    Expired: { label: "Vencido", className: "bg-red-100 text-red-700" },
     Inactive: { label: "Inativo", className: "bg-slate-100 text-slate-600" },
     Canceled: { label: "Cancelado", className: "bg-red-100 text-red-700" },
     Finished: { label: "Finalizado", className: "bg-blue-100 text-blue-700" },
@@ -4020,13 +4082,13 @@ function getDisplayContractStatus(contract: Contract): ContractDisplayStatus {
   return automaticStatus;
 }
 
-function getAutomaticContractStatus(endDate: string): ContractStatus {
+function getAutomaticContractStatus(endDate: string): "Active" | "Inactive" | "Expired" {
   if (!endDate) return "Inactive";
 
   const today = new Date();
   const contractEndDate = new Date(`${endDate}T23:59:59`);
 
-  return contractEndDate >= today ? "Active" : "Inactive";
+  return contractEndDate >= today ? "Active" : "Expired";
 }
 
 function isContractExpiring(endDate: string) {

@@ -7,6 +7,8 @@ import { AutenticacaoController } from './autenticacao.controller';
 import { AutenticacaoService } from './autenticacao.service';
 import { CompanyAdminGuard } from './guards/company-admin.guard';
 import { JwtStrategy } from './strategies/estrategia-jwt';
+import { RateLimitGuard } from './guards/rate-limit.guard';
+import { ToolPermissionGuard } from './guards/tool-permission.guard';
 
 @Module({
   imports: [
@@ -37,7 +39,13 @@ import { JwtStrategy } from './strategies/estrategia-jwt';
     }),
   ],
   controllers: [AutenticacaoController],
-  providers: [AutenticacaoService, JwtStrategy, CompanyAdminGuard],
+  providers: [
+    AutenticacaoService,
+    JwtStrategy,
+    CompanyAdminGuard,
+    RateLimitGuard,
+    ToolPermissionGuard,
+  ],
   exports: [AutenticacaoService, JwtModule, PassportModule],
 })
 export class AutenticacaoModule {}

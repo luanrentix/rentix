@@ -16,6 +16,10 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import {
+  requestPasswordResetRequest,
+  resetPasswordRequest,
+} from "@/services/auth";
 
 function getAuthErrorPresentation(
   error: unknown,
@@ -96,6 +100,18 @@ export default function LoginPage() {
     "E-mail ou senha inválidos.",
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPasswordRecoveryOpen, setIsPasswordRecoveryOpen] = useState(false);
+  const [passwordRecoveryStep, setPasswordRecoveryStep] = useState<
+    "request" | "reset" | "sent" | "success"
+  >("request");
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [recoveryToken, setRecoveryToken] = useState("");
+  const [recoveryPassword, setRecoveryPassword] = useState("");
+  const [recoveryPasswordConfirmation, setRecoveryPasswordConfirmation] =
+    useState("");
+  const [recoveryMessage, setRecoveryMessage] = useState("");
+  const [recoveryError, setRecoveryError] = useState("");
+  const [isRecoveringPassword, setIsRecoveringPassword] = useState(false);
 
   useEffect(() => {
     const legacyStoragePrefix = ["ren", "tix"].join("");
@@ -113,6 +129,17 @@ export default function LoginPage() {
     if (authNotice) {
       localStorage.removeItem("contrx_auth_notice");
       showAuthError("Sessão encerrada", authNotice, "Acesse novamente para continuar.");
+    }
+    const searchParams = new URLSearchParams(window.location.search);
+    const resetToken = searchParams.get("resetToken");
+    const resetEmail = searchParams.get("email");
+
+    if (resetToken) {
+      setRecoveryToken(resetToken);
+      setRecoveryEmail(resetEmail || savedEmail || "");
+      setPasswordRecoveryStep("reset");
+      setIsPasswordRecoveryOpen(true);
+      window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
 
@@ -155,6 +182,102 @@ export default function LoginPage() {
       );
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  function openPasswordRecovery() {
+    setRecoveryEmail(email.trim());
+    setRecoveryToken("");
+    setRecoveryPassword("");
+    setRecoveryPasswordConfirmation("");
+    setRecoveryMessage("");
+    setRecoveryError("");
+    setPasswordRecoveryStep("request");
+    setIsPasswordRecoveryOpen(true);
+  }
+
+  function closePasswordRecovery() {
+    if (isRecoveringPassword) return;
+
+    setIsPasswordRecoveryOpen(false);
+  }
+
+  async function handleRequestPasswordReset() {
+    if (!recoveryEmail.trim()) {
+      setRecoveryError("Informe o e-mail cadastrado para continuar.");
+      return;
+    }
+
+    try {
+      setIsRecoveringPassword(true);
+      setRecoveryError("");
+      setRecoveryMessage("");
+
+      const response = await requestPasswordResetRequest({
+        email: recoveryEmail.trim(),
+      });
+
+      setRecoveryMessage(response.message);
+
+      if (response.resetToken) {
+        setRecoveryToken(response.resetToken);
+        setPasswordRecoveryStep("reset");
+        return;
+      }
+
+      setPasswordRecoveryStep("sent");
+    } catch (error) {
+      const presentation = getAuthErrorPresentation(
+        error,
+        "Recuperação de senha",
+        "Não foi possível iniciar a recuperação de senha.",
+      );
+
+      setRecoveryError(presentation.message);
+    } finally {
+      setIsRecoveringPassword(false);
+    }
+  }
+
+  async function handleResetPassword() {
+    if (!recoveryToken.trim()) {
+      setRecoveryError("Informe o código de recuperação recebido.");
+      return;
+    }
+
+    if (recoveryPassword.length < 6) {
+      setRecoveryError("A nova senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+
+    if (recoveryPassword !== recoveryPasswordConfirmation) {
+      setRecoveryError("A confirmação da senha não confere.");
+      return;
+    }
+
+    try {
+      setIsRecoveringPassword(true);
+      setRecoveryError("");
+
+      await resetPasswordRequest({
+        token: recoveryToken.trim(),
+        newPassword: recoveryPassword,
+      });
+
+      setPasswordRecoveryStep("success");
+      setPassword("");
+      setEmail(recoveryEmail.trim() || email);
+      setRecoveryMessage("Senha redefinida com sucesso. Acesse com a nova senha.");
+    } catch (error) {
+      const presentation = getAuthErrorPresentation(
+        error,
+        "Recuperação de senha",
+        "Não foi possível redefinir a senha.",
+      );
+
+      setRecoveryError(presentation.message);
+    } finally {
+      setIsRecoveringPassword(false);
     }
   }
 
@@ -250,12 +373,7 @@ export default function LoginPage() {
 
               <button
                 type="button"
-                onClick={() =>
-                  showAuthError(
-                    "Recuperação de senha",
-                    "A recuperação de senha será configurada na próxima etapa.",
-                  )
-                }
+                onClick={openPasswordRecovery}
                 className="mt-5 w-full text-center text-sm font-black text-[#ff4b00] sm:mt-6"
               >
                 Esqueceu sua senha?
@@ -394,7 +512,200 @@ export default function LoginPage() {
           </div>
         </div>
       )}
+
+      {isPasswordRecoveryOpen && (
+        <PasswordRecoveryModal
+          email={recoveryEmail}
+          error={recoveryError}
+          isLoading={isRecoveringPassword}
+          message={recoveryMessage}
+          newPassword={recoveryPassword}
+          newPasswordConfirmation={recoveryPasswordConfirmation}
+          onClose={closePasswordRecovery}
+          onEmailChange={setRecoveryEmail}
+          onNewPasswordChange={setRecoveryPassword}
+          onNewPasswordConfirmationChange={setRecoveryPasswordConfirmation}
+          onRequestReset={handleRequestPasswordReset}
+          onResetPassword={handleResetPassword}
+          onTokenChange={setRecoveryToken}
+          step={passwordRecoveryStep}
+          token={recoveryToken}
+        />
+      )}
     </main>
+  );
+}
+
+function PasswordRecoveryModal({
+  email,
+  error,
+  isLoading,
+  message,
+  newPassword,
+  newPasswordConfirmation,
+  onClose,
+  onEmailChange,
+  onNewPasswordChange,
+  onNewPasswordConfirmationChange,
+  onRequestReset,
+  onResetPassword,
+  onTokenChange,
+  step,
+  token,
+}: {
+  email: string;
+  error: string;
+  isLoading: boolean;
+  message: string;
+  newPassword: string;
+  newPasswordConfirmation: string;
+  onClose: () => void;
+  onEmailChange: (value: string) => void;
+  onNewPasswordChange: (value: string) => void;
+  onNewPasswordConfirmationChange: (value: string) => void;
+  onRequestReset: () => void;
+  onResetPassword: () => void;
+  onTokenChange: (value: string) => void;
+  step: "request" | "reset" | "sent" | "success";
+  token: string;
+}) {
+  const isRequestStep = step === "request";
+  const isResetStep = step === "reset";
+  const isSuccessStep = step === "success";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-md">
+      <div className="w-full max-w-[480px] overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-orange-100">
+        <div className="bg-gradient-to-r from-orange-50 via-white to-red-50 px-7 py-6">
+          <div className="flex items-start justify-between gap-5">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#ff4b00] text-white shadow-lg shadow-orange-500/25">
+                <LockKeyhole size={25} />
+              </div>
+
+              <div>
+                <h2 className="text-xl font-black text-slate-950">
+                  Recuperação de senha
+                </h2>
+                <p className="mt-1 text-sm font-medium text-slate-500">
+                  {isSuccessStep
+                    ? "Senha atualizada."
+                    : isResetStep
+                      ? "Defina sua nova senha."
+                      : "Informe seu e-mail cadastrado."}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isLoading}
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+              aria-label="Fechar recuperação de senha"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-4 px-7 pb-7 pt-5">
+          {message && (
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+              <p className="text-sm font-bold text-emerald-700">{message}</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3">
+              <p className="text-sm font-bold text-red-700">{error}</p>
+            </div>
+          )}
+
+          {isRequestStep && (
+            <>
+              <AuthInput
+                icon={<Mail size={20} />}
+                type="email"
+                placeholder="E-mail cadastrado"
+                value={email}
+                onChange={onEmailChange}
+                autoComplete="email"
+                onEnter={onRequestReset}
+              />
+
+              <button
+                type="button"
+                onClick={onRequestReset}
+                disabled={isLoading}
+                className="h-12 w-full rounded-2xl bg-[#ff4b00] text-sm font-black text-white shadow-[0_12px_24px_rgba(255,75,0,0.24)] transition hover:bg-[#e94400] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isLoading ? "Enviando..." : "Enviar instruções"}
+              </button>
+            </>
+          )}
+
+          {step === "sent" && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-12 w-full rounded-2xl bg-[#ff4b00] text-sm font-black text-white shadow-[0_12px_24px_rgba(255,75,0,0.24)] transition hover:bg-[#e94400]"
+            >
+              Entendi
+            </button>
+          )}
+
+          {isResetStep && (
+            <>
+              <AuthInput
+                icon={<LockKeyhole size={20} />}
+                type="text"
+                placeholder="Código de recuperação"
+                value={token}
+                onChange={onTokenChange}
+                autoComplete="one-time-code"
+              />
+              <AuthInput
+                icon={<LockKeyhole size={20} />}
+                type="password"
+                placeholder="Nova senha"
+                value={newPassword}
+                onChange={onNewPasswordChange}
+                autoComplete="new-password"
+              />
+              <AuthInput
+                icon={<LockKeyhole size={20} />}
+                type="password"
+                placeholder="Confirmar nova senha"
+                value={newPasswordConfirmation}
+                onChange={onNewPasswordConfirmationChange}
+                autoComplete="new-password"
+                onEnter={onResetPassword}
+              />
+
+              <button
+                type="button"
+                onClick={onResetPassword}
+                disabled={isLoading}
+                className="h-12 w-full rounded-2xl bg-[#ff4b00] text-sm font-black text-white shadow-[0_12px_24px_rgba(255,75,0,0.24)] transition hover:bg-[#e94400] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isLoading ? "Redefinindo..." : "Redefinir senha"}
+              </button>
+            </>
+          )}
+
+          {isSuccessStep && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-12 w-full rounded-2xl bg-[#ff4b00] text-sm font-black text-white shadow-[0_12px_24px_rgba(255,75,0,0.24)] transition hover:bg-[#e94400]"
+            >
+              Voltar ao login
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

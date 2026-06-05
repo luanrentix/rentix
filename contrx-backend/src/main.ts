@@ -5,9 +5,14 @@ import { config } from 'dotenv';
 
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { json, urlencoded } from 'express';
+import { json, NextFunction, Request, Response, urlencoded } from 'express';
 
 import { AppModule } from './app.module';
+
+type ExpressAppLike = {
+  disable?: (setting: string) => void;
+  set?: (setting: string, value: unknown) => void;
+};
 
 const defaultEnvPath = resolve(process.cwd(), '.env');
 const supabaseEnvPath = resolve(process.cwd(), '.env.supabase');
@@ -52,9 +57,32 @@ function getAllowedOrigins() {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
+  const httpAdapter = app.getHttpAdapter().getInstance() as ExpressAppLike;
+
+  if (typeof httpAdapter.disable === 'function') {
+    httpAdapter.disable('x-powered-by');
+  }
+
+  if (typeof httpAdapter.set === 'function') {
+    httpAdapter.set('trust proxy', 1);
+  }
 
   app.use(json({ limit: '2mb' }));
   app.use(urlencoded({ extended: true, limit: '2mb' }));
+  app.use((_request: Request, response: Response, next: NextFunction) => {
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.setHeader('X-Frame-Options', 'DENY');
+    response.setHeader('Referrer-Policy', 'no-referrer');
+    response.setHeader(
+      'Permissions-Policy',
+      'geolocation=(), microphone=(), camera=()',
+    );
+    response.setHeader(
+      'Content-Security-Policy',
+      "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    );
+    next();
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({

@@ -536,11 +536,87 @@ textarea {
   min-width: 0;
 }
 
+.contrx-app-main {
+  font-size: 0.9375rem;
+}
+
+.contrx-app-main [class~="rounded-3xl"],
+.contrx-modal-panel[class~="rounded-3xl"],
+.contrx-minimized-modal[class~="rounded-3xl"] {
+  border-radius: 1.125rem !important;
+}
+
+.contrx-app-main [class~="rounded-[2rem]"],
+.contrx-modal-panel[class~="rounded-[2rem]"] {
+  border-radius: 1.25rem !important;
+}
+
+@media (min-width: 768px) {
+  .contrx-app-main [class~="p-8"],
+  .contrx-modal-panel [class~="p-8"] {
+    padding: 1.5rem !important;
+  }
+
+  .contrx-app-main [class~="p-6"],
+  .contrx-modal-panel [class~="p-6"] {
+    padding: 1.25rem !important;
+  }
+
+  .contrx-app-main [class~="px-8"],
+  .contrx-modal-panel [class~="px-8"] {
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+  }
+
+  .contrx-app-main [class~="py-8"],
+  .contrx-modal-panel [class~="py-8"] {
+    padding-top: 1.5rem !important;
+    padding-bottom: 1.5rem !important;
+  }
+
+  .contrx-app-main [class~="px-6"],
+  .contrx-modal-panel [class~="px-6"] {
+    padding-left: 1.25rem !important;
+    padding-right: 1.25rem !important;
+  }
+
+  .contrx-app-main [class~="py-6"],
+  .contrx-modal-panel [class~="py-6"] {
+    padding-top: 1.25rem !important;
+    padding-bottom: 1.25rem !important;
+  }
+
+  .contrx-app-main [class~="h-14"],
+  .contrx-modal-panel [class~="h-14"] {
+    height: 3rem !important;
+  }
+
+  .contrx-app-main [class~="w-14"],
+  .contrx-modal-panel [class~="w-14"] {
+    width: 3rem !important;
+  }
+
+  .contrx-app-main [class~="h-12"],
+  .contrx-modal-panel [class~="h-12"] {
+    height: 2.75rem !important;
+  }
+
+  .contrx-app-main [class~="w-12"],
+  .contrx-modal-panel [class~="w-12"] {
+    width: 2.75rem !important;
+  }
+
+  .contrx-app-main h1[class~="sm:text-3xl"] {
+    font-size: 1.625rem !important;
+    line-height: 2rem !important;
+  }
+}
+
 @media (max-width: 1023px) {
   :root {
-    --contrx-mobile-nav-height: 6.75rem;
+    --contrx-mobile-nav-height: 6rem;
     --contrx-mobile-safe-bottom: calc(
-      var(--contrx-mobile-nav-height) + env(safe-area-inset-bottom) + 4.5rem
+      var(--contrx-mobile-nav-height) + env(safe-area-inset-bottom) + 3rem
     );
   }
 
@@ -560,12 +636,12 @@ textarea {
   .contrx-app-main::after {
     content: "";
     display: block;
-    height: calc(var(--contrx-mobile-safe-bottom) - 1rem);
-    min-height: 7.5rem;
+    height: calc(var(--contrx-mobile-safe-bottom) - 1.5rem);
+    min-height: 5.5rem;
   }
 
   .contrx-app-main > :last-child {
-    margin-bottom: 2rem;
+    margin-bottom: 1rem;
   }
 
   .contrx-mobile-bottom-nav {
@@ -644,7 +720,7 @@ textarea {
 
 @media (max-width: 767px) {
   :root {
-    --contrx-mobile-nav-height: 6.75rem;
+    --contrx-mobile-nav-height: 6rem;
   }
 
   body {
@@ -868,12 +944,12 @@ textarea {
   }
 
   .contrx-mobile-bottom-nav a {
-    min-width: 4.85rem !important;
-    min-height: 4rem;
+    min-width: 4.4rem !important;
+    min-height: 3.55rem;
   }
 
   .contrx-mobile-bottom-nav a span:last-child {
-    max-width: 4.6rem !important;
+    max-width: 4.2rem !important;
     white-space: normal !important;
     overflow: hidden;
     text-align: center;
