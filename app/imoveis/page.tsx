@@ -1714,7 +1714,7 @@ export default function PropertiesPage() {
                         <button
                           type="button"
                           onClick={() => handleOpenPropertyHistory(property)}
-                          className="block max-w-[300px] truncate text-left text-sm font-black uppercase text-orange-600 underline-offset-4 transition hover:text-orange-700 hover:underline"
+                          className="block max-w-[300px] truncate text-left text-sm font-black uppercase text-slate-950 underline-offset-4 transition hover:text-orange-600 hover:underline"
                           title="Clique para ver o histórico deste bem/ativo"
                         >
                           {property.name}

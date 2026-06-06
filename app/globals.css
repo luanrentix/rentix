@@ -935,6 +935,7 @@ textarea {
   }
 
   .contrx-mobile-bottom-nav > div {
+    overscroll-behavior-x: contain;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
   }
@@ -946,6 +947,7 @@ textarea {
   .contrx-mobile-bottom-nav a {
     min-width: 4.4rem !important;
     min-height: 3.55rem;
+    flex: 0 0 auto;
   }
 
   .contrx-mobile-bottom-nav a span:last-child {
@@ -1002,6 +1004,12 @@ textarea {
     width: calc(100vw - 1rem) !important;
     max-width: calc(100vw - 1rem) !important;
     max-height: calc(100dvh - 1rem) !important;
+    overscroll-behavior: contain;
+  }
+
+  .contrx-modal-panel > [class*="overflow-y-auto"],
+  .contrx-modal-panel > [class*="overflow-auto"] {
+    -webkit-overflow-scrolling: touch;
   }
 
   .contrx-modal-body {

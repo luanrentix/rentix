@@ -2579,7 +2579,7 @@ export default function ContractsPage() {
                 {isLoadingPageData && (
                   <tr>
                     <td colSpan={8} className="px-6 py-10 text-center text-sm font-semibold text-slate-500">
-                      Carregando contratos do backend...
+                      Carregando
                     </td>
                   </tr>
                 )}

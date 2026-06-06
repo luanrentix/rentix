@@ -119,7 +119,6 @@ type PrintDocumentKey =
   | "accountsPayableReport";
 
 type PrintModalMode = "view" | "edit";
-type PrintEditorViewMode = "split" | "editor" | "preview";
 
 type PrintDocumentTemplate = {
   title: string;
@@ -144,6 +143,8 @@ type RestorePrintModalState = {
   isOpen: boolean;
   documentKey: PrintDocumentKey | null;
 };
+
+type PrintEditorViewMode = "split" | "editor" | "preview";
 
 type ImportPrintModalState = {
   isOpen: boolean;
@@ -1112,6 +1113,85 @@ async function extractTextFromDocx(file: File) {
   return textContent;
 }
 
+function escapeDocxXml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function getDocxParagraphXml(text: string) {
+  const runs = text.split("\t").map((part) => (
+    `<w:r><w:t xml:space="preserve">${escapeDocxXml(part)}</w:t></w:r>`
+  ));
+
+  return `<w:p>${runs.join("<w:r><w:tab/></w:r>")}</w:p>`;
+}
+
+async function createEditableDocxBlob(title: string, content: string) {
+  const zip = new JSZip();
+  const paragraphs = String(content || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((line) => getDocxParagraphXml(line || " "))
+    .join("");
+
+  zip.file(
+    "[Content_Types].xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+</Types>`,
+  );
+  zip.folder("_rels")?.file(
+    ".rels",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>`,
+  );
+  zip.folder("docProps")?.file(
+    "core.xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:title>${escapeDocxXml(title)}</dc:title>
+  <dc:creator>Contrx</dc:creator>
+  <dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created>
+</cp:coreProperties>`,
+  );
+  zip.folder("docProps")?.file(
+    "app.xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties">
+  <Application>Contrx</Application>
+</Properties>`,
+  );
+  zip.folder("word")?.file(
+    "document.xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    ${paragraphs}
+    <w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>
+  </w:body>
+</w:document>`,
+  );
+
+  return zip.generateAsync({
+    type: "blob",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  });
+}
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function extractPaymentBookletInstructions(content: string) {
   const cleanContent = String(content || "").trim();
@@ -1691,6 +1771,7 @@ export default function ConfiguracoesPage() {
   const [printImportMessage, setPrintImportMessage] = useState("");
   const [printImportError, setPrintImportError] = useState("");
   const [isImportingPrintTemplate, setIsImportingPrintTemplate] = useState(false);
+  const [downloadingPrintTemplateKey, setDownloadingPrintTemplateKey] = useState<PrintDocumentKey | null>(null);
   const [restorePrintModalState, setRestorePrintModalState] = useState<RestorePrintModalState>(defaultRestorePrintModalState);
   const [importPrintModalState, setImportPrintModalState] = useState<ImportPrintModalState>(defaultImportPrintModalState);
   const [passwordSettings, setPasswordSettings] = useState<PasswordSettings>(defaultPasswordSettings);
@@ -2500,10 +2581,6 @@ export default function ConfiguracoesPage() {
   }
 
   function handleOpenPrintModal(documentKey: PrintDocumentKey, mode: PrintModalMode) {
-    if (mode === "edit") {
-      setPrintEditorViewMode("split");
-    }
-
     setPrintImportError("");
     setPrintImportMessage("");
     setPrintModalState({
@@ -2514,7 +2591,6 @@ export default function ConfiguracoesPage() {
   }
 
   function handleClosePrintModal() {
-    setPrintEditorViewMode("split");
     setPrintImportError("");
     setPrintImportMessage("");
     setPrintModalState(defaultPrintModalState);
@@ -2545,6 +2621,43 @@ export default function ConfiguracoesPage() {
         content,
       },
     }));
+  }
+
+  async function handleDownloadPrintTemplateForEditing(documentKey: PrintDocumentKey) {
+    const template = printTemplates[documentKey];
+
+    if (!template) return;
+
+    setPrintImportError("");
+    setPrintImportMessage("");
+    setDownloadingPrintTemplateKey(documentKey);
+
+    try {
+      const fileName = `${template.title
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9]+/g, "-")
+        .replace(/^-|-$/g, "")
+        .toLowerCase()}-contrx.docx`;
+      const blob = await createEditableDocxBlob(template.title, template.content);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+
+      anchor.href = url;
+      anchor.download = fileName || "modelo-contrx.docx";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+
+      setPrintImportMessage(
+        "Arquivo baixado. Edite no Word ou LibreOffice, mantenha os marcadores entre chaves e importe o DOCX editado nesta tela.",
+      );
+    } catch {
+      setPrintImportError("Nao foi possivel baixar o modelo para edicao.");
+    } finally {
+      setDownloadingPrintTemplateKey(null);
+    }
   }
 
   async function handleImportPrintTemplateFromDocx(documentKey: PrintDocumentKey, file?: File | null) {
@@ -2585,7 +2698,6 @@ export default function ConfiguracoesPage() {
         mode: "edit",
         documentKey,
       });
-      setPrintEditorViewMode("split");
       setPrintImportMessage(
         missingVariables.length > 0
           ? `Modelo importado com ${importedStats.variables.length} campo(s). Revise os campos obrigatórios ausentes: ${missingVariables.join(", ")}.`
@@ -2600,28 +2712,6 @@ export default function ConfiguracoesPage() {
     } finally {
       setIsImportingPrintTemplate(false);
     }
-  }
-
-  function handleInsertPrintTemplateVariable(variableValue: string) {
-    if (!printModalState.documentKey) return;
-
-    const textareaElement = printTemplateTextareaRef.current;
-    const currentContent = selectedPrintTemplate?.content || "";
-    const startPosition = textareaElement?.selectionStart ?? currentContent.length;
-    const endPosition = textareaElement?.selectionEnd ?? currentContent.length;
-    const contentBeforeSelection = currentContent.slice(0, startPosition);
-    const contentAfterSelection = currentContent.slice(endPosition);
-    const nextContent = `${contentBeforeSelection}${variableValue}${contentAfterSelection}`;
-    const nextCursorPosition = startPosition + variableValue.length;
-
-    handleUpdatePrintTemplateContent(printModalState.documentKey, nextContent);
-
-    window.requestAnimationFrame(() => {
-      if (!printTemplateTextareaRef.current) return;
-
-      printTemplateTextareaRef.current.focus();
-      printTemplateTextareaRef.current.setSelectionRange(nextCursorPosition, nextCursorPosition);
-    });
   }
 
   function updateSelectedPrintTemplateText(
@@ -2709,13 +2799,6 @@ export default function ConfiguracoesPage() {
         ...defaultPrintTemplates[documentKey],
       },
     }));
-
-    if (printModalState.documentKey === documentKey) {
-      setPrintModalState((currentState) => ({
-        ...currentState,
-        mode: currentState.mode === "edit" ? "view" : currentState.mode,
-      }));
-    }
 
     handleCloseRestorePrintModal();
   }
@@ -4395,7 +4478,6 @@ export default function ConfiguracoesPage() {
                       const template = printTemplates[documentKey];
                       const templateStats = getPrintTemplateStats(template.content);
                       const missingVariables = getMissingPrintTemplateVariables(template.content, documentKey);
-                      const canImportDocx = template.isEditable && documentKey !== "paymentBooklet" && documentKey !== "accountsPayableReport";
 
                       return (
                         <div
@@ -4454,11 +4536,11 @@ export default function ConfiguracoesPage() {
                               </div>
                             )}
 
-                            <div className="flex items-center justify-end gap-2 overflow-x-auto">
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                               <button
                                 type="button"
                                 onClick={() => handleOpenPrintModal(documentKey, "view")}
-                                className="shrink-0 whitespace-nowrap rounded-2xl bg-slate-100 px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                                className="w-full whitespace-nowrap rounded-2xl bg-slate-100 px-3 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
                               >
                                 Visualizar
                               </button>
@@ -4466,26 +4548,15 @@ export default function ConfiguracoesPage() {
                               <button
                                 type="button"
                                 onClick={() => handleOpenPrintModal(documentKey, "edit")}
-                                className="shrink-0 whitespace-nowrap rounded-2xl bg-orange-500 px-4 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                                className="w-full whitespace-nowrap rounded-2xl bg-orange-500 px-3 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
                               >
                                 Editar modelo
                               </button>
 
-                              {canImportDocx && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenImportPrintTutorial(documentKey)}
-                                  disabled={isImportingPrintTemplate}
-                                  className="shrink-0 cursor-pointer whitespace-nowrap rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-md shadow-slate-100 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  {isImportingPrintTemplate ? "Importando..." : "Importar DOCX"}
-                                </button>
-                              )}
-
                               <button
                                 type="button"
                                 onClick={() => handleOpenRestorePrintModal(documentKey)}
-                                className="shrink-0 whitespace-nowrap rounded-2xl bg-red-50 px-4 py-3 text-sm font-black text-red-700 transition hover:bg-red-100"
+                                className="w-full whitespace-nowrap rounded-2xl bg-red-50 px-3 py-3 text-sm font-black text-red-700 transition hover:bg-red-100"
                               >
                                 Restaurar
                               </button>
@@ -4763,14 +4834,14 @@ export default function ConfiguracoesPage() {
                       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                         <div className="min-w-0">
                           <p className="truncate text-sm font-black text-slate-950">
-                            Editor do impresso
+                            Edicao externa do impresso
                           </p>
                           <p className="mt-0.5 text-xs font-semibold text-slate-500">
-                            {selectedPrintTemplateStats.words} palavras · {selectedPrintTemplateStats.variables.length} campos
+                            Baixe, edite fora do sistema e importe o DOCX atualizado
                           </p>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="hidden" aria-hidden="true">
                           <div className="inline-flex rounded-xl bg-slate-100 p-1">
                             {[
                               { label: "Lado a lado", value: "split" as const },
@@ -4839,6 +4910,34 @@ export default function ConfiguracoesPage() {
                             Restaurar padrão
                           </button>
                         </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadPrintTemplateForEditing(printModalState.documentKey!)}
+                            disabled={downloadingPrintTemplateKey === printModalState.documentKey}
+                            className="rounded-xl bg-orange-500 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {downloadingPrintTemplateKey === printModalState.documentKey
+                              ? "Preparando..."
+                              : "Baixar para editar"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenImportPrintTutorial(printModalState.documentKey!)}
+                            disabled={isImportingPrintTemplate}
+                            className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isImportingPrintTemplate ? "Importando..." : "Importar editado"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenRestorePrintModal(printModalState.documentKey!)}
+                            className="rounded-xl bg-red-50 px-4 py-2 text-xs font-black text-red-700 transition hover:bg-red-100"
+                          >
+                            Restaurar padrao
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -4852,24 +4951,37 @@ export default function ConfiguracoesPage() {
                       >
                         {printImportError ||
                           printImportMessage ||
-                          `Modelo importado de ${selectedPrintTemplate.importedFileName}.`}
+                          `Modelo importado de ${selectedPrintTemplate.importedFileName}. Clique em Salvar configuracoes para gravar definitivamente.`}
                       </div>
                     )}
 
+                    <div className="grid gap-3 border-b border-slate-200 bg-white px-4 py-4 lg:grid-cols-3">
+                      {[
+                        "Baixe o DOCX atual antes de alterar o modelo.",
+                        "Edite no Word ou LibreOffice mantendo os marcadores entre chaves.",
+                        "Importe o DOCX editado e revise a previa antes de salvar.",
+                      ].map((instruction, index) => (
+                        <div key={instruction} className="flex gap-3 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-xs font-black text-white">
+                            {index + 1}
+                          </span>
+                          <p className="text-xs font-bold leading-5 text-slate-700">
+                            {instruction}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+
                     <div className="grid min-h-[70vh] grid-cols-1 gap-0 xl:grid-cols-[minmax(0,1fr)_320px]">
-                      <div className="min-w-0 overflow-auto p-3 sm:p-5">
+                      <div className="min-w-0 p-3 sm:p-5">
                         <div
-                          className={`grid gap-4 ${
-                            printEditorViewMode === "split"
-                              ? "2xl:grid-cols-2"
-                              : "grid-cols-1"
-                          }`}
+                          className="grid grid-cols-1 gap-4"
                         >
-                          {printEditorViewMode !== "preview" && (
+                          {Boolean(0) && printEditorViewMode !== "preview" && (
                             <section className="min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                               <div className="border-b border-slate-100 px-5 py-4">
                                 <p className="text-sm font-black text-slate-950">
-                                  Texto do modelo
+                                  Arquivo em uso
                                 </p>
                                 <p className="mt-1 text-xs font-semibold text-slate-500">
                                   {selectedPrintTemplateStats.lines} linhas no modelo
@@ -4880,10 +4992,8 @@ export default function ConfiguracoesPage() {
                                 <div className="mx-auto max-w-[850px] bg-white px-5 py-6 shadow-[0_18px_60px_rgba(15,23,42,0.10)] ring-1 ring-slate-200 sm:px-8">
                                   <textarea
                                     ref={printTemplateTextareaRef}
-                                    value={selectedPrintTemplate.content}
-                                    onChange={(event) =>
-                                      handleUpdatePrintTemplateContent(printModalState.documentKey!, event.target.value)
-                                    }
+                                    readOnly
+                                    value={selectedPrintTemplate?.content || ""}
                                     spellCheck={false}
                                     className="min-h-[62vh] w-full resize-y border-0 bg-transparent font-serif text-[15px] font-medium leading-8 text-slate-900 outline-none"
                                   />
@@ -4896,14 +5006,14 @@ export default function ConfiguracoesPage() {
                             <section className="min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                               <div className="border-b border-slate-100 px-5 py-4">
                                 <p className="text-sm font-black text-slate-950">
-                                  Previa do PDF
+                                  Previa do arquivo em uso
                                 </p>
                                 <p className="mt-1 text-xs font-semibold text-slate-500">
                                   Dados de exemplo
                                 </p>
                               </div>
 
-                              <div className="overflow-auto bg-slate-50 p-3 sm:p-5">
+                              <div className="bg-slate-50 p-3 sm:p-5">
                                 <div className="mx-auto min-h-[62vh] max-w-[850px] bg-white px-5 py-6 shadow-[0_18px_60px_rgba(15,23,42,0.10)] ring-1 ring-slate-200 sm:px-8">
                                   <pre className="whitespace-pre-wrap font-sans text-sm font-semibold leading-7 text-slate-700">
                                     {selectedPrintTemplatePreview}
@@ -4915,17 +5025,47 @@ export default function ConfiguracoesPage() {
                         </div>
                       </div>
 
-                      <aside className="border-t border-slate-200 bg-white px-4 py-4 xl:max-h-[calc(96vh-13rem)] xl:overflow-y-auto xl:border-l xl:border-t-0">
+                      <aside className="border-t border-slate-200 bg-white px-4 py-4 xl:border-l xl:border-t-0">
                         <div className="mb-4">
                           <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-                            Campos do documento
+                            Como editar corretamente
                           </p>
                           <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
-                            Clique para inserir no cursor.
+                            Siga estes passos antes de importar a nova versao.
                           </p>
                         </div>
 
                         <div className="space-y-4">
+                          <div className="rounded-3xl border border-orange-100 bg-orange-50 p-4">
+                            <div className="space-y-3">
+                              {[
+                                "Baixe o DOCX atual e abra no Word ou LibreOffice.",
+                                "Mantenha os marcadores entre chaves para os dados automaticos.",
+                                "Salve como .docx e importe o arquivo editado.",
+                              ].map((instruction, index) => (
+                                <div key={instruction} className="flex gap-3 rounded-2xl bg-white px-3 py-3">
+                                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-xs font-black text-white">
+                                    {index + 1}
+                                  </span>
+                                  <p className="text-xs font-bold leading-5 text-slate-700">
+                                    {instruction}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadPrintTemplateForEditing(printModalState.documentKey!)}
+                              disabled={downloadingPrintTemplateKey === printModalState.documentKey}
+                              className="mt-3 flex w-full cursor-pointer items-center justify-center rounded-2xl bg-orange-500 px-4 py-3 text-xs font-black text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {downloadingPrintTemplateKey === printModalState.documentKey
+                                ? "Preparando arquivo..."
+                                : "Baixar arquivo para edicao"}
+                            </button>
+                          </div>
+
                           {printModalState.documentKey !== "paymentBooklet" &&
                             printModalState.documentKey !== "accountsPayableReport" && (
                               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
@@ -4961,18 +5101,15 @@ export default function ConfiguracoesPage() {
 
                               <div className="grid gap-2">
                                 {group.variables.map((variable) => (
-                                  <button
+                                  <div
                                     key={`${group.title}-${variable.value}`}
-                                    type="button"
-                                    onClick={() => handleInsertPrintTemplateVariable(variable.value)}
                                     className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-xs font-black text-slate-700 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700"
-                                    title={`Inserir ${variable.value}`}
                                   >
                                     <span>{variable.label}</span>
                                     <span className="font-mono text-[10px] text-slate-400">
                                       {variable.value}
                                     </span>
-                                  </button>
+                                  </div>
                                 ))}
                               </div>
                             </div>
@@ -4993,7 +5130,7 @@ export default function ConfiguracoesPage() {
                   Fechar
                 </button>
 
-                {printModalState.mode === "edit" && (
+                {Boolean(0) && (
                   <button
                     type="button"
                     onClick={handleClosePrintModal}
