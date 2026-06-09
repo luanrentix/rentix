@@ -7,3 +7,4 @@ npm-debug.log
 .env.supabase
 .local-postgres
 backups
+*.log

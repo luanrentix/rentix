@@ -76,9 +76,13 @@ function hashPasswordResetToken(token: string) {
 
 function shouldExposePasswordResetToken() {
   return (
-    process.env.NODE_ENV !== 'production' ||
-    process.env.CONTRX_EXPOSE_PASSWORD_RESET_TOKEN === 'true'
+    process.env.NODE_ENV !== 'production' &&
+    process.env.CONTRX_EXPOSE_PASSWORD_RESET_TOKEN !== 'false'
   );
+}
+
+function isOwnerRole(role?: string | null) {
+  return role === 'OWNER';
 }
 
 function isSmtpConfigured() {
@@ -643,6 +647,12 @@ export class AutenticacaoService {
       throw new BadRequestException('Selecione ao menos uma ferramenta.');
     }
 
+    if (isOwnerRole(data.role)) {
+      throw new BadRequestException(
+        'O perfil de dono da empresa nao pode ser atribuido por este fluxo.',
+      );
+    }
+
     const userExists = await this.prisma.user.findUnique({
       where: {
         email,
@@ -718,6 +728,18 @@ export class AutenticacaoService {
     if (existingUser.role === 'SYSTEM_OWNER') {
       throw new BadRequestException(
         'O dono do sistema nao pode ser editado neste cadastro.',
+      );
+    }
+
+    if (isOwnerRole(data.role) && existingUser.role !== 'OWNER') {
+      throw new BadRequestException(
+        'O perfil de dono da empresa nao pode ser atribuido por este fluxo.',
+      );
+    }
+
+    if (existingUser.role === 'OWNER' && !isOwnerRole(data.role)) {
+      throw new BadRequestException(
+        'O perfil de dono da empresa nao pode ser alterado por este fluxo.',
       );
     }
 

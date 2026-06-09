@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Min,
   MinLength,
   ValidateNested,
 } from 'class-validator';
@@ -37,6 +38,7 @@ export class CriarContaReceberDto {
   dueDate: string;
 
   @IsNumber()
+  @Min(0.01)
   amount: number;
 
   @IsOptional()
@@ -49,10 +51,12 @@ export class CriarContaReceberDto {
 
   @IsOptional()
   @IsNumber()
+  @Min(1)
   installmentNumber?: number | null;
 
   @IsOptional()
   @IsNumber()
+  @Min(1)
   installmentTotal?: number | null;
 
   @IsOptional()
@@ -76,13 +80,16 @@ export class ReceberPagamentoDto {
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
   interest?: number;
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
   discount?: number;
 
   @IsNumber()
+  @Min(0.01)
   amountPaid: number;
 
   @IsOptional()

@@ -4,6 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { FinancialAccountStatus, Prisma } from '@prisma/client';
+import {
+  exceedsFinancialSettlementLimit,
+  getFinancialSettlementAmount,
+  getFinancialStatusAfterSettlement,
+} from '../common/financial-settlement';
 import { toUpperText, uppercaseFields } from '../common/text-normalization';
 import { PrismaService } from '../prisma/prisma.service';
 import { CriarContaPagarDto, PagarContaDto } from './dto/criar-conta-pagar.dto';
@@ -107,7 +112,7 @@ export class ContasPagarService {
         where: { expenseId: id },
         _sum: { amountPaid: true, discount: true, interest: true },
       });
-      const currentSettlementAmount = this.getSettlementAmount(
+      const currentSettlementAmount = getFinancialSettlementAmount(
         currentPaymentSummary._sum.amountPaid,
         currentPaymentSummary._sum.discount,
         currentPaymentSummary._sum.interest,
@@ -119,13 +124,18 @@ export class ContasPagarService {
 
       const nextSettlementAmount =
         currentSettlementAmount +
-        this.getSettlementAmount(
+        getFinancialSettlementAmount(
           data.amountPaid,
           data.discount || 0,
           data.interest || 0,
         );
 
-      if (nextSettlementAmount - Number(account.amount) > 0.01) {
+      if (
+        exceedsFinancialSettlementLimit(
+          Number(account.amount),
+          nextSettlementAmount,
+        )
+      ) {
         throw new BadRequestException('O valor pago excede o saldo da conta.');
       }
 
@@ -170,13 +180,15 @@ export class ContasPagarService {
     }
 
     const account = await this.ensureExists(id, companyId);
-    const settlementAmount = this.getSettlementAmount(
+    const settlementAmount = getFinancialSettlementAmount(
       data.amountPaid,
       data.discount || 0,
       data.interest || 0,
     );
 
-    if (settlementAmount - Number(account.amount) > 0.01) {
+    if (
+      exceedsFinancialSettlementLimit(Number(account.amount), settlementAmount)
+    ) {
       throw new BadRequestException('O valor pago excede o saldo da conta.');
     }
 
@@ -426,18 +438,6 @@ export class ContasPagarService {
   }
 
   private getStatusAfterPayment(accountAmount: number, amountPaid: number) {
-    return amountPaid >= accountAmount
-      ? FinancialAccountStatus.PAID
-      : FinancialAccountStatus.PENDING;
-  }
-
-  private getSettlementAmount(
-    amountPaid: unknown,
-    discount: unknown,
-    interest: unknown,
-  ) {
-    return (
-      Number(amountPaid || 0) + Number(discount || 0) - Number(interest || 0)
-    );
+    return getFinancialStatusAfterSettlement(accountAmount, amountPaid);
   }
 }

@@ -4,7 +4,9 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MinLength,
+  Min,
 } from 'class-validator';
 
 export class CriarImovelDto {
@@ -63,6 +65,26 @@ export class CriarImovelDto {
   @IsOptional()
   @IsNumber()
   rentalValue?: number;
+
+  @IsOptional()
+  @IsString()
+  managementMode?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  administrationFeePercentage?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(31)
+  ownerPayoutDay?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  autoCreateOwnerPayable?: boolean;
 
   @IsOptional()
   @IsString()

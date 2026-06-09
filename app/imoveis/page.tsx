@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { LoaderCircle, Maximize2, Minus, Search, X } from "lucide-react";
+import { PersonCreateModal } from "@/components/people/person-create-modal";
 import {
   createProperty,
   getProperties,
   updateProperty,
   type Property as ApiProperty,
 } from "@/services/properties.service";
+import { getPeople, type Person as ApiPerson } from "@/services/people.service";
 import { getContracts, type Contract as ApiContract } from "@/services/contracts.service";
 import { getReceivableAccounts, type ReceivableAccount } from "@/services/financial.service";
 import {
@@ -53,6 +55,8 @@ type PropertyType =
   | "Land"
   | "Other";
 
+type PropertyManagementMode = "OWNED" | "MANAGED";
+
 type Property = {
   id: string;
   code: string;
@@ -81,6 +85,12 @@ type Property = {
   description: string;
   status: PropertyStatus;
   isActive: boolean;
+  ownerId: string;
+  ownerName: string;
+  managementMode: PropertyManagementMode;
+  administrationFeePercentage: number;
+  ownerPayoutDay: number;
+  autoCreateOwnerPayable: boolean;
 };
 
 type PropertyMovementType =
@@ -171,6 +181,11 @@ type PropertyModalDraft = {
   garages: string;
   description: string;
   isActive: boolean;
+  ownerId: string;
+  managementMode: PropertyManagementMode;
+  administrationFeePercentage: string;
+  ownerPayoutDay: string;
+  autoCreateOwnerPayable: boolean;
 };
 
 const propertyTypes: Array<{ label: string; value: PropertyType }> = [
@@ -295,15 +310,23 @@ function normalizeApiProperty(
     description: property.description || "",
     status: propertyStatus,
     isActive: property.isActive ?? true,
+    ownerId: property.ownerId || "",
+    ownerName: toUpperText(property.owner?.name || ""),
+    managementMode: property.managementMode === "MANAGED" ? "MANAGED" : "OWNED",
+    administrationFeePercentage: Number(property.administrationFeePercentage || 0),
+    ownerPayoutDay: Number(property.ownerPayoutDay || 0),
+    autoCreateOwnerPayable: property.autoCreateOwnerPayable !== false,
   };
 }
 
 export default function PropertiesPage() {
   const [properties, setProperties] = useState<Property[]>([]);
+  const [owners, setOwners] = useState<ApiPerson[]>([]);
   const [propertyMovements, setPropertyMovements] = useState<PropertyMovement[]>([]);
   const [contracts, setContracts] = useState<RentalHistoryContract[]>([]);
   const [rentalCharges, setRentalCharges] = useState<RentalCharge[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isOwnerCreateOpen, setIsOwnerCreateOpen] = useState(false);
   const [isFormMinimized, setIsFormMinimized] = useState(false);
   const [editingPropertyId, setEditingPropertyId] = useState<string | null>(null);
   const [propertyToInactivate, setPropertyToInactivate] = useState<Property | null>(null);
@@ -340,7 +363,13 @@ export default function PropertiesPage() {
   const [garages, setGarages] = useState("");
   const [description, setDescription] = useState("");
   const [isActive, setIsActive] = useState(true);
+  const [ownerId, setOwnerId] = useState("");
+  const [managementMode, setManagementMode] = useState<PropertyManagementMode>("OWNED");
+  const [administrationFeePercentage, setAdministrationFeePercentage] = useState("");
+  const [ownerPayoutDay, setOwnerPayoutDay] = useState("");
+  const [autoCreateOwnerPayable, setAutoCreateOwnerPayable] = useState(true);
   const [isSavingProperty, setIsSavingProperty] = useState(false);
+  const [isInactivatingProperty, setIsInactivatingProperty] = useState(false);
   const [isZipCodeLoading, setIsZipCodeLoading] = useState(false);
   const [zipCodeFeedback, setZipCodeFeedback] = useState("");
 
@@ -455,6 +484,7 @@ export default function PropertiesPage() {
 
     if (!companyId) {
       setProperties([]);
+      setOwners([]);
       setIsLoadingProperties(false);
       return;
     }
@@ -462,11 +492,12 @@ export default function PropertiesPage() {
     try {
       setIsLoadingProperties(true);
 
-      const [response, apiContracts, apiCharges, apiMovements] = await Promise.all([
+      const [response, apiContracts, apiCharges, apiMovements, apiPeople] = await Promise.all([
         getProperties(companyId),
         getContracts(companyId),
         getReceivableAccounts(companyId),
         getPropertyMovements(companyId),
+        getPeople(companyId),
       ]);
 
       const normalizedContracts = apiContracts.map(mapApiContractToRentalHistory);
@@ -478,6 +509,7 @@ export default function PropertiesPage() {
       setRentalCharges(apiCharges.map(mapApiChargeToRentalCharge));
       setPropertyMovements(apiMovements.map(mapApiPropertyMovementToPropertyMovement));
       setProperties(normalizedProperties);
+      setOwners(apiPeople.filter((person) => person.status === "ACTIVE"));
     } catch (error) {
       console.error("Erro ao carregar bens/ativos:", error);
       if (isSessionReplacedError(error)) {
@@ -600,6 +632,11 @@ export default function PropertiesPage() {
     setGarages("");
     setDescription("");
     setIsActive(true);
+    setOwnerId("");
+    setManagementMode("OWNED");
+    setAdministrationFeePercentage("");
+    setOwnerPayoutDay("");
+    setAutoCreateOwnerPayable(true);
     setZipCodeFeedback("");
     setEditingPropertyId(null);
   }
@@ -631,6 +668,11 @@ export default function PropertiesPage() {
       garages,
       description,
       isActive,
+      ownerId,
+      managementMode,
+      administrationFeePercentage,
+      ownerPayoutDay,
+      autoCreateOwnerPayable,
     };
   }
 
@@ -660,6 +702,11 @@ export default function PropertiesPage() {
     setGarages(draft.garages || "");
     setDescription(draft.description || "");
     setIsActive(draft.isActive ?? true);
+    setOwnerId(draft.ownerId || "");
+    setManagementMode(draft.managementMode || "OWNED");
+    setAdministrationFeePercentage(draft.administrationFeePercentage || "");
+    setOwnerPayoutDay(draft.ownerPayoutDay || "");
+    setAutoCreateOwnerPayable(draft.autoCreateOwnerPayable ?? true);
     setZipCodeFeedback("");
   }
 
@@ -697,6 +744,11 @@ export default function PropertiesPage() {
     }
 
     setType("Other");
+    setOwnerId("");
+    setManagementMode("OWNED");
+    setAdministrationFeePercentage("");
+    setOwnerPayoutDay("");
+    setAutoCreateOwnerPayable(true);
   }
 
   function handleCloseForm() {
@@ -704,6 +756,25 @@ export default function PropertiesPage() {
     resetForm();
     setIsFormMinimized(false);
     setIsFormOpen(false);
+  }
+
+  function openOwnerCreateModal() {
+    setIsOwnerCreateOpen(true);
+  }
+
+  function closeOwnerCreateModal() {
+    setIsOwnerCreateOpen(false);
+  }
+
+  function handleOwnerCreated(apiPerson: ApiPerson) {
+    setOwners((currentOwners) => {
+      const ownerAlreadyExists = currentOwners.some(
+        (owner) => String(owner.id) === String(apiPerson.id),
+      );
+
+      return ownerAlreadyExists ? currentOwners : [...currentOwners, apiPerson];
+    });
+    setOwnerId(apiPerson.id);
   }
 
   function handleZipCodeChange(value: string) {
@@ -814,6 +885,10 @@ export default function PropertiesPage() {
     const parsedBathrooms = parsePositiveInteger(bathrooms);
     const parsedGarages = parsePositiveInteger(garages);
     const parsedManufactureYear = parsePositiveInteger(manufactureYear);
+    const parsedAdministrationFeePercentage = parsePercentageValue(
+      administrationFeePercentage,
+    );
+    const parsedOwnerPayoutDay = parsePositiveInteger(ownerPayoutDay);
     const isPropertyAsset = assetCategory === "PROPERTY";
     if (
       !assetCategory ||
@@ -830,6 +905,26 @@ export default function PropertiesPage() {
     ) {
       alert("Preencha todos os campos obrigatórios.");
       return;
+    }
+
+    if (isPropertyAsset && managementMode === "MANAGED") {
+      if (!ownerId) {
+        alert("Informe o proprietário para imóveis administrados.");
+        return;
+      }
+
+      if (
+        parsedAdministrationFeePercentage <= 0 ||
+        parsedAdministrationFeePercentage > 100
+      ) {
+        alert("Informe uma taxa de administração válida entre 0 e 100.");
+        return;
+      }
+
+      if (parsedOwnerPayoutDay < 1 || parsedOwnerPayoutDay > 31) {
+        alert("Informe um dia de repasse válido entre 1 e 31.");
+        return;
+      }
     }
 
     if (!isActive && editingPropertyId && propertyHasActiveContract(editingPropertyId, contracts)) {
@@ -867,6 +962,23 @@ export default function PropertiesPage() {
       condition: formattedCondition,
       patrimonyCode: formattedPatrimonyCode,
       rentalValue: parsedRentValue,
+      ownerId:
+        isPropertyAsset && managementMode === "MANAGED"
+          ? ownerId || null
+          : null,
+      managementMode: isPropertyAsset ? managementMode : "OWNED",
+      administrationFeePercentage:
+        isPropertyAsset && managementMode === "MANAGED"
+          ? parsedAdministrationFeePercentage
+          : null,
+      ownerPayoutDay:
+        isPropertyAsset && managementMode === "MANAGED"
+          ? parsedOwnerPayoutDay
+          : null,
+      autoCreateOwnerPayable:
+        isPropertyAsset && managementMode === "MANAGED"
+          ? autoCreateOwnerPayable
+          : false,
       zipCode,
       state: formattedState,
       city: formattedCity,
@@ -944,6 +1056,13 @@ export default function PropertiesPage() {
     setGarages(property.garages ? String(property.garages) : "");
     setDescription(property.description);
     setIsActive(property.isActive);
+    setOwnerId(property.ownerId);
+    setManagementMode(property.managementMode);
+    setAdministrationFeePercentage(
+      property.administrationFeePercentage ? String(property.administrationFeePercentage) : "",
+    );
+    setOwnerPayoutDay(property.ownerPayoutDay ? String(property.ownerPayoutDay) : "");
+    setAutoCreateOwnerPayable(property.autoCreateOwnerPayable);
     clearMinimizedModalState("properties");
     setIsFormMinimized(false);
     setIsFormOpen(true);
@@ -992,6 +1111,8 @@ export default function PropertiesPage() {
   }
 
   function handleCancelInactivateProperty() {
+    if (isInactivatingProperty) return;
+
     setPropertyToInactivate(null);
   }
 
@@ -1000,7 +1121,7 @@ export default function PropertiesPage() {
   }
 
   async function handleConfirmInactivateProperty() {
-    if (!propertyToInactivate) return;
+    if (!propertyToInactivate || isInactivatingProperty) return;
 
     const updatedProperty: Property = {
       ...propertyToInactivate,
@@ -1009,6 +1130,7 @@ export default function PropertiesPage() {
     };
 
     try {
+      setIsInactivatingProperty(true);
       await updateProperty(propertyToInactivate.id, {
         isActive: false,
       });
@@ -1024,6 +1146,8 @@ export default function PropertiesPage() {
     } catch (error) {
       console.error("Erro ao inativar bem/ativo:", error);
       alert("Não foi possível inativar o bem/ativo.");
+    } finally {
+      setIsInactivatingProperty(false);
     }
   }
 
@@ -2225,6 +2349,86 @@ export default function PropertiesPage() {
                   </div>
                 </FormSection>
 
+                {assetCategory === "PROPERTY" && (
+                  <FormSection
+                    title="Gestão e repasse"
+                    description="Configura a imobiliária como administradora do imóvel e prepara o repasse automático ao proprietário."
+                  >
+                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                      <FormField label="Modelo de gestão" required>
+                        <select
+                          value={managementMode}
+                          onChange={(event) => setManagementMode(event.target.value as PropertyManagementMode)}
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        >
+                          <option value="OWNED">Próprio</option>
+                          <option value="MANAGED">Administrado por imobiliária</option>
+                        </select>
+                      </FormField>
+
+                      <FormField label="Proprietário" required={managementMode === "MANAGED"}>
+                        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                          <select
+                            value={ownerId}
+                            onChange={(event) => setOwnerId(event.target.value)}
+                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          >
+                            <option value="">Selecione</option>
+                            {owners.map((owner) => (
+                              <option key={owner.id} value={owner.id}>
+                                {toUpperText(owner.name)}
+                              </option>
+                            ))}
+                          </select>
+
+                          <button
+                            type="button"
+                            onClick={openOwnerCreateModal}
+                            className="h-[52px] rounded-xl bg-[#0f172a] px-5 text-sm font-bold text-[#ffffff] shadow-sm transition hover:bg-slate-800"
+                          >
+                            NOVO
+                          </button>
+                        </div>
+                      </FormField>
+
+                      <FormField label="Taxa de administração (%)" required={managementMode === "MANAGED"}>
+                        <input
+                          type="text"
+                          value={administrationFeePercentage}
+                          onChange={(event) => setAdministrationFeePercentage(event.target.value)}
+                          placeholder="Ex: 10"
+                          inputMode="decimal"
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        />
+                      </FormField>
+
+                      <FormField label="Dia do repasse" required={managementMode === "MANAGED"}>
+                        <input
+                          type="number"
+                          min="1"
+                          max="31"
+                          value={ownerPayoutDay}
+                          onChange={(event) => setOwnerPayoutDay(event.target.value)}
+                          placeholder="1 a 31"
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        />
+                      </FormField>
+
+                      <div className="md:col-span-2 xl:col-span-4">
+                        <label className="flex min-h-[58px] items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-black text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={autoCreateOwnerPayable}
+                            onChange={(event) => setAutoCreateOwnerPayable(event.target.checked)}
+                            className="h-5 w-5 rounded border-slate-300 accent-orange-500"
+                          />
+                          Gerar conta a pagar do proprietário automaticamente
+                        </label>
+                      </div>
+                    </div>
+                  </FormSection>
+                )}
+
                 {assetCategory === "PROPERTY" ? (
                   <FormSection
                     title="Dados do imóvel"
@@ -2510,6 +2714,8 @@ export default function PropertiesPage() {
             confirmLabel="Sim, inativar"
             onCancel={handleCancelInactivateProperty}
             onConfirm={handleConfirmInactivateProperty}
+            isProcessing={isInactivatingProperty}
+            processingLabel="Inativando..."
           />
         )}
 
@@ -2536,6 +2742,17 @@ export default function PropertiesPage() {
             onClose={handleCloseBlockedInactiveProperty}
           />
         )}
+
+        <PersonCreateModal
+          open={isOwnerCreateOpen}
+          companyId={getCurrentCompanyId()}
+          people={owners.map((owner) => ({
+            id: owner.id,
+            document: owner.document || "",
+          }))}
+          onClose={closeOwnerCreateModal}
+          onCreated={handleOwnerCreated}
+        />
       </div>
     </>
   );
@@ -2694,6 +2911,8 @@ type ConfirmationModalProps = {
   confirmLabel: string;
   onCancel: () => void;
   onConfirm: () => void;
+  isProcessing?: boolean;
+  processingLabel?: string;
 };
 
 function ConfirmationModal({
@@ -2705,6 +2924,8 @@ function ConfirmationModal({
   confirmLabel,
   onCancel,
   onConfirm,
+  isProcessing = false,
+  processingLabel = "Processando...",
 }: ConfirmationModalProps) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
@@ -2726,16 +2947,18 @@ function ConfirmationModal({
         <div className="mt-8 grid grid-cols-2 gap-3">
           <button
             onClick={onCancel}
-            className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+            disabled={isProcessing}
+            className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Cancelar
           </button>
 
           <button
             onClick={onConfirm}
-            className="rounded-2xl bg-red-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600"
+            disabled={isProcessing}
+            className="rounded-2xl bg-red-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {confirmLabel}
+            {isProcessing ? processingLabel : confirmLabel}
           </button>
         </div>
       </div>
@@ -3101,6 +3324,15 @@ function parsePositiveInteger(value: string) {
   if (!Number.isFinite(parsedValue) || parsedValue < 0) return 0;
 
   return Math.floor(parsedValue);
+}
+
+function parsePercentageValue(value: string) {
+  const normalizedValue = value.replace(",", ".").trim();
+  const parsedValue = Number(normalizedValue);
+
+  if (!Number.isFinite(parsedValue) || parsedValue < 0) return 0;
+
+  return parsedValue;
 }
 
 function formatCurrencyInput(value: string) {

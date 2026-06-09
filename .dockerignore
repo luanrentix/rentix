@@ -6,4 +6,7 @@ npm-debug.log
 .env.local
 .env.*.local
 backups
+PROJETO_EXPORTADO.md
+PROJETO_COMPLETO.md
+*.log
 contrx-backend

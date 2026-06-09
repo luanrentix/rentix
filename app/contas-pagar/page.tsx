@@ -256,6 +256,9 @@ export default function AccountsPayablePage() {
   const [isTenantCreateOpen, setIsTenantCreateOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [isExpenseSaving, setIsExpenseSaving] = useState(false);
+  const [processingConfirmation, setProcessingConfirmation] = useState<
+    "payment" | "delete" | "reversal" | null
+  >(null);
 
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [expensePendingDeletion, setExpensePendingDeletion] =
@@ -1397,6 +1400,8 @@ export default function AccountsPayablePage() {
   }
 
   function closePayExpenseModal() {
+    if (processingConfirmation) return;
+
     setExpensePendingPaymentReceipt(null);
     setIsPaymentConfirmationOpen(false);
     setPaymentInterest("");
@@ -1466,7 +1471,9 @@ export default function AccountsPayablePage() {
   }
 
   async function finishPayExpense() {
-    if (!expensePendingPaymentReceipt) return;
+    if (!expensePendingPaymentReceipt || processingConfirmation) return;
+
+    setProcessingConfirmation("payment");
 
     const interest = normalizeAmount(paymentInterest);
     const discount = normalizeAmount(paymentDiscount);
@@ -1529,12 +1536,14 @@ export default function AccountsPayablePage() {
             ? error.message
             : "Não foi possível registrar o pagamento no backend.",
         );
+        setProcessingConfirmation(null);
         return;
       }
     }
 
     savePaymentRecords(updatedPaymentRecords);
     closePayExpenseModal();
+    setProcessingConfirmation(null);
   }
 
   function openDeleteExpenseConfirmation() {
@@ -1553,11 +1562,15 @@ export default function AccountsPayablePage() {
   }
 
   function closeDeleteExpenseConfirmation() {
+    if (processingConfirmation) return;
+
     setExpensePendingDeletion(null);
   }
 
   async function confirmDeleteExpense() {
-    if (!expensePendingDeletion) return;
+    if (!expensePendingDeletion || processingConfirmation) return;
+
+    setProcessingConfirmation("delete");
 
     if (companyId) {
       try {
@@ -1569,6 +1582,7 @@ export default function AccountsPayablePage() {
             : "Não foi possível excluir a conta a pagar no backend.",
         );
         setExpensePendingDeletion(null);
+        setProcessingConfirmation(null);
         return;
       }
     }
@@ -1586,6 +1600,7 @@ export default function AccountsPayablePage() {
 
     setExpensePendingDeletion(null);
     closeCreateModal();
+    setProcessingConfirmation(null);
   }
 
   function openPaymentReversalConfirmation(selectedExpense?: Expense) {
@@ -1606,11 +1621,15 @@ export default function AccountsPayablePage() {
   }
 
   function closePaymentReversalConfirmation() {
+    if (processingConfirmation) return;
+
     setExpensePendingPaymentReversal(null);
   }
 
   async function confirmPaymentReversal() {
-    if (!expensePendingPaymentReversal) return;
+    if (!expensePendingPaymentReversal || processingConfirmation) return;
+
+    setProcessingConfirmation("reversal");
 
     if (companyId) {
       try {
@@ -1622,6 +1641,7 @@ export default function AccountsPayablePage() {
             : "Não foi possível estornar o pagamento no backend.",
         );
         setExpensePendingPaymentReversal(null);
+        setProcessingConfirmation(null);
         return;
       }
     }
@@ -1635,6 +1655,7 @@ export default function AccountsPayablePage() {
     savePaymentRecords(updatedPaymentRecords);
     setExpensePendingPaymentReversal(null);
     closeCreateModal();
+    setProcessingConfirmation(null);
   }
 
   function clearAllFilters() {
@@ -3268,7 +3289,8 @@ GERADO EM: {currentDate}`;
               <button
                 type="button"
                 onClick={closePayExpenseModal}
-                className="rounded-xl bg-slate-100 dark:bg-slate-800 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
+                disabled={Boolean(processingConfirmation)}
+                className="rounded-xl bg-slate-100 dark:bg-slate-800 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-slate-700"
               >
                 Cancelar
               </button>
@@ -3276,7 +3298,8 @@ GERADO EM: {currentDate}`;
               <button
                 type="button"
                 onClick={confirmPayExpense}
-                className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
+                disabled={Boolean(processingConfirmation)}
+                className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 Confirmar pagamento
               </button>
@@ -3295,6 +3318,8 @@ GERADO EM: {currentDate}`;
           confirmLabel="Confirmar pagamento"
           onCancel={() => setIsPaymentConfirmationOpen(false)}
           onConfirm={finishPayExpense}
+          isProcessing={processingConfirmation === "payment"}
+          processingLabel="Registrando pagamento..."
           isBlackTheme={isBlackTheme}
           themeClass={accountsPayableThemeClass}
         />
@@ -3311,6 +3336,8 @@ GERADO EM: {currentDate}`;
           danger
           onCancel={closeDeleteExpenseConfirmation}
           onConfirm={confirmDeleteExpense}
+          isProcessing={processingConfirmation === "delete"}
+          processingLabel="Excluindo..."
           isBlackTheme={isBlackTheme}
           themeClass={accountsPayableThemeClass}
         />
@@ -3326,6 +3353,8 @@ GERADO EM: {currentDate}`;
           confirmLabel="Voltar para pendente"
           onCancel={closePaymentReversalConfirmation}
           onConfirm={confirmPaymentReversal}
+          isProcessing={processingConfirmation === "reversal"}
+          processingLabel="Estornando..."
           isBlackTheme={isBlackTheme}
           themeClass={accountsPayableThemeClass}
         />
@@ -3727,6 +3756,8 @@ function ConfirmationModal({
   danger,
   onCancel,
   onConfirm,
+  isProcessing = false,
+  processingLabel = "Processando...",
   isBlackTheme,
   themeClass,
 }: {
@@ -3739,6 +3770,8 @@ function ConfirmationModal({
   danger?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  isProcessing?: boolean;
+  processingLabel?: string;
   isBlackTheme?: boolean;
   themeClass?: string;
 }) {
@@ -3779,7 +3812,8 @@ function ConfirmationModal({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-xl bg-slate-100 dark:bg-slate-800 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
+            disabled={isProcessing}
+            className="rounded-xl bg-slate-100 dark:bg-slate-800 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Cancelar
           </button>
@@ -3787,13 +3821,14 @@ function ConfirmationModal({
           <button
             type="button"
             onClick={onConfirm}
-            className={`rounded-xl px-5 py-3 text-sm font-bold text-white shadow-sm transition ${
+            disabled={isProcessing}
+            className={`rounded-xl px-5 py-3 text-sm font-bold text-white shadow-sm transition disabled:cursor-not-allowed disabled:opacity-70 ${
               danger
                 ? "bg-red-600 hover:bg-red-700"
                 : "bg-orange-500 hover:bg-orange-600"
             }`}
           >
-            {confirmLabel}
+            {isProcessing ? processingLabel : confirmLabel}
           </button>
         </div>
       </div>

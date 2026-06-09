@@ -629,9 +629,12 @@ export default function ContractsPage() {
   const [renewalRentValue, setRenewalRentValue] = useState("");
   const [renewalNotes, setRenewalNotes] = useState("");
   const [renewalError, setRenewalError] = useState("");
+  const [isRenewingContract, setIsRenewingContract] = useState(false);
   const [finishContract, setFinishContract] = useState<Contract | null>(null);
   const [finishReason, setFinishReason] = useState("");
   const [finishReasonError, setFinishReasonError] = useState("");
+  const [isFinishingContract, setIsFinishingContract] = useState(false);
+  const [isApplyingStatusChange, setIsApplyingStatusChange] = useState(false);
   const [pendingEditConfirmation, setPendingEditConfirmation] = useState<Contract | null>(null);
   const [openActionMenuContractId, setOpenActionMenuContractId] = useState<string | null>(null);
   const [actionMenuPosition, setActionMenuPosition] = useState<ActionMenuPosition | null>(null);
@@ -1181,6 +1184,8 @@ export default function ContractsPage() {
   }
 
   async function handleConfirmStatusReason() {
+    if (isApplyingStatusChange) return;
+
     const cleanReason = statusReason.trim();
 
     if (!pendingStatusChange) return;
@@ -1191,6 +1196,7 @@ export default function ContractsPage() {
     }
 
     try {
+      setIsApplyingStatusChange(true);
       const savedContract =
         pendingStatusChange.nextStatus === "Deleted"
           ? await softDeleteContract(pendingStatusChange.contract.id, cleanReason)
@@ -1223,15 +1229,19 @@ export default function ContractsPage() {
            ? error.message
           : "Não foi possível atualizar o status do contrato.",
       );
+      setIsApplyingStatusChange(false);
       return;
     }
 
+    setIsApplyingStatusChange(false);
     setPendingStatusChange(null);
     setStatusReason("");
     setStatusReasonError("");
   }
 
   function handleCancelStatusReason() {
+    if (isApplyingStatusChange) return;
+
     setPendingStatusChange(null);
     setStatusReason("");
     setStatusReasonError("");
@@ -1809,6 +1819,8 @@ export default function ContractsPage() {
   }
 
   function handleCloseRenewalModal() {
+    if (isRenewingContract) return;
+
     setRenewalContract(null);
     setRenewalEndDate("");
     setRenewalRentValue("");
@@ -1817,7 +1829,7 @@ export default function ContractsPage() {
   }
 
   async function handleConfirmContractRenewal() {
-    if (!renewalContract) return;
+    if (!renewalContract || isRenewingContract) return;
 
     const nextEndDate = renewalEndDate;
     const nextRentValue = parseCurrencyInput(renewalRentValue);
@@ -1838,6 +1850,7 @@ export default function ContractsPage() {
     }
 
     try {
+      setIsRenewingContract(true);
       const savedContract = await renewContract(renewalContract.id, {
         endDate: nextEndDate,
         rentValue: nextRentValue,
@@ -1866,10 +1879,16 @@ export default function ContractsPage() {
       setRenewalError(
         error instanceof Error ? error.message : "Não foi possível renovar o contrato."
       );
+      setIsRenewingContract(false);
       return;
     }
 
-    handleCloseRenewalModal();
+    setIsRenewingContract(false);
+    setRenewalContract(null);
+    setRenewalEndDate("");
+    setRenewalRentValue("");
+    setRenewalNotes("");
+    setRenewalError("");
   }
 
   function handleOpenFinishModal(contract: Contract) {
@@ -1879,13 +1898,15 @@ export default function ContractsPage() {
   }
 
   function handleCloseFinishModal() {
+    if (isFinishingContract) return;
+
     setFinishContract(null);
     setFinishReason("");
     setFinishReasonError("");
   }
 
   async function handleConfirmContractFinish() {
-    if (!finishContract) return;
+    if (!finishContract || isFinishingContract) return;
 
     const cleanReason = finishReason.trim();
 
@@ -1895,6 +1916,7 @@ export default function ContractsPage() {
     }
 
     try {
+      setIsFinishingContract(true);
       const savedContract = await finishContractAction(finishContract.id, cleanReason);
       const finishedContract = mapApiContractToContract(savedContract);
 
@@ -1919,10 +1941,14 @@ export default function ContractsPage() {
       setFinishReasonError(
         error instanceof Error ? error.message : "Não foi possível finalizar o contrato."
       );
+      setIsFinishingContract(false);
       return;
     }
 
-    handleCloseFinishModal();
+    setIsFinishingContract(false);
+    setFinishContract(null);
+    setFinishReason("");
+    setFinishReasonError("");
   }
 
   function handleOpenPrintableContract(contract: Contract) {
@@ -2979,7 +3005,8 @@ export default function ContractsPage() {
                 <button
                   type="button"
                   onClick={handleCloseRenewalModal}
-                  className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                  disabled={isRenewingContract}
+                  className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Cancelar
                 </button>
@@ -2987,9 +3014,10 @@ export default function ContractsPage() {
                 <button
                   type="button"
                   onClick={handleConfirmContractRenewal}
-                  className="rounded-2xl bg-emerald-600 px-5 py-4 text-sm font-black text-white shadow-md shadow-emerald-100 transition hover:bg-emerald-700"
+                  disabled={isRenewingContract}
+                  className="rounded-2xl bg-emerald-600 px-5 py-4 text-sm font-black text-white shadow-md shadow-emerald-100 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  Confirmar renovação
+                  {isRenewingContract ? "Renovando..." : "Confirmar renovação"}
                 </button>
               </div>
             </div>
@@ -3048,7 +3076,8 @@ export default function ContractsPage() {
                 <button
                   type="button"
                   onClick={handleCloseFinishModal}
-                  className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                  disabled={isFinishingContract}
+                  className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Cancelar
                 </button>
@@ -3056,9 +3085,10 @@ export default function ContractsPage() {
                 <button
                   type="button"
                   onClick={handleConfirmContractFinish}
-                  className="rounded-2xl bg-red-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600"
+                  disabled={isFinishingContract}
+                  className="rounded-2xl bg-red-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  Confirmar
+                  {isFinishingContract ? "Finalizando..." : "Confirmar"}
                 </button>
               </div>
             </div>
@@ -3229,7 +3259,8 @@ export default function ContractsPage() {
                 <button
                   type="button"
                   onClick={handleCancelStatusReason}
-                  className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                  disabled={isApplyingStatusChange}
+                  className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Cancelar
                 </button>
@@ -3237,9 +3268,10 @@ export default function ContractsPage() {
                 <button
                   type="button"
                   onClick={handleConfirmStatusReason}
-                  className="rounded-2xl bg-red-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600"
+                  disabled={isApplyingStatusChange}
+                  className="rounded-2xl bg-red-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  Confirmar
+                  {isApplyingStatusChange ? "Processando..." : "Confirmar"}
                 </button>
               </div>
             </div>

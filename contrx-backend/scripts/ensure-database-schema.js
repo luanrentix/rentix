@@ -24,6 +24,10 @@ function removeSslMode(url) {
   }
 }
 
+function shouldRejectUnauthorizedTls() {
+  return process.env.CONTRX_DB_SSL_REJECT_UNAUTHORIZED !== 'false';
+}
+
 function createClient() {
   if (!databaseUrl) {
     throw new Error('DATABASE_URL or DIRECT_URL environment variable is required.');
@@ -35,7 +39,9 @@ function createClient() {
     connectionString: isSupabaseConnection
       ? removeSslMode(databaseUrl)
       : databaseUrl,
-    ssl: isSupabaseConnection ? { rejectUnauthorized: false } : undefined,
+    ssl: isSupabaseConnection
+      ? { rejectUnauthorized: shouldRejectUnauthorizedTls() }
+      : undefined,
   });
 }
 

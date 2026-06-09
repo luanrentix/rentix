@@ -55,13 +55,17 @@ describe('ContratosService', () => {
         }),
       },
     };
+    const transactionMock = jest.fn(
+      (callback: (client: typeof tx) => unknown) => callback(tx),
+    );
     const prisma = {
       contract: {
         findFirst: jest.fn().mockResolvedValue(contract),
       },
-      $transaction: jest.fn((callback: (client: typeof tx) => unknown) =>
-        callback(tx),
-      ),
+      contaReceber: {
+        count: jest.fn().mockResolvedValue(0),
+      },
+      $transaction: transactionMock,
       ...prismaOverrides,
     } as unknown as PrismaService;
 
@@ -69,6 +73,7 @@ describe('ContratosService', () => {
       service: new ContratosService(prisma),
       prisma,
       tx,
+      transactionMock,
     };
   }
 
@@ -172,5 +177,26 @@ describe('ContratosService', () => {
         'company-1',
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('bloqueia finalizacao quando existem contas a receber em aberto', async () => {
+    const countMock = jest.fn().mockResolvedValue(2);
+    const { service, transactionMock } = createService({
+      contaReceber: {
+        count: countMock,
+      },
+    } as Partial<PrismaService>);
+
+    await expect(
+      service.finish('contract-1', { reason: 'Motivo valido' }, 'company-1'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(countMock).toHaveBeenCalledWith({
+      where: {
+        contractId: 'contract-1',
+        companyId: 'company-1',
+        status: { not: FinancialAccountStatus.PAID },
+      },
+    });
+    expect(transactionMock).not.toHaveBeenCalled();
   });
 });

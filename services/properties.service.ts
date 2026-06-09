@@ -20,6 +20,8 @@ export type PropertyType =
   | 'Land'
   | 'Other';
 
+export type PropertyManagementMode = 'OWNED' | 'MANAGED';
+
 export type Property = {
   id: string;
   companyId: string;
@@ -40,6 +42,10 @@ export type Property = {
   patrimonyCode?: string | null;
 
   rentalValue?: number | null;
+  managementMode?: PropertyManagementMode | string | null;
+  administrationFeePercentage?: number | null;
+  ownerPayoutDay?: number | null;
+  autoCreateOwnerPayable?: boolean | null;
 
   zipCode?: string | null;
   city?: string | null;
@@ -85,6 +91,10 @@ export type CreatePropertyDto = {
   patrimonyCode?: string;
 
   rentalValue?: number;
+  managementMode?: PropertyManagementMode | string;
+  administrationFeePercentage?: number | null;
+  ownerPayoutDay?: number | null;
+  autoCreateOwnerPayable?: boolean;
 
   zipCode?: string;
   city?: string;

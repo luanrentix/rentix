@@ -414,6 +414,12 @@ type Property = {
   id: string;
   name: string;
   assetCategory?: string | null;
+  ownerId?: string | null;
+  ownerName?: string | null;
+  managementMode?: string | null;
+  administrationFeePercentage?: number | null;
+  ownerPayoutDay?: number | null;
+  autoCreateOwnerPayable?: boolean | null;
   zipCode?: string;
   state?: string;
   city?: string;
@@ -584,6 +590,14 @@ function normalizeAmount(value: unknown) {
   return 0;
 }
 
+function roundMoney(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function formatPercent(value: number) {
+  return `${roundMoney(value).toFixed(2).replace(".", ",")}%`;
+}
+
 function getLocalDateValue(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -653,6 +667,9 @@ export default function AccountsReceivablePage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isTenantCreateOpen, setIsTenantCreateOpen] = useState(false);
   const [isChargeSaving, setIsChargeSaving] = useState(false);
+  const [processingConfirmation, setProcessingConfirmation] = useState<
+    "payment" | "delete" | "reversal" | "print" | null
+  >(null);
 
   const [search, setSearch] = useState("");
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
@@ -2644,6 +2661,8 @@ export default function AccountsReceivablePage() {
   }
 
   function closeReceivePaymentModal() {
+    if (processingConfirmation) return;
+
     setChargePendingPaymentReceipt(null);
     setPaymentBatchCharges([]);
     setIsPaymentConfirmationOpen(false);
@@ -2726,14 +2745,57 @@ export default function AccountsReceivablePage() {
   }
 
   function closePaymentConfirmation() {
+    if (processingConfirmation) return;
+
     setIsPaymentConfirmationOpen(false);
   }
 
+  function getOwnerPayoutNotice(charge: Charge | null) {
+    if (!charge?.contractId) return null;
+
+    const contract = contracts.find(
+      (item) => String(item.id) === String(charge.contractId),
+    );
+    const property = contract
+      ? properties.find((item) => String(item.id) === String(contract.propertyId))
+      : properties.find(
+          (item) => item.name.toLowerCase() === charge.property.toLowerCase(),
+        );
+
+    if (
+      !property ||
+      property.managementMode !== "MANAGED" ||
+      property.autoCreateOwnerPayable === false ||
+      !property.ownerId
+    ) {
+      return null;
+    }
+
+    const receivedAmount = normalizeAmount(paymentFinalAmount);
+    const feePercent = normalizeAmount(property.administrationFeePercentage || 0);
+    const feeAmount = roundMoney((receivedAmount * feePercent) / 100);
+    const payoutAmount = roundMoney(receivedAmount - feeAmount);
+
+    if (receivedAmount <= 0 || payoutAmount <= 0) return null;
+
+    return {
+      ownerName: property.ownerName || "Proprietario nao informado",
+      propertyName: property.name || charge.property,
+      feePercent,
+      feeAmount,
+      payoutAmount,
+      payoutDay: property.ownerPayoutDay || null,
+    };
+  }
+
   async function finishReceivePayment() {
-    if (!chargePendingPaymentReceipt) return;
+    if (!chargePendingPaymentReceipt || processingConfirmation) return;
+
+    setProcessingConfirmation("payment");
 
     if (paymentBatchCharges.length > 1) {
       await finishBatchReceivePayment();
+      setProcessingConfirmation(null);
       return;
     }
 
@@ -2778,6 +2840,7 @@ export default function AccountsReceivablePage() {
             ? error.message
             : "Não foi possível registrar o recebimento no backend.",
         );
+        setProcessingConfirmation(null);
         return;
       }
     }
@@ -2846,6 +2909,7 @@ export default function AccountsReceivablePage() {
     generatePaymentReceipt(receivedFlowCharge, paymentRecord);
     closeReceivePaymentModal();
     await continueContractFlowAfterDownPayment(receivedFlowCharge);
+    setProcessingConfirmation(null);
   }
 
   function distributeBatchPaymentAmount(
@@ -3101,6 +3165,8 @@ export default function AccountsReceivablePage() {
   }
 
   function closeDeleteChargeConfirmation() {
+    if (processingConfirmation) return;
+
     setChargePendingDeletion(null);
   }
 
@@ -3122,11 +3188,15 @@ export default function AccountsReceivablePage() {
   }
 
   function closePaymentReversalConfirmation() {
+    if (processingConfirmation) return;
+
     setChargePendingPaymentReversal(null);
   }
 
   async function confirmPaymentReversal() {
-    if (!chargePendingPaymentReversal) return;
+    if (!chargePendingPaymentReversal || processingConfirmation) return;
+
+    setProcessingConfirmation("reversal");
 
     let reversedAccount: ReceivableAccount | null = null;
 
@@ -3142,6 +3212,7 @@ export default function AccountsReceivablePage() {
             : "Não foi possível estornar o recebimento no backend.",
         );
         setChargePendingPaymentReversal(null);
+        setProcessingConfirmation(null);
         return;
       }
     }
@@ -3200,11 +3271,14 @@ export default function AccountsReceivablePage() {
       setPaymentRecords(updatedPaymentRecords);
     }
     setChargePendingPaymentReversal(null);
+    setProcessingConfirmation(null);
     closeCreateModal();
   }
 
   async function confirmDeleteCharge() {
-    if (!chargePendingDeletion) return;
+    if (!chargePendingDeletion || processingConfirmation) return;
+
+    setProcessingConfirmation("delete");
 
     if (companyId) {
       try {
@@ -3216,6 +3290,7 @@ export default function AccountsReceivablePage() {
             : "Não foi possível excluir a cobrança no backend.",
         );
         setChargePendingDeletion(null);
+        setProcessingConfirmation(null);
         return;
       }
     }
@@ -3236,6 +3311,7 @@ export default function AccountsReceivablePage() {
     setPaid(updatedPaid);
     setPaymentRecords(updatedPaymentRecords);
     setChargePendingDeletion(null);
+    setProcessingConfirmation(null);
     closeCreateModal();
   }
 
@@ -4835,6 +4911,10 @@ export default function AccountsReceivablePage() {
     paymentModalRemainingAmount - paymentModalFinalAmount,
     0,
   );
+  const ownerPayoutNotice =
+    !isBatchPayment && chargePendingPaymentReceipt
+      ? getOwnerPayoutNotice(chargePendingPaymentReceipt)
+      : null;
   const accountsReceivableThemeClass =
     themeMode === "graphite"
       ? "contrx-accounts-receivable-page-graphite"
@@ -6785,6 +6865,45 @@ export default function AccountsReceivablePage() {
                 </div>
               </div>
 
+              {ownerPayoutNotice && (
+                <div
+                  className={`rounded-2xl border p-4 shadow-sm ${
+                    isBlackTheme
+                      ? "border-amber-800 bg-amber-950/30 text-amber-100"
+                      : "border-amber-200 bg-amber-50 text-amber-950"
+                  }`}
+                >
+                  <p className="text-xs font-black uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                    Gestao de repasse ativa
+                  </p>
+                  <p className="mt-2 text-sm font-bold">
+                    Ao confirmar este recebimento, sera gerado um contas a pagar
+                    de repasse para {ownerPayoutNotice.ownerName}.
+                  </p>
+                  <div className="mt-3 grid gap-2 text-sm md:grid-cols-4">
+                    <p>
+                      <span className="font-black">Recebido:</span>{" "}
+                      {formatCurrency(paymentModalFinalAmount)}
+                    </p>
+                    <p>
+                      <span className="font-black">Taxa:</span>{" "}
+                      {formatCurrency(ownerPayoutNotice.feeAmount)} (
+                      {formatPercent(ownerPayoutNotice.feePercent)})
+                    </p>
+                    <p>
+                      <span className="font-black">Repasse:</span>{" "}
+                      {formatCurrency(ownerPayoutNotice.payoutAmount)}
+                    </p>
+                    <p>
+                      <span className="font-black">Vencimento:</span>{" "}
+                      {ownerPayoutNotice.payoutDay
+                        ? `dia ${ownerPayoutNotice.payoutDay}`
+                        : "data do recebimento"}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div
                 className={`rounded-2xl border p-5 shadow-sm ${
                   isBlackTheme
@@ -7095,7 +7214,8 @@ export default function AccountsReceivablePage() {
               <button
                 type="button"
                 onClick={closeReceivePaymentModal}
-                className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-3 text-sm font-black text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
+                disabled={Boolean(processingConfirmation)}
+                className="rounded-2xl bg-slate-100 dark:bg-slate-800 px-6 py-3 text-sm font-black text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-slate-700"
               >
                 Cancelar
               </button>
@@ -7103,7 +7223,8 @@ export default function AccountsReceivablePage() {
               <button
                 type="button"
                 onClick={confirmReceivePayment}
-                className="rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-emerald-600/20 dark:shadow-emerald-950/30 transition hover:bg-emerald-700"
+                disabled={Boolean(processingConfirmation)}
+                className="rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70 dark:shadow-emerald-950/30"
               >
                 Confirmar recebimento
               </button>
@@ -7163,6 +7284,8 @@ export default function AccountsReceivablePage() {
           tone="emerald"
           onCancel={closePaymentConfirmation}
           onConfirm={finishReceivePayment}
+          isProcessing={processingConfirmation === "payment"}
+          processingLabel="Registrando recebimento..."
           isBlackTheme={isBlackTheme}
           themeClass={accountsReceivableThemeClass}
         />
@@ -7186,6 +7309,8 @@ export default function AccountsReceivablePage() {
           danger
           onCancel={closeDeleteChargeConfirmation}
           onConfirm={confirmDeleteCharge}
+          isProcessing={processingConfirmation === "delete"}
+          processingLabel="Excluindo..."
           isBlackTheme={isBlackTheme}
           themeClass={accountsReceivableThemeClass}
           zIndex="z-[70]"
@@ -7210,6 +7335,8 @@ export default function AccountsReceivablePage() {
           tone="amber"
           onCancel={closePaymentReversalConfirmation}
           onConfirm={confirmPaymentReversal}
+          isProcessing={processingConfirmation === "reversal"}
+          processingLabel="Estornando..."
           isBlackTheme={isBlackTheme}
           themeClass={accountsReceivableThemeClass}
           zIndex="z-[70]"
@@ -7419,6 +7546,14 @@ function mapApiPropertyToReceivableProperty(property: ApiProperty): Property {
     id: property.id,
     name: property.title,
     assetCategory: property.assetCategory || "PROPERTY",
+    ownerId: property.ownerId || null,
+    ownerName: property.owner?.name || null,
+    managementMode: property.managementMode || "OWNED",
+    administrationFeePercentage: property.administrationFeePercentage
+      ? Number(property.administrationFeePercentage)
+      : 0,
+    ownerPayoutDay: property.ownerPayoutDay || null,
+    autoCreateOwnerPayable: property.autoCreateOwnerPayable !== false,
     zipCode: property.zipCode || "",
     state: property.state || "",
     city: property.city || "",
@@ -7576,6 +7711,8 @@ function ConfirmationModal({
   tone = "orange",
   onCancel,
   onConfirm,
+  isProcessing = false,
+  processingLabel = "Processando...",
   isBlackTheme,
   themeClass,
   zIndex = "z-[80]",
@@ -7592,6 +7729,8 @@ function ConfirmationModal({
   tone?: "orange" | "emerald" | "amber";
   onCancel: () => void;
   onConfirm: () => void;
+  isProcessing?: boolean;
+  processingLabel?: string;
   isBlackTheme?: boolean;
   themeClass?: string;
   zIndex?: string;
@@ -7645,7 +7784,8 @@ function ConfirmationModal({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+            disabled={isProcessing}
+            className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
           >
             {cancelLabel}
           </button>
@@ -7653,9 +7793,10 @@ function ConfirmationModal({
           <button
             type="button"
             onClick={onConfirm}
-            className={`rounded-xl px-5 py-3 text-sm font-bold text-white shadow-sm transition ${confirmClass}`}
+            disabled={isProcessing}
+            className={`rounded-xl px-5 py-3 text-sm font-bold text-white shadow-sm transition disabled:cursor-not-allowed disabled:opacity-70 ${confirmClass}`}
           >
-            {confirmLabel}
+            {isProcessing ? processingLabel : confirmLabel}
           </button>
         </div>
       </div>

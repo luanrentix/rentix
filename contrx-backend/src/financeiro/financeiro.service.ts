@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { FinancialAccountStatus, Prisma } from '@prisma/client';
+import { getFinancialSettlementAmount } from '../common/financial-settlement';
 import { PrismaService } from '../prisma/prisma.service';
 
 type FinancialStatus = 'Pending' | 'Paid' | 'Overdue';
@@ -259,10 +260,11 @@ export class FinanceiroService {
       return total + (Number.isFinite(amount) ? amount : 0);
     }, 0);
     const settlementAmount = payments.reduce((total, payment) => {
-      const amountPaid = Number(payment.amountPaid || 0);
-      const discount = Number(payment.discount || 0);
-      const interest = Number(payment.interest || 0);
-      const amount = amountPaid + discount - interest;
+      const amount = getFinancialSettlementAmount(
+        payment.amountPaid,
+        payment.discount,
+        payment.interest,
+      );
 
       return total + (Number.isFinite(amount) ? amount : 0);
     }, 0);

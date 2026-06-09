@@ -14,6 +14,7 @@ type RateLimitBucket = {
 type RequestLike = {
   ip?: string;
   ips?: string[];
+  body?: Record<string, unknown>;
   headers?: Record<string, string | string[] | undefined>;
   route?: {
     path?: string;
@@ -36,6 +37,12 @@ function getClientIp(request: RequestLike) {
   return forwardedIp || request.ips?.[0] || request.ip || 'unknown';
 }
 
+function getNormalizedBodyEmail(request: RequestLike) {
+  const email = request.body?.email;
+
+  return typeof email === 'string' ? email.trim().toLowerCase() : '';
+}
+
 function cleanupExpiredBuckets(now: number) {
   for (const [key, bucket] of buckets.entries()) {
     if (bucket.resetAt <= now) {
@@ -50,7 +57,8 @@ export class RateLimitGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<RequestLike>();
     const now = Date.now();
     const routeKey = request.route?.path || request.originalUrl || 'unknown';
-    const key = `${getClientIp(request)}:${routeKey}`;
+    const emailKey = getNormalizedBodyEmail(request);
+    const key = `${getClientIp(request)}:${routeKey}:${emailKey}`;
     const currentBucket = buckets.get(key);
 
     cleanupExpiredBuckets(now);

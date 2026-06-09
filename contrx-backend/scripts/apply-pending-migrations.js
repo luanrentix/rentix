@@ -26,13 +26,19 @@ function removeSslMode(url) {
   }
 }
 
+function shouldRejectUnauthorizedTls() {
+  return process.env.CONTRX_DB_SSL_REJECT_UNAUTHORIZED !== 'false';
+}
+
 const isSupabaseConnection = isSupabaseDatabaseUrl(databaseUrl);
 
 const client = new Client({
   connectionString: isSupabaseConnection
     ? removeSslMode(databaseUrl)
     : databaseUrl,
-  ssl: isSupabaseConnection ? { rejectUnauthorized: false } : undefined,
+  ssl: isSupabaseConnection
+    ? { rejectUnauthorized: shouldRejectUnauthorizedTls() }
+    : undefined,
 });
 
 const migrationsDir = path.resolve(__dirname, '..', 'prisma', 'migrations');

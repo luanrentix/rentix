@@ -25,6 +25,9 @@
 contrx-backend/backups/
 contrx-backend/.local-postgres/
 
+# generated local exports
+/PROJETO_EXPORTADO.md
+
 # local dev logs
 /.next-dev*.log
 

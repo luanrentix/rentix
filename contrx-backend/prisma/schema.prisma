@@ -185,6 +185,10 @@ model Property {
   condition   String? @map("condicao")
   patrimonyCode String? @map("codigo_patrimonial")
   rentalValue Decimal? @map("valor_aluguel") @db.Decimal(10, 2)
+  managementMode String @default("OWNED") @map("modo_gestao")
+  administrationFeePercentage Decimal? @map("taxa_administracao_percentual") @db.Decimal(5, 2)
+  ownerPayoutDay Int? @map("dia_repasse_proprietario")
+  autoCreateOwnerPayable Boolean @default(true) @map("gerar_repasse_proprietario")
 
   zipCode    String? @map("cep")
   city       String? @map("cidade")

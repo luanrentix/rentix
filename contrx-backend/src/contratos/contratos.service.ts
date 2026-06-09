@@ -111,6 +111,7 @@ export class ContratosService {
       this.formatDateForInput(currentContract.endDate);
     const nextRentValue =
       updateContractDto.rentValue ?? Number(currentContract.rentValue || 0);
+    const nextStatus = updateContractDto.status ?? currentContract.status;
 
     await this.validateCompany(nextCompanyId);
     this.validateContractInput(nextStartDate, nextEndDate, nextRentValue);
@@ -135,6 +136,13 @@ export class ContratosService {
         nextPropertyId,
         currentContract.id,
       );
+    }
+
+    if (
+      nextStatus === ContractStatus.FINISHED &&
+      currentContract.status !== ContractStatus.FINISHED
+    ) {
+      await this.assertContractHasNoOpenReceivables(id, companyId);
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -203,6 +211,7 @@ export class ContratosService {
   async finish(id: string, data: MotivoContratoDto, companyId: string) {
     const reason = this.normalizeRequiredReason(data.reason);
     await this.ensureContractExists(id, companyId);
+    await this.assertContractHasNoOpenReceivables(id, companyId);
 
     return this.prisma.$transaction(async (tx) => {
       await this.deleteFuturePendingReceivablesFromContract(tx, id, companyId);
@@ -350,6 +359,25 @@ export class ContratosService {
     await tx.contaReceber.deleteMany({
       where: { id: { in: pendingAccountIds } },
     });
+  }
+
+  private async assertContractHasNoOpenReceivables(
+    contractId: string,
+    companyId: string,
+  ) {
+    const openReceivablesCount = await this.prisma.contaReceber.count({
+      where: {
+        contractId,
+        companyId,
+        status: { not: FinancialAccountStatus.PAID },
+      },
+    });
+
+    if (openReceivablesCount > 0) {
+      throw new BadRequestException(
+        `Nao e possivel encerrar este contrato enquanto existir ${openReceivablesCount} conta(s) a receber em aberto.`,
+      );
+    }
   }
 
   private async deleteFuturePendingReceivablesFromContract(

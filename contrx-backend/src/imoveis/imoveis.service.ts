@@ -13,6 +13,8 @@ import { AtualizarImovelDto } from './dto/atualizar-imovel.dto';
 export class ImoveisService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private readonly propertyManagementModes = new Set(['OWNED', 'MANAGED']);
+
   async create(createPropertyDto: CriarImovelDto, companyId: string) {
     const data = this.normalizePropertyData(createPropertyDto);
     const company = await this.prisma.company.findUnique({
@@ -36,6 +38,8 @@ export class ImoveisService {
       }
     }
 
+    this.validateManagedPropertyData(data.managementMode, data.ownerId);
+
     return this.prisma.property.create({
       data: {
         companyId,
@@ -57,6 +61,14 @@ export class ImoveisService {
           data.rentalValue !== undefined && data.rentalValue !== null
             ? new Prisma.Decimal(data.rentalValue)
             : null,
+        managementMode: this.normalizeManagementMode(data.managementMode),
+        administrationFeePercentage:
+          data.administrationFeePercentage !== undefined &&
+          data.administrationFeePercentage !== null
+            ? new Prisma.Decimal(data.administrationFeePercentage)
+            : null,
+        ownerPayoutDay: data.ownerPayoutDay ?? null,
+        autoCreateOwnerPayable: data.autoCreateOwnerPayable ?? true,
 
         zipCode: data.zipCode || null,
         city: data.city || null,
@@ -137,12 +149,20 @@ export class ImoveisService {
       }
     }
 
+    const nextOwnerId =
+      data.ownerId !== undefined ? data.ownerId || null : property.ownerId;
+    const nextManagementMode =
+      data.managementMode !== undefined
+        ? this.normalizeManagementMode(data.managementMode)
+        : property.managementMode;
+
+    this.validateManagedPropertyData(nextManagementMode, nextOwnerId);
+
     return this.prisma.property.update({
       where: { id },
       data: {
         companyId,
-        ownerId:
-          data.ownerId !== undefined ? data.ownerId || null : property.ownerId,
+        ownerId: nextOwnerId,
 
         title: data.title ?? property.title,
         code: data.code !== undefined ? data.code || null : property.code,
@@ -179,6 +199,19 @@ export class ImoveisService {
           data.rentalValue !== undefined && data.rentalValue !== null
             ? new Prisma.Decimal(data.rentalValue)
             : property.rentalValue,
+        managementMode: nextManagementMode,
+        administrationFeePercentage:
+          data.administrationFeePercentage !== undefined
+            ? data.administrationFeePercentage !== null
+              ? new Prisma.Decimal(data.administrationFeePercentage)
+              : null
+            : property.administrationFeePercentage,
+        ownerPayoutDay:
+          data.ownerPayoutDay !== undefined
+            ? data.ownerPayoutDay
+            : property.ownerPayoutDay,
+        autoCreateOwnerPayable:
+          data.autoCreateOwnerPayable ?? property.autoCreateOwnerPayable,
 
         zipCode:
           data.zipCode !== undefined ? data.zipCode || null : property.zipCode,
@@ -274,5 +307,30 @@ export class ImoveisService {
       'complement',
       'description',
     ]);
+  }
+
+  private normalizeManagementMode(value?: string | null) {
+    const mode = String(value || 'OWNED').toUpperCase();
+
+    if (!this.propertyManagementModes.has(mode)) {
+      throw new BadRequestException('Modo de gestao do imovel invalido.');
+    }
+
+    return mode;
+  }
+
+  private validateManagedPropertyData(
+    managementMode?: string | null,
+    ownerId?: string | null,
+  ) {
+    if (this.normalizeManagementMode(managementMode) !== 'MANAGED') {
+      return;
+    }
+
+    if (!ownerId) {
+      throw new BadRequestException(
+        'Informe o proprietario para imoveis administrados por imobiliaria.',
+      );
+    }
   }
 }

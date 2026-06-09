@@ -657,7 +657,7 @@ export default function FinancialReportsPage() {
       expenseCategoryRanking,
       dreLines: [
         {
-          label: "Receita operacional bruta",
+          label: "Entradas de caixa recebidas",
           amount: grossRevenue,
           tone: "positive",
           detail: `${receivedReceivables.length} recebimento(s) baixado(s)`,
@@ -675,13 +675,13 @@ export default function FinancialReportsPage() {
           detail: "Acréscimos financeiros registrados nas baixas",
         },
         {
-          label: "Receita líquida realizada",
+          label: "Receita liquida movimentada em caixa",
           amount: totalReceived,
           tone: "positive",
           strong: true,
         },
         {
-          label: "Despesas operacionais pagas",
+          label: "Saidas de caixa pagas",
           amount: totalPaid,
           tone: "negative",
           detail: `${paidPayables.length} pagamento(s) baixado(s)`,
@@ -697,7 +697,7 @@ export default function FinancialReportsPage() {
           tone: "negative",
         },
         {
-          label: "Resultado operacional realizado",
+          label: "Resultado operacional de caixa",
           amount: operationalResult,
           tone: operationalResult >= 0 ? "positive" : "negative",
           detail: `Margem operacional de ${formatPercentage(operationalMargin)}`,
@@ -713,17 +713,17 @@ export default function FinancialReportsPage() {
       ] satisfies ReportLine[],
       trialBalanceLines: [
         {
-          label: "Entradas realizadas",
+          label: "Entradas de caixa",
           amount: totalReceived,
           tone: "positive",
         },
         {
-          label: "Saídas realizadas",
+          label: "Saidas de caixa",
           amount: totalPaid,
           tone: "negative",
         },
         {
-          label: "Saldo financeiro realizado",
+          label: "Saldo financeiro de caixa",
           amount: operationalResult,
           tone: operationalResult >= 0 ? "positive" : "negative",
           strong: true,
@@ -749,7 +749,7 @@ export default function FinancialReportsPage() {
       ] satisfies ReportLine[],
       chartRows: [
         {
-          name: "Recebido",
+          name: "Recebido em caixa",
           value: totalReceived,
         },
         {
@@ -757,7 +757,7 @@ export default function FinancialReportsPage() {
           value: totalReceivableOpen,
         },
         {
-          name: "Pago",
+          name: "Pago em caixa",
           value: totalPaid,
         },
         {
@@ -833,7 +833,7 @@ export default function FinancialReportsPage() {
     const summaryText = [
       `${selectedReportOption?.title || "Relatório financeiro"} - ${periodLabel}`,
       ...executiveSummary,
-      `Resultado realizado: ${formatCurrency(reportData.operationalResult)}`,
+      `Resultado de caixa: ${formatCurrency(reportData.operationalResult)}`,
       `Saldo projetado: ${formatCurrency(reportData.projectedResult)}`,
       `Inadimplência: ${formatCurrency(reportData.overdueTotal)}`,
     ].join("\n");
@@ -1373,8 +1373,8 @@ function CashFlowTable({ rows }: { rows: CashFlowRow[] }) {
         <thead className="bg-slate-50 text-xs uppercase text-slate-500 dark:bg-slate-950 dark:text-slate-400">
           <tr>
             <th className="px-4 py-3 font-black">Período</th>
-            <th className="px-4 py-3 text-right font-black">Recebido</th>
-            <th className="px-4 py-3 text-right font-black">Pago</th>
+            <th className="px-4 py-3 text-right font-black">Recebido em caixa</th>
+            <th className="px-4 py-3 text-right font-black">Pago em caixa</th>
             <th className="px-4 py-3 text-right font-black">Saldo do mês</th>
             <th className="px-4 py-3 text-right font-black">A receber</th>
             <th className="px-4 py-3 text-right font-black">A pagar</th>
@@ -1801,8 +1801,8 @@ function buildCsvRows(
       ...header,
       [
         "Período",
-        "Recebido",
-        "Pago",
+        "Recebido em caixa",
+        "Pago em caixa",
         "Saldo do mês",
         "A receber",
         "A pagar",

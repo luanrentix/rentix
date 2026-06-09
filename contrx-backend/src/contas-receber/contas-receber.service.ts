@@ -4,6 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { FinancialAccountStatus, Prisma } from '@prisma/client';
+import {
+  exceedsFinancialSettlementLimit,
+  getFinancialSettlementAmount,
+  getFinancialStatusAfterSettlement,
+} from '../common/financial-settlement';
 import { toUpperText, uppercaseFields } from '../common/text-normalization';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -82,12 +87,16 @@ export class ContasReceberService {
   async remove(id: string, companyId: string) {
     await this.ensureExists(id, companyId);
 
-    await this.prisma.pagamentoRecebido.deleteMany({
-      where: { chargeId: id },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      await this.deleteOwnerPayoutForReceivable(tx, id, companyId);
 
-    return this.prisma.contaReceber.delete({
-      where: { id },
+      await tx.pagamentoRecebido.deleteMany({
+        where: { chargeId: id },
+      });
+
+      return tx.contaReceber.delete({
+        where: { id },
+      });
     });
   }
 
@@ -108,7 +117,7 @@ export class ContasReceberService {
         where: { chargeId: id },
         _sum: { amountPaid: true, discount: true, interest: true },
       });
-      const currentSettlementAmount = this.getSettlementAmount(
+      const currentSettlementAmount = getFinancialSettlementAmount(
         currentPaymentSummary._sum.amountPaid,
         currentPaymentSummary._sum.discount,
         currentPaymentSummary._sum.interest,
@@ -120,7 +129,7 @@ export class ContasReceberService {
 
       const nextSettlementAmount =
         currentSettlementAmount +
-        this.getSettlementAmount(
+        getFinancialSettlementAmount(
           data.amountPaid,
           data.discount || 0,
           data.interest || 0,
@@ -148,6 +157,8 @@ export class ContasReceberService {
         },
       });
 
+      await this.syncOwnerPayoutFromReceivable(tx, id, companyId);
+
       return tx.contaReceber.update({
         where: { id },
         data: {
@@ -171,7 +182,7 @@ export class ContasReceberService {
       'O valor recebido deve ser maior que zero.',
     );
     const account = await this.ensureExists(id, companyId);
-    const nextSettlementAmount = this.getSettlementAmount(
+    const nextSettlementAmount = getFinancialSettlementAmount(
       data.amountPaid,
       data.discount || 0,
       data.interest || 0,
@@ -203,6 +214,8 @@ export class ContasReceberService {
           note: data.note ? toUpperText(data.note) : null,
         },
       });
+
+      await this.syncOwnerPayoutFromReceivable(tx, id, companyId);
 
       return tx.contaReceber.update({
         where: { id },
@@ -250,7 +263,7 @@ export class ContasReceberService {
           where: { chargeId: payment.chargeId },
           _sum: { amountPaid: true, discount: true, interest: true },
         });
-        const currentSettlementAmount = this.getSettlementAmount(
+        const currentSettlementAmount = getFinancialSettlementAmount(
           currentPaymentSummary._sum.amountPaid,
           currentPaymentSummary._sum.discount,
           currentPaymentSummary._sum.interest,
@@ -264,7 +277,7 @@ export class ContasReceberService {
 
         const nextSettlementAmount =
           currentSettlementAmount +
-          this.getSettlementAmount(
+          getFinancialSettlementAmount(
             payment.amountPaid,
             payment.discount || 0,
             payment.interest || 0,
@@ -306,6 +319,12 @@ export class ContasReceberService {
           include: this.defaultInclude,
         });
 
+        await this.syncOwnerPayoutFromReceivable(
+          tx,
+          payment.chargeId,
+          companyId,
+        );
+
         updatedAccounts.push(updatedAccount);
       }
 
@@ -317,6 +336,8 @@ export class ContasReceberService {
     await this.ensureExists(id, companyId);
 
     return this.prisma.$transaction(async (tx) => {
+      await this.deleteOwnerPayoutForReceivable(tx, id, companyId);
+
       await tx.pagamentoRecebido.deleteMany({
         where: { chargeId: id },
       });
@@ -510,19 +531,7 @@ export class ContasReceberService {
   }
 
   private getStatusAfterPayment(accountAmount: number, amountPaid: number) {
-    return amountPaid >= accountAmount
-      ? FinancialAccountStatus.PAID
-      : FinancialAccountStatus.PENDING;
-  }
-
-  private getSettlementAmount(
-    amountPaid: unknown,
-    discount: unknown,
-    interest: unknown,
-  ) {
-    return (
-      Number(amountPaid || 0) + Number(discount || 0) - Number(interest || 0)
-    );
+    return getFinancialStatusAfterSettlement(accountAmount, amountPaid);
   }
 
   private validatePaymentInput(
@@ -545,8 +554,274 @@ export class ContasReceberService {
     settlementAmount: number,
     message: string,
   ) {
-    if (settlementAmount - accountAmount > 0.01) {
+    if (exceedsFinancialSettlementLimit(accountAmount, settlementAmount)) {
       throw new BadRequestException(message);
     }
+  }
+
+  private async syncOwnerPayoutFromReceivable(
+    tx: Prisma.TransactionClient,
+    chargeId: string,
+    companyId: string,
+  ) {
+    const account = await this.findReceivableWithProperty(
+      tx,
+      chargeId,
+      companyId,
+    );
+
+    if (!account) {
+      throw new NotFoundException('Conta a receber nao encontrada.');
+    }
+
+    const property = account.contract?.property;
+    const ownerPayoutGroupId = this.getOwnerPayoutGroupId(account.id);
+    const existingPayout = await tx.contaPagar.findFirst({
+      where: {
+        companyId,
+        installmentGroupId: ownerPayoutGroupId,
+      },
+      include: {
+        payments: true,
+      },
+    });
+
+    const isManagedProperty =
+      property?.managementMode === 'MANAGED' &&
+      property.autoCreateOwnerPayable &&
+      !!property.ownerId &&
+      !!property.owner;
+
+    if (!isManagedProperty) {
+      if (existingPayout) {
+        this.assertPayoutCanBeUpdated(
+          existingPayout.status,
+          existingPayout.payments.length,
+        );
+        await tx.contaPagar.delete({
+          where: { id: existingPayout.id },
+        });
+      }
+
+      return null;
+    }
+
+    const ownerId = property.ownerId;
+    const owner = property.owner;
+
+    if (!ownerId || !owner) {
+      return null;
+    }
+
+    const totalReceived = account.payments.reduce(
+      (sum, payment) => sum + Number(payment.amountPaid || 0),
+      0,
+    );
+
+    if (totalReceived <= 0) {
+      if (existingPayout) {
+        this.assertPayoutCanBeUpdated(
+          existingPayout.status,
+          existingPayout.payments.length,
+        );
+        await tx.contaPagar.delete({
+          where: { id: existingPayout.id },
+        });
+      }
+
+      return null;
+    }
+
+    const feePercent = Number(property.administrationFeePercentage || 0);
+    const feeAmount = this.roundMoney((totalReceived * feePercent) / 100);
+    const ownerAmount = this.roundMoney(totalReceived - feeAmount);
+
+    if (ownerAmount <= 0) {
+      if (existingPayout) {
+        this.assertPayoutCanBeUpdated(
+          existingPayout.status,
+          existingPayout.payments.length,
+        );
+        await tx.contaPagar.delete({
+          where: { id: existingPayout.id },
+        });
+      }
+
+      return null;
+    }
+
+    const referenceDate = account.payments[0]?.paidAt || new Date();
+    const dueDate = this.buildOwnerPayoutDueDate(
+      referenceDate,
+      property.ownerPayoutDay,
+    );
+    const issueDate = referenceDate;
+    const ownerName = owner.name || '';
+    const propertyName = property.title || account.propertyName || '';
+    const tenantName = account.tenantName || '';
+    const note =
+      `REPASSE AUTOMATICO DA LOCACAO DE ${toUpperText(propertyName)}. ` +
+      `INQUILINO: ${toUpperText(tenantName || 'NAO INFORMADO')}. ` +
+      `RECEBIDO: ${this.formatMoney(totalReceived)}. ` +
+      `TAXA: ${this.formatMoney(feeAmount)}. ` +
+      `REPASSE: ${this.formatMoney(ownerAmount)}.`;
+
+    if (existingPayout) {
+      this.assertPayoutCanBeUpdated(
+        existingPayout.status,
+        existingPayout.payments.length,
+      );
+
+      return tx.contaPagar.update({
+        where: { id: existingPayout.id },
+        data: {
+          personId: ownerId,
+          propertyId: property.id,
+          personName: ownerName,
+          description: `REPASSE ALUGUEL - ${toUpperText(propertyName)}`,
+          category: 'REPASSE PROPRIETARIO',
+          note,
+          amount: new Prisma.Decimal(ownerAmount),
+          issueDate,
+          dueDate,
+          status: FinancialAccountStatus.PENDING,
+          manual: false,
+          installmentGroupId: ownerPayoutGroupId,
+        },
+      });
+    }
+
+    return tx.contaPagar.create({
+      data: {
+        company: { connect: { id: companyId } },
+        person: { connect: { id: ownerId } },
+        property: { connect: { id: property.id } },
+        personName: ownerName,
+        description: `REPASSE ALUGUEL - ${toUpperText(propertyName)}`,
+        category: 'REPASSE PROPRIETARIO',
+        note,
+        amount: new Prisma.Decimal(ownerAmount),
+        issueDate,
+        dueDate,
+        status: FinancialAccountStatus.PENDING,
+        manual: false,
+        installmentGroupId: ownerPayoutGroupId,
+      },
+    });
+  }
+
+  private async deleteOwnerPayoutForReceivable(
+    tx: Prisma.TransactionClient,
+    chargeId: string,
+    companyId: string,
+  ) {
+    const ownerPayoutGroupId = this.getOwnerPayoutGroupId(chargeId);
+    const payout = await tx.contaPagar.findFirst({
+      where: {
+        companyId,
+        installmentGroupId: ownerPayoutGroupId,
+      },
+      include: {
+        payments: true,
+      },
+    });
+
+    if (!payout) {
+      return;
+    }
+
+    this.assertPayoutCanBeUpdated(payout.status, payout.payments.length);
+
+    await tx.contaPagar.delete({
+      where: { id: payout.id },
+    });
+  }
+
+  private async findReceivableWithProperty(
+    tx: Prisma.TransactionClient,
+    chargeId: string,
+    companyId: string,
+  ) {
+    return tx.contaReceber.findFirst({
+      where: { id: chargeId, companyId },
+      include: {
+        payments: {
+          orderBy: { paidAt: 'desc' as const },
+        },
+        contract: {
+          include: {
+            property: {
+              include: {
+                owner: true,
+              },
+            },
+            tenant: true,
+          },
+        },
+      },
+    });
+  }
+
+  private assertPayoutCanBeUpdated(
+    status: FinancialAccountStatus,
+    paymentCount: number,
+  ) {
+    if (status === FinancialAccountStatus.PAID || paymentCount > 0) {
+      throw new BadRequestException(
+        'O repasse do proprietario ja possui pagamentos e nao pode ser alterado automaticamente.',
+      );
+    }
+  }
+
+  private getOwnerPayoutGroupId(chargeId: string) {
+    return `owner-payout:${chargeId}`;
+  }
+
+  private roundMoney(value: number) {
+    return Math.round((value + Number.EPSILON) * 100) / 100;
+  }
+
+  private formatMoney(value: number) {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(this.roundMoney(value));
+  }
+
+  private buildOwnerPayoutDueDate(
+    referenceDate: Date,
+    payoutDay?: number | null,
+  ) {
+    const dueDate = new Date(referenceDate);
+    const comparisonDate = new Date(referenceDate);
+    const desiredDay =
+      payoutDay && payoutDay >= 1 && payoutDay <= 31
+        ? payoutDay
+        : dueDate.getDate();
+
+    comparisonDate.setHours(0, 0, 0, 0);
+    dueDate.setHours(0, 0, 0, 0);
+    dueDate.setDate(1);
+    dueDate.setMonth(referenceDate.getMonth());
+    dueDate.setFullYear(referenceDate.getFullYear());
+    dueDate.setDate(
+      Math.min(
+        desiredDay,
+        new Date(dueDate.getFullYear(), dueDate.getMonth() + 1, 0).getDate(),
+      ),
+    );
+
+    if (dueDate < comparisonDate) {
+      dueDate.setMonth(dueDate.getMonth() + 1);
+      dueDate.setDate(1);
+      dueDate.setDate(
+        Math.min(
+          desiredDay,
+          new Date(dueDate.getFullYear(), dueDate.getMonth() + 1, 0).getDate(),
+        ),
+      );
+    }
+
+    return dueDate;
   }
 }

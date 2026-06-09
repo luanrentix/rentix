@@ -282,6 +282,14 @@ const companyUserRoleOptions: { label: string; value: CompanyUserRole }[] = [
   { label: "Dono da empresa", value: "OWNER" },
 ];
 
+function getCompanyUserRoleOptions(role: CompanyUserRole) {
+  if (role === "OWNER") {
+    return companyUserRoleOptions;
+  }
+
+  return companyUserRoleOptions.filter((option) => option.value !== "OWNER");
+}
+
 const roleLabels: Record<string, string> = {
   SYSTEM_OWNER: "Dono do sistema",
   OWNER: "Dono da empresa",
@@ -4008,7 +4016,7 @@ export default function ConfiguracoesPage() {
                                     }
                                     className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                                   >
-                                    {companyUserRoleOptions.map((option) => (
+                                    {getCompanyUserRoleOptions(editCompanyUserForm.role).map((option) => (
                                       <option key={option.value} value={option.value}>
                                         {option.label}
                                       </option>
@@ -4229,7 +4237,7 @@ export default function ConfiguracoesPage() {
                                 }
                                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                               >
-                                {companyUserRoleOptions.map((option) => (
+                                {getCompanyUserRoleOptions(newCompanyUserForm.role).map((option) => (
                                   <option key={option.value} value={option.value}>
                                     {option.label}
                                   </option>

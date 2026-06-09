@@ -728,7 +728,7 @@ export default function FinancialPage() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <p className="text-xs font-black uppercase tracking-wide text-orange-600">
-                  Resultado realizado {periodLabel}
+                  Resultado de caixa {periodLabel}
                 </p>
                 <h2
                   className={`mt-2 text-2xl font-black sm:text-3xl ${
@@ -738,7 +738,7 @@ export default function FinancialPage() {
                   {isLoading ? "..." : formatCurrency(balance.operationalResult)}
                 </h2>
                 <p className="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
-                  Recebido menos pago, usando a data real da baixa.
+                  Entradas menos saídas de caixa, usando a data real da baixa.
                 </p>
               </div>
 
@@ -792,7 +792,7 @@ export default function FinancialPage() {
           />
           <MetricCard
             icon={<Banknote className="h-5 w-5" />}
-            title="Recebido"
+            title="Recebido em caixa"
             value={formatCurrency(balance.totalReceived)}
             detail={`${balance.receivedCount} baixado(s)`}
             tone="slate"
@@ -806,7 +806,7 @@ export default function FinancialPage() {
           />
           <MetricCard
             icon={<CreditCard className="h-5 w-5" />}
-            title="Pago"
+            title="Pago em caixa"
             value={formatCurrency(balance.totalPaid)}
             detail={`${balance.paidCount} despesa(s)`}
             tone="slate"

@@ -27,6 +27,13 @@ describe('ContasReceberService', () => {
         deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       contaReceber: {
+        findFirst: jest.fn().mockResolvedValue({
+          ...account,
+          tenantName: 'Inquilino',
+          propertyName: 'Imovel',
+          payments: [],
+          contract: null,
+        }),
         update: jest.fn().mockImplementation(({ data }) =>
           Promise.resolve({
             ...account,
@@ -35,6 +42,12 @@ describe('ContasReceberService', () => {
             payments: [],
           }),
         ),
+      },
+      contaPagar: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        delete: jest.fn().mockResolvedValue({ id: 'payout-1' }),
+        create: jest.fn().mockResolvedValue({ id: 'payout-1' }),
+        update: jest.fn().mockResolvedValue({ id: 'payout-1' }),
       },
     };
 
