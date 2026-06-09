@@ -7,6 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "prisma generate && nest build",
+    "db:migrate:deploy": "prisma migrate deploy",
     "ensure:schema": "node scripts/ensure-database-schema.js",
     "normalize:text": "node scripts/normalize-existing-text.js",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",

@@ -40,9 +40,12 @@ export class ContratosService {
     );
     this.validateContractInput(data.startDate, data.endDate, data.rentValue);
 
-    await this.ensurePropertyHasNoActiveContract(
+    await this.ensurePropertyHasNoConflictingActiveContract(
       data.companyId,
       data.propertyId,
+      data.startDate,
+      data.endDate,
+      data.isTemporaryRental ?? false,
     );
 
     return this.prisma.$transaction(async (tx) => {
@@ -50,13 +53,6 @@ export class ContratosService {
         data: this.buildCreateData(data),
         include: this.defaultInclude,
       });
-
-      if (contract.status === ContractStatus.ACTIVE) {
-        await this.syncOpenReceivablesFromContract(tx, contract);
-        await this.upsertContractDueScheduleItem(tx, contract);
-      } else {
-        await this.syncRelatedRecordsAfterContractChange(tx, contract);
-      }
 
       return contract;
     });
@@ -113,6 +109,8 @@ export class ContratosService {
     const nextRentValue =
       updateContractDto.rentValue ?? Number(currentContract.rentValue || 0);
     const nextStatus = updateContractDto.status ?? currentContract.status;
+    const nextIsTemporaryRental =
+      updateContractDto.isTemporaryRental ?? currentContract.isTemporaryRental;
 
     await this.validateCompany(nextCompanyId);
     this.validateContractInput(nextStartDate, nextEndDate, nextRentValue);
@@ -130,11 +128,17 @@ export class ContratosService {
 
     if (
       nextPropertyId !== currentContract.propertyId ||
-      nextCompanyId !== currentContract.companyId
+      nextCompanyId !== currentContract.companyId ||
+      nextStartDate !== this.formatDateForInput(currentContract.startDate) ||
+      nextEndDate !== this.formatDateForInput(currentContract.endDate) ||
+      nextIsTemporaryRental !== currentContract.isTemporaryRental
     ) {
-      await this.ensurePropertyHasNoActiveContract(
+      await this.ensurePropertyHasNoConflictingActiveContract(
         nextCompanyId,
         nextPropertyId,
+        nextStartDate,
+        nextEndDate,
+        nextIsTemporaryRental,
         currentContract.id,
       );
     }
@@ -575,7 +579,7 @@ export class ContratosService {
     ].join('\n');
     const data = {
       title: 'Vencimento de contrato',
-      customerName: contract.tenantName || 'Inquilino nao informado',
+      customerName: contract.tenantName || 'Pessoa nao informada',
       propertyName: contract.propertyName || 'Bem/ativo nao informado',
       date: contract.endDate,
       time: existingScheduleItem?.time || '08:00',
@@ -743,25 +747,35 @@ export class ContratosService {
     });
 
     if (!tenant) {
-      throw new BadRequestException('Inquilino nao encontrado.');
+      throw new BadRequestException('Pessoa nao encontrada.');
     }
 
     if (tenant.status !== 'ACTIVE') {
-      throw new BadRequestException('Inquilino inativo nao pode ser usado.');
-    }
-
-    if (!tenant.isTenant) {
-      throw new BadRequestException(
-        'Esta pessoa nao esta marcada como inquilino.',
-      );
+      throw new BadRequestException('Pessoa inativa nao pode ser usada.');
     }
   }
 
-  private async ensurePropertyHasNoActiveContract(
+  private async ensurePropertyHasNoConflictingActiveContract(
     companyId: string,
     propertyId: string,
+    startDateValue: string,
+    endDateValue: string,
+    isTemporaryRental: boolean,
     ignoredContractId?: string,
   ) {
+    const startDate = this.parseDate(startDateValue, 'Data inicial invalida.');
+    const endDate = this.parseDate(endDateValue, 'Data final invalida.');
+    const periodWhere = isTemporaryRental
+      ? {
+          startDate: { lte: endDate },
+          endDate: { gte: startDate },
+        }
+      : {
+          endDate: {
+            gte: this.getTodayStart(),
+          },
+          isTemporaryRental: false,
+        };
     const existingContract = await this.prisma.contract.findFirst({
       where: {
         companyId,
@@ -769,15 +783,17 @@ export class ContratosService {
         status: {
           in: [ContractStatus.ACTIVE],
         },
-        endDate: {
-          gte: this.getTodayStart(),
-        },
+        ...periodWhere,
         id: ignoredContractId ? { not: ignoredContractId } : undefined,
       },
     });
 
     if (existingContract) {
-      throw new BadRequestException('Este bem/ativo ja possui contrato ativo.');
+      throw new BadRequestException(
+        isTemporaryRental
+          ? 'Este bem/ativo ja possui contrato ativo nesse periodo.'
+          : 'Este bem/ativo ja possui contrato ativo.',
+      );
     }
   }
 

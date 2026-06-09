@@ -1,6 +1,7 @@
 function getApiBaseUrl() {
   const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
   const isBrowser = typeof window !== 'undefined';
+  const productionApiUrl = 'https://api.contrx.com.br';
   const isLocalhost =
     isBrowser &&
     (window.location.hostname === 'localhost' ||
@@ -26,7 +27,7 @@ function getApiBaseUrl() {
     return 'http://localhost:3001';
   }
 
-  return '';
+  return productionApiUrl;
 }
 
 type RequestOptions = RequestInit & {

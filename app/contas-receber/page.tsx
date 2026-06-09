@@ -674,6 +674,7 @@ export default function AccountsReceivablePage() {
 
   const [search, setSearch] = useState("");
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+  const [focusedContractId, setFocusedContractId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(
     DEFAULT_RECEIVABLE_STATUS_FILTER,
   );
@@ -755,6 +756,7 @@ export default function AccountsReceivablePage() {
     if (!companyId) return;
 
     loadReceivablesFromBackend(companyId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
 
   async function loadReceivablesFromBackend(currentCompanyId: string) {
@@ -767,6 +769,7 @@ export default function AccountsReceivablePage() {
       ]);
       const nextManualCharges = apiCharges.map(mapApiReceivableToCharge);
       const nextContracts = apiContracts.map(mapApiContractToReceivableContract);
+      const nextTenants = apiPeople.map(mapApiPersonToReceivableTenant);
       const nextPaid = nextManualCharges
         .filter((charge) => charge.status === "Paid")
         .map((charge) => charge.id);
@@ -777,13 +780,16 @@ export default function AccountsReceivablePage() {
       setPaymentRecords(nextPaymentRecords);
       setContracts(nextContracts);
       setProperties(apiProperties.map(mapApiPropertyToReceivableProperty));
-      setTenants(apiPeople.map(mapApiPersonToReceivableTenant));
+      setTenants(nextTenants);
 
       const queryParams = new URLSearchParams(window.location.search);
       const cameFromContract = queryParams.get("fromContract") === "1";
       const contractIdFromQuery = queryParams.get("contractId");
 
       if (cameFromContract && contractIdFromQuery) {
+        setFocusedContractId(String(contractIdFromQuery));
+        setStatusFilter("All");
+
         const linkedContract = nextContracts.find(
           (contract) => String(contract.id) === String(contractIdFromQuery),
         );
@@ -799,11 +805,34 @@ export default function AccountsReceivablePage() {
               Number(secondCharge.installmentNumber || 0),
           );
 
-        if (linkedContract && linkedCharges.length > 0) {
-          setPendingContractCarnetRequest({
-            contract: linkedContract,
-            charges: linkedCharges,
-          });
+        if (linkedContract) {
+          const linkedTenant =
+            nextTenants.find(
+              (tenant) => String(tenant.id) === String(linkedContract.tenantId),
+            ) || null;
+
+          setSelectedTenant(linkedTenant);
+        }
+
+        const contractChargeData = getCompanyStorageItem(
+          currentCompanyId,
+          RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
+          RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
+        );
+
+        if (contractChargeData) {
+          try {
+            const parsedContractChargeData = JSON.parse(
+              contractChargeData,
+            ) as ReceivableFromContractPayload;
+
+            removeCompanyStorageItem(currentCompanyId, RECEIVABLE_FROM_CONTRACT_STORAGE_KEY);
+            openChargeFromContractPayload(parsedContractChargeData);
+          } catch {
+            removeCompanyStorageItem(currentCompanyId, RECEIVABLE_FROM_CONTRACT_STORAGE_KEY);
+          }
+        } else if (linkedCharges.length === 0) {
+          setFocusedContractId(String(contractIdFromQuery));
         }
       }
     } catch (error) {
@@ -900,6 +929,7 @@ export default function AccountsReceivablePage() {
     setInstallmentPreview([]);
     setIsTenantCreateOpen(false);
     setSelectedTenant(null);
+    setFocusedContractId(null);
     setSearch("");
     setIsSearchOpen(false);
     setIsCreateOpen(true);
@@ -942,8 +972,10 @@ export default function AccountsReceivablePage() {
       RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
       RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
     );
+    const queryParams = new URLSearchParams(window.location.search);
+    const cameFromContract = queryParams.get("fromContract") === "1";
 
-    if (contractChargeData) {
+    if (contractChargeData && !cameFromContract) {
       try {
         const parsedContractChargeData = JSON.parse(
           contractChargeData,
@@ -1235,6 +1267,12 @@ export default function AccountsReceivablePage() {
   const filteredCharges = useMemo(() => {
     let result = charges;
 
+    if (focusedContractId) {
+      result = result.filter(
+        (charge) => String(charge.contractId || "") === String(focusedContractId),
+      );
+    }
+
     if (selectedTenant) {
       result = result.filter(
         (charge) =>
@@ -1249,7 +1287,7 @@ export default function AccountsReceivablePage() {
     }
 
     return result;
-  }, [charges, selectedTenant, statusFilter]);
+  }, [charges, focusedContractId, selectedTenant, statusFilter]);
 
   useEffect(() => {
     const availableChargeIds = new Set(charges.map((charge) => String(charge.id)));
@@ -3939,7 +3977,7 @@ export default function AccountsReceivablePage() {
   <style>
     @page { size: A4; margin: 0; }
     * { box-sizing: border-box; }
-    body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; }
+    body { margin: 0; background: #eef2f7; color: #111827; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
     .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
     .print-button { background: #f97316; color: #ffffff; }
@@ -4321,51 +4359,51 @@ export default function AccountsReceivablePage() {
           <title>Recibos de Recebimento</title>
           <style>
             * { box-sizing: border-box; }
-            body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            body { margin: 0; background: #eef2f7; color: #111827; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 10px; padding: 12px 18px; background: rgba(255,255,255,.97); border-bottom: 1px solid #d1d5db; }
-            .toolbar button { border: 0; border-radius: 10px; padding: 10px 16px; font-size: 12px; font-weight: 900; cursor: pointer; }
+            .toolbar button { border: 0; border-radius: 8px; padding: 10px 16px; font-size: 12px; font-weight: 800; cursor: pointer; }
             .print-button { background: #f97316; color: #ffffff; }
             .close-button { background: #f3f4f6; color: #111827; border: 1px solid #d1d5db !important; }
-            .page { width: 176mm; margin: 14px auto; }
-            .receipt { position: relative; background: #ffffff; border: 1px solid #111827; padding: 8mm 9mm 7mm; box-shadow: 0 18px 36px rgba(15,23,42,.16); break-inside: avoid; page-break-inside: avoid; margin-bottom: 12px; }
-            .receipt::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 4px; background: #f97316; }
-            .top { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: start; border-bottom: 2px solid #111827; padding-bottom: 8px; }
-            .title { margin: 0; font-size: 26px; line-height: 1; font-weight: 900; letter-spacing: 0; text-transform: uppercase; }
+            .page { width: 184mm; margin: 16px auto; }
+            .receipt { position: relative; background: #ffffff; border: 1px solid #cbd5e1; border-top: 5px solid #f97316; padding: 10mm; box-shadow: 0 18px 34px rgba(15,23,42,.14); break-inside: avoid; page-break-inside: avoid; margin-bottom: 12px; }
+            .receipt::before { display: none; }
+            .top { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: start; border-bottom: 1px solid #d9e0ea; padding-bottom: 8mm; }
+            .title { margin: 0; font-size: 28px; line-height: 1; font-weight: 900; letter-spacing: 0; text-transform: uppercase; }
             .subtitle { margin-top: 5px; color: #c2410c; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .1em; }
-            .number { min-width: 150px; border: 1px solid #111827; padding: 8px 10px; text-align: right; font-size: 10px; line-height: 1.45; }
+            .number { min-width: 165px; border: 1px solid #d9e0ea; background: #f8fafc; padding: 12px 14px; text-align: right; font-size: 10px; line-height: 1.55; }
             .number strong { font-size: 12px; }
-            .reference { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; border-bottom: 1px solid #d1d5db; padding: 9px 0; }
-            .reference div { border: 1px solid #d1d5db; padding: 7px 8px; }
+            .reference { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 8mm 0 0; }
+            .reference div { border: 1px solid #d9e0ea; background: #f8fafc; padding: 10px 11px; }
             .reference span, .amount-card span { display: block; color: #6b7280; font-size: 9px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
             .reference strong { display: block; margin-top: 5px; font-size: 12px; line-height: 1.25; }
-            .amount-grid { display: grid; grid-template-columns: 1.35fr 1fr 1fr; margin-top: 9px; overflow: hidden; border: 1px solid #111827; }
-            .amount-card { min-height: 52px; padding: 8px 10px; border-right: 1px solid #111827; }
-            .amount-card:last-child { border-right: 0; }
+            .amount-grid { display: grid; grid-template-columns: 1.35fr 1fr 1fr; gap: 8px; margin-top: 8px; overflow: visible; border: 0; }
+            .amount-card { min-height: 58px; padding: 11px 12px; border: 1px solid #d9e0ea; }
+            .amount-card:last-child { border-right: 1px solid #d9e0ea; }
             .amount-card strong { display: block; margin-top: 5px; font-size: 16px; line-height: 1.15; }
-            .amount-card.highlight { background: #fff7ed; }
+            .amount-card.highlight { background: #fff7ed; border-color: #fed7aa; }
             .amount-card.highlight strong { font-size: 22px; }
             .amount-card.discount strong { color: #b91c1c; }
-            .total-box { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; margin-top: 9px; border: 2px solid #111827; background: #111827; color: #ffffff; padding: 9px 11px; }
+            .total-box { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; margin-top: 8px; border: 1px solid #0f172a; background: #0f172a; color: #ffffff; padding: 13px 15px; }
             .total-box span { display: block; color: #fed7aa; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
             .total-box strong { display: block; margin-top: 3px; font-size: 25px; line-height: 1; font-weight: 900; }
-            .confirmed { border: 1px solid #fed7aa; background: #ffffff; color: #c2410c; padding: 7px 10px; font-size: 10px; font-weight: 900; white-space: nowrap; }
-            .payment-box { margin-top: 9px; border: 1px solid #111827; }
-            .payment-row { display: grid; grid-template-columns: 190px 1fr; border-bottom: 1px solid #d1d5db; }
+            .confirmed { border: 1px solid #bbf7d0; background: #f0fdf4; color: #166534; padding: 8px 11px; font-size: 10px; font-weight: 900; white-space: nowrap; text-transform: uppercase; letter-spacing: .04em; }
+            .payment-box { margin-top: 8px; border: 1px solid #d9e0ea; }
+            .payment-row { display: grid; grid-template-columns: 170px 1fr; border-bottom: 1px solid #e5eaf1; }
             .payment-row:last-child { border-bottom: 0; }
             .payment-row span, .payment-row strong { padding: 6px 8px; font-size: 10.5px; }
-            .payment-row span { background: #f9fafb; font-weight: 900; border-right: 1px solid #d1d5db; text-transform: uppercase; letter-spacing: .04em; }
+            .payment-row span { background: #f8fafc; font-weight: 900; border-right: 1px solid #e5eaf1; text-transform: uppercase; letter-spacing: .04em; }
             .payment-row strong { text-align: right; font-weight: 800; }
-            .declaration { margin: 9px 0 0; color: #374151; font-size: 9.5px; line-height: 1.35; font-weight: 700; }
-            .signature-area { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 19px; }
+            .declaration { margin: 7mm 0 0; color: #334155; font-size: 10px; line-height: 1.55; font-weight: 700; }
+            .signature-area { display: grid; grid-template-columns: 1fr 1fr; gap: 22mm; margin-top: 13mm; }
             .signature { border-top: 1px solid #111827; padding-top: 5px; text-align: center; font-size: 10px; font-weight: 800; }
             .signature small { display: block; margin-top: 3px; color: #4b5563; font-weight: 700; }
-            .footer { margin-top: 9px; border-top: 1px solid #d1d5db; padding-top: 6px; color: #374151; font-size: 8.5px; line-height: 1.3; text-align: center; }
+            .footer { margin-top: 7mm; border-top: 1px solid #d9e0ea; padding-top: 4mm; color: #64748b; font-size: 8.5px; line-height: 1.35; text-align: center; }
             @page { size: A4 portrait; margin: 10mm; }
             @media print {
               body { background: #ffffff; }
               .toolbar { display: none !important; }
               .page { width: 100%; margin: 0; }
-              .receipt { width: 100%; border: 1px solid #111827; box-shadow: none; padding: 7mm 8mm 6mm; margin-bottom: 0; }
+              .receipt { width: 100%; border: 1px solid #cbd5e1; border-top: 5px solid #f97316; box-shadow: none; padding: 9mm; margin-bottom: 0; }
               .receipt + .receipt { margin-top: 8mm; page-break-before: always; }
             }
           </style>
@@ -4440,52 +4478,52 @@ export default function AccountsReceivablePage() {
           <title>Recibo de Recebimento</title>
           <style>
             * { box-sizing: border-box; }
-            body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; }
+            body { margin: 0; background: #eef2f7; color: #111827; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 10px; padding: 12px 18px; background: rgba(255,255,255,.97); border-bottom: 1px solid #d1d5db; }
-            .toolbar button { border: 0; border-radius: 10px; padding: 10px 16px; font-size: 12px; font-weight: 900; cursor: pointer; }
+            .toolbar button { border: 0; border-radius: 8px; padding: 10px 16px; font-size: 12px; font-weight: 800; cursor: pointer; }
             .print-button { background: #f97316; color: #ffffff; }
             .close-button { background: #f3f4f6; color: #111827; border: 1px solid #d1d5db !important; }
-            .page { width: 176mm; margin: 14px auto; }
-            .receipt { position: relative; background: #ffffff; border: 1px solid #111827; padding: 8mm 9mm 7mm; box-shadow: 0 18px 36px rgba(15,23,42,.16); break-inside: avoid; page-break-inside: avoid; }
-            .receipt::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 4px; background: #f97316; }
-            .top { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: start; border-bottom: 2px solid #111827; padding-bottom: 8px; }
-            .title { margin: 0; font-size: 26px; line-height: 1; font-weight: 900; letter-spacing: 0; text-transform: uppercase; }
+            .page { width: 184mm; margin: 16px auto; }
+            .receipt { position: relative; background: #ffffff; border: 1px solid #cbd5e1; border-top: 5px solid #f97316; padding: 10mm; box-shadow: 0 18px 34px rgba(15,23,42,.14); break-inside: avoid; page-break-inside: avoid; }
+            .receipt::before { display: none; }
+            .top { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: start; border-bottom: 1px solid #d9e0ea; padding-bottom: 8mm; }
+            .title { margin: 0; font-size: 28px; line-height: 1; font-weight: 900; letter-spacing: 0; text-transform: uppercase; }
             .subtitle { margin-top: 5px; color: #c2410c; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .1em; }
-            .number { min-width: 150px; border: 1px solid #111827; padding: 8px 10px; text-align: right; font-size: 10px; line-height: 1.45; }
+            .number { min-width: 165px; border: 1px solid #d9e0ea; background: #f8fafc; padding: 12px 14px; text-align: right; font-size: 10px; line-height: 1.55; }
             .number strong { font-size: 12px; }
-            .reference { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; border-bottom: 1px solid #d1d5db; padding: 9px 0; }
-            .reference div { border: 1px solid #d1d5db; padding: 7px 8px; }
+            .reference { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 8mm 0 0; }
+            .reference div { border: 1px solid #d9e0ea; background: #f8fafc; padding: 10px 11px; }
             .reference span { display: block; color: #6b7280; font-size: 9px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
             .reference strong { display: block; margin-top: 5px; font-size: 12px; line-height: 1.25; }
-            .amount-grid { display: grid; grid-template-columns: 1.35fr 1fr 1fr; margin-top: 9px; overflow: hidden; border: 1px solid #111827; }
-            .amount-card { min-height: 52px; padding: 8px 10px; border-right: 1px solid #111827; }
-            .amount-card:last-child { border-right: 0; }
+            .amount-grid { display: grid; grid-template-columns: 1.35fr 1fr 1fr; gap: 8px; margin-top: 8px; overflow: visible; border: 0; }
+            .amount-card { min-height: 58px; padding: 11px 12px; border: 1px solid #d9e0ea; }
+            .amount-card:last-child { border-right: 1px solid #d9e0ea; }
             .amount-card span { display: block; color: #4b5563; font-size: 9px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
             .amount-card strong { display: block; margin-top: 5px; font-size: 16px; line-height: 1.15; }
-            .amount-card.highlight { background: #fff7ed; }
+            .amount-card.highlight { background: #fff7ed; border-color: #fed7aa; }
             .amount-card.highlight strong { font-size: 22px; }
             .amount-card.discount strong { color: #b91c1c; }
-            .total-box { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; margin-top: 9px; border: 2px solid #111827; background: #111827; color: #ffffff; padding: 9px 11px; }
+            .total-box { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; margin-top: 8px; border: 1px solid #0f172a; background: #0f172a; color: #ffffff; padding: 13px 15px; }
             .total-box span { display: block; color: #fed7aa; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
             .total-box strong { display: block; margin-top: 3px; font-size: 25px; line-height: 1; font-weight: 900; }
-            .confirmed { border: 1px solid #fed7aa; background: #ffffff; color: #c2410c; padding: 7px 10px; font-size: 10px; font-weight: 900; white-space: nowrap; }
-            .payment-box { margin-top: 9px; border: 1px solid #111827; }
-            .payment-row { display: grid; grid-template-columns: 190px 1fr; border-bottom: 1px solid #d1d5db; }
+            .confirmed { border: 1px solid #bbf7d0; background: #f0fdf4; color: #166534; padding: 8px 11px; font-size: 10px; font-weight: 900; white-space: nowrap; text-transform: uppercase; letter-spacing: .04em; }
+            .payment-box { margin-top: 8px; border: 1px solid #d9e0ea; }
+            .payment-row { display: grid; grid-template-columns: 170px 1fr; border-bottom: 1px solid #e5eaf1; }
             .payment-row:last-child { border-bottom: 0; }
             .payment-row span, .payment-row strong { padding: 6px 8px; font-size: 10.5px; }
-            .payment-row span { background: #f9fafb; font-weight: 900; border-right: 1px solid #d1d5db; text-transform: uppercase; letter-spacing: .04em; }
+            .payment-row span { background: #f8fafc; font-weight: 900; border-right: 1px solid #e5eaf1; text-transform: uppercase; letter-spacing: .04em; }
             .payment-row strong { text-align: right; font-weight: 800; }
-            .declaration { margin: 9px 0 0; color: #374151; font-size: 9.5px; line-height: 1.35; font-weight: 700; }
-            .signature-area { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 19px; }
+            .declaration { margin: 7mm 0 0; color: #334155; font-size: 10px; line-height: 1.55; font-weight: 700; }
+            .signature-area { display: grid; grid-template-columns: 1fr 1fr; gap: 22mm; margin-top: 13mm; }
             .signature { border-top: 1px solid #111827; padding-top: 5px; text-align: center; font-size: 10px; font-weight: 800; }
             .signature small { display: block; margin-top: 3px; color: #4b5563; font-weight: 700; }
-            .footer { margin-top: 9px; border-top: 1px solid #d1d5db; padding-top: 6px; color: #374151; font-size: 8.5px; line-height: 1.3; text-align: center; }
+            .footer { margin-top: 7mm; border-top: 1px solid #d9e0ea; padding-top: 4mm; color: #64748b; font-size: 8.5px; line-height: 1.35; text-align: center; }
             @page { size: A4 portrait; margin: 10mm; }
             @media print {
               body { background: #ffffff; }
               .toolbar { display: none !important; }
               .page { width: 100%; margin: 0; }
-              .receipt { width: 100%; border: 1px solid #111827; box-shadow: none; padding: 7mm 8mm 6mm; }
+              .receipt { width: 100%; border: 1px solid #cbd5e1; border-top: 5px solid #f97316; box-shadow: none; padding: 9mm; }
               .receipt + .receipt { margin-top: 8mm; page-break-before: always; }
             }
           </style>
@@ -7825,5 +7863,3 @@ function ConfirmationModal({
     </div>
   );
 }
-
-

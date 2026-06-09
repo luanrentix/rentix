@@ -118,6 +118,11 @@ export async function getReceivableAccounts(companyId: string) {
   return apiFetch<ReceivableAccount[]>('/contas-receber');
 }
 
+export async function getContractReceivableAccounts(companyId: string) {
+  void companyId;
+  return apiFetch<ReceivableAccount[]>('/contas-receber/contratos/resumo');
+}
+
 export async function createReceivableAccount(data: CreateReceivableAccountDto) {
   return apiFetch<ReceivableAccount>('/contas-receber', {
     method: 'POST',

@@ -55,6 +55,37 @@ export class ContasReceberService {
     });
   }
 
+  async findContractSummary(companyId?: string) {
+    if (!companyId) {
+      throw new BadRequestException('O companyId e obrigatorio.');
+    }
+
+    return this.prisma.contaReceber.findMany({
+      where: {
+        companyId,
+        contractId: { not: null },
+      },
+      orderBy: { dueDate: 'asc' },
+      select: {
+        id: true,
+        companyId: true,
+        contractId: true,
+        tenantId: true,
+        propertyName: true,
+        tenantName: true,
+        issueDate: true,
+        dueDate: true,
+        amount: true,
+        status: true,
+        manual: true,
+        installmentNumber: true,
+        installmentTotal: true,
+        installmentGroupId: true,
+        isDownPayment: true,
+      },
+    });
+  }
+
   async findOne(id: string, companyId: string) {
     const account = await this.prisma.contaReceber.findFirst({
       where: { id, companyId },

@@ -40,6 +40,11 @@ export class ContasReceberController {
     return this.contasReceberService.findAll(user.companyId);
   }
 
+  @Get('contratos/resumo')
+  findContractSummary(@CurrentUser() user: UsuarioAutenticado) {
+    return this.contasReceberService.findContractSummary(user.companyId);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string, @CurrentUser() user: UsuarioAutenticado) {
     return this.contasReceberService.findOne(id, user.companyId);

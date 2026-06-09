@@ -10,7 +10,7 @@ describe('ContratosService', () => {
     propertyId: 'property-1',
     tenantId: 'tenant-1',
     propertyName: 'Imovel',
-    tenantName: 'Inquilino',
+    tenantName: 'Pessoa',
     startDate: new Date('2026-05-01T00:00:00'),
     endDate: new Date('2026-05-31T00:00:00'),
     rentValue: new Prisma.Decimal(1000),
@@ -114,7 +114,7 @@ describe('ContratosService', () => {
     });
   });
 
-  it('cria contrato ativo gerando parcelas como financeiro vinculado', async () => {
+  it('cria contrato ativo sem gerar parcelas ou agenda automaticamente', async () => {
     const { service, tx } = createService({
       company: {
         findUnique: jest.fn().mockResolvedValue({ id: 'company-1' }),
@@ -131,7 +131,7 @@ describe('ContratosService', () => {
           id: 'tenant-1',
           companyId: 'company-1',
           status: 'ACTIVE',
-          isTenant: true,
+          isTenant: false,
         }),
       },
       contract: {
@@ -150,7 +150,7 @@ describe('ContratosService', () => {
         propertyId: 'property-1',
         tenantId: 'tenant-1',
         propertyName: 'Imovel',
-        tenantName: 'Inquilino',
+        tenantName: 'Pessoa',
         startDate: '2026-05-01',
         endDate: '2026-08-01',
         rentValue: 1000,
@@ -160,30 +160,161 @@ describe('ContratosService', () => {
     );
 
     expect(tx.contract.create).toHaveBeenCalled();
-    expect(tx.contaReceber.create).toHaveBeenCalledTimes(3);
-    expect(tx.contaReceber.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        company: { connect: { id: 'company-1' } },
-        contract: { connect: { id: 'contract-1' } },
-        tenant: { connect: { id: 'tenant-1' } },
-        amount: new Prisma.Decimal(1000),
-        status: FinancialAccountStatus.PENDING,
-        manual: false,
-        installmentNumber: 1,
-        installmentTotal: 3,
-        installmentGroupId: 'contract-1-installments',
-        isDownPayment: false,
-      }),
+    expect(tx.contaReceber.create).not.toHaveBeenCalled();
+    expect(tx.scheduleItem.create).not.toHaveBeenCalled();
+  });
+
+  it('permite contrato temporario do mesmo bem quando o periodo nao conflita', async () => {
+    const contractFindFirst = jest.fn().mockResolvedValue(null);
+    const { service, tx } = createService({
+      company: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'company-1' }),
+      },
+      property: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'property-1',
+          companyId: 'company-1',
+          isActive: true,
+        }),
+      },
+      person: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'tenant-1',
+          companyId: 'company-1',
+          status: 'ACTIVE',
+        }),
+      },
+      contract: {
+        findFirst: contractFindFirst,
+      },
+    } as Partial<PrismaService>);
+    tx.contract.create.mockResolvedValue({
+      ...contract,
+      isTemporaryRental: true,
     });
-    expect(tx.scheduleItem.create).toHaveBeenCalledWith({
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      data: expect.objectContaining({
+    tx.contaReceber.findMany.mockResolvedValue([]);
+
+    await service.create(
+      {
+        propertyId: 'property-1',
+        tenantId: 'tenant-1',
+        propertyName: 'Imovel',
+        tenantName: 'Pessoa',
+        startDate: '2026-09-01',
+        endDate: '2026-09-05',
+        rentValue: 1000,
+        status: ContractStatus.ACTIVE,
+        isTemporaryRental: true,
+      },
+      'company-1',
+    );
+
+    expect(contractFindFirst).toHaveBeenCalledWith({
+      where: {
         companyId: 'company-1',
-        title: 'Vencimento de contrato',
-        type: 'Contrato',
-        status: 'scheduled',
-      }),
+        propertyId: 'property-1',
+        startDate: { lte: new Date('2026-09-05T00:00:00') },
+        endDate: { gte: new Date('2026-09-01T00:00:00') },
+      },
     });
+    expect(tx.contract.create).toHaveBeenCalled();
+    expect(tx.contaReceber.create).not.toHaveBeenCalled();
+  });
+
+  it('permite contrato padrao quando o mesmo bem tem apenas contrato temporario ativo', async () => {
+    const contractFindFirst = jest.fn().mockResolvedValue(null);
+    const { service, tx } = createService({
+      company: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'company-1' }),
+      },
+      property: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'property-1',
+          companyId: 'company-1',
+          isActive: true,
+        }),
+      },
+      person: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'tenant-1',
+          companyId: 'company-1',
+          status: 'ACTIVE',
+        }),
+      },
+      contract: {
+        findFirst: contractFindFirst,
+      },
+    } as Partial<PrismaService>);
+
+    await service.create(
+      {
+        propertyId: 'property-1',
+        tenantId: 'tenant-1',
+        propertyName: 'Imovel',
+        tenantName: 'Pessoa',
+        startDate: '2026-09-01',
+        endDate: '2026-12-01',
+        rentValue: 1000,
+        status: ContractStatus.ACTIVE,
+        isTemporaryRental: false,
+      },
+      'company-1',
+    );
+
+    expect(contractFindFirst).toHaveBeenCalledWith({
+      where: {
+        companyId: 'company-1',
+        propertyId: 'property-1',
+        isTemporaryRental: false,
+      },
+    });
+    expect(tx.contract.create).toHaveBeenCalled();
+    expect(tx.contaReceber.create).not.toHaveBeenCalled();
+  });
+
+  it('bloqueia contrato temporario do mesmo bem quando o periodo conflita', async () => {
+    const { service, transactionMock } = createService({
+      company: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'company-1' }),
+      },
+      property: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'property-1',
+          companyId: 'company-1',
+          isActive: true,
+        }),
+      },
+      person: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'tenant-1',
+          companyId: 'company-1',
+          status: 'ACTIVE',
+        }),
+      },
+      contract: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'contract-existing',
+        }),
+      },
+    } as Partial<PrismaService>);
+
+    await expect(
+      service.create(
+        {
+          propertyId: 'property-1',
+          tenantId: 'tenant-1',
+          propertyName: 'Imovel',
+          tenantName: 'Pessoa',
+          startDate: '2026-09-01',
+          endDate: '2026-09-05',
+          rentValue: 1000,
+          status: ContractStatus.ACTIVE,
+          isTemporaryRental: true,
+        },
+        'company-1',
+      ),
+    ).rejects.toThrow('Este bem/ativo ja possui contrato ativo nesse periodo.');
+    expect(transactionMock).not.toHaveBeenCalled();
   });
 
   it('renova contrato e gera parcelas faltantes no mesmo padrao da criacao', async () => {
@@ -218,34 +349,32 @@ describe('ContratosService', () => {
       'company-1',
     );
 
-    expect(tx.contract.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'contract-1' },
-        data: expect.objectContaining({
-          endDate: new Date('2026-08-31T00:00:00'),
-          rentValue: new Prisma.Decimal(1200),
-          status: ContractStatus.ACTIVE,
-        }),
-      }),
-    );
+    expect(tx.contract.update).toHaveBeenCalledWith({
+      where: { id: 'contract-1' },
+      data: {
+        endDate: new Date('2026-08-31T00:00:00'),
+        rentValue: new Prisma.Decimal(1200),
+        status: ContractStatus.ACTIVE,
+      },
+    });
     expect(tx.contaReceber.create).toHaveBeenCalledTimes(2);
     expect(tx.contaReceber.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
+      data: {
         dueDate: new Date('2026-07-01T00:00:00'),
         amount: new Prisma.Decimal(1200),
         installmentNumber: 2,
         installmentTotal: 3,
         installmentGroupId: 'contract-1-installments',
-      }),
+      },
     });
     expect(tx.contaReceber.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
+      data: {
         dueDate: new Date('2026-08-01T00:00:00'),
         amount: new Prisma.Decimal(1200),
         installmentNumber: 3,
         installmentTotal: 3,
         installmentGroupId: 'contract-1-installments',
-      }),
+      },
     });
   });
 

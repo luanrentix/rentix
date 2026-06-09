@@ -37,6 +37,7 @@ import {
 } from "@/services/contracts.service";
 import {
   deleteReceivableAccount,
+  getContractReceivableAccounts,
   getReceivableAccounts,
   type ReceivableAccount,
 } from "@/services/financial.service";
@@ -720,6 +721,7 @@ export default function ContractsPage() {
     }
 
     loadPageData(companyId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
 
 
@@ -806,25 +808,31 @@ export default function ContractsPage() {
 
   const availableProperties = useMemo(() => {
     return properties.filter((property) => {
-      const hasActiveContract = contracts.some(
-        (contract) =>
-          String(contract.propertyId) === String(property.id) &&
-          ["Active", "Expiring"].includes(getDisplayContractStatus(contract)) &&
-          contract.status !== "Deleted"
-      );
-
       const isCurrentEditingProperty = isEditing && String(property.id) === String(propertyId);
       const isPropertyActive = property.isActive !== false;
+      const isPropertyAvailable = property.status === "Available";
+      const hasConflictingContract = contracts.some((contract) => {
+        const isSameProperty = String(contract.propertyId) === String(property.id);
+        const isSameContract = isEditing && contract.id === editingContractId;
+        const isActiveContract =
+          ["Active", "Expiring"].includes(getDisplayContractStatus(contract)) &&
+          contract.status !== "Deleted";
 
-      return (isPropertyActive && property.status === "Available" && !hasActiveContract) || isCurrentEditingProperty;
+        if (!isSameProperty || isSameContract || !isActiveContract) return false;
+        if (!isTemporaryRental) return !contract.isTemporaryRental;
+        if (!startDate || !endDate) return false;
+
+        return doDateRangesOverlap(startDate, endDate, contract.startDate, contract.endDate);
+      });
+
+      return (isPropertyActive && isPropertyAvailable && !hasConflictingContract) || isCurrentEditingProperty;
     });
-  }, [properties, contracts, isEditing, propertyId]);
+  }, [properties, contracts, isEditing, editingContractId, propertyId, isTemporaryRental, startDate, endDate]);
 
   const availableTenants = useMemo(() => {
     return tenants.filter((tenant) => {
-      const isTenant = tenant.isTenant !== false;
       const isActive = tenant.isActive !== false;
-      return isTenant && isActive;
+      return isActive;
     });
   }, [tenants]);
 
@@ -871,11 +879,10 @@ export default function ContractsPage() {
       setIsLoadingPageData(true);
       setFormError("");
 
-      const [apiContracts, apiProperties, apiPeople, apiReceivableAccounts] = await Promise.all([
+      const [apiContracts, apiProperties, apiPeople] = await Promise.all([
         getContracts(currentCompanyId),
         getProperties(currentCompanyId),
         getPeople(currentCompanyId),
-        getReceivableAccounts(currentCompanyId),
       ]);
 
       const normalizedContracts = apiContracts.map(mapApiContractToContract);
@@ -883,7 +890,8 @@ export default function ContractsPage() {
       setContracts(normalizedContracts);
       setProperties(apiProperties.map((property) => mapApiPropertyToProperty(property, normalizedContracts)));
       setTenants(apiPeople.map(mapApiPersonToTenant));
-      setReceivableAccounts(apiReceivableAccounts);
+      setReceivableAccounts([]);
+      void loadContractReceivableAccounts(currentCompanyId);
     } catch (error) {
       setFormError(
         error instanceof Error
@@ -893,6 +901,15 @@ export default function ContractsPage() {
     } finally {
       setIsLoaded(true);
       setIsLoadingPageData(false);
+    }
+  }
+
+  async function loadContractReceivableAccounts(currentCompanyId: string) {
+    try {
+      const apiReceivableAccounts = await getContractReceivableAccounts(currentCompanyId);
+      setReceivableAccounts(apiReceivableAccounts);
+    } catch (error) {
+      console.warn("Nao foi possivel carregar o resumo financeiro dos contratos.", error);
     }
   }
 
@@ -1058,6 +1075,29 @@ export default function ContractsPage() {
     const day = String(nextDate.getDate()).padStart(2, "0");
 
     return `${year}-${month}-${day}`;
+  }
+
+  function doDateRangesOverlap(
+    firstStartDateValue: string,
+    firstEndDateValue: string,
+    secondStartDateValue: string,
+    secondEndDateValue: string,
+  ) {
+    const firstStart = new Date(`${firstStartDateValue}T00:00:00`);
+    const firstEnd = new Date(`${firstEndDateValue}T00:00:00`);
+    const secondStart = new Date(`${secondStartDateValue}T00:00:00`);
+    const secondEnd = new Date(`${secondEndDateValue}T00:00:00`);
+
+    if (
+      Number.isNaN(firstStart.getTime()) ||
+      Number.isNaN(firstEnd.getTime()) ||
+      Number.isNaN(secondStart.getTime()) ||
+      Number.isNaN(secondEnd.getTime())
+    ) {
+      return true;
+    }
+
+    return firstStart <= secondEnd && firstEnd >= secondStart;
   }
 
   function getContractInstallmentQuantity(startDateValue: string, endDateValue: string) {
@@ -1296,39 +1336,39 @@ export default function ContractsPage() {
       console.warn("Nao foi possivel conferir parcelas do contrato no backend.", error);
     }
 
-    if (existingAccounts.length === 0) {
-      const monthlyAmount = Number(contract.rentValue || 0);
-      const totalAmount = receivableSchedule.reduce(
-        (total, installment) => total + Number(installment.amount || 0),
-        0,
-      );
-      const firstInstallment = receivableSchedule[0];
+    void existingAccounts;
 
-      setCompanyStorageItem(
-        companyId,
-        RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
-        JSON.stringify({
-          contractId: String(contract.id),
-          tenantId: String(contract.tenantId),
-          tenantName:
-            contract.tenantName ||
-            tenants.find((tenant) => String(tenant.id) === String(contract.tenantId))?.name ||
-            "",
-          propertyId: String(contract.propertyId),
-          propertyName:
-            contract.propertyName ||
-            properties.find((property) => String(property.id) === String(contract.propertyId))?.name ||
-            "",
-          amount: monthlyAmount,
-          monthlyAmount,
-          totalAmount,
-          issueDate: contract.startDate,
-          dueDate: firstInstallment.dueDate,
-          endDate: contract.endDate,
-          installmentQuantity: receivableSchedule.length,
-        }),
-      );
-    }
+    const monthlyAmount = Number(contract.rentValue || 0);
+    const totalAmount = receivableSchedule.reduce(
+      (total, installment) => total + Number(installment.amount || 0),
+      0,
+    );
+    const firstInstallment = receivableSchedule[0];
+
+    setCompanyStorageItem(
+      companyId,
+      RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
+      JSON.stringify({
+        contractId: String(contract.id),
+        tenantId: String(contract.tenantId),
+        tenantName:
+          contract.tenantName ||
+          tenants.find((tenant) => String(tenant.id) === String(contract.tenantId))?.name ||
+          "",
+        propertyId: String(contract.propertyId),
+        propertyName:
+          contract.propertyName ||
+          properties.find((property) => String(property.id) === String(contract.propertyId))?.name ||
+          "",
+        amount: monthlyAmount,
+        monthlyAmount,
+        totalAmount,
+        issueDate: contract.startDate,
+        dueDate: firstInstallment.dueDate,
+        endDate: contract.endDate,
+        installmentQuantity: receivableSchedule.length,
+      }),
+    );
 
     window.location.href = `/contas-receber?fromContract=1&contractId=${encodeURIComponent(
       String(contract.id),
@@ -1367,21 +1407,24 @@ export default function ContractsPage() {
       const isSameContract = isEditing && contract.id === editingContractId;
       const isActiveContract = ["Active", "Expiring"].includes(getDisplayContractStatus(contract));
 
-      return isSameProperty && !isSameContract && isActiveContract;
+      if (!isSameProperty || isSameContract || !isActiveContract) return false;
+      if (!isTemporaryRental) return !contract.isTemporaryRental;
+      if (!startDate || !endDate) return false;
+
+      return doDateRangesOverlap(startDate, endDate, contract.startDate, contract.endDate);
     });
 
     if (propertyHasAnotherActiveContract) {
-      setFormError("Este bem/ativo já possui contrato ativo e não pode ser usado em outro contrato.");
+      setFormError(
+        isTemporaryRental
+          ? "Este bem/ativo ja possui contrato ativo nesse periodo."
+          : "Este bem/ativo ja possui contrato ativo e nao pode ser usado em outro contrato.",
+      );
       return;
     }
 
     if (!selectedTenant) {
-      setFormError("Selecione um inquilino válido.");
-      return;
-    }
-
-    if (selectedTenant.isTenant === false) {
-      setFormError("Esta pessoa não está marcada como inquilino.");
+      setFormError("Selecione uma pessoa válida.");
       return;
     }
 
@@ -1633,7 +1676,7 @@ export default function ContractsPage() {
     const tenantPhone = tenant?.phone || "";
 
     if (!tenantPhone) {
-      window.alert("Este inquilino nao possui telefone cadastrado.");
+      window.alert("Esta pessoa nao possui telefone cadastrado.");
       return;
     }
 
@@ -1644,7 +1687,7 @@ export default function ContractsPage() {
     openWhatsAppMessage({
       phone: tenantPhone,
       message: [
-        `Olá, ${contract.tenantName || tenant?.name || "inquilino"}.`,
+        `Olá, ${contract.tenantName || tenant?.name || "pessoa"}.`,
         "",
         `${companyName} informa sobre o contrato de locação:`,
         `Bem/Ativo: ${contract.propertyName || "Não informado"}`,
@@ -1744,7 +1787,7 @@ export default function ContractsPage() {
     ].join("\n");
     const schedulePayload = {
       title: "Vencimento de contrato",
-      customerName: contract.tenantName || "Inquilino nao informado",
+      customerName: contract.tenantName || "Pessoa nao informada",
       propertyName: contract.propertyName || "Bem/ativo nao informado",
       date: contract.endDate,
       time: existingScheduleItem?.time || "08:00",
@@ -2452,7 +2495,7 @@ export default function ContractsPage() {
                   type="text"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Buscar por bem/ativo ou inquilino"
+                  placeholder="Buscar por bem/ativo ou pessoa"
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                 />
               </FormField>
@@ -2481,7 +2524,7 @@ export default function ContractsPage() {
               <thead className="bg-orange-50">
                 <tr>
                   <th className="px-6 py-4 text-sm font-black text-slate-700">Bem/Ativo</th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">Inquilino</th>
+                  <th className="px-6 py-4 text-sm font-black text-slate-700">Pessoa</th>
                   <th className="px-6 py-4 text-sm font-black text-slate-700">Início</th>
                   <th className="px-6 py-4 text-sm font-black text-slate-700">Fim</th>
                   <th className="px-6 py-4 text-sm font-black text-slate-700">Valor</th>
@@ -2697,7 +2740,7 @@ export default function ContractsPage() {
                         </span>
                       </div>
                       <p className="mt-2 text-sm font-semibold text-slate-500">
-                        {selectedContractDetails.tenantName || "Inquilino não informado"} ⬢ {formatDate(selectedContractDetails.startDate)} até {formatDate(selectedContractDetails.endDate)}
+                        {selectedContractDetails.tenantName || "Pessoa não informada"} ⬢ {formatDate(selectedContractDetails.startDate)} até {formatDate(selectedContractDetails.endDate)}
                       </p>
                     </div>
 
@@ -2765,7 +2808,7 @@ export default function ContractsPage() {
                         zipCode: detailsProperty?.zipCode,
                         complement: detailsProperty?.complement,
                       }) || "Endereço não informado"} />
-                      <DetailCard title="Inquilino" value={selectedContractDetails.tenantName || "Não informado"} detail={detailsTenant?.phone || detailsTenant?.email || "Contato não informado"} />
+                      <DetailCard title="Pessoa" value={selectedContractDetails.tenantName || "Não informado"} detail={detailsTenant?.phone || detailsTenant?.email || "Contato não informado"} />
                       <DetailCard title="Valor do aluguel" value={formatCurrency(selectedContractDetails.rentValue)} detail="Valor base do contrato" />
                       <DetailCard title="Período" value={`${formatDate(selectedContractDetails.startDate)} até ${formatDate(selectedContractDetails.endDate)}`} detail={`${getContractDurationInMonths(selectedContractDetails.startDate, selectedContractDetails.endDate)} mês(es) / ${getContractDurationInDays(selectedContractDetails.startDate, selectedContractDetails.endDate)} dia(s)`} />
                       <DetailCard
@@ -2956,7 +2999,7 @@ export default function ContractsPage() {
                   {renewalContract.propertyName || "Contrato"}
                 </p>
                 <p className="mt-1 text-xs font-semibold text-slate-500">
-                  {renewalContract.tenantName || "Inquilino não informado"} ⬢ Vence em {formatDate(renewalContract.endDate)}
+                  {renewalContract.tenantName || "Pessoa não informada"} ⬢ Vence em {formatDate(renewalContract.endDate)}
                 </p>
               </div>
 
@@ -3051,7 +3094,7 @@ export default function ContractsPage() {
                   {finishContract.propertyName || "Contrato"}
                 </p>
                 <p className="mt-1 text-xs font-semibold text-slate-500">
-                  {finishContract.tenantName || "Inquilino não informado"}
+                  {finishContract.tenantName || "Pessoa não informada"}
                 </p>
               </div>
 
@@ -3177,7 +3220,7 @@ export default function ContractsPage() {
                   {pendingEditConfirmation.propertyName || "Contrato"}
                 </p>
                 <p className="mt-1 text-xs font-semibold text-slate-500">
-                  {pendingEditConfirmation.tenantName || "Inquilino nao informado"}
+                  {pendingEditConfirmation.tenantName || "Pessoa nao informada"}
                 </p>
               </div>
 
@@ -3230,7 +3273,7 @@ export default function ContractsPage() {
                   {pendingStatusChange.contract.propertyName || "Contrato"}
                 </p>
                 <p className="mt-1 text-xs font-semibold text-slate-500">
-                  {pendingStatusChange.contract.tenantName || "Inquilino não informado"}
+                  {pendingStatusChange.contract.tenantName || "Pessoa não informada"}
                 </p>
               </div>
 
@@ -3450,7 +3493,7 @@ export default function ContractsPage() {
                       </select>
                     </FormField>
 
-                    <FormField label="Inquilino" required>
+                    <FormField label="Pessoa" required>
                       <select
                         value={tenantId}
                         onChange={(event) => {
@@ -3460,7 +3503,7 @@ export default function ContractsPage() {
                         required
                         className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                       >
-                        <option value="">Selecione um inquilino</option>
+                        <option value="">Selecione uma pessoa</option>
                         {availableTenants.map((tenant) => (
                           <option key={tenant.id} value={tenant.id}>
                             {tenant.name}
@@ -3981,7 +4024,8 @@ function mapApiPropertyToProperty(
     (contract) =>
       String(contract.propertyId) === String(apiProperty.id) &&
       ["Active", "Expiring"].includes(getDisplayContractStatus(contract)) &&
-      contract.status !== "Deleted",
+      contract.status !== "Deleted" &&
+      !contract.isTemporaryRental,
   );
 
   return {
@@ -4116,12 +4160,13 @@ function formatApiDateForInput(value: string) {
 
 function syncPropertiesWithContracts(contracts: Contract[], properties: Property[]): Property[] {
   return properties.map((property) => {
-    const hasActiveContract = contracts.some(
-      (contract) =>
-        String(contract.propertyId) === String(property.id) &&
-        ["Active", "Expiring"].includes(getDisplayContractStatus(contract)) &&
-        contract.status !== "Deleted"
-    );
+  const hasActiveContract = contracts.some(
+    (contract) =>
+      String(contract.propertyId) === String(property.id) &&
+      ["Active", "Expiring"].includes(getDisplayContractStatus(contract)) &&
+      contract.status !== "Deleted" &&
+      !contract.isTemporaryRental
+  );
 
     return {
       ...property,
