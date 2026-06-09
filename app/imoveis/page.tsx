@@ -1682,26 +1682,26 @@ export default function PropertiesPage() {
         }
       `}</style>
 
-      <div className="contrx-properties-page space-y-8 print:space-y-0">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <div className="contrx-properties-page space-y-5 print:space-y-0">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
               Bens/Ativos
             </h1>
-            <p className="mt-2 text-slate-500">
+            <p className="mt-1 text-slate-500">
               Cadastre, acompanhe e gerencie bens, ativos, equipamentos e máquinas disponíveis para contratos.
             </p>
           </div>
 
           <button
             onClick={handleOpenCreateForm}
-            className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+            className="rounded-2xl bg-orange-500 px-6 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
           >
             + Novo bem/ativo
           </button>
         </div>
 
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <SummaryCard icon="🏢" title="Cadastrados" value={properties.length} detail="Total no sistema" />
           <SummaryCard icon="✅" title="Ativos" value={activeProperties} detail="Prontos para uso" />
           <SummaryCard icon="🚫" title="Inativos" value={inactiveProperties} detail="Histórico preservado" />
@@ -1709,10 +1709,10 @@ export default function PropertiesPage() {
           <SummaryCard icon="💰" title="Outros ativos" value={operationalAssets} detail="Equipamentos e bens" />
         </div>
 
-        <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm">
-          <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div className="rounded-3xl border border-orange-100 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <h2 className="text-2xl font-black text-slate-950">
+              <h2 className="text-xl font-black text-slate-950 sm:text-2xl">
                 Bens/Ativos cadastrados
               </h2>
               <p className="mt-1 text-sm text-slate-500">
@@ -1720,14 +1720,14 @@ export default function PropertiesPage() {
               </p>
             </div>
 
-            <div className="grid w-full gap-3 md:grid-cols-2 xl:max-w-5xl xl:grid-cols-[minmax(260px,1fr)_180px_180px_190px]">
+            <div className="grid w-full gap-3 md:grid-cols-2 xl:max-w-4xl xl:grid-cols-[minmax(260px,1fr)_160px_160px_170px]">
               <FormField label="Buscar">
                 <input
                   type="text"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Nome, endereço, cidade ou bairro"
-                  className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                 />
               </FormField>
 
@@ -1737,7 +1737,7 @@ export default function PropertiesPage() {
                   onChange={(event) =>
                     setCategoryFilter(event.target.value as PropertyCategoryFilterStatus)
                   }
-                  className="w-full appearance-auto rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                  className="w-full appearance-auto rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                 >
                   <option value="All">Todas</option>
                   {assetCategories.map((categoryOption) => (
@@ -1754,7 +1754,7 @@ export default function PropertiesPage() {
                   onChange={(event) =>
                     setRegistrationFilter(event.target.value as PropertyRegistrationFilterStatus)
                   }
-                  className="w-full appearance-auto rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                  className="w-full appearance-auto rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                 >
                   <option value="Active">Ativos</option>
                   <option value="Inactive">Inativos</option>
@@ -1768,7 +1768,7 @@ export default function PropertiesPage() {
                   onChange={(event) =>
                     setRentalFilter(event.target.value as PropertyRentalFilterStatus)
                   }
-                  className="w-full appearance-auto rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                  className="w-full appearance-auto rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                 >
                   <option value="All">Todas</option>
                   <option value="Available">Disponíveis</option>
@@ -2809,14 +2809,16 @@ type SummaryCardProps = {
 
 function SummaryCard({ icon, title, value, detail }: SummaryCardProps) {
   return (
-    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
-      <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-xl text-orange-600">
+    <div className="flex items-center gap-4 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-lg text-orange-600">
         {icon}
       </div>
 
-      <p className="text-sm font-bold text-slate-500">{title}</p>
-      <h3 className="mt-2 text-2xl font-black text-slate-950">{value}</h3>
-      <p className="mt-3 text-sm font-bold text-orange-600">{detail}</p>
+      <div className="min-w-0">
+        <p className="truncate text-xs font-bold text-slate-500">{title}</p>
+        <h3 className="mt-1 truncate text-xl font-black text-slate-950">{value}</h3>
+        <p className="mt-1 truncate text-xs font-bold text-orange-600">{detail}</p>
+      </div>
     </div>
   );
 }

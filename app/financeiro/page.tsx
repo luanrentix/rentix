@@ -782,7 +782,7 @@ export default function FinancialPage() {
           </section>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard
             icon={<ArrowUpCircle className="h-5 w-5" />}
             title="A receber"
@@ -879,17 +879,19 @@ function MetricCard({
   }[tone];
 
   return (
-    <div className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-orange-500/30 dark:bg-slate-900">
-      <div className={`mb-4 flex h-10 w-10 items-center justify-center rounded-xl ${toneClass}`}>
+    <div className="flex items-center gap-4 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-orange-500/30 dark:bg-slate-900">
+      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${toneClass}`}>
         {icon}
       </div>
-      <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
-        {title}
-      </p>
-      <h3 className="mt-2 text-2xl font-black text-slate-950 dark:text-white">
-        {value}
-      </h3>
-      <p className="mt-2 text-xs font-bold text-orange-600">{detail}</p>
+      <div className="min-w-0">
+        <p className="truncate text-xs font-bold text-slate-500 dark:text-slate-400">
+          {title}
+        </p>
+        <h3 className="mt-1 truncate text-xl font-black text-slate-950 dark:text-white">
+          {value}
+        </h3>
+        <p className="mt-1 truncate text-xs font-bold text-orange-600">{detail}</p>
+      </div>
     </div>
   );
 }

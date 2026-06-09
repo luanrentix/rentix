@@ -2263,7 +2263,7 @@ GERADO EM: {currentDate}`;
 
       <div
         data-contrx-theme={themeMode}
-        className={`${accountsPayableThemeClass} space-y-8`}
+        className={`${accountsPayableThemeClass} space-y-5`}
       >
         <div>
           <p className="text-sm font-semibold text-orange-600">Financeiro</p>
@@ -2272,12 +2272,12 @@ GERADO EM: {currentDate}`;
             Contas a Pagar
           </h1>
 
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
             Cadastre, acompanhe e controle suas despesas financeiras.
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-4">
           <Card
             title="Total a Pagar"
             value={formatCurrency(totalPayable)}
@@ -2292,8 +2292,8 @@ GERADO EM: {currentDate}`;
           <Card title="Despesas" value={filteredExpenses.length} />
         </div>
 
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-sm">
-          <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
             <div>
               <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">
                 Filtros Financeiros
@@ -2353,8 +2353,8 @@ GERADO EM: {currentDate}`;
           </div>
         )}
 
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
-          <div className="border-b border-slate-200 dark:border-slate-700 dark:border-slate-800 p-5">
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div className="border-b border-slate-200 p-4 dark:border-slate-800">
             <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
               <div>
                 <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">
@@ -2369,26 +2369,26 @@ GERADO EM: {currentDate}`;
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={openCreateModal}
-                  className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
+                    className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
                 >
                   Nova conta
                 </button>
 
                 <button
                   onClick={openReportModal}
-                  className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
+                    className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
                 >
                   Relatório PDF
                 </button>
               </div>
             </div>
 
-            <div className="mt-5">
+            <div className="mt-4">
               <input
                 placeholder="Buscar por pessoa, descrição ou categoria..."
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
+                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:ring-orange-900/40"
               />
             </div>
           </div>
@@ -3726,13 +3726,13 @@ function Card({
   red?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-sm">
-      <p className="text-sm font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <p className="truncate text-xs font-bold text-slate-500 dark:text-slate-400">
         {title}
       </p>
 
       <h2
-        className={`mt-2 text-2xl font-black ${
+        className={`mt-1 truncate text-xl font-black ${
           green
             ? "text-emerald-600"
             : red

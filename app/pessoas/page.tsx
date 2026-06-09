@@ -878,13 +878,13 @@ export default function PeoplePage() {
 
   return (
     <>
-      <div className="contrx-module-page contrx-properties-page space-y-8">
-        <section className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <div className="contrx-module-page contrx-properties-page space-y-5">
+        <section className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
               Pessoas
             </h1>
-            <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-500">
+            <p className="mt-1 max-w-2xl text-sm font-medium leading-6 text-slate-500">
               Gerencie clientes, inquilinos, fornecedores e pessoas vinculadas aos contratos.
             </p>
           </div>
@@ -892,13 +892,13 @@ export default function PeoplePage() {
           <button
             type="button"
             onClick={openCreateModal}
-            className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+            className="rounded-2xl bg-orange-500 px-6 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
           >
             + Nova pessoa
           </button>
         </section>
 
-        <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <PeopleStatCard
             icon={<UserRound className="h-5 w-5" />}
             label="Total cadastrado"
@@ -931,10 +931,10 @@ export default function PeoplePage() {
           </section>
         )}
 
-        <section className="contrx-module-panel rounded-3xl border border-orange-100 bg-white p-6 shadow-sm">
-          <div className="mb-6 grid gap-5 lg:grid-cols-[1fr_620px] lg:items-end">
+        <section className="contrx-module-panel rounded-3xl border border-orange-100 bg-white p-5 shadow-sm">
+          <div className="mb-4 grid gap-4 lg:grid-cols-[1fr_560px] lg:items-center">
             <div>
-              <h2 className="text-2xl font-black text-slate-950">Cadastros</h2>
+              <h2 className="text-xl font-black text-slate-950 sm:text-2xl">Cadastros</h2>
               <p className="mt-1 text-sm font-medium text-slate-500">
                 Exibindo {filteredPeople.length} de {people.length} pessoa(s).
               </p>
@@ -949,7 +949,7 @@ export default function PeoplePage() {
                     value={searchTerm}
                     onChange={(event) => setSearchTerm(event.target.value)}
                     placeholder="Nome, documento, cidade ou e-mail"
-                    className="h-14 w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                   />
                 </div>
               </label>
@@ -961,7 +961,7 @@ export default function PeoplePage() {
                   onChange={(event) =>
                     setStatusFilter(event.target.value as "all" | PersonStatus)
                   }
-                  className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                 >
                   <option value="all">Todos</option>
                   <option value="active">Ativos</option>
@@ -974,7 +974,7 @@ export default function PeoplePage() {
                 <select
                   value={typeFilter}
                   onChange={(event) => setTypeFilter(event.target.value as PersonTypeFilter)}
-                  className="h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                 >
                   <option value="all">Todos</option>
                   <option value="individual">Pessoa física</option>
@@ -1789,14 +1789,16 @@ function PeopleStatCard({
   detail: string;
 }) {
   return (
-    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
-      <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-orange-600">
+    <div className="flex items-center gap-4 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-600">
         {icon}
       </div>
 
-      <p className="text-sm font-bold text-slate-500">{label}</p>
-      <p className="mt-2 text-2xl font-black text-slate-950">{value}</p>
-      <p className="mt-3 text-sm font-bold text-orange-600">{detail}</p>
+      <div className="min-w-0">
+        <p className="truncate text-xs font-bold text-slate-500">{label}</p>
+        <p className="mt-1 truncate text-xl font-black text-slate-950">{value}</p>
+        <p className="mt-1 truncate text-xs font-bold text-orange-600">{detail}</p>
+      </div>
     </div>
   );
 }

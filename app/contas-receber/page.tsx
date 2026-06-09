@@ -2208,27 +2208,28 @@ export default function AccountsReceivablePage() {
                 <h2>Carnê de pagamento</h2>
               </div>
               <div class="installment-badge">
-                Parcela ${installmentLabel}
+                <span>Parcela</span>
+                <strong>${installmentLabel}</strong>
               </div>
             </div>
 
-            <div class="voucher-grid">
-              <div class="field full">
-                <span>Inquilino/Pessoa</span>
+            <div class="payer-card">
+              <div>
+                <span>Pagador</span>
                 <strong>${escapeHtml(charge.tenant)}</strong>
               </div>
-
-              <div class="field full">
+              <div>
                 <span>Bem/Ativo</span>
                 <strong>${escapeHtml(charge.property)}</strong>
               </div>
+            </div>
 
-              <div class="field">
+            <div class="amount-strip">
+              <div>
                 <span>Vencimento</span>
                 <strong>${formatDate(charge.dueDate)}</strong>
               </div>
-
-              <div class="field">
+              <div>
                 <span>Valor</span>
                 <strong>${formatCurrency(charge.amount)}</strong>
               </div>
@@ -2236,9 +2237,11 @@ export default function AccountsReceivablePage() {
 
             <div class="pix-area">
               <div class="pix-info">
-                <span>Pagamento via Pix</span>
-                <strong>${escapeHtml(pixKey)}</strong>
-                <small>Tipo da chave: ${escapeHtml(pixKeyType || "Não informado")}</small>
+                <div class="pix-heading">
+                  <span>Pagamento via Pix</span>
+                  <strong>${escapeHtml(pixKey)}</strong>
+                  <small>Tipo da chave: ${escapeHtml(pixKeyType || "Não informado")}</small>
+                </div>
                 ${
                   pixPayload
                     ? `<div class="pix-copy"><span>Pix copia e cola</span><p>${escapeHtml(pixPayload)}</p></div>`
@@ -2275,51 +2278,57 @@ export default function AccountsReceivablePage() {
           <title>Carnê de Pagamento</title>
           <style>
             * { box-sizing: border-box; }
-            body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 10px; padding: 14px 24px; background: rgba(255, 255, 255, 0.97); border-bottom: 1px solid #d1d5db; backdrop-filter: blur(10px); }
-            .toolbar button { border: 0; border-radius: 10px; padding: 11px 18px; font-size: 12px; font-weight: 900; cursor: pointer; }
-            .print-button { background: #f97316; color: #ffffff; }
-            .close-button { background: #f3f4f6; color: #111827; border: 1px solid #d1d5db !important; }
+            body { margin: 0; background: #eef2f7; color: #172033; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 10px; padding: 14px 24px; background: rgba(255, 255, 255, 0.97); border-bottom: 1px solid #d8dee8; backdrop-filter: blur(10px); }
+            .toolbar button { border: 0; border-radius: 8px; padding: 11px 18px; font-size: 12px; font-weight: 900; cursor: pointer; }
+            .print-button { background: #0f766e; color: #ffffff; }
+            .close-button { background: #f8fafc; color: #172033; border: 1px solid #cbd5e1 !important; }
             @page { size: A4; margin: 7mm; }
             .page { width: min(1080px, calc(100% - 28px)); margin: 14px auto; }
-            .voucher-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-            .summary { margin-bottom: 10px; border: 1px solid #111827; border-radius: 0; background: #ffffff; padding: 12px 14px; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.10); }
-            .summary-header { display: grid; grid-template-columns: 1fr auto; gap: 14px; border-bottom: 2px solid #111827; padding-bottom: 8px; }
-            .brand { color: #c2410c; font-size: 10px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; }
-            h1, h2 { margin: 5px 0 0; color: #111827; letter-spacing: 0; }
+            .voucher-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+            .summary { margin-bottom: 12px; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; padding: 14px 16px; box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08); }
+            .summary-header { display: grid; grid-template-columns: 1fr auto; gap: 14px; border-bottom: 2px solid #172033; padding-bottom: 9px; }
+            .brand { color: #0f766e; font-size: 9.5px; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; }
+            h1, h2 { margin: 5px 0 0; color: #172033; letter-spacing: 0; }
             h1 { font-size: 22px; text-transform: uppercase; }
-            h2 { font-size: 15px; }
+            h2 { font-size: 14px; }
             .summary p { margin: 5px 0 0; font-size: 11px; }
-            .summary-meta { color: #374151; font-size: 11px; line-height: 1.55; text-align: right; }
+            .summary-meta { color: #475569; font-size: 11px; line-height: 1.55; text-align: right; }
             table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            th { background: #111827; color: #ffffff; font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; }
-            th, td { border: 1px solid #d1d5db; padding: 5px 6px; font-size: 10px; text-align: left; }
-            tbody tr:nth-child(even) td { background: #f9fafb; }
-            .voucher { position: relative; break-inside: avoid; page-break-inside: avoid; border: 1px solid #111827; border-radius: 0; background: #ffffff; padding: 10px; min-height: 248px; }
-            .voucher::before { content: "Via do pagador"; position: absolute; top: 8px; right: 12px; color: #6b7280; font-size: 8px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; }
-            .voucher-header { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 10px; border-bottom: 2px solid #111827; padding-bottom: 7px; }
+            th { background: #172033; color: #ffffff; font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; }
+            th, td { border: 1px solid #d8dee8; padding: 5px 6px; font-size: 10px; text-align: left; }
+            tbody tr:nth-child(even) td { background: #f8fafc; }
+            .voucher { position: relative; overflow: hidden; break-inside: avoid; page-break-inside: avoid; border: 1px solid #c6cfda; border-radius: 4px; background: #ffffff; padding: 10px; min-height: 286px; }
+            .voucher::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: #0f766e; }
+            .voucher-header { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 10px; border-bottom: 1.5px solid #172033; padding: 0 0 8px 7px; }
             .voucher-header h2 { text-transform: uppercase; }
-            .installment-badge { min-width: 76px; border: 1px solid #111827; background: #fff7ed; color: #111827; padding: 7px 8px; font-size: 11px; font-weight: 900; text-align: center; white-space: nowrap; }
-            .voucher-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-top: 8px; }
-            .field { border: 1px solid #d1d5db; border-radius: 0; padding: 6px 7px; background: #ffffff; min-height: 40px; }
-            .field.full { grid-column: 1 / -1; }
-            .field span { display: block; color: #6b7280; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; }
-            .field strong { display: block; margin-top: 3px; font-size: 11px; line-height: 1.2; }
-            .field small { display: block; margin-top: 3px; color: #6b7280; font-size: 8px; font-weight: 700; }
-            .pix-area { display: grid; grid-template-columns: minmax(0, 1fr) 88px; gap: 7px; margin-top: 7px; border: 1px solid #111827; border-radius: 0; background: #f9fafb; padding: 7px; }
-            .pix-info span, .pix-copy span { display: block; color: #c2410c; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; }
-            .pix-info strong { display: block; margin-top: 3px; color: #111827; font-size: 11px; }
-            .pix-info small { display: block; margin-top: 3px; color: #4b5563; font-size: 8px; font-weight: 700; }
-            .pix-copy { margin-top: 5px; border-radius: 0; background: #ffffff; padding: 5px; border: 1px dashed #9ca3af; }
-            .pix-copy p { margin: 3px 0 0; color: #111827; font-size: 6.4px; line-height: 1.25; word-break: break-all; }
-            .pix-warning { margin-top: 5px; border: 1px solid #fed7aa; background: #fff7ed; color: #c2410c; padding: 5px; font-size: 8px; font-weight: 800; }
-            .pix-qr { display: flex; flex-direction: column; align-items: center; justify-content: center; background: #ffffff; padding: 4px; border: 1px solid #d1d5db; }
-            .pix-qr img { width: 78px; height: 78px; object-fit: contain; }
-            .pix-qr span { margin-top: 2px; color: #111827; font-size: 8px; font-weight: 900; }
-            .instructions { margin-top: 7px; border: 1px solid #d1d5db; border-left: 3px solid #f97316; border-radius: 0; background: #ffffff; padding: 6px 7px; }
-            .instructions span { display: block; margin-bottom: 3px; color: #c2410c; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; }
-            .instructions p { margin: 1px 0; color: #374151; font-size: 7.8px; line-height: 1.25; font-weight: 700; }
-            .voucher-footer { display: grid; grid-template-columns: 1fr; gap: 2px; margin-top: 7px; border-top: 1px solid #d1d5db; padding-top: 5px; color: #4b5563; font-size: 7.8px; font-weight: 700; }
+            .installment-badge { min-width: 74px; border: 1px solid #172033; background: #f8fafc; color: #172033; padding: 5px 8px; text-align: center; white-space: nowrap; }
+            .installment-badge span { display: block; color: #64748b; font-size: 7.5px; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase; }
+            .installment-badge strong { display: block; margin-top: 1px; font-size: 13px; line-height: 1; }
+            .payer-card { display: grid; grid-template-columns: 1fr; gap: 5px; margin: 8px 0 0 7px; padding: 8px 9px; border: 1px solid #d8dee8; background: #f8fafc; }
+            .payer-card span, .amount-strip span, .pix-heading span, .pix-copy span { display: block; color: #64748b; font-size: 7.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; }
+            .payer-card strong { display: block; margin-top: 2px; color: #172033; font-size: 10.5px; line-height: 1.2; text-transform: uppercase; }
+            .amount-strip { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 7px 0 0 7px; border: 1px solid #172033; background: #172033; }
+            .amount-strip div { background: #ffffff; padding: 7px 9px; }
+            .amount-strip div + div { border-left: 1px solid #172033; }
+            .amount-strip strong { display: block; margin-top: 2px; color: #172033; font-size: 14px; line-height: 1.1; }
+            .pix-area { display: grid; grid-template-columns: minmax(0, 1fr) 112px; gap: 8px; margin: 8px 0 0 7px; border: 1px solid #d8dee8; background: #ffffff; padding: 8px; }
+            .pix-info { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+            .pix-heading { display: grid; grid-template-columns: 1fr; gap: 2px; }
+            .pix-heading span { color: #0f766e; }
+            .pix-heading strong { display: block; color: #172033; font-size: 12px; line-height: 1.1; }
+            .pix-heading small { display: block; color: #64748b; font-size: 7.6px; font-weight: 800; }
+            .pix-copy { border: 1px dashed #a7b2c1; background: #f8fafc; padding: 6px; }
+            .pix-copy span { color: #0f766e; }
+            .pix-copy p { margin: 3px 0 0; color: #172033; font-family: "Courier New", monospace; font-size: 5.8px; line-height: 1.28; word-break: break-all; }
+            .pix-warning { border: 1px solid #fbbf24; background: #fffbeb; color: #92400e; padding: 6px; font-size: 8px; font-weight: 800; }
+            .pix-qr { display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f8fafc; padding: 6px; border: 1px solid #d8dee8; min-height: 124px; }
+            .pix-qr img { width: 98px; height: 98px; object-fit: contain; background: #ffffff; }
+            .pix-qr span { margin-top: 4px; color: #172033; font-size: 7.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; }
+            .instructions { margin: 8px 0 0 7px; border: 1px solid #d8dee8; border-left: 4px solid #0f766e; background: #ffffff; padding: 7px 8px; }
+            .instructions span { display: block; margin-bottom: 4px; color: #0f766e; font-size: 7.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; }
+            .instructions p { margin: 1px 0; color: #475569; font-size: 7.4px; line-height: 1.25; font-weight: 700; }
+            .voucher-footer { display: grid; grid-template-columns: 1fr; gap: 2px; margin: 7px 0 0 7px; border-top: 1px solid #d8dee8; padding-top: 5px; color: #64748b; font-size: 7.3px; font-weight: 700; }
             @media print {
               body { background: #ffffff; }
               .toolbar { display: none !important; }
@@ -5433,7 +5442,7 @@ export default function AccountsReceivablePage() {
 
       <div
         data-contrx-theme={themeMode}
-        className={`${accountsReceivableThemeClass} space-y-8`}
+        className={`${accountsReceivableThemeClass} space-y-5`}
       >
         <div>
           <p className="text-sm font-semibold text-orange-600">Financeiro</p>
@@ -5442,12 +5451,12 @@ export default function AccountsReceivablePage() {
             Contas a Receber
           </h1>
 
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
             Acompanhe cobranças geradas automaticamente pelos contratos ativos.
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-4">
           <Card
             title="Total a Receber"
             value={formatCurrency(totalReceivable)}
@@ -5465,8 +5474,8 @@ export default function AccountsReceivablePage() {
           <Card title="Cobranças" value={filteredCharges.length} />
         </div>
 
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-sm">
-          <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
             <div>
               <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">
                 Filtros Financeiros
@@ -5532,8 +5541,8 @@ export default function AccountsReceivablePage() {
           </div>
         )}
 
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
-          <div className="border-b border-slate-200 dark:border-slate-700 p-5">
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div className="border-b border-slate-200 p-4 dark:border-slate-700">
             <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
               <div>
                 <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">
@@ -5548,21 +5557,21 @@ export default function AccountsReceivablePage() {
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={openCreateModal}
-                  className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
+                  className="rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
                 >
                   Nova cobrança
                 </button>
 
                 <button
                   onClick={openReportModal}
-                  className="rounded-xl bg-[#0f172a] px-5 py-3 text-sm font-bold text-[#ffffff] shadow-sm transition hover:bg-[#1e293b]"
+                  className="rounded-xl bg-[#0f172a] px-5 py-2.5 text-sm font-bold text-[#ffffff] shadow-sm transition hover:bg-[#1e293b]"
                 >
                   Relatório PDF
                 </button>
 
                 <button
                   onClick={() => setIsSearchOpen(true)}
-                  className="rounded-xl bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700"
+                  className="rounded-xl bg-white px-5 py-2.5 text-sm font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700"
                 >
                   Buscar Por Pessoa
                 </button>
@@ -7697,11 +7706,11 @@ function Card({
   red?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-sm">
-      <p className="text-sm font-medium text-slate-500 dark:text-slate-400 dark:text-slate-500">{title}</p>
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <p className="truncate text-xs font-bold text-slate-500 dark:text-slate-400">{title}</p>
 
       <h2
-        className={`mt-2 text-2xl font-black ${
+        className={`mt-1 truncate text-xl font-black ${
           green ? "text-emerald-600" : red ? "text-red-600" : "text-slate-900 dark:text-slate-100"
         }`}
       >

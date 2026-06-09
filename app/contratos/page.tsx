@@ -533,6 +533,8 @@ type Contract = {
   renewalHistory?: ContractRenewalRecord[];
   finishedAt?: string | null;
   finishReason?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 type ReceivableCharge = {
@@ -829,19 +831,23 @@ export default function ContractsPage() {
   const filteredContracts = useMemo(() => {
     const normalizedSearchTerm = normalizeSearchText(searchTerm);
 
-    return contracts.filter((contract) => {
-      const displayStatus = getDisplayContractStatus(contract);
-      const matchesStatus =
-        statusFilter === "All" ||
-        displayStatus === statusFilter ||
-        (statusFilter === "Active" && displayStatus === "Expiring");
-      const matchesSearch =
-        !normalizedSearchTerm ||
-        normalizeSearchText(contract.propertyName).includes(normalizedSearchTerm) ||
-        normalizeSearchText(contract.tenantName).includes(normalizedSearchTerm);
+    return contracts
+      .filter((contract) => {
+        const displayStatus = getDisplayContractStatus(contract);
+        const matchesStatus =
+          statusFilter === "All" ||
+          displayStatus === statusFilter ||
+          (statusFilter === "Active" && displayStatus === "Expiring");
+        const matchesSearch =
+          !normalizedSearchTerm ||
+          normalizeSearchText(contract.propertyName).includes(normalizedSearchTerm) ||
+          normalizeSearchText(contract.tenantName).includes(normalizedSearchTerm);
 
-      return matchesStatus && matchesSearch;
-    });
+        return matchesStatus && matchesSearch;
+      })
+      .sort((firstContract, secondContract) => {
+        return getContractSortTime(secondContract) - getContractSortTime(firstContract);
+      });
   }, [contracts, statusFilter, searchTerm]);
 
   const activeContracts = contracts.filter((contract) =>
@@ -2402,13 +2408,13 @@ export default function ContractsPage() {
           background-color: #dc2626 !important;
         }
       `}</style>
-      <div data-contrx-theme={themeMode} className={`contrx-contracts-page space-y-8 ${contractsThemeClass}`}>
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <div data-contrx-theme={themeMode} className={`contrx-contracts-page space-y-5 ${contractsThemeClass}`}>
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
               Contratos
             </h1>
-            <p className="mt-2 text-slate-500">
+            <p className="mt-1 text-slate-500">
               Gerencie os contratos de locação e mantenha o financeiro integrado.
             </p>
           </div>
@@ -2416,13 +2422,13 @@ export default function ContractsPage() {
           <button
             type="button"
             onClick={handleOpenCreateForm}
-            className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+            className="rounded-2xl bg-orange-500 px-6 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
           >
             + Novo contrato
           </button>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <SummaryCard icon={<FileText className="h-5 w-5" />} title="Contratos ativos" value={activeContracts} detail="Inclui vencendo" />
           <SummaryCard icon={<Clock className="h-5 w-5" />} title="Vencendo" value={expiringContracts} detail={`Até ${EXPIRING_CONTRACT_DAYS_LIMIT} dias`} />
           <SummaryCard icon={<AlertTriangle className="h-5 w-5" />} title="Vencidos" value={expiredContracts} detail="Aguardam operação" />
@@ -2430,9 +2436,9 @@ export default function ContractsPage() {
         </div>
 
         <div className="rounded-3xl border border-orange-100 bg-white shadow-sm">
-          <div className="flex flex-col gap-4 border-b border-slate-100 px-6 py-5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <h2 className="text-2xl font-black text-slate-950">
+              <h2 className="text-xl font-black text-slate-950 sm:text-2xl">
                 Contratos cadastrados
               </h2>
               <p className="mt-1 text-sm text-slate-500">
@@ -2440,14 +2446,14 @@ export default function ContractsPage() {
               </p>
             </div>
 
-            <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-[1fr_240px] xl:max-w-3xl">
+            <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-[1fr_200px] xl:max-w-2xl">
               <FormField label="Buscar contrato">
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
                   placeholder="Buscar por bem/ativo ou inquilino"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                 />
               </FormField>
 
@@ -2455,7 +2461,7 @@ export default function ContractsPage() {
                 <select
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value as ContractFilterStatus)}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                 >
                   <option value="Active">Ativos</option>
                   <option value="Expiring">Vencendo</option>
@@ -3784,14 +3790,16 @@ function ActionMenuButton({
 
 function SummaryCard({ icon, title, value, detail }: SummaryCardProps) {
   return (
-    <div className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100 text-orange-600">
+    <div className="flex items-center gap-4 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-600">
         {icon}
       </div>
 
-      <p className="text-xs font-bold text-slate-500">{title}</p>
-      <h3 className="mt-2 text-2xl font-black text-slate-950">{value}</h3>
-      <p className="mt-2 text-xs font-bold text-orange-600">{detail}</p>
+      <div className="min-w-0">
+        <p className="truncate text-xs font-bold text-slate-500">{title}</p>
+        <h3 className="mt-1 truncate text-xl font-black text-slate-950">{value}</h3>
+        <p className="mt-1 truncate text-xs font-bold text-orange-600">{detail}</p>
+      </div>
     </div>
   );
 }
@@ -3873,6 +3881,29 @@ function TimelineItem({
   );
 }
 
+function getContractSortTime(contract: Contract) {
+  const dateCandidates = [
+    contract.createdAt,
+    contract.updatedAt,
+    contract.startDate,
+    contract.endDate,
+  ];
+
+  for (const dateCandidate of dateCandidates) {
+    if (!dateCandidate) {
+      continue;
+    }
+
+    const timestamp = new Date(dateCandidate).getTime();
+
+    if (Number.isFinite(timestamp)) {
+      return timestamp;
+    }
+  }
+
+  return 0;
+}
+
 function mapApiContractToContract(apiContract: ApiContract): Contract {
   const propertyName =
     apiContract.propertyName ||
@@ -3906,6 +3937,8 @@ function mapApiContractToContract(apiContract: ApiContract): Contract {
       : [],
     finishedAt: apiContract.finishedAt || null,
     finishReason: apiContract.finishReason || null,
+    createdAt: apiContract.createdAt,
+    updatedAt: apiContract.updatedAt,
   };
 }
 

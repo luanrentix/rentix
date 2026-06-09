@@ -1076,7 +1076,7 @@ export default function FinancialReportsPage() {
           </div>
         </section>
 
-        <div className="contrx-report-kpi-grid grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="contrx-report-kpi-grid grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <KpiCard
             title="Saldo projetado"
             value={formatCurrency(reportData.projectedResult)}
@@ -1310,19 +1310,21 @@ function KpiCard({
   }[tone];
 
   return (
-    <div className="contrx-report-kpi-card contrx-print-card rounded-2xl border border-orange-100 bg-white p-5 shadow-sm dark:border-orange-500/30 dark:bg-slate-900">
-      <div className={`contrx-report-kpi-icon mb-4 flex h-10 w-10 items-center justify-center rounded-xl ${toneClass}`}>
+    <div className="contrx-report-kpi-card contrx-print-card flex items-center gap-4 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm dark:border-orange-500/30 dark:bg-slate-900">
+      <div className={`contrx-report-kpi-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${toneClass}`}>
         {icon}
       </div>
-      <p className="text-xs font-black uppercase text-slate-500 dark:text-slate-400">
-        {title}
-      </p>
-      <h3 className="mt-2 text-2xl font-black text-slate-950 dark:text-white">
-        {value}
-      </h3>
-      <p className="mt-2 text-xs font-bold text-slate-500 dark:text-slate-400">
-        {detail}
-      </p>
+      <div className="min-w-0">
+        <p className="truncate text-xs font-black uppercase text-slate-500 dark:text-slate-400">
+          {title}
+        </p>
+        <h3 className="mt-1 truncate text-xl font-black text-slate-950 dark:text-white">
+          {value}
+        </h3>
+        <p className="mt-1 truncate text-xs font-bold text-slate-500 dark:text-slate-400">
+          {detail}
+        </p>
+      </div>
     </div>
   );
 }
