@@ -2706,10 +2706,13 @@ export default function ConfiguracoesPage() {
         mode: "edit",
         documentKey,
       });
+      const importSuccessMessage =
+        "Arquivo importado com sucesso. É preciso salvar as configurações para gravar a importação.";
+
       setPrintImportMessage(
         missingVariables.length > 0
-          ? `Modelo importado com ${importedStats.variables.length} campo(s). Revise os campos obrigatórios ausentes: ${missingVariables.join(", ")}.`
-          : `Modelo importado com ${importedStats.variables.length} campo(s) reconhecido(s). Revise a prévia e salve as configurações.`,
+          ? `${importSuccessMessage} ${importedStats.variables.length} campo(s) reconhecido(s); revise os campos obrigatórios ausentes: ${missingVariables.join(", ")}.`
+          : `${importSuccessMessage} ${importedStats.variables.length} campo(s) reconhecido(s).`,
       );
     } catch (error) {
       setPrintImportError(

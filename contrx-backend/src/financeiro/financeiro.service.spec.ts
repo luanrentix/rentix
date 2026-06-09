@@ -221,4 +221,37 @@ describe('FinanceiroService', () => {
       interestAmount: 10,
     });
   });
+
+  it('usa desconto e juros para calcular quitacao e saldo restante', async () => {
+    const { service } = createService({
+      receivables: [
+        {
+          id: 'receivable-1',
+          tenantName: 'Inquilino',
+          propertyName: 'Imovel',
+          dueDate: new Date('2099-05-10T00:00:00'),
+          amount: new Prisma.Decimal(1000),
+          status: FinancialAccountStatus.PENDING,
+          payments: [
+            {
+              paidAt: new Date('2099-05-05T00:00:00'),
+              amountPaid: new Prisma.Decimal(920),
+              discount: new Prisma.Decimal(100),
+              interest: new Prisma.Decimal(20),
+            },
+          ],
+        },
+      ],
+    });
+
+    const resumo = await service.getResumo('company-1');
+
+    expect(resumo.receivables[0]).toMatchObject({
+      status: 'Paid',
+      paidAmount: 920,
+      discountAmount: 100,
+      interestAmount: 20,
+      remainingAmount: 0,
+    });
+  });
 });

@@ -52,6 +52,7 @@ export class ContratosService {
       });
 
       if (contract.status === ContractStatus.ACTIVE) {
+        await this.syncOpenReceivablesFromContract(tx, contract);
         await this.upsertContractDueScheduleItem(tx, contract);
       } else {
         await this.syncRelatedRecordsAfterContractChange(tx, contract);
