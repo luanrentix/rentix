@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
+import QRCode from "qrcode";
 import { useAuth } from "@/context/AuthContext";
 import { PersonCreateModal } from "@/components/people/person-create-modal";
 import {
@@ -2106,13 +2107,20 @@ export default function AccountsReceivablePage() {
     return `${payloadWithoutCrc}${calculatePixCrc16(payloadWithoutCrc)}`;
   }
 
-  function getPixQrCodeUrl(pixPayload: string) {
-    return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=8&data=${encodeURIComponent(
-      pixPayload,
-    )}`;
+  async function getPixQrCodeDataUrl(pixPayload: string) {
+    try {
+      return await QRCode.toDataURL(pixPayload, {
+        errorCorrectionLevel: "M",
+        margin: 2,
+        width: 180,
+      });
+    } catch (error) {
+      console.warn("Nao foi possivel gerar QR Code Pix localmente.", error);
+      return "";
+    }
   }
 
-  function generatePaymentCarnet(carnetCharges: Charge[]) {
+  async function generatePaymentCarnet(carnetCharges: Charge[]) {
     if (carnetCharges.length === 0) return;
 
     const printWindow = window.open(
@@ -2157,8 +2165,9 @@ export default function AccountsReceivablePage() {
       )
       .join("");
 
-    const vouchers = carnetCharges
-      .map((charge) => {
+    const vouchers = (
+      await Promise.all(
+        carnetCharges.map(async (charge) => {
         const installmentLabel = `${charge.installmentNumber || 1}/${
           charge.installmentTotal || carnetCharges.length
         }`;
@@ -2173,7 +2182,7 @@ export default function AccountsReceivablePage() {
             .slice(-18)}${String(charge.installmentNumber || 1).padStart(2, "0")}`,
           description: `Aluguel ${installmentLabel} ${charge.tenant}`,
         });
-        const pixQrCodeUrl = pixPayload ? getPixQrCodeUrl(pixPayload) : "";
+        const pixQrCodeDataUrl = pixPayload ? await getPixQrCodeDataUrl(pixPayload) : "";
         const paymentBookletContent = renderPaymentBookletTemplate(
           paymentBookletInstructions,
           {
@@ -2237,8 +2246,10 @@ export default function AccountsReceivablePage() {
                 }
               </div>
               ${
-                pixQrCodeUrl
-                  ? `<div class="pix-qr"><img src="${pixQrCodeUrl}" alt="QR Code Pix" /><span>QR Code Pix</span></div>`
+                pixQrCodeDataUrl
+                  ? `<div class="pix-qr"><img src="${pixQrCodeDataUrl}" alt="QR Code Pix" /><span>QR Code Pix</span></div>`
+                  : pixPayload
+                    ? `<div class="pix-qr pix-qr-error"><span>QR Code indisponivel</span></div>`
                   : ""
               }
             </div>
@@ -2251,7 +2262,9 @@ export default function AccountsReceivablePage() {
             </div>
           </section>
         `;
-      })
+        }),
+      )
+    )
       .join("");
 
     printWindow.document.write(`
@@ -3588,7 +3601,7 @@ export default function AccountsReceivablePage() {
     }
 
     if (carnetCharges.length > 0) {
-      generatePaymentCarnet(carnetCharges);
+      void generatePaymentCarnet(carnetCharges);
     }
 
     handleAfterContractCarnetGenerated(contractId);
@@ -3618,7 +3631,7 @@ export default function AccountsReceivablePage() {
         return;
       }
 
-      generatePaymentCarnet(pendingDownPaymentFlow.carnetCharges);
+      void generatePaymentCarnet(pendingDownPaymentFlow.carnetCharges);
     }
 
     await handleAfterContractCarnetGenerated(contractId);
@@ -3645,7 +3658,7 @@ export default function AccountsReceivablePage() {
   function confirmContractCarnetQuestion() {
     if (!pendingContractCarnetRequest) return;
 
-    generatePaymentCarnet(pendingContractCarnetRequest.charges);
+    void generatePaymentCarnet(pendingContractCarnetRequest.charges);
     setPendingContractPrintRequest(pendingContractCarnetRequest.contract);
     setPendingContractCarnetRequest(null);
   }
@@ -4128,7 +4141,7 @@ export default function AccountsReceivablePage() {
       (currentCharge) => !currentCharge.isDownPayment,
     );
 
-    generatePaymentCarnet(carnetCharges);
+    void generatePaymentCarnet(carnetCharges);
   }
 
   function reprintPaymentReceipt(charge: Charge) {
@@ -4154,7 +4167,7 @@ export default function AccountsReceivablePage() {
       return;
     }
 
-    generatePaymentCarnet(carnetCharges);
+    void generatePaymentCarnet(carnetCharges);
   }
 
   function printSelectedReceipts() {
