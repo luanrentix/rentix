@@ -784,7 +784,7 @@ export class ContratosService {
           in: [ContractStatus.ACTIVE],
         },
         ...periodWhere,
-        id: ignoredContractId ? { not: ignoredContractId } : undefined,
+        ...(ignoredContractId ? { id: { not: ignoredContractId } } : {}),
       },
     });
 

@@ -4,6 +4,7 @@ dist
 coverage
 npm-debug.log
 .env
+.env*
 .env.supabase
 .local-postgres
 backups

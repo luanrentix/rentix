@@ -2708,6 +2708,7 @@ export default function AccountsReceivablePage() {
     setPaymentInterestMode("amount");
     setPaymentDiscountMode("amount");
     setPaymentFinalAmount(formatAmountInput(remainingAmount));
+    setFormPaymentDate(getLocalDateValue(new Date()));
     setPaymentMethod("Cash");
     setPaymentEntries([
       {
@@ -2733,6 +2734,7 @@ export default function AccountsReceivablePage() {
     setPaymentInterestMode("amount");
     setPaymentDiscountMode("amount");
     setPaymentFinalAmount("");
+    setFormPaymentDate("");
     setPaymentMethod("Cash");
     setPaymentEntries([]);
     setPaymentNote("");
@@ -2763,6 +2765,11 @@ export default function AccountsReceivablePage() {
 
     if (amountPaid <= 0) {
       setPaymentFormError("O valor final recebido precisa ser maior que zero.");
+      return;
+    }
+
+    if (!formPaymentDate) {
+      setPaymentFormError("Informe a data de recebimento da conta.");
       return;
     }
 
@@ -6990,8 +6997,23 @@ export default function AccountsReceivablePage() {
                   </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div>
+                <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-[minmax(190px,1fr)_minmax(190px,1fr)_minmax(190px,1fr)_minmax(230px,1.15fr)]">
+                  <div className="min-w-0">
+                    <label className={`mb-2 block text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
+                      Data do recebimento
+                    </label>
+                    <input
+                      type="date"
+                      value={formPaymentDate}
+                      onChange={(event) => {
+                        setPaymentFormError("");
+                        setFormPaymentDate(event.target.value);
+                      }}
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:ring-emerald-900/50"
+                    />
+                  </div>
+
+                  <div className="min-w-0">
                     <label className={`mb-2 block text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
                       Juros
                     </label>
@@ -7038,7 +7060,7 @@ export default function AccountsReceivablePage() {
                     </div>
                   </div>
 
-                  <div>
+                  <div className="min-w-0">
                     <label className={`mb-2 block text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
                       Desconto
                     </label>
@@ -7085,12 +7107,12 @@ export default function AccountsReceivablePage() {
                     </div>
                   </div>
 
-                  <div>
-                    <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <label className={`block text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
+                  <div className="min-w-0">
+                    <div className="mb-2">
+                      <label className={`block whitespace-nowrap text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
                         Valor final
                       </label>
-                      <span className={`text-xs font-bold ${isBlackTheme ? "text-[#94a3b8]" : "text-[#64748b]"}`}>
+                      <span className={`mt-1 block text-xs font-bold leading-4 ${isBlackTheme ? "text-[#94a3b8]" : "text-[#64748b]"}`}>
                         Pode ser parcial ou total
                       </span>
                     </div>
@@ -7120,7 +7142,7 @@ export default function AccountsReceivablePage() {
                         setPaymentFinalAmount(formattedAmount);
                         updatePaymentEntriesFromFinalAmount(formattedAmount);
                       }}
-                      className="h-11 w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-black text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-slate-100 dark:placeholder:text-slate-500 dark:ring-emerald-900/50"
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:ring-emerald-900/50"
                     />
                   </div>
                 </div>
@@ -7319,6 +7341,7 @@ export default function AccountsReceivablePage() {
                   ? "Conforme contas selecionadas"
                   : formatDate(chargePendingPaymentReceipt.dueDate)}
               </p>
+              <p>Data do recebimento: {formatDate(`${formPaymentDate}T00:00:00`)}</p>
               <p>Valor original: {formatCurrency(paymentModalOriginalAmount)}</p>
               <p>Saldo em aberto: {formatCurrency(paymentModalRemainingAmount)}</p>
               <p>Juros: {formatCurrency(normalizeAmount(paymentInterest))}</p>

@@ -3386,10 +3386,16 @@ GERADO EM: {currentDate}`;
                 <button
                   type="button"
                   onClick={closeReportModal}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 dark:text-slate-500 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-800 hover:text-slate-900 dark:text-slate-100"
+                  className="flex h-10 w-10 items-center justify-center rounded-xl shadow-sm ring-1 transition"
+                  style={{
+                    backgroundColor: "#ffffff",
+                    color: "#0f172a",
+                    borderColor: "#e2e8f0",
+                    boxShadow: "0 1px 2px rgba(15, 23, 42, 0.06)",
+                  }}
                   aria-label="Fechar relatório"
                 >
-                  ✕
+                  X
                 </button>
               </div>
             </div>
@@ -3461,11 +3467,18 @@ GERADO EM: {currentDate}`;
                         setReportFormError("");
                         setReportDueFilter(filter);
                       }}
-                      className={`min-h-16 rounded-2xl border px-3 py-3 text-sm font-bold leading-snug transition ${
-                        reportDueFilter === filter
-                          ? "border-slate-950 bg-slate-950 !text-white shadow-sm"
-                          : "border-slate-200 bg-white !text-slate-800 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:!text-slate-100 dark:hover:bg-slate-700"
-                      }`}
+                      className="min-h-16 rounded-2xl border px-3 py-3 text-sm font-bold leading-snug transition"
+                      style={{
+                        backgroundColor:
+                          reportDueFilter === filter ? "#020617" : "#ffffff",
+                        color: reportDueFilter === filter ? "#ffffff" : "#0f172a",
+                        borderColor:
+                          reportDueFilter === filter ? "#020617" : "#cbd5e1",
+                        boxShadow:
+                          reportDueFilter === filter
+                            ? "0 1px 2px rgba(15, 23, 42, 0.12)"
+                            : "none",
+                      }}
                     >
                       {getReportDueFilterLabel(filter)}
                     </button>
@@ -3557,7 +3570,11 @@ GERADO EM: {currentDate}`;
               <button
                 type="button"
                 onClick={closeReportModal}
-                className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold !text-slate-800 transition hover:bg-slate-200 dark:bg-slate-800 dark:!text-slate-100 dark:hover:bg-slate-700"
+                className="rounded-xl px-5 py-3 text-sm font-bold transition"
+                style={{
+                  backgroundColor: "#f1f5f9",
+                  color: "#0f172a",
+                }}
               >
                 Cancelar
               </button>
@@ -3565,7 +3582,12 @@ GERADO EM: {currentDate}`;
               <button
                 type="button"
                 onClick={viewAccountsPayableReport}
-                className="rounded-xl bg-white px-5 py-3 text-sm font-bold !text-slate-800 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 dark:bg-slate-800 dark:!text-slate-100 dark:ring-slate-700 dark:hover:bg-slate-700"
+                className="rounded-xl px-5 py-3 text-sm font-bold shadow-sm ring-1 transition"
+                style={{
+                  backgroundColor: "#ffffff",
+                  color: "#0f172a",
+                  borderColor: "#e2e8f0",
+                }}
               >
                 Visualizar relatório
               </button>

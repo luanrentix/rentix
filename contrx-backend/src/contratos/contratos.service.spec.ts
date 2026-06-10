@@ -4,6 +4,14 @@ import { ContratosService } from './contratos.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 describe('ContratosService', () => {
+  beforeAll(() => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-06-10T12:00:00.000Z'));
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   const contract = {
     id: 'contract-1',
     companyId: 'company-1',
@@ -213,6 +221,9 @@ describe('ContratosService', () => {
       where: {
         companyId: 'company-1',
         propertyId: 'property-1',
+        status: {
+          in: [ContractStatus.ACTIVE],
+        },
         startDate: { lte: new Date('2026-09-05T00:00:00') },
         endDate: { gte: new Date('2026-09-01T00:00:00') },
       },
@@ -265,6 +276,12 @@ describe('ContratosService', () => {
       where: {
         companyId: 'company-1',
         propertyId: 'property-1',
+        status: {
+          in: [ContractStatus.ACTIVE],
+        },
+        endDate: {
+          gte: new Date('2026-06-10T00:00:00'),
+        },
         isTemporaryRental: false,
       },
     });
@@ -355,25 +372,85 @@ describe('ContratosService', () => {
         endDate: new Date('2026-08-31T00:00:00'),
         rentValue: new Prisma.Decimal(1200),
         status: ContractStatus.ACTIVE,
+        renewedAt: new Date('2026-06-10T12:00:00.000Z'),
+        renewalHistory: [
+          {
+            renewedAt: '2026-06-10T12:00:00.000Z',
+            previousEndDate: '2026-05-31',
+            newEndDate: '2026-08-31',
+            previousRentValue: 1000,
+            newRentValue: 1200,
+            notes: undefined,
+          },
+        ],
+        finishedAt: null,
+        finishReason: null,
+      },
+      include: {
+        company: true,
+        property: true,
+        tenant: true,
       },
     });
     expect(tx.contaReceber.create).toHaveBeenCalledTimes(2);
     expect(tx.contaReceber.create).toHaveBeenCalledWith({
       data: {
+        company: {
+          connect: {
+            id: 'company-1',
+          },
+        },
+        contract: {
+          connect: {
+            id: 'contract-1',
+          },
+        },
+        tenant: {
+          connect: {
+            id: 'tenant-1',
+          },
+        },
+        propertyName: 'Imovel',
+        tenantName: 'Pessoa',
+        issueDate: new Date('2026-05-01T00:00:00'),
         dueDate: new Date('2026-07-01T00:00:00'),
         amount: new Prisma.Decimal(1200),
+        status: FinancialAccountStatus.PENDING,
+        manual: false,
         installmentNumber: 2,
         installmentTotal: 3,
         installmentGroupId: 'contract-1-installments',
+        isDownPayment: false,
       },
     });
     expect(tx.contaReceber.create).toHaveBeenCalledWith({
       data: {
+        company: {
+          connect: {
+            id: 'company-1',
+          },
+        },
+        contract: {
+          connect: {
+            id: 'contract-1',
+          },
+        },
+        tenant: {
+          connect: {
+            id: 'tenant-1',
+          },
+        },
+        propertyName: 'Imovel',
+        tenantName: 'Pessoa',
+        issueDate: new Date('2026-05-01T00:00:00'),
         dueDate: new Date('2026-08-01T00:00:00'),
         amount: new Prisma.Decimal(1200),
+        status: FinancialAccountStatus.PENDING,
+        manual: false,
         installmentNumber: 3,
         installmentTotal: 3,
         installmentGroupId: 'contract-1-installments',
+        isDownPayment: false,
       },
     });
   });
