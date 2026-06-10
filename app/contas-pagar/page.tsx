@@ -24,7 +24,6 @@ import {
   getCompanyStorageItem,
   setCompanyStorageItem,
 } from "@/services/company-storage";
-import { getCachedPrintTemplates } from "@/services/settings-cache";
 
 type ThemeMode = "light" | "black" | "graphite";
 type PersonType = "Individual" | "Company";
@@ -1767,7 +1766,7 @@ Total pendente: {reportPendingTotal}
 Total vencido: {reportOverdueTotal}
 
 GERADO EM: {currentDate}`;
-    const configuredTemplate = getCachedPrintTemplates()?.accountsPayableReport;
+    const configuredTemplate: unknown = null;
     const templateContent =
       configuredTemplate &&
       typeof configuredTemplate === "object" &&
@@ -1807,13 +1806,13 @@ GERADO EM: {currentDate}`;
 
     const pendingTotal = reportExpenses
       .filter((expense) => expense.status === "Pending")
-      .reduce((total, expense) => total + expense.amount, 0);
+      .reduce((total, expense) => total + getExpenseRemainingAmount(expense), 0);
     const paidTotal = reportExpenses
       .filter((expense) => expense.status === "Paid")
       .reduce((total, expense) => total + getExpensePaidAmount(expense), 0);
     const overdueTotal = reportExpenses
       .filter((expense) => expense.status === "Overdue")
-      .reduce((total, expense) => total + expense.amount, 0);
+      .reduce((total, expense) => total + getExpenseRemainingAmount(expense), 0);
     const grandTotal = getReportTotalAmount(reportExpenses);
 
     const filterSummary = [
@@ -1850,6 +1849,7 @@ GERADO EM: {currentDate}`;
       reportOverdueTotal: formatCurrency(overdueTotal),
       currentDate: new Date().toLocaleString("pt-BR"),
     });
+    void configuredReportHeader;
 
     const rows = reportExpenses
       .map((expense) => {
@@ -1857,7 +1857,7 @@ GERADO EM: {currentDate}`;
         const amount =
           expense.status === "Paid"
             ? getExpensePaidAmount(expense)
-            : expense.amount;
+            : getExpenseRemainingAmount(expense);
         const paymentMethods = payment?.paymentItems?.length
           ? payment.paymentItems
               .map(
@@ -1923,7 +1923,10 @@ GERADO EM: {currentDate}`;
             th { background: #fff7ed; color: #0f172a; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
             th, td { border: 1px solid #e2e8f0; padding: 9px; font-size: 12px; vertical-align: top; }
             tr:nth-child(even) td { background: #f8fafc; }
-            .configured-header { white-space: pre-wrap; border: 1px solid #fed7aa; background: #fff7ed; border-radius: 14px; padding: 16px; margin: 20px 0; font-size: 12px; line-height: 1.6; font-weight: 700; }
+            .filters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 0 0 22px; }
+            .filter-item { border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px 14px; }
+            .filter-item span { display: block; font-size: 10px; color: #64748b; font-weight: 800; text-transform: uppercase; }
+            .filter-item strong { display: block; margin-top: 5px; font-size: 13px; }
             .footer { margin-top: 24px; font-size: 11px; color: #64748b; text-align: center; }
             @media print {
               body { margin: 0; background: #ffffff; }
@@ -1966,7 +1969,11 @@ GERADO EM: {currentDate}`;
               <div class="card"><span>Categoria</span><strong>${escapeHtml(reportCategory || "Todas")}</strong></div>
             </div>
 
-            <div class="configured-header">${escapeHtml(configuredReportHeader)}</div>
+            <div class="filters">
+              <div class="filter-item"><span>Categoria</span><strong>${escapeHtml(reportCategory || "Todas")}</strong></div>
+              <div class="filter-item"><span>Status</span><strong>${getStatusFilterLabel(reportStatusFilter)}</strong></div>
+              <div class="filter-item"><span>Vencimento</span><strong>${getReportDueFilterLabel(reportDueFilter)}</strong></div>
+            </div>
 
             <table>
               <thead>
@@ -1975,7 +1982,7 @@ GERADO EM: {currentDate}`;
                   <th>Descrição</th>
                   <th>Categoria</th>
                   <th>Vencimento</th>
-                  <th>Valor</th>
+                  <th>Valor pago/em aberto</th>
                   <th>Status</th>
                   <th>Pagamento</th>
                   <th>Forma de pagamento</th>
@@ -3093,7 +3100,7 @@ GERADO EM: {currentDate}`;
                 <button
                   type="button"
                   onClick={closePayExpenseModal}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 dark:text-slate-500 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-800 hover:text-slate-900 dark:text-slate-100"
+                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 hover:text-slate-950 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700 dark:hover:bg-slate-700"
                   aria-label="Fechar pagamento"
                 >
                   ✕
@@ -3285,7 +3292,7 @@ GERADO EM: {currentDate}`;
               )}
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 md:flex-row md:justify-end">
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white p-5 dark:border-slate-800 dark:bg-slate-900 md:flex-row md:justify-end">
               <button
                 type="button"
                 onClick={closePayExpenseModal}
@@ -3362,8 +3369,8 @@ GERADO EM: {currentDate}`;
 
       {isReportOpen && (
         <div className={`fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${accountsPayableThemeClass}`}>
-          <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
-            <div className="border-b border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-gradient-to-r from-slate-50 to-white dark:from-slate-800 dark:to-slate-900 p-6">
+          <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
+            <div className="border-b border-slate-100 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">
@@ -3437,7 +3444,7 @@ GERADO EM: {currentDate}`;
                   Filtro de vencimento
                 </label>
 
-                <div className="grid gap-3 md:grid-cols-5">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                   {(
                     [
                       "All",
@@ -3454,10 +3461,10 @@ GERADO EM: {currentDate}`;
                         setReportFormError("");
                         setReportDueFilter(filter);
                       }}
-                      className={`rounded-2xl border px-3 py-3 text-sm font-bold transition ${
+                      className={`min-h-16 rounded-2xl border px-3 py-3 text-sm font-bold leading-snug transition ${
                         reportDueFilter === filter
-                          ? "border-slate-900 bg-slate-900 text-white shadow-sm"
-                          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-800/80"
+                          ? "border-slate-950 bg-slate-950 !text-white shadow-sm"
+                          : "border-slate-200 bg-white !text-slate-800 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:!text-slate-100 dark:hover:bg-slate-700"
                       }`}
                     >
                       {getReportDueFilterLabel(filter)}
@@ -3550,7 +3557,7 @@ GERADO EM: {currentDate}`;
               <button
                 type="button"
                 onClick={closeReportModal}
-                className="rounded-xl bg-slate-100 dark:bg-slate-800 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 dark:hover:bg-slate-700"
+                className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold !text-slate-800 transition hover:bg-slate-200 dark:bg-slate-800 dark:!text-slate-100 dark:hover:bg-slate-700"
               >
                 Cancelar
               </button>
@@ -3558,7 +3565,7 @@ GERADO EM: {currentDate}`;
               <button
                 type="button"
                 onClick={viewAccountsPayableReport}
-                className="rounded-xl bg-white dark:bg-slate-900 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-800"
+                className="rounded-xl bg-white px-5 py-3 text-sm font-bold !text-slate-800 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 dark:bg-slate-800 dark:!text-slate-100 dark:ring-slate-700 dark:hover:bg-slate-700"
               >
                 Visualizar relatório
               </button>
