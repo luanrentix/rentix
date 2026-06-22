@@ -219,12 +219,6 @@ export default function LoginPage() {
 
       setRecoveryMessage(response.message);
 
-      if (response.resetToken) {
-        setRecoveryToken(response.resetToken);
-        setPasswordRecoveryStep("reset");
-        return;
-      }
-
       setPasswordRecoveryStep("sent");
     } catch (error) {
       const presentation = getAuthErrorPresentation(
@@ -527,7 +521,6 @@ export default function LoginPage() {
           onNewPasswordConfirmationChange={setRecoveryPasswordConfirmation}
           onRequestReset={handleRequestPasswordReset}
           onResetPassword={handleResetPassword}
-          onTokenChange={setRecoveryToken}
           step={passwordRecoveryStep}
           token={recoveryToken}
         />
@@ -549,7 +542,6 @@ function PasswordRecoveryModal({
   onNewPasswordConfirmationChange,
   onRequestReset,
   onResetPassword,
-  onTokenChange,
   step,
   token,
 }: {
@@ -565,7 +557,6 @@ function PasswordRecoveryModal({
   onNewPasswordConfirmationChange: (value: string) => void;
   onRequestReset: () => void;
   onResetPassword: () => void;
-  onTokenChange: (value: string) => void;
   step: "request" | "reset" | "sent" | "success";
   token: string;
 }) {
@@ -657,14 +648,7 @@ function PasswordRecoveryModal({
 
           {isResetStep && (
             <>
-              <AuthInput
-                icon={<LockKeyhole size={20} />}
-                type="text"
-                placeholder="Código de recuperação"
-                value={token}
-                onChange={onTokenChange}
-                autoComplete="one-time-code"
-              />
+              <input type="hidden" value={token} readOnly />
               <AuthInput
                 icon={<LockKeyhole size={20} />}
                 type="password"

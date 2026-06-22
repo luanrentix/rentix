@@ -77,7 +77,7 @@ function hashPasswordResetToken(token: string) {
 function shouldExposePasswordResetToken() {
   return (
     process.env.NODE_ENV !== 'production' &&
-    process.env.CONTRX_EXPOSE_PASSWORD_RESET_TOKEN !== 'false'
+    process.env.CONTRX_EXPOSE_PASSWORD_RESET_TOKEN === 'true'
   );
 }
 
@@ -89,6 +89,19 @@ function isSmtpConfigured() {
   return Boolean(
     process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS,
   );
+}
+
+function buildPasswordResetUrl(email: string, token: string) {
+  const frontendUrl =
+    process.env.CONTRX_FRONTEND_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    'http://localhost:3000';
+  const normalizedFrontendUrl = frontendUrl.replace(/\/$/, '');
+  const loginUrl = normalizedFrontendUrl.endsWith('/login')
+    ? normalizedFrontendUrl
+    : `${normalizedFrontendUrl}/login`;
+
+  return `${loginUrl}?resetToken=${token}&email=${encodeURIComponent(email)}`;
 }
 
 type AuthenticatedUserWithCompany = User & {
@@ -494,11 +507,7 @@ export class AutenticacaoService {
       },
     });
 
-    const frontendUrl =
-      process.env.CONTRX_FRONTEND_URL ||
-      process.env.NEXT_PUBLIC_APP_URL ||
-      'http://localhost:3000';
-    const resetUrl = `${frontendUrl.replace(/\/$/, '')}/login?resetToken=${token}&email=${encodeURIComponent(email)}`;
+    const resetUrl = buildPasswordResetUrl(email, token);
 
     if (!canExposeToken) {
       await this.sendPasswordResetEmail(email, resetUrl);
