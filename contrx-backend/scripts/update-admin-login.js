@@ -12,7 +12,7 @@ const ADMIN_EMAILS = [
   'adm@contrx.com.br',
 ];
 const ADMIN_EMAIL = 'adm@contrx.com.br';
-const ADMIN_PASSWORD = '123456';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '123456';
 const ADMIN_NAME = 'Administrador Contrx';
 const COMPANY_NAME = 'Contrx';
 
