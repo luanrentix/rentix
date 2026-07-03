@@ -61,7 +61,7 @@ describe('AdminService', () => {
       where: {
         companyId: 'company-1',
         id: { not: 'current-user' },
-        email: { not: 'adm@contrx.com' },
+        role: { not: 'SYSTEM_OWNER' },
       },
     });
     expect(result).toEqual({

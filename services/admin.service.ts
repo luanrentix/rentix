@@ -37,6 +37,7 @@ export type AdminUser = {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  lastLoginAt?: string | null;
   company: {
     id: string;
     tradeName: string;

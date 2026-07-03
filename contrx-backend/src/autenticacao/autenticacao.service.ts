@@ -285,6 +285,7 @@ export class AutenticacaoService {
       },
       data: {
         activeSessionId: sessionId,
+        lastLoginAt: new Date(),
       },
       include: {
         company: {
@@ -432,6 +433,7 @@ export class AutenticacaoService {
       },
       data: {
         activeSessionId: sessionId,
+        lastLoginAt: new Date(),
       },
       include: {
         company: {

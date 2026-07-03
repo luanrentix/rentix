@@ -100,6 +100,16 @@ function formatDate(value: string) {
   });
 }
 
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function addDays(date: Date, days: number) {
   const nextDate = new Date(date);
   nextDate.setDate(nextDate.getDate() + days);
@@ -317,6 +327,14 @@ export default function AdminPage() {
   }
 
   async function handleUpdateUserRole(userId: string, role: AdminUserRole) {
+    const confirmed = await requestConfirmation({
+      title: "Alterar perfil de usuário",
+      message: `Deseja realmente alterar o perfil deste usuário para ${roleLabels[role] || role}?`,
+      confirmLabel: "Alterar",
+    });
+
+    if (!confirmed) return;
+
     try {
       setUpdatingUserId(userId);
       setErrorMessage("");
@@ -337,6 +355,15 @@ export default function AdminPage() {
   }
 
   async function handleToggleUserStatus(userToUpdate: AdminUser) {
+    const confirmed = await requestConfirmation({
+      title: userToUpdate.isActive ? "Inativar usuário" : "Ativar usuário",
+      message: `Deseja realmente ${userToUpdate.isActive ? "inativar" : "ativar"} o usuário "${userToUpdate.name}"?`,
+      confirmLabel: userToUpdate.isActive ? "Inativar" : "Ativar",
+      tone: userToUpdate.isActive ? "danger" : "default",
+    });
+
+    if (!confirmed) return;
+
     try {
       setUpdatingUserId(userToUpdate.id);
       setErrorMessage("");
@@ -363,6 +390,15 @@ export default function AdminPage() {
   }
 
   async function handleToggleCompanyStatus(companyToUpdate: AdminCompany) {
+    const confirmed = await requestConfirmation({
+      title: companyToUpdate.isActive ? "Inativar empresa" : "Ativar empresa",
+      message: `Deseja realmente ${companyToUpdate.isActive ? "inativar" : "ativar"} a empresa "${companyToUpdate.tradeName}"?`,
+      confirmLabel: companyToUpdate.isActive ? "Inativar" : "Ativar",
+      tone: companyToUpdate.isActive ? "danger" : "default",
+    });
+
+    if (!confirmed) return;
+
     try {
       setUpdatingCompanyId(companyToUpdate.id);
       setErrorMessage("");
@@ -1059,13 +1095,14 @@ export default function AdminPage() {
               <div className="max-w-full overflow-x-auto overscroll-x-contain">
                 <table className="w-full min-w-[960px] table-fixed text-left text-[13px]">
                   <colgroup>
-                    <col className="w-[19%]" />
-                    <col className="w-[20%]" />
-                    <col className="w-[15%]" />
-                    <col className="w-[11%]" />
                     <col className="w-[17%]" />
-                    <col className="w-[9%]" />
-                    <col className="w-[9%]" />
+                    <col className="w-[16%]" />
+                    <col className="w-[17%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[13%]" />
+                    <col className="w-[15%]" />
+                    <col className="w-[7%]" />
+                    <col className="w-[7%]" />
                   </colgroup>
                   <thead className="border-y border-slate-100 bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
                     <tr>
@@ -1073,6 +1110,7 @@ export default function AdminPage() {
                       <th className="px-4 py-3">Empresa</th>
                       <th className="px-4 py-3">Perfil</th>
                       <th className="px-4 py-3">Criado em</th>
+                      <th className="px-4 py-3">Último acesso</th>
                       <th className="px-4 py-3">Vencimento</th>
                       <th className="px-4 py-3">Status</th>
                       <th className="px-4 py-3">Ações</th>
@@ -1080,9 +1118,9 @@ export default function AdminPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {isLoading ? (
-                      <TableState colSpan={7} message="Carregando usuários..." />
+                      <TableState colSpan={8} message="Carregando usuários..." />
                     ) : filteredUsers.length === 0 ? (
-                      <TableState colSpan={7} message="Nenhum usuário encontrado." />
+                      <TableState colSpan={8} message="Nenhum usuário encontrado." />
                     ) : (
                       filteredUsers.map((item) => (
                         <tr key={item.id} className="bg-white transition hover:bg-slate-50">
@@ -1116,6 +1154,9 @@ export default function AdminPage() {
                           </td>
                           <td className="px-4 py-4 font-bold text-slate-500">
                             {formatDate(item.createdAt)}
+                          </td>
+                          <td className="px-4 py-4 font-bold text-slate-500">
+                            {item.lastLoginAt ? formatDateTime(item.lastLoginAt) : "Nunca"}
                           </td>
                           <td className="px-4 py-4">
                             <div className="grid gap-2">

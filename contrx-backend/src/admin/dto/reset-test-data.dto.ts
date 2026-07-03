@@ -1,4 +1,4 @@
-import { IsArray, IsIn } from 'class-validator';
+import { IsArray, IsIn, IsOptional, IsString } from 'class-validator';
 
 export const resetTestDataModules = [
   'properties',
@@ -16,4 +16,8 @@ export class ResetTestDataDto {
   @IsArray()
   @IsIn(resetTestDataModules, { each: true })
   modules!: ResetTestDataModule[];
+
+  @IsOptional()
+  @IsString()
+  targetCompanyId?: string;
 }

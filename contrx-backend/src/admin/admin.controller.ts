@@ -81,6 +81,7 @@ export class AdminController {
       user.companyId,
       user.id,
       data.modules,
+      data.targetCompanyId,
     );
   }
 }

@@ -120,6 +120,7 @@ model User {
   activeSessionId String? @map("sessao_ativa_id")
   passwordResetTokenHash String? @map("token_recuperacao_senha_hash")
   passwordResetExpiresAt DateTime? @map("token_recuperacao_senha_expira_em")
+  lastLoginAt            DateTime? @map("ultimo_login_em")
 
   createdAt DateTime @default(now()) @map("criado_em")
   updatedAt DateTime @updatedAt @map("atualizado_em")

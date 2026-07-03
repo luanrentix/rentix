@@ -61,6 +61,17 @@ async function ensureSchema(client) {
   `);
 
   await client.query(`
+    ALTER TABLE IF EXISTS "usuarios"
+    ADD COLUMN IF NOT EXISTS "ultimo_login_em" TIMESTAMPTZ
+  `);
+
+  await client.query(`
+    UPDATE "usuarios"
+    SET "ultimo_login_em" = "criado_em"
+    WHERE "ultimo_login_em" IS NULL
+  `);
+
+  await client.query(`
     ALTER TABLE IF EXISTS "pessoas"
     ADD COLUMN IF NOT EXISTS "inquilino" BOOLEAN NOT NULL DEFAULT true
   `);

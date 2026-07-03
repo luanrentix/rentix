@@ -98,6 +98,7 @@ export class AdminService {
         isActive: true,
         createdAt: true,
         updatedAt: true,
+        lastLoginAt: true,
         company: {
           select: {
             id: true,
@@ -522,10 +523,12 @@ export class AdminService {
   }
 
   async resetTestData(
-    companyId: string,
+    operatorCompanyId: string,
     currentUserId: string,
     modules: ResetTestDataModule[],
+    targetCompanyId?: string,
   ) {
+    const companyId = targetCompanyId || operatorCompanyId;
     const selectedModules = new Set(modules);
     const deletedRecords: Partial<Record<ResetTestDataModule, number>> = {};
 
@@ -632,7 +635,7 @@ export class AdminService {
           where: {
             companyId,
             id: { not: currentUserId },
-            email: { not: 'adm@contrx.com' },
+            role: { not: 'SYSTEM_OWNER' },
           },
         });
         deletedRecords.masterPanel = deletedMasterPanelUsers.count;

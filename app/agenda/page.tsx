@@ -224,6 +224,17 @@ function getShortDate(value: string) {
   });
 }
 
+function getWeekRangeLabel(days: Date[]) {
+  const firstDay = days[0];
+  const lastDay = days[days.length - 1];
+
+  if (!firstDay || !lastDay) return "";
+
+  return `${getShortDate(formatDateToInputValue(firstDay))} - ${getShortDate(
+    formatDateToInputValue(lastDay),
+  )}`;
+}
+
 function getTimeValue(item: ScheduleItem) {
   return `${item.date}T${item.time || "00:00"}`;
 }
@@ -490,6 +501,20 @@ export default function AgendaPage() {
   const overdueCount = scheduleItems.filter(
     (item) => item.date < todayInputValue && item.status === "scheduled",
   ).length;
+  const activeFilterCount = [
+    searchTerm.trim(),
+    statusFilter !== "all",
+    typeFilter !== "all",
+    responsibleFilter !== "all",
+    priorityFilter !== "all",
+  ].filter(Boolean).length;
+  const selectedDateLabel = getReadableDate(selectedDate);
+  const calendarSubtitle =
+    viewMode === "month"
+      ? `${monthItems.length} compromisso(s) neste mes`
+      : viewMode === "week"
+        ? `${weekItems.length} compromisso(s) de ${getWeekRangeLabel(weekDays)}`
+        : `${selectedDateItems.length} compromisso(s) no dia`;
 
   const openActionMenuSchedule = useMemo(() => {
     return openActionMenuScheduleId
@@ -528,6 +553,7 @@ export default function AgendaPage() {
         ? "h-11 w-full rounded-xl border border-[#334155] bg-[#020617] px-3.5 text-sm font-bold text-[#f8fafc] outline-none transition placeholder:text-[#64748b] focus:border-[#64748b] focus:ring-4 focus:ring-[#334155]/40"
         : "h-11 w-full rounded-xl border border-[#cbd5e1] bg-[#ffffff] px-3.5 text-sm font-bold text-[#0f172a] outline-none transition placeholder:text-[#94a3b8] focus:border-[#0f172a] focus:ring-4 focus:ring-[#e2e8f0]";
   const textareaClass = inputClass.replace("h-11", "min-h-24 py-2.5");
+  const dateInputClass = inputClass.replace("w-full", "w-full sm:w-48");
   const secondaryButtonClass =
     themeMode === "graphite"
       ? "rounded-xl bg-[#162a44] px-3.5 py-2.5 text-sm font-bold text-[#b6c6dc] transition hover:bg-[#24405f] hover:text-[#ffffff]"
@@ -776,20 +802,41 @@ export default function AgendaPage() {
     setActionMenuPosition(null);
   }
 
-  function handlePreviousMonth() {
-    setCurrentCalendarDate(
-      new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() - 1, 1),
-    );
+  function moveSelectedDateByDays(amount: number) {
+    const nextSelectedDate = addDaysToInputValue(selectedDate, amount);
+    const nextDate = createDateFromInputValue(nextSelectedDate);
+
+    setSelectedDate(nextSelectedDate);
+    setCurrentCalendarDate(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1));
   }
 
-  function handleNextMonth() {
-    setCurrentCalendarDate(
-      new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() + 1, 1),
-    );
+  function handlePreviousPeriod() {
+    if (viewMode === "month") {
+      setCurrentCalendarDate(
+        new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() - 1, 1),
+      );
+      return;
+    }
+
+    moveSelectedDateByDays(viewMode === "week" ? -7 : -1);
+  }
+
+  function handleNextPeriod() {
+    if (viewMode === "month") {
+      setCurrentCalendarDate(
+        new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() + 1, 1),
+      );
+      return;
+    }
+
+    moveSelectedDateByDays(viewMode === "week" ? 7 : 1);
   }
 
   function handleSelectDate(date: Date) {
-    setSelectedDate(formatDateToInputValue(date));
+    const nextDateValue = formatDateToInputValue(date);
+
+    setSelectedDate(nextDateValue);
+    setCurrentCalendarDate(new Date(date.getFullYear(), date.getMonth(), 1));
   }
 
   function handleTodayClick() {
@@ -1038,17 +1085,17 @@ export default function AgendaPage() {
     return (
       <article
         key={item.id}
-        className={`rounded-2xl border border-l-4 p-4 shadow-sm transition hover:shadow-md ${getTypeAccentClass(
+        className={`${compact ? "rounded-xl p-3" : "rounded-2xl p-4"} border border-l-4 shadow-sm transition hover:shadow-md ${getTypeAccentClass(
           item.type,
           isBlackTheme,
         )} ${isBlackTheme ? "border-[#334155]" : "border-[#e2e8f0]"}`}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm font-black text-orange-600">
+            <p className={`${compact ? "text-xs" : "text-sm"} font-black text-orange-600`}>
               {item.time} · {getShortDate(item.date)}
             </p>
-            <h3 className={`mt-1 break-words text-base font-black ${strongTextClass}`}>
+            <h3 className={`mt-1 break-words ${compact ? "text-sm" : "text-base"} font-black ${strongTextClass}`}>
               {item.title}
             </h3>
           </div>
@@ -1056,7 +1103,7 @@ export default function AgendaPage() {
           <div className="flex shrink-0 items-start gap-2">
             <div className="flex flex-col items-end gap-2">
               <span
-                className={`rounded-full border px-3 py-1 text-[11px] font-black ${getStatusBadgeClass(
+                className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${getStatusBadgeClass(
                   item.status,
                   isBlackTheme,
                 )}`}
@@ -1088,7 +1135,7 @@ export default function AgendaPage() {
         </div>
 
         <div
-          className={`mt-3 grid gap-2 text-sm font-semibold ${
+          className={`mt-3 grid gap-2 ${compact ? "text-xs" : "text-sm"} font-semibold ${
             isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"
           } ${compact ? "" : "sm:grid-cols-2"}`}
         >
@@ -1114,9 +1161,9 @@ export default function AgendaPage() {
           </p>
         )}
 
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className={`${compact ? "mt-3" : "mt-4"} flex flex-wrap gap-2`}>
           <span
-            className={`rounded-xl px-3 py-2 text-xs font-black ${
+            className={`rounded-xl px-3 ${compact ? "py-1.5 text-[11px]" : "py-2 text-xs"} font-black ${
               isBlackTheme
                 ? "bg-[#1e293b] text-[#cbd5e1]"
                 : "bg-[#ffffff] text-[#475569] shadow-sm ring-1 ring-[#e2e8f0]"
@@ -1125,7 +1172,7 @@ export default function AgendaPage() {
             {item.type}
           </span>
           <span
-            className={`rounded-xl border px-3 py-2 text-xs font-black ${getPriorityBadgeClass(
+            className={`rounded-xl border px-3 ${compact ? "py-1.5 text-[11px]" : "py-2 text-xs"} font-black ${getPriorityBadgeClass(
               item.priority,
               isBlackTheme,
             )}`}
@@ -1394,11 +1441,7 @@ export default function AgendaPage() {
             </Field>
           </div>
 
-          {(searchTerm ||
-            statusFilter !== "all" ||
-            typeFilter !== "all" ||
-            responsibleFilter !== "all" ||
-            priorityFilter !== "all") && (
+          {activeFilterCount > 0 && (
             <div
               className={`mt-4 flex flex-col justify-between gap-3 rounded-2xl border p-4 md:flex-row md:items-center ${
                 isBlackTheme
@@ -1424,23 +1467,23 @@ export default function AgendaPage() {
           )}
         </section>
 
-        <section className="grid gap-6 2xl:grid-cols-[1.45fr_0.85fr]">
-          <div className={`rounded-2xl border p-5 shadow-sm lg:p-6 ${cardClass}`}>
+        <section className="grid gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(22rem,0.72fr)]">
+          <div className={`rounded-2xl border p-4 shadow-sm lg:p-5 ${cardClass}`}>
             <div
-              className={`flex flex-col gap-4 border-b pb-5 lg:flex-row lg:items-center lg:justify-between ${
+              className={`flex flex-col gap-4 border-b pb-4 lg:flex-row lg:items-center lg:justify-between ${
                 isBlackTheme ? "border-[#334155]" : "border-[#e2e8f0]"
               }`}
             >
               <div>
-                <h2 className={`text-xl font-black ${strongTextClass}`}>
+                <h2 className={`text-lg font-black ${strongTextClass}`}>
                   {viewMode === "month"
                     ? `${monthNames[currentCalendarDate.getMonth()]} ${currentCalendarDate.getFullYear()}`
                     : viewMode === "week"
-                      ? "Semana"
-                      : `Dia ${getReadableDate(selectedDate)}`}
+                      ? `Semana ${getWeekRangeLabel(weekDays)}`
+                      : `Dia ${selectedDateLabel}`}
                 </h2>
-                <p className={`mt-1 text-sm leading-6 ${mutedTextClass}`}>
-                  {filteredItems.length} compromisso(s) no filtro atual.
+                <p className={`mt-1 text-sm ${mutedTextClass}`}>
+                  {calendarSubtitle} no filtro atual.
                 </p>
               </div>
 
@@ -1449,20 +1492,20 @@ export default function AgendaPage() {
                   type="date"
                   value={selectedDate}
                   onChange={(event) => handleDateInputChange(event.target.value)}
-                  className={inputClass}
+                  className={dateInputClass}
                 />
                 <button
                   type="button"
-                  onClick={handlePreviousMonth}
-                  className={`flex h-12 w-12 items-center justify-center ${secondaryButtonClass}`}
+                  onClick={handlePreviousPeriod}
+                  className={`flex h-11 w-11 items-center justify-center ${secondaryButtonClass}`}
                   aria-label="Mês anterior"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
-                  onClick={handleNextMonth}
-                  className={`flex h-12 w-12 items-center justify-center ${secondaryButtonClass}`}
+                  onClick={handleNextPeriod}
+                  className={`flex h-11 w-11 items-center justify-center ${secondaryButtonClass}`}
                   aria-label="Próximo mês"
                 >
                   <ChevronRight className="h-4 w-4" />
@@ -1480,7 +1523,7 @@ export default function AgendaPage() {
                       key={mode}
                       type="button"
                       onClick={() => setViewMode(mode)}
-                      className={`rounded-lg px-4 py-2 text-xs font-black transition ${
+                      className={`rounded-lg px-3 py-2 text-xs font-black transition ${
                         viewMode === mode
                           ? "bg-orange-500 text-white shadow-sm"
                           : isBlackTheme
@@ -1499,15 +1542,50 @@ export default function AgendaPage() {
               <LoadingState isBlackTheme={isBlackTheme} />
             ) : (
               <>
+                <div
+                  className={`mt-4 grid gap-2 text-xs font-black sm:grid-cols-3 ${
+                    isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"
+                  }`}
+                >
+                  <div
+                    className={`rounded-xl px-3 py-2 ${
+                      isBlackTheme ? "bg-[#020617]" : "bg-[#f8fafc]"
+                    }`}
+                  >
+                    Selecionado: {selectedDateLabel}
+                  </div>
+                  <div
+                    className={`rounded-xl px-3 py-2 ${
+                      isBlackTheme ? "bg-[#020617]" : "bg-[#f8fafc]"
+                    }`}
+                  >
+                    Visiveis: {filteredItems.length}
+                  </div>
+                  <div
+                    className={`rounded-xl px-3 py-2 ${
+                      overdueCount > 0
+                        ? isBlackTheme
+                          ? "bg-red-950/30 text-red-300"
+                          : "bg-red-50 text-red-700"
+                        : isBlackTheme
+                          ? "bg-[#020617]"
+                          : "bg-[#f8fafc]"
+                    }`}
+                  >
+                    Atrasados: {overdueCount}
+                  </div>
+                </div>
+
                 {viewMode === "month" && (
-                  <div className="mt-5 grid min-w-[720px] grid-cols-7 gap-2 overflow-x-auto lg:min-w-0">
+                  <div className="mt-4 overflow-x-auto pb-2">
+                    <div className="grid min-w-[640px] grid-cols-7 gap-1.5 lg:min-w-0 xl:gap-2">
                     {weekDayLabels.map((dayLabel) => (
                       <div
                         key={dayLabel}
                         className={
                           isBlackTheme
-                            ? "rounded-xl bg-orange-950/30 px-2 py-3 text-center text-xs font-black uppercase text-orange-300"
-                            : "rounded-xl bg-orange-50 px-2 py-3 text-center text-xs font-black uppercase text-orange-700"
+                            ? "rounded-lg bg-orange-950/30 px-2 py-2 text-center text-[11px] font-black uppercase text-orange-300"
+                            : "rounded-lg bg-orange-50 px-2 py-2 text-center text-[11px] font-black uppercase text-orange-700"
                         }
                       >
                         {dayLabel}
@@ -1530,7 +1608,7 @@ export default function AgendaPage() {
                           type="button"
                           onClick={() => handleSelectDate(date)}
                           aria-pressed={isSelectedDate}
-                          className={`min-h-32 rounded-2xl border p-3 text-left transition ${
+                          className={`min-h-16 rounded-xl border p-2 text-left transition xl:min-h-20 ${
                             isSelectedDate
                               ? "border-orange-400 bg-orange-50 shadow-sm"
                               : isBlackTheme
@@ -1540,7 +1618,7 @@ export default function AgendaPage() {
                         >
                           <div className="flex items-center justify-between gap-2">
                             <span
-                              className={`flex h-8 w-8 items-center justify-center rounded-xl text-sm font-black ${
+                              className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-black ${
                                 isToday
                                   ? "bg-orange-500 text-white"
                                   : isSelectedDate
@@ -1553,17 +1631,17 @@ export default function AgendaPage() {
                               {date.getDate()}
                             </span>
                             {dateItems.length > 0 && (
-                              <span className="rounded-full bg-orange-500 px-2 py-1 text-[10px] font-black text-white">
+                              <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-black text-white">
                                 {dateItems.length}
                               </span>
                             )}
                           </div>
 
-                          <div className="mt-3 space-y-1">
-                            {dateItems.slice(0, 3).map((item) => (
+                          <div className="mt-2 space-y-1">
+                            {dateItems.slice(0, 2).map((item) => (
                               <div
                                 key={item.id}
-                                className={`truncate rounded-xl px-2 py-1 text-[11px] font-bold ${
+                                className={`truncate rounded-lg px-2 py-1 text-[10px] font-bold ${
                                   item.priority === "high"
                                     ? "bg-red-600 text-white"
                                     : isBlackTheme
@@ -1574,20 +1652,21 @@ export default function AgendaPage() {
                                 {item.time} · {item.title}
                               </div>
                             ))}
-                            {dateItems.length > 3 && (
-                              <p className={`px-2 text-[11px] font-black ${mutedTextClass}`}>
-                                + {dateItems.length - 3} mais
+                            {dateItems.length > 2 && (
+                              <p className={`px-1 text-[10px] font-black ${mutedTextClass}`}>
+                                + {dateItems.length - 2} mais
                               </p>
                             )}
                           </div>
                         </button>
                       );
                     })}
+                    </div>
                   </div>
                 )}
 
                 {viewMode === "week" && (
-                  <div className="mt-5 grid gap-3 lg:grid-cols-7">
+                  <div className="mt-4 grid gap-3 lg:grid-cols-7">
                     {weekDays.map((date) => {
                       const dateValue = formatDateToInputValue(date);
                       const items = weekItems.filter((item) => item.date === dateValue);
@@ -1596,7 +1675,7 @@ export default function AgendaPage() {
                       return (
                         <div
                           key={dateValue}
-                          className={`rounded-2xl border p-4 ${
+                          className={`rounded-xl border p-3 ${
                             isToday
                               ? "border-orange-400"
                               : isBlackTheme
@@ -1613,21 +1692,21 @@ export default function AgendaPage() {
                               {weekDayLabels[date.getDay()]}
                             </p>
                             <p
-                              className={`mt-1 text-2xl font-black ${
+                              className={`mt-1 text-xl font-black ${
                                 isToday ? "text-orange-600" : strongTextClass
                               }`}
                             >
                               {date.getDate()}
                             </p>
                           </button>
-                          <div className="mt-4 space-y-2">
+                          <div className="mt-3 space-y-2">
                             {items.length > 0 ? (
                               items.map((item) => (
                                 <button
                                   key={item.id}
                                   type="button"
                                   onClick={() => handleOpenEditModal(item)}
-                                  className={`w-full rounded-xl border-l-4 p-3 text-left text-xs font-bold ${getTypeAccentClass(
+                                  className={`w-full rounded-lg border-l-4 p-2.5 text-left text-xs font-bold ${getTypeAccentClass(
                                     item.type,
                                     isBlackTheme,
                                   )}`}
@@ -1655,7 +1734,7 @@ export default function AgendaPage() {
                 )}
 
                 {viewMode === "day" && (
-                  <div className="mt-5 space-y-4">
+                  <div className="mt-4 space-y-3">
                     {selectedDateItems.length > 0 ? (
                       selectedDateItems.map((item) => renderScheduleCard(item))
                     ) : (
@@ -1671,14 +1750,14 @@ export default function AgendaPage() {
             )}
           </div>
 
-          <aside className="space-y-6">
-            <div className={`rounded-2xl border p-5 shadow-sm lg:p-6 ${cardClass}`}>
+          <aside className="space-y-4 2xl:sticky 2xl:top-4 2xl:self-start">
+            <div className={`rounded-2xl border p-4 shadow-sm lg:p-5 ${cardClass}`}>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-orange-600">
                     Data selecionada
                   </p>
-                  <h2 className={`mt-2 text-xl font-black ${strongTextClass}`}>
+                  <h2 className={`mt-2 text-lg font-black ${strongTextClass}`}>
                     {getReadableDate(selectedDate)}
                   </h2>
                   <p className={`mt-1 text-sm font-semibold ${mutedTextClass}`}>
@@ -1695,7 +1774,7 @@ export default function AgendaPage() {
                 </button>
               </div>
 
-              <div className="mt-5 space-y-3">
+              <div className="mt-4 max-h-[26rem] space-y-3 overflow-y-auto pr-1">
                 {selectedDateItems.length > 0 ? (
                   selectedDateItems.map((item) => renderScheduleCard(item, true))
                 ) : (
@@ -1712,14 +1791,14 @@ export default function AgendaPage() {
               </div>
             </div>
 
-            <div className={`rounded-2xl border p-5 shadow-sm lg:p-6 ${cardClass}`}>
+            <div className={`rounded-2xl border p-4 shadow-sm lg:p-5 ${cardClass}`}>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-orange-600">
                 Próximos 7 dias
               </p>
-              <h2 className={`mt-2 text-xl font-black ${strongTextClass}`}>
+              <h2 className={`mt-2 text-lg font-black ${strongTextClass}`}>
                 Fila operacional
               </h2>
-              <div className="mt-5 space-y-3">
+              <div className="mt-4 space-y-3">
                 {nextSevenDaysItems.length > 0 ? (
                   nextSevenDaysItems.map((item) => (
                     <button
@@ -1729,7 +1808,7 @@ export default function AgendaPage() {
                         setSelectedDate(item.date);
                         handleOpenEditModal(item);
                       }}
-                      className={`w-full rounded-2xl border-l-4 p-4 text-left transition hover:-translate-y-0.5 ${getTypeAccentClass(
+                      className={`w-full rounded-xl border-l-4 p-3 text-left transition hover:-translate-y-0.5 ${getTypeAccentClass(
                         item.type,
                         isBlackTheme,
                       )}`}
@@ -1770,14 +1849,14 @@ export default function AgendaPage() {
               </div>
             </div>
 
-            <div className={`rounded-2xl border p-5 shadow-sm lg:p-6 ${cardClass}`}>
+            <div className={`rounded-2xl border p-4 shadow-sm lg:p-5 ${cardClass}`}>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-orange-600">
                 Resumo do mês
               </p>
-              <h2 className={`mt-2 text-xl font-black ${strongTextClass}`}>
+              <h2 className={`mt-2 text-lg font-black ${strongTextClass}`}>
                 {monthItems.length} evento(s)
               </h2>
-              <div className="mt-5 space-y-3">
+              <div className="mt-4 space-y-3">
                 {uniqueTypeOptions.slice(0, 6).map((type) => {
                   const total = monthItems.filter((item) => item.type === type).length;
                   const percentage =

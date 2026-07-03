@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import Link from "next/link";
 import {
   createContract,
   cancelContract,
@@ -2609,7 +2610,10 @@ export default function ContractsPage() {
                               </span>
                             )}
                           {shouldShowExpiredReceivableAlert && (
-                            <span className="inline-flex max-w-[260px] items-start gap-1.5 rounded-xl bg-red-50 px-2.5 py-2 text-xs font-bold leading-5 text-red-700 ring-1 ring-red-100">
+                            <Link
+                              href={`/contas-receber?fromContract=1&contractId=${contract.id}`}
+                              className="inline-flex max-w-[260px] items-start gap-1.5 rounded-xl bg-red-50 px-2.5 py-2 text-xs font-bold leading-5 text-red-700 ring-1 ring-red-100 transition hover:bg-red-100 hover:ring-red-200"
+                            >
                               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                               <span>
                                 Vencido com {receivableSummary.charges.length} conta(s) a receber vinculada(s)
@@ -2618,7 +2622,7 @@ export default function ContractsPage() {
                                   : ""}
                                 .
                               </span>
-                            </span>
+                            </Link>
                           )}
                         </div>
                       </td>
@@ -2789,8 +2793,13 @@ export default function ContractsPage() {
                           </p>
                           <p className="mt-1 text-sm font-semibold leading-6">
                             Existem {receivableSummary.charges.length} cobrança(s) ligada(s) a este contrato,
-                            sendo {receivableSummary.pendingCharges.length} em aberto. Revise o financeiro antes de
-                            finalizar, renovar, cancelar ou excluir.
+                            sendo {receivableSummary.pendingCharges.length} em aberto.{" "}
+                            <Link
+                              href={`/contas-receber?fromContract=1&contractId=${selectedContractDetails.id}`}
+                              className="font-black text-red-900 underline transition hover:text-red-700"
+                            >
+                              Clique aqui para revisar e dar baixa no financeiro.
+                            </Link>
                           </p>
                         </div>
                       </div>
