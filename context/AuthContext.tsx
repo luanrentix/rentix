@@ -20,6 +20,7 @@ import {
 } from '@/services/auth';
 import { isSessionReplacedError } from '@/services/api';
 import {
+  getCompanyStorageItem,
   removeCompanyStorageItem,
   setCompanyStorageItem,
 } from '@/services/company-storage';
@@ -172,7 +173,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setToken(response.accessToken);
     setUser(response.user);
 
-    router.push('/dashboard');
+    const hasPendingOnboarding = getCompanyStorageItem(
+      response.user.companyId,
+      'contrx_onboarding_pending',
+    ) === 'true';
+
+    if (hasPendingOnboarding) {
+      router.push('/configuracoes?onboarding=1');
+    } else {
+      router.push('/dashboard');
+    }
   }, [router]);
 
   const createAccount = useCallback(async (data: CreateAccountRequest) => {

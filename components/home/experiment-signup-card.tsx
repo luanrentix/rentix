@@ -47,10 +47,12 @@ export default function ExperimentSignupCard() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [isEmailFocused, setIsEmailFocused] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+
+  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   async function handleCreateAccount() {
     const normalizedEmail = email.trim();
@@ -66,8 +68,8 @@ export default function ExperimentSignupCard() {
       return;
     }
 
-    if (password !== passwordConfirm) {
-      setErrorMessage("As senhas não conferem.");
+    if (!isEmailValid) {
+      setErrorMessage("Por favor, insira um e-mail válido.");
       return;
     }
 
@@ -139,28 +141,29 @@ export default function ExperimentSignupCard() {
             onChange={(value) => setPhone(formatPhone(value))}
             autoComplete="tel"
           />
-          <SignupInput
-            icon={<Mail size={18} />}
-            type="email"
-            placeholder="E-mail profissional"
-            value={email}
-            onChange={setEmail}
-            autoComplete="username"
-          />
+          <div className="flex flex-col gap-1">
+            <SignupInput
+              icon={<Mail size={18} />}
+              type="email"
+              placeholder="E-mail profissional"
+              value={email}
+              onChange={setEmail}
+              autoComplete="username"
+              onFocus={() => setIsEmailFocused(true)}
+              onBlur={() => setIsEmailFocused(false)}
+            />
+            {(isEmailFocused || (email && !isEmailValid)) && (
+              <p className="px-2 text-[11px] font-bold text-orange-600">
+                Por favor, insira um e-mail válido (ex: nome@empresa.com)
+              </p>
+            )}
+          </div>
           <SignupInput
             icon={<LockKeyhole size={18} />}
             type="password"
             placeholder="Senha"
             value={password}
             onChange={setPassword}
-            autoComplete="new-password"
-          />
-          <SignupInput
-            icon={<LockKeyhole size={18} />}
-            type="password"
-            placeholder="Confirmar senha"
-            value={passwordConfirm}
-            onChange={setPasswordConfirm}
             autoComplete="new-password"
             onEnter={handleCreateAccount}
           />
@@ -269,6 +272,8 @@ type SignupInputProps = {
   onChange: (value: string) => void;
   autoComplete?: string;
   onEnter?: () => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
 };
 
 function SignupInput({
@@ -279,6 +284,8 @@ function SignupInput({
   onChange,
   autoComplete,
   onEnter,
+  onFocus,
+  onBlur,
 }: SignupInputProps) {
   return (
     <div className="flex h-11 items-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition focus-within:border-orange-400 focus-within:ring-4 focus-within:ring-orange-100">
@@ -294,6 +301,8 @@ function SignupInput({
         onKeyDown={(event) => {
           if (event.key === "Enter") onEnter?.();
         }}
+        onFocus={onFocus}
+        onBlur={onBlur}
         className="h-full min-w-0 flex-1 bg-white pr-4 text-sm font-bold text-slate-700 outline-none placeholder:text-slate-400"
       />
     </div>

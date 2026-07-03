@@ -417,6 +417,9 @@ export class AutenticacaoService {
       });
 
       user = result.user;
+      this.sendWelcomeEmail(email, data.name || name).catch((err) => {
+        console.error('Falha ao enviar e-mail de boas-vindas:', err);
+      });
     } catch (error) {
       if (error instanceof ConflictException) {
         throw error;
@@ -529,6 +532,63 @@ export class AutenticacaoService {
           }
         : {}),
     };
+  }
+
+  private async sendWelcomeEmail(email: string, name: string) {
+    if (!isSmtpConfigured()) {
+      console.log(
+        `[DESENVOLVIMENTO] E-mail de boas-vindas nao enviado (SMTP nao configurado). Destinatario: ${email}`,
+      );
+      return;
+    }
+    const smtpPort = process.env.SMTP_PORT
+      ? Number(process.env.SMTP_PORT)
+      : 587;
+    const smtpFrom =
+      process.env.SMTP_FROM ||
+      process.env.SMTP_USER ||
+      'Contrx <no-reply@contrx.com.br>';
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+
+    await transporter.sendMail({
+      from: smtpFrom,
+      to: email,
+      subject: 'Bem-vindo ao Contrx!',
+      text: [
+        `Ola, ${name}!`,
+        '',
+        'Estamos muito felizes em ter voce conosco no Contrx.',
+        'Sua conta foi criada com sucesso e seu periodo de teste de 30 dias ja esta ativo.',
+        '',
+        'Caso tenha qualquer duvida, responda a este e-mail.',
+        '',
+        'Abracos,',
+        'Equipe Contrx',
+      ].join('\n'),
+      html: `
+        <div style="font-family: Arial, sans-serif; color: #0f172a; line-height: 1.6;">
+          <h2 style="margin: 0 0 12px; color: #ff4b00;">Bem-vindo ao Contrx, ${name}!</h2>
+          <p>Estamos muito felizes em ter voce conosco.</p>
+          <p>Sua conta foi criada com sucesso e seu periodo de teste de 30 dias ja esta ativo.</p>
+          <p>Para começar, acesse sua conta no link abaixo para configurar sua empresa:</p>
+          <p>
+            <a href="https://www.contrx.com.br/login" style="display:inline-block;background:#ff4b00;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:12px;font-weight:700;">
+              Acessar minha conta
+            </a>
+          </p>
+          <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
+          <p style="font-size:13px;color:#64748b;">Se voce tiver qualquer duvida, basta responder a este e-mail.</p>
+        </div>
+      `,
+    });
   }
 
   private async sendPasswordResetEmail(email: string, resetUrl: string) {
