@@ -2539,9 +2539,9 @@ export default function ContractsPage() {
                 {filteredContracts.map((contract) => {
                   const displayStatus = getDisplayContractStatus(contract);
                   const receivableSummary = getContractReceivableSummary(contract);
-                  const hasLinkedReceivables = receivableSummary.charges.length > 0;
+                  const hasPendingReceivables = receivableSummary.pendingCharges.length > 0;
                   const shouldShowExpiredReceivableAlert =
-                    displayStatus === "Expired" && hasLinkedReceivables;
+                    displayStatus === "Expired" && hasPendingReceivables;
 
                   return (
                     <tr
@@ -2716,7 +2716,7 @@ export default function ContractsPage() {
           const detailsTenant = tenants.find((tenant) => String(tenant.id) === String(selectedContractDetails.tenantId));
           const receivableSummary = getContractReceivableSummary(selectedContractDetails);
           const shouldShowExpiredReceivableAlert =
-            detailsDisplayStatus === "Expired" && receivableSummary.charges.length > 0;
+            detailsDisplayStatus === "Expired" && receivableSummary.pendingCharges.length > 0;
           const detailsTabs: { id: ContractDetailsTab; label: string; icon: React.ReactNode }[] = [
             { id: "Data", label: "Dados", icon: <MapPin className="h-4 w-4" /> },
             { id: "Financial", label: "Financeiro", icon: <DollarSign className="h-4 w-4" /> },
