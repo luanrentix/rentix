@@ -513,6 +513,10 @@ export class AutenticacaoService {
 
     if (!canExposeToken) {
       await this.sendPasswordResetEmail(email, resetUrl);
+    } else {
+      console.log(
+        `\n=== [DESENVOLVIMENTO] LINK DE RECOMPOSIÇÃO DE SENHA ===\nUsuário: ${email}\nLink: ${resetUrl}\n======================================================\n`,
+      );
     }
 
     return {
