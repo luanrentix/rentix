@@ -18,6 +18,7 @@ export const userToolPermissions = [
   'accountsPayable',
   'schedule',
   'settings',
+  'bank',
 ] as const;
 
 export type UserToolPermission = (typeof userToolPermissions)[number];

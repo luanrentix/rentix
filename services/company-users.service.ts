@@ -10,7 +10,8 @@ export type UserToolPermission =
   | 'accountsReceivable'
   | 'accountsPayable'
   | 'schedule'
-  | 'settings';
+  | 'settings'
+  | 'bank';
 
 export type CompanyUserRole = 'OWNER' | 'ADMIN' | 'MANAGER' | 'USER';
 

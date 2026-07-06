@@ -1055,3 +1055,88 @@ textarea {
     line-height: 2rem !important;
   }
 }
+
+/* --- ACCENT COLORS VARIABLES --- */
+:root {
+  --primary-color: #ff4b00;
+  --primary-hover: #e94400;
+  --primary-bg-light: #fff7ed;
+  --primary-border-light: #ffedd5;
+  --primary-shadow-color: rgba(255, 75, 0, 0.22);
+}
+
+[data-contrx-accent="violet"] {
+  --primary-color: #8b5cf6;
+  --primary-hover: #7c3aed;
+  --primary-bg-light: #f5f3ff;
+  --primary-border-light: #ede9fe;
+  --primary-shadow-color: rgba(139, 92, 246, 0.22);
+}
+
+[data-contrx-accent="emerald"] {
+  --primary-color: #10b981;
+  --primary-hover: #059669;
+  --primary-bg-light: #ecfdf5;
+  --primary-border-light: #d1fae5;
+  --primary-shadow-color: rgba(16, 185, 129, 0.22);
+}
+
+[data-contrx-accent="cobalt"] {
+  --primary-color: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-bg-light: #eff6ff;
+  --primary-border-light: #dbeafe;
+  --primary-shadow-color: rgba(37, 99, 251, 0.22);
+}
+
+[data-contrx-accent="amber"] {
+  --primary-color: #f59e0b;
+  --primary-hover: #d97706;
+  --primary-bg-light: #fffbeb;
+  --primary-border-light: #fef3c7;
+  --primary-shadow-color: rgba(245, 158, 11, 0.22);
+}
+
+[data-contrx-accent="rose"] {
+  --primary-color: #f43f5e;
+  --primary-hover: #e11d48;
+  --primary-bg-light: #fff1f2;
+  --primary-border-light: #ffe4e6;
+  --primary-shadow-color: rgba(244, 63, 94, 0.22);
+}
+
+[data-contrx-accent="orange"] {
+  --primary-color: #f97316;
+  --primary-hover: #ea580c;
+  --primary-bg-light: #fff7ed;
+  --primary-border-light: #ffedd5;
+  --primary-shadow-color: rgba(249, 115, 22, 0.22);
+}
+
+/* OVERRIDE TAILWIND VARIABLES DIRECTLY */
+:root,
+[data-contrx-accent] {
+  --color-orange-50: var(--primary-bg-light) !important;
+  --color-orange-100: var(--primary-border-light) !important;
+  --color-orange-200: var(--primary-border-light) !important;
+  --color-orange-300: var(--primary-border-light) !important;
+  --color-orange-400: var(--primary-color) !important;
+  --color-orange-500: var(--primary-color) !important;
+  --color-orange-600: var(--primary-hover) !important;
+  --color-orange-700: var(--primary-hover) !important;
+  --color-orange-800: var(--primary-hover) !important;
+}
+
+/* HARDCODED CLASS OVERRIDES */
+.bg-\[\#ff4b00\] {
+  background-color: var(--primary-color) !important;
+}
+.hover\:bg-\[\#e94400\]:hover {
+  background-color: var(--primary-hover) !important;
+}
+.text-\[\#ff4b00\] {
+  color: var(--primary-color) !important;
+}
+.shadow-orange-100 {
+  --tw-shadow-color: var(--primary-shadow-color) !important;
+}

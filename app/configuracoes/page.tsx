@@ -109,6 +109,7 @@ type ThemeMode = "light" | "black" | "graphite";
 
 type ThemeSettings = {
   mode: ThemeMode;
+  accent?: string;
 };
 
 type PrintDocumentKey =
@@ -340,7 +341,17 @@ const maxCompanyLogoSizeInBytes = 2 * 1024 * 1024;
 
 const defaultThemeSettings: ThemeSettings = {
   mode: "light",
+  accent: "violet",
 };
+
+const accentColors = [
+  { key: "violet", label: "Violet", desc: "The default — confident, slightly playful.", color: "#8b5cf6" },
+  { key: "emerald", label: "Emerald", desc: "Growth-coded, messaging-friendly.", color: "#10b981" },
+  { key: "cobalt", label: "Cobalt", desc: "Clean B2B-SaaS blue — calm and product-y.", color: "#2563eb" },
+  { key: "amber", label: "Amber", desc: "Warm and friendly — feels good for SMB teams.", color: "#f59e0b" },
+  { key: "rose", label: "Rose", desc: "Bold and modern — D2C, creator-economy.", color: "#f43f5e" },
+  { key: "orange", label: "Orange", desc: "The classic Contrx identity.", color: "#f97316" },
+];
 
 const settingsStorageKeys = {
   user: "contrx_user_settings",
@@ -412,10 +423,15 @@ function normalizeThemeMode(value: unknown): ThemeMode {
 }
 
 function normalizeThemeSettings(settings?: Partial<ThemeSettings> | null): ThemeSettings {
+  const allowedAccents = ["violet", "emerald", "cobalt", "amber", "rose", "orange"];
+  const accent = settings?.accent && allowedAccents.includes(settings.accent) 
+    ? settings.accent 
+    : "violet";
   return {
     ...defaultThemeSettings,
     ...(settings || {}),
     mode: normalizeThemeMode(settings?.mode),
+    accent,
   };
 }
 
@@ -440,12 +456,12 @@ function readThemeSettingsFromStorage(companyId?: string): ThemeSettings {
       const parsedValue = JSON.parse(storedValue) as Partial<ThemeSettings> | string;
 
       if (typeof parsedValue === "string") {
-        return { mode: normalizeThemeMode(parsedValue) };
+        return { mode: normalizeThemeMode(parsedValue), accent: "violet" };
       }
 
       return normalizeThemeSettings(parsedValue);
     } catch {
-      return { mode: normalizeThemeMode(storedValue) };
+      return { mode: normalizeThemeMode(storedValue), accent: "violet" };
     }
   }
 
@@ -2063,7 +2079,11 @@ export default function ConfiguracoesPage() {
     document.body.classList.toggle("dark", isDarkMode);
     document.documentElement.dataset.contrxTheme = themeSettings.mode;
     document.body.dataset.contrxTheme = themeSettings.mode;
-  }, [themeSettings.mode]);
+
+    const activeAccent = themeSettings.accent || "violet";
+    document.documentElement.dataset.contrxAccent = activeAccent;
+    document.body.dataset.contrxAccent = activeAccent;
+  }, [themeSettings.mode, themeSettings.accent]);
 
   function handleOpenResetModal() {
     if (!canResetTestData) {
@@ -4325,112 +4345,170 @@ export default function ConfiguracoesPage() {
               )}
 
               {activeSettingsTab === "appearance" && (
-                <div className="space-y-6">
+                <div className="space-y-8">
                   <div>
                     <h2 className="text-xl font-black text-slate-950">
                       Aparência
                     </h2>
                     <p className="mt-1 text-sm font-medium text-slate-500">
-                      Escolha o tema visual do Contrx mantendo o laranja como cor principal do sistema.
+                      Configure o tema visual (Modo Claro/Escuro) e a cor de destaque do sistema.
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <button
-                      type="button"
-                      onClick={() => setThemeSettings({ mode: "light" })}
-                      className={`contrx-theme-choice rounded-3xl border p-5 text-left transition ${
-                        themeSettings.mode === "light"
-                          ? "border-orange-300 bg-orange-50 shadow-md shadow-orange-100"
-                          : "border-slate-200 bg-white hover:border-orange-200 hover:bg-orange-50/40"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-sm font-black text-orange-700">
-                            Claro
-                          </div>
-                          <h3 className="mt-4 text-lg font-black text-slate-950">
-                            Tema claro
-                          </h3>
-                          <p className="mt-1 text-sm font-semibold leading-6 text-slate-500">
-                            Mantém o padrão atual com fundo claro, cards brancos e detalhes em laranja.
-                          </p>
-                        </div>
-
-                        <span className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs font-black ${
+                  <div>
+                    <h3 className="mb-4 text-xs font-black uppercase tracking-wider text-slate-400">
+                      💡 Modo de Exibição
+                    </h3>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                      <button
+                        type="button"
+                        onClick={() => setThemeSettings((prev) => ({ ...prev, mode: "light" }))}
+                        className={`contrx-theme-choice rounded-3xl border p-5 text-left transition ${
                           themeSettings.mode === "light"
-                            ? "border-orange-500 bg-orange-500 text-white"
-                            : "border-slate-300 text-transparent"
-                        }`}>
-                          ✓
-                        </span>
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setThemeSettings({ mode: "black" })}
-                      className={`contrx-theme-choice rounded-3xl border p-5 text-left transition ${
-                        themeSettings.mode === "black"
-                          ? "border-orange-400 bg-slate-950 shadow-md shadow-orange-950/30"
-                          : "border-slate-200 bg-white hover:border-orange-200 hover:bg-orange-50/40"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-sm font-black text-orange-300 ring-1 ring-orange-500/40">
-                            Black
+                            ? "border-orange-300 bg-orange-50/50 shadow-md shadow-orange-100"
+                            : "border-slate-200 bg-white hover:border-orange-200 hover:bg-orange-50/40"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100/50 text-sm font-black text-orange-700">
+                              Claro
+                            </div>
+                            <h4 className="mt-4 text-base font-black text-slate-950">
+                              Tema claro
+                            </h4>
+                            <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">
+                              Fundo claro, cards brancos e contraste sutil.
+                            </p>
                           </div>
-                          <h3 className={`mt-4 text-lg font-black ${themeSettings.mode === "black" ? "text-white" : "text-slate-950"}`}>
-                            Tema black
-                          </h3>
-                          <p className={`mt-1 text-sm font-semibold leading-6 ${themeSettings.mode === "black" ? "text-slate-300" : "text-slate-500"}`}>
-                            Usa fundo preto/cinza escuro, textos claros e mantém o laranja como destaque principal.
-                          </p>
+                          <span className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs font-black ${
+                            themeSettings.mode === "light"
+                              ? "border-orange-500 bg-orange-500 text-white"
+                              : "border-slate-300 text-transparent"
+                          }`}>
+                            ✓
+                          </span>
                         </div>
+                      </button>
 
-                        <span className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs font-black ${
+                      <button
+                        type="button"
+                        onClick={() => setThemeSettings((prev) => ({ ...prev, mode: "black" }))}
+                        className={`contrx-theme-choice rounded-3xl border p-5 text-left transition ${
                           themeSettings.mode === "black"
-                            ? "border-orange-500 bg-orange-500 text-white"
-                            : "border-slate-300 text-transparent"
-                        }`}>
-                          ✓
-                        </span>
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setThemeSettings({ mode: "graphite" })}
-                      className={`contrx-theme-choice rounded-3xl border p-5 text-left transition ${
-                        themeSettings.mode === "graphite"
-                          ? "border-[#24405f] bg-[#0d1b2e] shadow-md shadow-slate-950/30"
-                          : "border-slate-200 bg-white hover:border-orange-200 hover:bg-orange-50/40"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#07111f] text-lg font-black text-orange-300 ring-1 ring-[#24405f]">
-                            AN
+                            ? "border-orange-400 bg-slate-950 shadow-md shadow-orange-950/30"
+                            : "border-slate-200 bg-white hover:border-orange-200 hover:bg-orange-50/40"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-sm font-black text-orange-300 ring-1 ring-orange-500/40">
+                              Dark
+                            </div>
+                            <h4 className={`mt-4 text-base font-black ${themeSettings.mode === "black" ? "text-white" : "text-slate-950"}`}>
+                              Tema Dark (Black)
+                            </h4>
+                            <p className={`mt-1 text-xs font-semibold leading-5 ${themeSettings.mode === "black" ? "text-slate-300" : "text-slate-500"}`}>
+                              Fundo preto/cinza escuro e painéis adaptados.
+                            </p>
                           </div>
-                          <h3 className={`mt-4 text-lg font-black ${themeSettings.mode === "graphite" ? "text-white" : "text-slate-950"}`}>
-                            Azul Noturno
-                          </h3>
-                          <p className={`mt-1 text-sm font-semibold leading-6 ${themeSettings.mode === "graphite" ? "text-[#b6c6dc]" : "text-slate-500"}`}>
-                            Usa azul profundo com painéis elegantes, contraste confortável e laranja como ponto de ação.
-                          </p>
+                          <span className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs font-black ${
+                            themeSettings.mode === "black"
+                              ? "border-orange-500 bg-orange-500 text-white"
+                              : "border-slate-300 text-transparent"
+                          }`}>
+                            ✓
+                          </span>
                         </div>
+                      </button>
 
-                        <span className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs font-black ${
+                      <button
+                        type="button"
+                        onClick={() => setThemeSettings((prev) => ({ ...prev, mode: "graphite" }))}
+                        className={`contrx-theme-choice rounded-3xl border p-5 text-left transition ${
                           themeSettings.mode === "graphite"
-                            ? "border-orange-500 bg-orange-500 text-white"
-                            : "border-slate-300 text-transparent"
-                        }`}>
-                          ✓
-                        </span>
-                      </div>
-                    </button>
+                            ? "border-[#24405f] bg-[#0d1b2e] shadow-md shadow-slate-950/30"
+                            : "border-slate-200 bg-white hover:border-orange-200 hover:bg-orange-50/40"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#07111f] text-sm font-black text-orange-300 ring-1 ring-[#24405f]">
+                              Grafite
+                            </div>
+                            <h4 className={`mt-4 text-base font-black ${themeSettings.mode === "graphite" ? "text-white" : "text-slate-950"}`}>
+                              Azul Noturno
+                            </h4>
+                            <p className={`mt-1 text-xs font-semibold leading-5 ${themeSettings.mode === "graphite" ? "text-[#b6c6dc]" : "text-slate-500"}`}>
+                              Azul profundo confortável para leitura.
+                            </p>
+                          </div>
+                          <span className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs font-black ${
+                            themeSettings.mode === "graphite"
+                              ? "border-orange-500 bg-orange-500 text-white"
+                              : "border-slate-300 text-transparent"
+                          }`}>
+                            ✓
+                          </span>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="mb-4 text-xs font-black uppercase tracking-wider text-slate-400">
+                      🎨 Cor de Destaque (Accent Color)
+                    </h3>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {accentColors.map((color) => {
+                        const isActive = (themeSettings.accent || "violet") === color.key;
+                        return (
+                          <button
+                            key={color.key}
+                            type="button"
+                            onClick={() => setThemeSettings((prev) => ({ ...prev, accent: color.key }))}
+                            className={`rounded-2xl border p-4 text-left transition ${
+                              isActive
+                                ? "border-orange-300 bg-orange-50/30 shadow-md shadow-orange-100/40"
+                                : "border-slate-200 bg-white hover:border-orange-200 hover:bg-orange-50/20"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="flex items-center gap-3">
+                                <span
+                                  className="h-8 w-8 rounded-full shadow-sm ring-2 ring-white"
+                                  style={{ backgroundColor: color.color }}
+                                />
+                                <div>
+                                  <h4 className="text-sm font-black text-slate-950">
+                                    {color.label}
+                                  </h4>
+                                  <p className="text-[11px] font-semibold text-slate-500">
+                                    {color.desc}
+                                  </p>
+                                </div>
+                              </div>
+                              <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-black ${
+                                isActive
+                                  ? "border-orange-500 bg-orange-500 text-white"
+                                  : "border-slate-300 text-transparent"
+                              }`}>
+                                ✓
+                              </span>
+                            </div>
+                            <div className="mt-3 h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-300"
+                                style={{
+                                  backgroundColor: color.color,
+                                  width: isActive ? "100%" : "30%",
+                                }}
+                              />
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div className="rounded-3xl border border-orange-100 bg-orange-50 px-5 py-4">
@@ -4438,7 +4516,7 @@ export default function ConfiguracoesPage() {
                       Importante
                     </p>
                     <p className="mt-1 text-sm font-semibold leading-6 text-orange-700">
-                      A alteração será aplicada ao sistema depois de clicar em Salvar configurações. A identidade laranja do Contrx permanece em todos os temas.
+                      A alteração do tema e da cor de destaque será aplicada em todo o sistema depois de clicar em &quot;Salvar configurações&quot;.
                     </p>
                   </div>
                 </div>

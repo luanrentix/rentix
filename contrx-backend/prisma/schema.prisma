@@ -67,6 +67,7 @@ model Company {
   propertyMovements   PropertyMovement[]
   settings           AppSettings?
   commercialHistories CommercialHistory[]
+  bankAccounts       BankAccount[]
 
   @@map("empresas")
 }
@@ -293,10 +294,11 @@ model Contract {
   createdAt DateTime @default(now()) @map("criado_em")
   updatedAt DateTime @updatedAt @map("atualizado_em")
 
-  company            Company        @relation(fields: [companyId], references: [id])
-  property           Property       @relation(fields: [propertyId], references: [id])
-  tenant             Person         @relation("ContractTenant", fields: [tenantId], references: [id])
+  company            Company             @relation(fields: [companyId], references: [id])
+  property           Property            @relation(fields: [propertyId], references: [id])
+  tenant             Person              @relation("ContractTenant", fields: [tenantId], references: [id])
   receivableAccounts ContaReceber[]
+  signatures         ContractSignature[]
 
   @@index([companyId])
   @@index([propertyId])
@@ -468,4 +470,103 @@ model ScheduleItem {
   @@index([personId])
   @@index([propertyId])
   @@map("agenda_itens")
+}
+
+enum ContractSignatureStatus {
+  PENDING
+  SIGNED
+}
+
+enum SignerRole {
+  LANDLORD
+  TENANT
+  GUARANTOR
+  WITNESS
+}
+
+model ContractSignature {
+  id           String                  @id @default(uuid())
+  contractId   String                  @map("contrato_id")
+  name         String                  @map("nome")
+  email        String                  @map("email")
+  role         SignerRole              @default(TENANT) @map("papel")
+  status       ContractSignatureStatus @default(PENDING) @map("status")
+  token        String                  @unique @map("token_acesso")
+  signedAt     DateTime?               @map("assinado_em")
+  ipAddress    String?                 @map("endereco_ip")
+  userAgent    String?                 @map("agente_usuario")
+  documentHash String?                 @map("hash_documento")
+
+  contract Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([contractId])
+  @@map("assinaturas_contrato")
+}
+
+enum BankAccountType {
+  CHECKING
+  SAVINGS
+  INVESTMENT
+  CASH
+}
+
+enum BankTransactionType {
+  INFLOW
+  OUTFLOW
+}
+
+enum BankTransactionStatus {
+  PENDING
+  CONFIRMED
+}
+
+model BankAccount {
+  id             String          @id @default(uuid())
+  companyId      String          @map("empresa_id")
+  name           String          @map("nome")
+  type           BankAccountType @default(CHECKING) @map("tipo")
+  agency         String?         @map("agencia")
+  accountNumber  String?         @map("numero_conta")
+  bankCode       String?         @map("codigo_banco")
+  bankName       String?         @map("nome_banco")
+  initialBalance Decimal         @default(0) @map("saldo_inicial") @db.Decimal(10, 2)
+  currentBalance Decimal         @default(0) @map("saldo_atual") @db.Decimal(10, 2)
+  limit          Decimal         @default(0) @map("limite") @db.Decimal(10, 2)
+  currency       String          @default("BRL") @map("moeda")
+  active         Boolean         @default(true) @map("ativo")
+  deletedAt      DateTime?       @map("deletado_em")
+  
+  createdAt      DateTime        @default(now()) @map("criado_em")
+  updatedAt      DateTime        @updatedAt @map("atualizado_em")
+
+  company        Company           @relation(fields: [companyId], references: [id])
+  transactions   BankTransaction[]
+
+  @@index([companyId])
+  @@map("contas_bancarias")
+}
+
+model BankTransaction {
+  id            String                @id @default(uuid())
+  bankAccountId String                @map("conta_bancaria_id")
+  type          BankTransactionType   @map("tipo")
+  status        BankTransactionStatus @default(PENDING) @map("status")
+  amount        Decimal               @map("valor") @db.Decimal(10, 2)
+  fee           Decimal               @default(0) @map("taxa") @db.Decimal(10, 2)
+  description   String                @map("descricao")
+  competenceDate DateTime             @map("data_competencia")
+  paymentDate   DateTime?             @map("data_pagamento")
+  category      String?               @map("categoria")
+  referenceType String?               @map("tipo_referencia")
+  referenceId   String?               @map("id_referencia")
+  transferGroupId String?             @map("grupo_transferencia_id")
+  
+  createdAt     DateTime              @default(now()) @map("criado_em")
+  updatedAt     DateTime              @updatedAt @map("atualizado_em")
+
+  bankAccount   BankAccount           @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+
+  @@index([bankAccountId])
+  @@index([competenceDate])
+  @@map("movimentacoes_bancarias")
 }

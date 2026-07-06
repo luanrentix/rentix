@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import Link from "next/link";
 import {
   AlertTriangle,
+  ArrowRight,
   CalendarDays,
   ChartLine,
   CircleCheck,
@@ -11,6 +12,7 @@ import {
   FileText,
   Home,
   Info,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -26,7 +28,7 @@ import {
   getProperties,
   type Property as ApiProperty,
 } from "@/services/properties.service";
-import { getCompanyStorageItem } from "@/services/company-storage";
+import { getCompanyStorageItem, setCompanyStorageItem } from "@/services/company-storage";
 import {
   Bar,
   CartesianGrid,
@@ -222,7 +224,34 @@ export default function DashboardPage() {
     "month",
   );
 
-  const loadDashboardData = useCallback(async (currentCompanyId: string) => {
+  const [isOnboardingDismissed, setIsOnboardingDismissed] = useState(false);
+  const [hasCompanyConfigured, setHasCompanyConfigured] = useState(false);
+
+  useEffect(() => {
+    if (!companyId) return;
+    const storedDismissed = getCompanyStorageItem(companyId, "contrx_onboarding_dismissed", "contrx_onboarding_dismissed") === "true";
+    setIsOnboardingDismissed(storedDismissed);
+
+    const storedCompanySettings = getCompanyStorageItem(companyId, "contrx_company_settings", "contrx_company_settings");
+    if (storedCompanySettings) {
+      try {
+        const parsed = JSON.parse(storedCompanySettings);
+        setHasCompanyConfigured(!!(parsed.companyName || parsed.tradeName));
+      } catch {
+        setHasCompanyConfigured(false);
+      }
+    } else {
+      setHasCompanyConfigured(false);
+    }
+  }, [companyId]);
+
+  const dismissOnboarding = () => {
+    if (!companyId) return;
+    setCompanyStorageItem(companyId, "contrx_onboarding_dismissed", "true");
+    setIsOnboardingDismissed(true);
+  };
+
+  const loadDashboardData = useCallback(async (currentCompanyId: string, forceRefresh = false) => {
     setIsDashboardLoading(true);
     setDashboardError("");
     setFinancialSummaryError("");
@@ -235,6 +264,7 @@ export default function DashboardPage() {
       const financialSummary = await getFinancialSummary(
         currentCompanyId,
         getFinancialSummaryFilters(financialPeriod),
+        forceRefresh,
       ).catch((error) => {
         setFinancialSummaryError(
           error instanceof Error
@@ -347,7 +377,7 @@ export default function DashboardPage() {
   function refreshDashboardData() {
     if (!companyId || isDashboardLoading) return;
 
-    loadDashboardData(companyId);
+    loadDashboardData(companyId, true);
   }
 
   const activeContractsList = useMemo(
@@ -760,6 +790,34 @@ export default function DashboardPage() {
     totalProperties,
   ]);
 
+  const steps = [
+    {
+      id: "company",
+      label: "Configurar dados da empresa",
+      description: "Preencha a razão social, CNPJ e logo para emitir contratos e recibos.",
+      completed: hasCompanyConfigured,
+      href: "/configuracoes",
+    },
+    {
+      id: "property",
+      label: "Cadastrar seu primeiro Bem/Ativo",
+      description: "Cadastre imóveis, veículos ou equipamentos para gestão.",
+      completed: totalProperties > 0,
+      href: "/imoveis",
+    },
+    {
+      id: "contract",
+      label: "Gerar seu primeiro Contrato",
+      description: "Vincule um cliente a um bem/ativo e configure as cobranças.",
+      completed: activeContracts > 0,
+      href: "/contratos",
+    },
+  ];
+
+  const completedStepsCount = steps.filter((step) => step.completed).length;
+  const isAllStepsCompleted = completedStepsCount === steps.length;
+  const showOnboarding = !isOnboardingDismissed && !isAllStepsCompleted;
+
   return (
     <>
         <style>{contrxDashboardThemeStyle}</style>
@@ -830,6 +888,82 @@ export default function DashboardPage() {
           {isDashboardLoading && !dashboardError && (
             <div className="rounded-3xl border border-orange-100 bg-white p-5 text-sm font-bold text-slate-600 shadow-sm">
               Carregando indicadores da Dashboard...
+            </div>
+          )}
+
+          {showOnboarding && (
+            <div className="rounded-3xl border border-orange-200 bg-gradient-to-br from-orange-50/70 to-white p-5 shadow-sm md:p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <h2 className="flex items-center gap-2 text-lg font-black text-slate-950">
+                    <span>🎯 Primeiros Passos no Contrx</span>
+                    <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-black text-orange-700">
+                      {completedStepsCount} de {steps.length} concluído
+                    </span>
+                  </h2>
+                  <p className="text-sm font-semibold text-slate-500">
+                    Complete as etapas fundamentais para ativar e gerenciar seus contratos de forma profissional.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={dismissOnboarding}
+                  className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+                  title="Ocultar painel"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Progress bar */}
+              <div className="mt-4 h-2 w-full rounded-full bg-slate-100 overflow-hidden">
+                <div
+                  className="h-full bg-orange-500 rounded-full transition-all duration-500"
+                  style={{ width: `${(completedStepsCount / steps.length) * 100}%` }}
+                />
+              </div>
+
+              {/* Steps checklist */}
+              <div className="mt-6 grid gap-4 md:grid-cols-3">
+                {steps.map((step, idx) => (
+                  <div
+                    key={step.id}
+                    className={`flex flex-col justify-between rounded-2xl border p-4 transition ${
+                      step.completed
+                        ? "border-emerald-100 bg-emerald-50/30"
+                        : "border-slate-200 bg-white hover:border-orange-200"
+                    }`}
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        {step.completed ? (
+                          <CircleCheck className="h-5 w-5 shrink-0 text-emerald-600" />
+                        ) : (
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-300 text-xs font-bold text-slate-400">
+                            {idx + 1}
+                          </span>
+                        )}
+                        <h3 className={`text-sm font-black ${step.completed ? "text-slate-700 line-through" : "text-slate-900"}`}>
+                          {step.label}
+                        </h3>
+                      </div>
+                      <p className="text-xs font-semibold leading-5 text-slate-500">
+                        {step.description}
+                      </p>
+                    </div>
+
+                    {!step.completed && (
+                      <Link
+                        href={step.href}
+                        className="mt-4 inline-flex items-center gap-1 text-xs font-black text-orange-600 hover:text-orange-700 transition"
+                      >
+                        Começar etapa
+                        <ArrowRight className="h-3 w-3" />
+                      </Link>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

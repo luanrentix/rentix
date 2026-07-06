@@ -34,6 +34,11 @@ type FinancialPayable = {
   remainingAmount: number;
 };
 
+type FinancialSummary = {
+  receivables: FinancialReceivable[];
+  payables: FinancialPayable[];
+};
+
 type FinancialPayment = {
   paidAt: Date;
   amountPaid: unknown;
@@ -50,8 +55,25 @@ type FinancialSummaryFilters = {
 export class FinanceiroService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getResumo(companyId: string, filters: FinancialSummaryFilters = {}) {
+  private resumoCache = new Map<
+    string,
+    { data: FinancialSummary; expiresAt: number }
+  >();
+
+  async getResumo(
+    companyId: string,
+    filters: FinancialSummaryFilters = {},
+    forceRefresh = false,
+  ): Promise<FinancialSummary> {
     await this.validateCompany(companyId);
+
+    const cacheKey = `${companyId}:${filters.startDate || ''}:${filters.endDate || ''}`;
+    const now = Date.now();
+    const cached = this.resumoCache.get(cacheKey);
+
+    if (!forceRefresh && cached && cached.expiresAt > now) {
+      return cached.data;
+    }
 
     const dateRange = this.getDateRange(filters);
 
@@ -85,7 +107,7 @@ export class FinanceiroService {
       }),
     ]);
 
-    return {
+    const result: FinancialSummary = {
       receivables: receivables.map<FinancialReceivable>((account) => {
         const amount = Number(account.amount);
         const paymentSummary = this.getPaymentSummary(
@@ -144,6 +166,13 @@ export class FinanceiroService {
         };
       }),
     };
+
+    this.resumoCache.set(cacheKey, {
+      data: result,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+    });
+
+    return result;
   }
 
   private getDateRange(filters: FinancialSummaryFilters) {

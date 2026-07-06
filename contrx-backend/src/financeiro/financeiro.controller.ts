@@ -17,10 +17,15 @@ export class FinanceiroController {
     @CurrentUser() user: UsuarioAutenticado,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('refresh') refresh?: string,
   ) {
-    return this.financeiroService.getResumo(user.companyId, {
-      startDate,
-      endDate,
-    });
+    return this.financeiroService.getResumo(
+      user.companyId,
+      {
+        startDate,
+        endDate,
+      },
+      refresh === 'true',
+    );
   }
 }

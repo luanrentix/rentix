@@ -75,6 +75,7 @@ type ThemeMode = "light" | "black" | "graphite";
 
 type ThemeSettings = {
   mode: ThemeMode;
+  accent?: string;
 };
 
 type ResetModuleKey =
@@ -196,6 +197,7 @@ const defaultCompanySettings: CompanySettings = {
 
 const defaultThemeSettings: ThemeSettings = {
   mode: "light",
+  accent: "violet",
 };
 
 function getInitialLetters(name: string) {
@@ -320,10 +322,15 @@ function normalizeThemeMode(value: unknown): ThemeMode {
 }
 
 function normalizeThemeSettings(settings?: Partial<ThemeSettings> | null): ThemeSettings {
+  const allowedAccents = ["violet", "emerald", "cobalt", "amber", "rose", "orange"];
+  const accent = settings?.accent && allowedAccents.includes(settings.accent) 
+    ? settings.accent 
+    : "violet";
   return {
     ...defaultThemeSettings,
     ...(settings || {}),
     mode: normalizeThemeMode(settings?.mode),
+    accent,
   };
 }
 
@@ -350,12 +357,12 @@ function readThemeSettingsFromStorage(companyId?: string): ThemeSettings {
       const parsedValue = JSON.parse(storedValue) as Partial<ThemeSettings> | string;
 
       if (typeof parsedValue === "string") {
-        return { mode: normalizeThemeMode(parsedValue) };
+        return { mode: normalizeThemeMode(parsedValue), accent: "violet" };
       }
 
       return normalizeThemeSettings(parsedValue);
     } catch {
-      return { mode: normalizeThemeMode(storedValue) };
+      return { mode: normalizeThemeMode(storedValue), accent: "violet" };
     }
   }
 
@@ -747,14 +754,20 @@ export default function AppShell({ children }: AppShellProps) {
     document.body.classList.toggle("dark", isDarkMode);
     document.documentElement.dataset.contrxTheme = themeSettings.mode;
     document.body.dataset.contrxTheme = themeSettings.mode;
-  }, [themeSettings.mode]);
+
+    const activeAccent = themeSettings.accent || "violet";
+    document.documentElement.dataset.contrxAccent = activeAccent;
+    document.body.dataset.contrxAccent = activeAccent;
+  }, [themeSettings.mode, themeSettings.accent]);
 
   useEffect(() => {
     function syncThemeFromStorage() {
       const storedTheme = readThemeSettingsFromStorage(companyId);
 
       setThemeSettings((currentTheme) =>
-        currentTheme.mode === storedTheme.mode ? currentTheme : storedTheme
+        currentTheme.mode === storedTheme.mode && currentTheme.accent === storedTheme.accent 
+          ? currentTheme 
+          : storedTheme
       );
     }
 

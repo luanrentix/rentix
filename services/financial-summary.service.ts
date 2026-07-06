@@ -55,11 +55,13 @@ export type FinancialSummaryFilters = {
 export async function getFinancialSummary(
   _companyId?: string,
   filters: FinancialSummaryFilters = {},
+  refresh = false,
 ) {
   const searchParams = new URLSearchParams();
 
   if (filters.startDate) searchParams.set('startDate', filters.startDate);
   if (filters.endDate) searchParams.set('endDate', filters.endDate);
+  if (refresh) searchParams.set('refresh', 'true');
 
   const queryString = searchParams.toString();
 

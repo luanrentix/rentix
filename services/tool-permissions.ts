@@ -8,6 +8,7 @@ export const toolPermissionOptions = [
   { key: 'accountsPayable', label: 'Contas a Pagar', href: '/contas-pagar', icon: '📤' },
   { key: 'schedule', label: 'Agenda', href: '/agenda', icon: '📅' },
   { key: 'settings', label: 'Configurações', href: '/configuracoes', icon: '⚙️' },
+  { key: 'bank', label: 'Banco', href: '/bancos', icon: '🏦' },
 ] as const;
 
 export type ToolPermission = (typeof toolPermissionOptions)[number]['key'];

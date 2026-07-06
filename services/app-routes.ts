@@ -72,6 +72,13 @@ export const internalToolRoutes: AppToolRoute[] = [
     permissionKey: "schedule",
     scope: "internal",
   },
+  {
+    label: "Banco",
+    href: "/bancos",
+    icon: "🏦",
+    permissionKey: "bank",
+    scope: "internal",
+  },
 ];
 
 export const systemOwnerToolRoutes: AppToolRoute[] = [
