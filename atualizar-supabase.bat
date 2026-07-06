@@ -128,7 +128,7 @@ if errorlevel 1 (
 
 echo.
 echo [3/4] Limpando tabelas do Supabase...
-"%PSQL%" "%SUPABASE_DATABASE_URL%" -v ON_ERROR_STOP=1 -c "TRUNCATE TABLE public.pagamentos_recebidos, public.pagamentos_realizados, public.contas_receber, public.contas_pagar, public.movimentacoes_imoveis, public.agenda_itens, public.configuracoes_app, public.contratos, public.imoveis, public.pessoas, public.usuarios, public.empresas RESTART IDENTITY CASCADE;"
+"%PSQL%" "%SUPABASE_DATABASE_URL%" -v ON_ERROR_STOP=1 -c "TRUNCATE TABLE public.pagamentos_recebidos, public.pagamentos_realizados, public.contas_receber, public.contas_pagar, public.movimentacoes_imoveis, public.agenda_itens, public.configuracoes_app, public.contratos, public.imoveis, public.pessoas, public.usuarios, public.empresas, public.assinaturas_contrato, public.contas_bancarias, public.movimentacoes_bancarias RESTART IDENTITY CASCADE;"
 if errorlevel 1 (
   echo ERRO: falha ao limpar tabelas do Supabase.
   goto :error_exit
