@@ -29,6 +29,7 @@ import {
   type Property as ApiProperty,
 } from "@/services/properties.service";
 import { getCompanyStorageItem, setCompanyStorageItem } from "@/services/company-storage";
+import { getAppSettings } from "@/services/settings.service";
 import {
   Bar,
   CartesianGrid,
@@ -257,10 +258,21 @@ export default function DashboardPage() {
     setFinancialSummaryError("");
 
     try {
-      const [apiProperties, apiContracts] = await Promise.all([
+      const [apiProperties, apiContracts, appSettings] = await Promise.all([
         getProperties(currentCompanyId),
         getContracts(currentCompanyId),
+        getAppSettings(currentCompanyId).catch(() => null),
       ]);
+
+      if (appSettings && appSettings.companySettings) {
+        const isConfigured = !!(appSettings.companySettings.companyName || appSettings.companySettings.tradeName);
+        setHasCompanyConfigured(isConfigured);
+        setCompanyStorageItem(
+          currentCompanyId,
+          "contrx_company_settings",
+          JSON.stringify(appSettings.companySettings),
+        );
+      }
       const financialSummary = await getFinancialSummary(
         currentCompanyId,
         getFinancialSummaryFilters(financialPeriod),
@@ -816,7 +828,7 @@ export default function DashboardPage() {
 
   const completedStepsCount = steps.filter((step) => step.completed).length;
   const isAllStepsCompleted = completedStepsCount === steps.length;
-  const showOnboarding = !isOnboardingDismissed && !isAllStepsCompleted;
+  const showOnboarding = !isDashboardLoading && !isOnboardingDismissed && !isAllStepsCompleted;
 
   return (
     <>

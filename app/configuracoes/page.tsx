@@ -345,12 +345,12 @@ const defaultThemeSettings: ThemeSettings = {
 };
 
 const accentColors = [
-  { key: "violet", label: "Violet", desc: "The default — confident, slightly playful.", color: "#8b5cf6" },
-  { key: "emerald", label: "Emerald", desc: "Growth-coded, messaging-friendly.", color: "#10b981" },
-  { key: "cobalt", label: "Cobalt", desc: "Clean B2B-SaaS blue — calm and product-y.", color: "#2563eb" },
-  { key: "amber", label: "Amber", desc: "Warm and friendly — feels good for SMB teams.", color: "#f59e0b" },
-  { key: "rose", label: "Rose", desc: "Bold and modern — D2C, creator-economy.", color: "#f43f5e" },
-  { key: "orange", label: "Orange", desc: "The classic Contrx identity.", color: "#f97316" },
+  { key: "violet", label: "Violeta", desc: "O padrão — confiante e levemente descontraído.", color: "#8b5cf6" },
+  { key: "emerald", label: "Esmeralda", desc: "Focado em crescimento, amigável e moderno.", color: "#10b981" },
+  { key: "cobalt", label: "Cobalto", desc: "Azul B2B-SaaS limpo — calmo e corporativo.", color: "#2563eb" },
+  { key: "amber", label: "Âmbar", desc: "Quente e amigável — ótimo para equipes de PMEs.", color: "#f59e0b" },
+  { key: "rose", label: "Rosa", desc: "Ousado e moderno — ideal para criadores e inovação.", color: "#f43f5e" },
+  { key: "orange", label: "Laranja", desc: "A identidade clássica do Contrx.", color: "#f97316" },
 ];
 
 const settingsStorageKeys = {
@@ -4403,7 +4403,7 @@ export default function ConfiguracoesPage() {
                         <div className="flex items-start justify-between gap-4">
                           <div>
                             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-sm font-black text-orange-300 ring-1 ring-orange-500/40">
-                              Dark
+                              Escuro
                             </div>
                             <h4 className={`mt-4 text-base font-black ${themeSettings.mode === "black" ? "text-white" : "text-slate-950"}`}>
                               Tema Dark (Black)
@@ -4457,7 +4457,7 @@ export default function ConfiguracoesPage() {
 
                   <div>
                     <h3 className="mb-4 text-xs font-black uppercase tracking-wider text-slate-400">
-                      🎨 Cor de Destaque (Accent Color)
+                      🎨 Cor de Destaque
                     </h3>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                       {accentColors.map((color) => {

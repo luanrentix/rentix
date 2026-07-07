@@ -19,14 +19,11 @@ if exist "%PG_BIN%\pg_dump.exe" (
 
 echo.
 echo ============================================================
-echo  Contrx - Atualizar Supabase manualmente
+echo  Contrx - Atualizar Estrutura do Supabase (Migrations)
 echo ============================================================
 echo.
-echo Este processo vai copiar os dados do banco LOCAL para o Supabase.
-echo Ele NAO altera o banco usado pelo sistema no dia a dia.
-echo.
-echo ATENCAO: antes de importar, as tabelas do Supabase serao limpas.
-echo O Supabase ficara como uma copia do banco local.
+echo Este processo vai aplicar as novas tabelas e alteracoes do Prisma (migrations) no Supabase.
+echo Ele NAO altera nem apaga as movimentacoes e dados ja existentes em producao.
 echo.
 
 if not exist "%LOCAL_ENV%" (
@@ -105,11 +102,20 @@ if /I not "%CONFIRMACAO%"=="ATUALIZAR" (
 )
 
 echo.
-echo [1/4] Aplicando migrations pendentes no Supabase...
+echo [1/2] Criando backups das tabelas no Supabase...
 pushd "%BACKEND_DIR%"
 set "DATABASE_URL=%SUPABASE_DATABASE_URL%"
 set "DIRECT_URL=%SUPABASE_DATABASE_URL%"
 set "CONTRX_DB_SSL_REJECT_UNAUTHORIZED=false"
+node scripts\backup-supabase-tables.js
+if errorlevel 1 (
+  popd
+  echo ERRO: falha ao criar backup das tabelas no Supabase.
+  goto :error_exit
+)
+
+echo.
+echo [2/2] Aplicando migrations pendentes no Supabase...
 node scripts\apply-pending-migrations.js
 if errorlevel 1 (
   popd
@@ -119,33 +125,8 @@ if errorlevel 1 (
 popd
 
 echo.
-echo [2/4] Gerando dump dos dados locais...
-if not exist "%BACKEND_DIR%\backups" mkdir "%BACKEND_DIR%\backups"
-"%PG_DUMP%" --dbname="%LOCAL_DATABASE_URL%" --schema=public --data-only --column-inserts --exclude-table=public._prisma_migrations --file="%DUMP_FILE%"
-if errorlevel 1 (
-  echo ERRO: falha ao gerar dump do banco local.
-  goto :error_exit
-)
-
-echo.
-echo [3/4] Limpando tabelas do Supabase...
-"%PSQL%" "%SUPABASE_DATABASE_URL%" -v ON_ERROR_STOP=1 -c "TRUNCATE TABLE public.pagamentos_recebidos, public.pagamentos_realizados, public.contas_receber, public.contas_pagar, public.movimentacoes_imoveis, public.agenda_itens, public.configuracoes_app, public.contratos, public.imoveis, public.pessoas, public.usuarios, public.empresas, public.assinaturas_contrato, public.contas_bancarias, public.movimentacoes_bancarias RESTART IDENTITY CASCADE;"
-if errorlevel 1 (
-  echo ERRO: falha ao limpar tabelas do Supabase.
-  goto :error_exit
-)
-
-echo.
-echo [4/4] Importando dados no Supabase...
-"%PSQL%" "%SUPABASE_DATABASE_URL%" -v ON_ERROR_STOP=1 -f "%DUMP_FILE%"
-if errorlevel 1 (
-  echo ERRO: falha ao importar dados no Supabase.
-  goto :error_exit
-)
-
-echo.
 echo ============================================================
-echo  Supabase atualizado com sucesso.
+echo  Supabase atualizado com sucesso (backups criados e migracoes aplicadas).
 echo ============================================================
 echo.
 pause
