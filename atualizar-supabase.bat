@@ -109,6 +109,7 @@ echo [1/4] Aplicando migrations pendentes no Supabase...
 pushd "%BACKEND_DIR%"
 set "DATABASE_URL=%SUPABASE_DATABASE_URL%"
 set "DIRECT_URL=%SUPABASE_DATABASE_URL%"
+set "CONTRX_DB_SSL_REJECT_UNAUTHORIZED=false"
 node scripts\apply-pending-migrations.js
 if errorlevel 1 (
   popd
