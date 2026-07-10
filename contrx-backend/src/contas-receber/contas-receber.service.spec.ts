@@ -37,7 +37,7 @@ describe('ContasReceberService', () => {
         update: jest.fn().mockImplementation(({ data }) =>
           Promise.resolve({
             ...account,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+
             status: data.status,
             payments: [],
           }),
@@ -84,7 +84,6 @@ describe('ContasReceberService', () => {
 
     expect(tx.pagamentoRecebido.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         data: expect.objectContaining({
           amountPaid: new Prisma.Decimal(400),
         }),
@@ -136,7 +135,6 @@ describe('ContasReceberService', () => {
 
     expect(tx.pagamentoRecebido.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         data: expect.objectContaining({
           amountPaid: new Prisma.Decimal(900),
           discount: new Prisma.Decimal(100),
@@ -166,7 +164,6 @@ describe('ContasReceberService', () => {
 
     expect(tx.pagamentoRecebido.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         data: expect.objectContaining({
           amountPaid: new Prisma.Decimal(1100),
           interest: new Prisma.Decimal(100),

@@ -96,8 +96,9 @@ export default function SuportePage() {
         setView("list");
         setSuccess("");
       }, 2000);
-    } catch (err: any) {
-      setError(err?.message || "Ocorreu um erro ao enviar o chamado.");
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Ocorreu um erro ao enviar o chamado.";
+      setError(errorMessage);
     } finally {
       setSubmitting(false);
     }

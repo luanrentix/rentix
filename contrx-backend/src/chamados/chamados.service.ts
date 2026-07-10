@@ -1,4 +1,10 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CriarChamadoDto } from './dto/criar-chamado.dto';
 import * as nodemailer from 'nodemailer';
@@ -37,7 +43,10 @@ export class ChamadosService {
     // 2. Enviar e-mail para o dono do sistema
     // Dispara de forma assíncrona para não atrasar a resposta da API
     this.enviarNotificacaoEmail(chamado).catch((err) => {
-      this.logger.error('Falha ao enviar e-mail de notificacao do chamado:', err);
+      this.logger.error(
+        'Falha ao enviar e-mail de notificacao do chamado:',
+        err,
+      );
     });
 
     return chamado;
@@ -113,12 +122,23 @@ export class ChamadosService {
     });
 
     // Send email to the customer who created the ticket
-    await this.enviarEmailResposta(chamado.user.email, chamado.user.name, chamado.subject, chamado.message, responseText);
+    await this.enviarEmailResposta(
+      chamado.user.email,
+      chamado.user.name,
+      chamado.subject,
+      chamado.message,
+      responseText,
+    );
 
     return updatedChamado;
   }
 
-  async clienteAcao(id: string, action: 'reply' | 'close', replyText: string | undefined, companyId: string) {
+  async clienteAcao(
+    id: string,
+    action: 'reply' | 'close',
+    replyText: string | undefined,
+    companyId: string,
+  ) {
     const chamado = await this.prisma.supportTicket.findUnique({
       where: { id },
     });
@@ -172,7 +192,10 @@ export class ChamadosService {
 
       // Send email to system owners notifying them that the customer replied
       this.enviarNotificacaoEmail(updatedTicket).catch((err) => {
-        this.logger.error('Falha ao enviar e-mail de notificacao do chamado:', err);
+        this.logger.error(
+          'Falha ao enviar e-mail de notificacao do chamado:',
+          err,
+        );
       });
 
       return updatedTicket;
@@ -186,8 +209,13 @@ export class ChamadosService {
     originalMessage: string,
     responseText: string,
   ) {
-    const smtpPort = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
-    const smtpFrom = process.env.SMTP_FROM || process.env.SMTP_USER || 'Contrx <no-reply@contrx.com.br>';
+    const smtpPort = process.env.SMTP_PORT
+      ? Number(process.env.SMTP_PORT)
+      : 587;
+    const smtpFrom =
+      process.env.SMTP_FROM ||
+      process.env.SMTP_USER ||
+      'Contrx <no-reply@contrx.com.br>';
 
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
@@ -247,8 +275,13 @@ export class ChamadosService {
   }
 
   private async enviarNotificacaoEmail(chamado: any) {
-    const smtpPort = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
-    const smtpFrom = process.env.SMTP_FROM || process.env.SMTP_USER || 'Contrx <no-reply@contrx.com.br>';
+    const smtpPort = process.env.SMTP_PORT
+      ? Number(process.env.SMTP_PORT)
+      : 587;
+    const smtpFrom =
+      process.env.SMTP_FROM ||
+      process.env.SMTP_USER ||
+      'Contrx <no-reply@contrx.com.br>';
 
     // Procurar donos do sistema no banco
     const systemOwners = await this.prisma.user.findMany({
@@ -278,7 +311,10 @@ export class ChamadosService {
       },
     });
 
-    const infoEmpresa = chamado.company.tradeName || chamado.company.companyName || 'Nao identificada';
+    const infoEmpresa =
+      chamado.company.tradeName ||
+      chamado.company.companyName ||
+      'Nao identificada';
     const infoUsuario = `${chamado.user.name} (${chamado.user.email})`;
 
     await transporter.sendMail({
@@ -336,6 +372,8 @@ export class ChamadosService {
       `,
     });
 
-    this.logger.log(`E-mail de notificacao de chamado enviado para: ${destinatarios}`);
+    this.logger.log(
+      `E-mail de notificacao de chamado enviado para: ${destinatarios}`,
+    );
   }
 }

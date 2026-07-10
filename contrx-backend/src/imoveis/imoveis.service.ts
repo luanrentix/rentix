@@ -242,9 +242,7 @@ export class ImoveisService {
             ? data.description || null
             : property.description,
         photos:
-          data.photos !== undefined
-            ? data.photos || null
-            : property.photos,
+          data.photos !== undefined ? data.photos || null : property.photos,
         isActive: data.isActive ?? property.isActive,
       },
       include: {

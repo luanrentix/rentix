@@ -28,7 +28,7 @@ describe('ContasPagarService', () => {
         update: jest.fn().mockImplementation(({ data }) =>
           Promise.resolve({
             ...account,
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+
             status: data.status,
             payments: [],
           }),

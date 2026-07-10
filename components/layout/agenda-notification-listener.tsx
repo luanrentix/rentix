@@ -77,8 +77,8 @@ export default function AgendaNotificationListener() {
       } else {
         setActiveNotification(null);
       }
-    } catch (error: any) {
-      if (error?.name === "SessionReplacedError") {
+    } catch (error) {
+      if (error && typeof error === "object" && "name" in error && error.name === "SessionReplacedError") {
         return;
       }
       console.error("Erro ao verificar lembretes de agenda:", error);

@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { ChamadosService } from './chamados.service';
 import { CriarChamadoDto } from './dto/criar-chamado.dto';
 import { CurrentUser } from '../autenticacao/decorators/usuario-atual.decorator';
@@ -26,10 +34,7 @@ export class ChamadosController {
 
   @Patch(':id/responder')
   @UseGuards(SystemOwnerGuard)
-  responder(
-    @Param('id') id: string,
-    @Body() data: { response: string },
-  ) {
+  responder(@Param('id') id: string, @Body() data: { response: string }) {
     return this.chamadosService.responder(id, data.response);
   }
 
@@ -39,6 +44,11 @@ export class ChamadosController {
     @Body() data: { action: 'reply' | 'close'; replyText?: string },
     @CurrentUser() user: UsuarioAutenticado,
   ) {
-    return this.chamadosService.clienteAcao(id, data.action, data.replyText, user.companyId);
+    return this.chamadosService.clienteAcao(
+      id,
+      data.action,
+      data.replyText,
+      user.companyId,
+    );
   }
 }
