@@ -91,6 +91,7 @@ type Property = {
   administrationFeePercentage: number;
   ownerPayoutDay: number;
   autoCreateOwnerPayable: boolean;
+  photos?: string | null;
 };
 
 type PropertyMovementType =
@@ -316,6 +317,7 @@ function normalizeApiProperty(
     administrationFeePercentage: Number(property.administrationFeePercentage || 0),
     ownerPayoutDay: Number(property.ownerPayoutDay || 0),
     autoCreateOwnerPayable: property.autoCreateOwnerPayable !== false,
+    photos: property.photos,
   };
 }
 
@@ -369,6 +371,21 @@ export default function PropertiesPage() {
   const [ownerPayoutDay, setOwnerPayoutDay] = useState("");
   const [autoCreateOwnerPayable, setAutoCreateOwnerPayable] = useState(true);
   const [isSavingProperty, setIsSavingProperty] = useState(false);
+  const [formActiveTab, setFormActiveTab] = useState("identificacao");
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [customAlert, setCustomAlert] = useState<{
+    title: string;
+    description: string;
+    icon?: string;
+  } | null>(null);
+
+  const showAlert = (
+    description: string,
+    title: string = "Aviso",
+    icon: string = "⚠️",
+  ) => {
+    setCustomAlert({ title, description, icon });
+  };
   const [isInactivatingProperty, setIsInactivatingProperty] = useState(false);
   const [isZipCodeLoading, setIsZipCodeLoading] = useState(false);
   const [zipCodeFeedback, setZipCodeFeedback] = useState("");
@@ -515,7 +532,7 @@ export default function PropertiesPage() {
       if (isSessionReplacedError(error)) {
         return;
       }
-      alert("Não foi possível carregar os bens/ativos.");
+      showAlert("Não foi possível carregar os bens/ativos.", "Erro", "❌");
     } finally {
       setIsLoadingProperties(false);
     }
@@ -639,6 +656,8 @@ export default function PropertiesPage() {
     setAutoCreateOwnerPayable(true);
     setZipCodeFeedback("");
     setEditingPropertyId(null);
+    setFormActiveTab("identificacao");
+    setPhotos([]);
   }
 
   function getPropertyModalDraft(): PropertyModalDraft {
@@ -816,6 +835,29 @@ export default function PropertiesPage() {
     }
   }
 
+  function handlePhotoUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = event.target.files;
+    if (!files) return;
+
+    Array.from(files).forEach((file) => {
+      if (file.size > 5 * 1024 * 1024) {
+        alert("A foto " + file.name + " excede o tamanho máximo de 5MB.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === "string") {
+          setPhotos((currentPhotos) => [...currentPhotos, reader.result as string]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function handleRemovePhoto(index: number) {
+    setPhotos((currentPhotos) => currentPhotos.filter((_, i) => i !== index));
+  }
+
   function getEditingProperty() {
     if (!editingPropertyId) return null;
 
@@ -903,13 +945,13 @@ export default function PropertiesPage() {
           !formattedNumber)) ||
       parsedRentValue <= 0
     ) {
-      alert("Preencha todos os campos obrigatórios.");
+      showAlert("Preencha todos os campos obrigatórios.");
       return;
     }
 
     if (isPropertyAsset && managementMode === "MANAGED") {
       if (!ownerId) {
-        alert("Informe o proprietário para imóveis administrados.");
+        showAlert("Informe o proprietário para imóveis administrados.");
         return;
       }
 
@@ -917,12 +959,12 @@ export default function PropertiesPage() {
         parsedAdministrationFeePercentage <= 0 ||
         parsedAdministrationFeePercentage > 100
       ) {
-        alert("Informe uma taxa de administração válida entre 0 e 100.");
+        showAlert("Informe uma taxa de administração válida entre 0 e 100.");
         return;
       }
 
       if (parsedOwnerPayoutDay < 1 || parsedOwnerPayoutDay > 31) {
-        alert("Informe um dia de repasse válido entre 1 e 31.");
+        showAlert("Informe um dia de repasse válido entre 1 e 31.");
         return;
       }
     }
@@ -945,7 +987,7 @@ export default function PropertiesPage() {
     const companyId = getCurrentCompanyId();
 
     if (!companyId) {
-      alert("Empresa não identificada. Faça login novamente.");
+      showAlert("Empresa não identificada. Faça login novamente.", "Erro", "❌");
       return;
     }
 
@@ -990,6 +1032,7 @@ export default function PropertiesPage() {
       bathrooms: parsedBathrooms,
       garages: parsedGarages,
       description: description.trim(),
+      photos: JSON.stringify(photos),
       isActive,
     };
 
@@ -1020,7 +1063,7 @@ export default function PropertiesPage() {
       void loadProperties();
     } catch (error) {
       console.error("Erro ao salvar bem/ativo:", error);
-      alert("Não foi possível salvar o bem/ativo.");
+      showAlert("Não foi possível salvar o bem/ativo.", "Erro", "❌");
     } finally {
       setIsSavingProperty(false);
     }
@@ -1063,6 +1106,7 @@ export default function PropertiesPage() {
     );
     setOwnerPayoutDay(property.ownerPayoutDay ? String(property.ownerPayoutDay) : "");
     setAutoCreateOwnerPayable(property.autoCreateOwnerPayable);
+    setPhotos(property.photos ? JSON.parse(property.photos) : []);
     clearMinimizedModalState("properties");
     setIsFormMinimized(false);
     setIsFormOpen(true);
@@ -1145,7 +1189,7 @@ export default function PropertiesPage() {
       setPropertyToInactivate(null);
     } catch (error) {
       console.error("Erro ao inativar bem/ativo:", error);
-      alert("Não foi possível inativar o bem/ativo.");
+      showAlert("Não foi possível inativar o bem/ativo.", "Erro", "❌");
     } finally {
       setIsInactivatingProperty(false);
     }
@@ -1892,15 +1936,6 @@ export default function PropertiesPage() {
                           >
                             Editar
                           </button>
-                          {property.isActive && (
-                            <button
-                              type="button"
-                              onClick={() => handleRequestInactivateProperty(property.id)}
-                              className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600 transition hover:bg-red-100"
-                            >
-                              Inativar
-                            </button>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -2231,7 +2266,7 @@ export default function PropertiesPage() {
                     <Minus className="h-5 w-5" />
                   </button>
 
-                  <button
+<button
                     type="button"
                     onClick={handleCloseForm}
                     className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-orange-50 hover:text-orange-600"
@@ -2243,329 +2278,273 @@ export default function PropertiesPage() {
                 </div>
               </div>
 
-              <div className="space-y-6 p-8">
-                <FormSection
-                  title="Identificação"
-                  description="Dados básicos usados para localizar e selecionar o bem nos contratos."
-                >
-                  <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                    <FormField label="Categoria do ativo" required>
-                      <select
-                        value={assetCategory}
-                        onChange={(event) => handleAssetCategoryChange(event.target.value as AssetCategory)}
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                      >
-                        {assetCategories.map((category) => (
-                          <option key={category.value} value={category.value}>
-                            {category.label}
-                          </option>
-                        ))}
-                      </select>
-                    </FormField>
+              {/* Navegação por Abas */}
+              <div className="flex border-b border-slate-100 bg-slate-50/50 px-8 gap-2 overflow-x-auto shrink-0">
+                {[
+                  { id: "identificacao", label: "Identificação", icon: "🆔" },
+                  { id: "dados", label: assetCategory === "PROPERTY" ? "Endereço e Características" : "Dados Técnicos", icon: "⚙️" },
+                  { id: "gestao", label: "Gestão e Repasse", icon: "🔄" },
+                  { id: "valores", label: "Valores", icon: "💵" },
+                  { id: "fotos", label: "Fotos (Em Breve)", icon: "📷" }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setFormActiveTab(tab.id)}
+                    className={`py-4 px-4 font-black text-sm flex items-center gap-2 border-b-2 transition shrink-0 ${
+                      formActiveTab === tab.id
+                        ? "border-orange-500 text-orange-600 bg-white"
+                        : "border-transparent text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    <span>{tab.icon}</span>
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
 
-                    <FormField label="Nome do bem/ativo" required>
-                      <input
-                        type="text"
-                        value={name}
-                        onChange={(event) => setName(toUpperText(event.target.value))}
-                        placeholder={assetCategory === "PROPERTY" ? "Ex: APARTAMENTO CENTRO" : "Ex: ESCAVADEIRA CAT 320"}
-                        className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                      />
-                    </FormField>
-
-                    <FormField label="Código">
-                    <input
-                      type="text"
-                      value={code}
-                      onChange={(event) => setCode(toUpperText(event.target.value))}
-                      placeholder="Ex: IMV-001"
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                    />
-                    </FormField>
-
-                    {assetCategory === "PROPERTY" && (
-                      <FormField label="Tipo de imóvel" required>
+              <div className="space-y-6 p-8 min-h-[350px]">
+                {formActiveTab === "identificacao" && (
+                  <FormSection
+                    title="Identificação"
+                    description="Dados básicos usados para localizar e selecionar o bem nos contratos."
+                  >
+                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                      <FormField label="Categoria do ativo" required>
                         <select
-                          value={type}
-                          onChange={(event) => setType(event.target.value as PropertyType)}
+                          value={assetCategory}
+                          onChange={(event) => handleAssetCategoryChange(event.target.value as AssetCategory)}
                           className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         >
-                          {propertyTypes.map((propertyType) => (
-                            <option key={propertyType.value} value={propertyType.value}>
-                              {propertyType.label}
+                          {assetCategories.map((category) => (
+                            <option key={category.value} value={category.value}>
+                              {category.label}
                             </option>
                           ))}
                         </select>
                       </FormField>
-                    )}
 
-                    <FormField label="Situação do cadastro">
-                      <div className="space-y-2">
-                        <label
-                          className={`flex min-h-[58px] cursor-pointer items-center gap-3 rounded-2xl border px-4 py-4 text-sm font-black transition ${
-                            isActive
-                              ? "border-emerald-200 bg-emerald-50/50 text-emerald-800"
-                              : "border-red-200 bg-red-50 text-red-700"
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isActive}
-                            onChange={(event) => handleActiveChange(event.target.checked)}
-                            className="h-5 w-5 rounded border-slate-300 accent-orange-500"
-                          />
-                          {isActive ? "Bem/ativo ativo" : "Bem/ativo inativo"}
-                        </label>
-
-                        {!isActive && (
-                          <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs font-bold leading-5 text-red-700">
-                            Atenção: bem/ativo inativo não poderá ser selecionado em novos contratos.
-                            O histórico será preservado para relatórios e auditoria.
-                          </div>
-                        )}
-                      </div>
-                    </FormField>
-
-                    <FormField label="Disponibilidade">
-                      <div className="min-h-[58px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-sm font-black text-slate-700">
-                            Status automático
-                          </span>
-                          <StatusBadge
-                            status={
-                              editingPropertyId &&
-                              propertyHasActiveContract(editingPropertyId, contracts)
-                                ? "Rented"
-                                : "Available"
-                            }
-                          />
-                        </div>
-                        <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
-                          Atualizado automaticamente quando existe contrato ativo.
-                        </p>
-                      </div>
-                    </FormField>
-                  </div>
-                </FormSection>
-
-                {assetCategory === "PROPERTY" && (
-                  <FormSection
-                    title="Gestão e repasse"
-                    description="Configura a imobiliária como administradora do imóvel e prepara o repasse automático ao proprietário."
-                  >
-                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                      <FormField label="Modelo de gestão" required>
-                        <select
-                          value={managementMode}
-                          onChange={(event) => setManagementMode(event.target.value as PropertyManagementMode)}
-                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        >
-                          <option value="OWNED">Próprio</option>
-                          <option value="MANAGED">Administrado por imobiliária</option>
-                        </select>
+                      <FormField label="Nome do bem/ativo" required>
+                        <input
+                          type="text"
+                          value={name}
+                          onChange={(event) => setName(toUpperText(event.target.value))}
+                          placeholder={assetCategory === "PROPERTY" ? "Ex: APARTAMENTO CENTRO" : "Ex: ESCAVADEIRA CAT 320"}
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        />
                       </FormField>
 
-                      <FormField label="Proprietário" required={managementMode === "MANAGED"}>
-                        <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                      <FormField label="Código">
+                        <input
+                          type="text"
+                          value={code}
+                          onChange={(event) => setCode(toUpperText(event.target.value))}
+                          placeholder="Ex: IMV-001"
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        />
+                      </FormField>
+
+                      {assetCategory === "PROPERTY" && (
+                        <FormField label="Tipo de imóvel" required>
                           <select
-                            value={ownerId}
-                            onChange={(event) => setOwnerId(event.target.value)}
+                            value={type}
+                            onChange={(event) => setType(event.target.value as PropertyType)}
                             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                           >
-                            <option value="">Selecione</option>
-                            {owners.map((owner) => (
-                              <option key={owner.id} value={owner.id}>
-                                {toUpperText(owner.name)}
+                            {propertyTypes.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
                               </option>
                             ))}
                           </select>
+                        </FormField>
+                      )}
 
-                          <button
-                            type="button"
-                            onClick={openOwnerCreateModal}
-                            className="h-[52px] rounded-xl bg-[#0f172a] px-5 text-sm font-bold text-[#ffffff] shadow-sm transition hover:bg-slate-800"
-                          >
-                            NOVO
-                          </button>
-                        </div>
-                      </FormField>
 
-                      <FormField label="Taxa de administração (%)" required={managementMode === "MANAGED"}>
+
+                      <FormField label="Código Patrimonial">
                         <input
                           type="text"
-                          value={administrationFeePercentage}
-                          onChange={(event) => setAdministrationFeePercentage(event.target.value)}
-                          placeholder="Ex: 10"
-                          inputMode="decimal"
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          value={patrimonyCode}
+                          onChange={(event) => setPatrimonyCode(toUpperText(event.target.value))}
+                          placeholder="Ex: PAT-2023"
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         />
                       </FormField>
 
-                      <FormField label="Dia do repasse" required={managementMode === "MANAGED"}>
-                        <input
-                          type="number"
-                          min="1"
-                          max="31"
-                          value={ownerPayoutDay}
-                          onChange={(event) => setOwnerPayoutDay(event.target.value)}
-                          placeholder="1 a 31"
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        />
-                      </FormField>
-
-                      <div className="md:col-span-2 xl:col-span-4">
-                        <label className="flex min-h-[58px] items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-black text-slate-700">
-                          <input
-                            type="checkbox"
-                            checked={autoCreateOwnerPayable}
-                            onChange={(event) => setAutoCreateOwnerPayable(event.target.checked)}
-                            className="h-5 w-5 rounded border-slate-300 accent-orange-500"
-                          />
-                          Gerar conta a pagar do proprietário automaticamente
-                        </label>
-                      </div>
+                      {editingPropertyId && (
+                        <div className="flex flex-col gap-2 rounded-2xl border border-slate-100 bg-slate-50/50 p-4 col-span-2 md:col-span-1">
+                          <label className="inline-flex items-center gap-3 text-sm font-black text-slate-700 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isActive}
+                              onChange={(event) => {
+                                const newActiveState = event.target.checked;
+                                if (!newActiveState && propertyHasActiveContract(editingPropertyId, contracts)) {
+                                  showAlert(
+                                    "Não é possível inativar este bem/ativo pois ele possui um contrato ativo ou pendente vinculado.",
+                                    "Bloqueado",
+                                    "⚠️"
+                                  );
+                                  return;
+                                }
+                                setIsActive(newActiveState);
+                              }}
+                              className="h-5 w-5 rounded border-slate-300 accent-orange-500"
+                            />
+                            Bem/Ativo Ativo
+                          </label>
+                          <p className="text-xs font-semibold text-slate-500">
+                            {isActive 
+                              ? "O bem está ativo e disponível para locações." 
+                              : "O bem está inativo e indisponível para novas locações."}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </FormSection>
                 )}
 
-                {assetCategory === "PROPERTY" ? (
-                  <FormSection
-                    title="Dados do imóvel"
-                    description="Endereço e características físicas do imóvel."
-                  >
-                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                      <FormField label="CEP" required>
-                    <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={zipCode}
-                          onChange={(event) => handleZipCodeChange(event.target.value)}
-                          onBlur={handleZipCodeBlur}
-                          placeholder="Ex: 76940-000"
-                          inputMode="numeric"
-                          maxLength={9}
-                          className="min-w-0 flex-1 rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        />
+                {formActiveTab === "dados" && assetCategory === "PROPERTY" && (
+                  <>
+                    <FormSection
+                      title="Dados do imóvel"
+                      description="Endereço e características físicas do imóvel."
+                    >
+                      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                        <FormField label="CEP" required>
+                          <div className="space-y-2">
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={zipCode}
+                                onChange={(event) => handleZipCodeChange(event.target.value)}
+                                onBlur={handleZipCodeBlur}
+                                placeholder="Ex: 76940-000"
+                                inputMode="numeric"
+                                maxLength={9}
+                                className="min-w-0 flex-1 rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                              />
 
-                        <button
-                          type="button"
-                          onClick={handleZipCodeLookup}
-                          disabled={isZipCodeLoading || zipCode.replace(/\D/g, "").length !== 8}
-                          className="flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
-                          title="Buscar CEP"
-                          aria-label="Buscar CEP"
-                        >
-                          {isZipCodeLoading ? (
-                            <LoaderCircle className="h-5 w-5 animate-spin" />
-                          ) : (
-                            <Search className="h-5 w-5" />
-                          )}
-                        </button>
+                              <button
+                                type="button"
+                                onClick={handleZipCodeLookup}
+                                disabled={isZipCodeLoading}
+                                className="rounded-2xl border border-orange-200 bg-white px-4 text-xs font-black text-orange-600 transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-70"
+                              >
+                                {isZipCodeLoading ? "..." : "Buscar"}
+                              </button>
+                            </div>
+
+                            {zipCodeFeedback && (
+                              <p className="text-[11px] font-black text-orange-600">
+                                {zipCodeFeedback}
+                              </p>
+                            )}
+                          </div>
+                        </FormField>
+
+                        <FormField label="Estado" required>
+                          <input
+                            type="text"
+                            value={state}
+                            onChange={(event) => setState(toUpperText(event.target.value).slice(0, 2))}
+                            placeholder="UF"
+                            maxLength={2}
+                            className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          />
+                        </FormField>
+
+                        <FormField label="Cidade" required>
+                          <input
+                            type="text"
+                            value={city}
+                            onChange={(event) => setCity(toUpperText(event.target.value))}
+                            placeholder="Cidade"
+                            className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          />
+                        </FormField>
+
+                        <FormField label="Bairro" required>
+                          <input
+                            type="text"
+                            value={neighborhood}
+                            onChange={(event) => setNeighborhood(toUpperText(event.target.value))}
+                            placeholder="Bairro"
+                            className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          />
+                        </FormField>
+
+                        <div className="md:col-span-2">
+                          <FormField label="Logradouro / Endereço" required>
+                            <input
+                              type="text"
+                              value={street}
+                              onChange={(event) => setStreet(toUpperText(event.target.value))}
+                              placeholder="Rua, Avenida, Praça..."
+                              className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                            />
+                          </FormField>
+                        </div>
+
+                        <FormField label="Número" required>
+                          <input
+                            type="text"
+                            value={number}
+                            onChange={(event) => setNumber(toUpperText(event.target.value))}
+                            placeholder="Número"
+                            className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          />
+                        </FormField>
+
+                        <FormField label="Complemento">
+                          <input
+                            type="text"
+                            value={complement}
+                            onChange={(event) => setComplement(toUpperText(event.target.value))}
+                            placeholder="Apartamento, bloco, referência..."
+                            className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          />
+                        </FormField>
+
+                        <FormField label="Quartos">
+                          <input
+                            type="number"
+                            min="0"
+                            value={bedrooms}
+                            onChange={(event) => setBedrooms(event.target.value)}
+                            placeholder="0"
+                            className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          />
+                        </FormField>
+
+                        <FormField label="Banheiros">
+                          <input
+                            type="number"
+                            min="0"
+                            value={bathrooms}
+                            onChange={(event) => setBathrooms(event.target.value)}
+                            placeholder="0"
+                            className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          />
+                        </FormField>
+
+                        <FormField label="Vagas">
+                          <input
+                            type="number"
+                            min="0"
+                            value={garages}
+                            onChange={(event) => setGarages(event.target.value)}
+                            placeholder="0"
+                            className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          />
+                        </FormField>
                       </div>
+                    </FormSection>
+                  </>
+                )}
 
-                      {zipCodeFeedback && (
-                        <p className="text-xs font-bold text-slate-500">{zipCodeFeedback}</p>
-                      )}
-                    </div>
-                      </FormField>
-
-                      <FormField label="Estado" required>
-                    <input
-                      type="text"
-                      value={state}
-                      onChange={(event) => setState(toUpperText(event.target.value))}
-                      placeholder="UF"
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                    />
-                      </FormField>
-
-                      <FormField label="Cidade" required>
-                    <input
-                      type="text"
-                      value={city}
-                      onChange={(event) => setCity(toUpperText(event.target.value))}
-                      placeholder="Cidade"
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                    />
-                      </FormField>
-
-                      <FormField label="Bairro" required>
-                    <input
-                      type="text"
-                      value={neighborhood}
-                      onChange={(event) => setNeighborhood(toUpperText(event.target.value))}
-                      placeholder="Bairro"
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                    />
-                      </FormField>
-
-                      <FormField label="Logradouro" required>
-                    <input
-                      type="text"
-                      value={street}
-                      onChange={(event) => setStreet(toUpperText(event.target.value))}
-                      placeholder="Rua, avenida..."
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                    />
-                      </FormField>
-
-                      <FormField label="Número" required>
-                    <input
-                      type="text"
-                      value={number}
-                      onChange={(event) => setNumber(toUpperText(event.target.value))}
-                      placeholder="Número"
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                    />
-                      </FormField>
-
-                      <FormField label="Complemento">
-                    <input
-                      type="text"
-                      value={complement}
-                      onChange={(event) => setComplement(toUpperText(event.target.value))}
-                      placeholder="Apartamento, bloco, referência..."
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                    />
-                      </FormField>
-
-                      <FormField label="Quartos">
-                        <input
-                          type="number"
-                          min="0"
-                          value={bedrooms}
-                          onChange={(event) => setBedrooms(event.target.value)}
-                          placeholder="0"
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        />
-                      </FormField>
-
-                      <FormField label="Banheiros">
-                        <input
-                          type="number"
-                          min="0"
-                          value={bathrooms}
-                          onChange={(event) => setBathrooms(event.target.value)}
-                          placeholder="0"
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        />
-                      </FormField>
-
-                      <FormField label="Vagas">
-                        <input
-                          type="number"
-                          min="0"
-                          value={garages}
-                          onChange={(event) => setGarages(event.target.value)}
-                          placeholder="0"
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        />
-                      </FormField>
-                    </div>
-                  </FormSection>
-                ) : (
+                {formActiveTab === "dados" && assetCategory !== "PROPERTY" && (
                   <FormSection
                     title="Dados técnicos"
                     description="Identificação técnica, conservação e controle patrimonial do equipamento ou bem."
@@ -2586,53 +2565,42 @@ export default function PropertiesPage() {
                           type="text"
                           value={model}
                           onChange={(event) => setModel(toUpperText(event.target.value))}
-                          placeholder="Ex: 320 GC"
+                          placeholder="Ex: 320D L"
                           className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         />
                       </FormField>
 
-                      <FormField label="Número de série">
+                      <FormField label="Número de Série">
                         <input
                           type="text"
                           value={serialNumber}
                           onChange={(event) => setSerialNumber(toUpperText(event.target.value))}
-                          placeholder="Ex: SN-123456"
+                          placeholder="Ex: CAT0320DL12345"
                           className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         />
                       </FormField>
 
-                      <FormField label={assetCategory === "VEHICLE" ? "Placa" : "Placa / identificação"}>
+                      <FormField label="Placa (se houver)">
                         <input
                           type="text"
                           value={licensePlate}
                           onChange={(event) => setLicensePlate(toUpperText(event.target.value))}
-                          placeholder={assetCategory === "VEHICLE" ? "Ex: ABC1D23" : "Ex: PLACA OU TAG"}
+                          placeholder="Ex: ABC1D23"
                           className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         />
                       </FormField>
 
-                      <FormField label="Código patrimonial">
-                        <input
-                          type="text"
-                          value={patrimonyCode}
-                          onChange={(event) => setPatrimonyCode(toUpperText(event.target.value))}
-                          placeholder="Ex: PAT-001"
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        />
-                      </FormField>
-
-                      <FormField label="Ano de fabricação">
+                      <FormField label="Ano de Fabricação">
                         <input
                           type="number"
-                          min="0"
                           value={manufactureYear}
                           onChange={(event) => setManufactureYear(event.target.value)}
-                          placeholder="Ex: 2024"
+                          placeholder="Ex: 2021"
                           className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         />
                       </FormField>
 
-                      <FormField label="Condição">
+                      <FormField label="Estado de Conservação">
                         <select
                           value={condition}
                           onChange={(event) => setCondition(event.target.value)}
@@ -2650,32 +2618,131 @@ export default function PropertiesPage() {
                   </FormSection>
                 )}
 
-                <FormSection title="Valores e observações">
-                  <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                    <FormField label="Valor da Locação" required>
-                    <input
-                      type="text"
-                      value={rentValue}
-                      onChange={(event) => setRentValue(formatCurrencyInput(event.target.value))}
-                      placeholder="R$ 0,00"
-                      inputMode="numeric"
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                    />
-                    </FormField>
-
-                    <div className="md:col-span-2 xl:col-span-3">
-                      <FormField label="Descrição">
-                      <textarea
-                        value={description}
-                        onChange={(event) => setDescription(event.target.value)}
-                        placeholder="Observações internas, características, acessórios inclusos ou referências do bem/ativo"
-                        rows={3}
-                        className="w-full resize-none rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                      />
+                {formActiveTab === "gestao" && (
+                  <FormSection
+                    title="Gestão e Repasse"
+                    description="Defina se o bem é administrado por você ou pertence a um terceiro."
+                  >
+                    <div className="grid gap-5 md:grid-cols-2">
+                      <FormField label="Modo de Gestão" required>
+                        <select
+                          value={managementMode}
+                          onChange={(event) => setManagementMode(event.target.value as PropertyManagementMode)}
+                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        >
+                          <option value="OWNED">Próprio (Administração Direta)</option>
+                          <option value="MANAGED">Terceirizado (Administrado para Terceiros)</option>
+                        </select>
                       </FormField>
+
+                      {managementMode === "MANAGED" && (
+                        <>
+                          <FormField label="Proprietário" required>
+                            <select
+                              value={ownerId}
+                              onChange={(event) => setOwnerId(event.target.value)}
+                              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                            >
+                              <option value="">Selecione o proprietário</option>
+                              {owners.map((person) => (
+                                <option key={person.id} value={person.id}>
+                                  {person.name}
+                                </option>
+                              ))}
+                            </select>
+                          </FormField>
+
+                          <FormField label="Taxa de Administração (%)" required>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={administrationFeePercentage}
+                              onChange={(event) => setAdministrationFeePercentage(event.target.value)}
+                              placeholder="Ex: 10"
+                              className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                            />
+                          </FormField>
+
+                          <FormField label="Dia do Repasse" required>
+                            <input
+                              type="number"
+                              min="1"
+                              max="31"
+                              value={ownerPayoutDay}
+                              onChange={(event) => setOwnerPayoutDay(event.target.value)}
+                              placeholder="Ex: 10"
+                              className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                            />
+                          </FormField>
+
+                          <label className="flex items-center gap-3 py-2 cursor-pointer col-span-2">
+                            <input
+                              type="checkbox"
+                              checked={autoCreateOwnerPayable}
+                              onChange={(event) => setAutoCreateOwnerPayable(event.target.checked)}
+                              className="h-5 w-5 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+                            />
+                            <span className="text-sm font-semibold text-slate-700">
+                              Gerar contas a pagar de repasse automaticamente ao liquidar receitas
+                            </span>
+                          </label>
+                        </>
+                      )}
                     </div>
-                  </div>
-                </FormSection>
+                  </FormSection>
+                )}
+
+                {formActiveTab === "valores" && (
+                  <FormSection
+                    title="Valores e Observações"
+                    description="Defina os parâmetros financeiros sugeridos para locação do bem."
+                  >
+                    <div className="grid gap-5 md:grid-cols-2">
+                      <FormField label="Valor de Aluguel Sugerido" required>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={rentValue}
+                          onChange={(event) => setRentValue(event.target.value)}
+                          placeholder="Ex: 1200.00"
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                        />
+                      </FormField>
+
+                      <div className="col-span-2">
+                        <FormField label="Observações / Descrição">
+                          <textarea
+                            value={description}
+                            onChange={(event) => setDescription(event.target.value)}
+                            placeholder="Observações ou descrição detalhada do bem/ativo..."
+                            rows={4}
+                            className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          />
+                        </FormField>
+                      </div>
+                    </div>
+                  </FormSection>
+                )}
+
+                {formActiveTab === "fotos" && (
+                  <FormSection
+                    title="Fotos do Bem/Ativo"
+                    description="Galeria de imagens e arquivos visuais do bem."
+                  >
+                    <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50/50 p-12 text-center">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50 text-orange-500 mb-4 text-2xl">
+                        🔒
+                      </div>
+                      <h4 className="text-base font-black text-slate-800">
+                        Funcionalidade Em Breve
+                      </h4>
+                      <p className="mt-2 max-w-sm text-sm font-semibold text-slate-500 leading-relaxed">
+                        A possibilidade de incluir fotos diretamente no cadastro de bens e ativos está sendo preparada e estará disponível em breve.
+                      </p>
+                    </div>
+                  </FormSection>
+                )}
+
               </div>
 
               <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-slate-100 bg-white px-8 py-6">
@@ -2740,6 +2807,15 @@ export default function PropertiesPage() {
             itemTitle={blockedInactiveProperty.name}
             itemDetail={blockedInactiveProperty.address || "Endereço não informado"}
             onClose={handleCloseBlockedInactiveProperty}
+          />
+        )}
+
+        {customAlert && (
+          <AlertModal
+            icon={customAlert.icon || "⚠️"}
+            title={customAlert.title}
+            description={customAlert.description}
+            onClose={() => setCustomAlert(null)}
           />
         )}
 
@@ -2972,8 +3048,8 @@ type AlertModalProps = {
   icon: string;
   title: string;
   description: string;
-  itemTitle: string;
-  itemDetail: string;
+  itemTitle?: string;
+  itemDetail?: string;
   onClose: () => void;
 };
 
@@ -2989,10 +3065,12 @@ function AlertModal({ icon, title, description, itemTitle, itemDetail, onClose }
           <h3 className="text-2xl font-black text-slate-950">{title}</h3>
           <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">{description}</p>
 
-          <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
-            <p className="text-sm font-black text-slate-900">{itemTitle}</p>
-            <p className="mt-1 text-xs font-semibold text-slate-500">{itemDetail}</p>
-          </div>
+          {itemTitle && (
+            <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
+              <p className="text-sm font-black text-slate-900">{itemTitle}</p>
+              {itemDetail && <p className="mt-1 text-xs font-semibold text-slate-500">{itemDetail}</p>}
+            </div>
+          )}
         </div>
 
         <div className="mt-8">

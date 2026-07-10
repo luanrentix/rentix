@@ -82,7 +82,7 @@ body.dark [class*="to-white"] {
 [data-contrx-theme="black"] [class*="bg-orange-100"],
 body.dark [class*="bg-orange-50"],
 body.dark [class*="bg-orange-100"] {
-  background-color: rgb(249 115 22 / 0.14) !important;
+  background-color: color-mix(in srgb, var(--primary-color) 14%, transparent) !important;
 }
 
 [data-contrx-theme="black"] [class*="bg-red-50"],
@@ -139,7 +139,7 @@ body.dark [class*="text-slate-400"] {
 
 [data-contrx-theme="black"] [class*="text-orange-"],
 body.dark [class*="text-orange-"] {
-  color: #fb923c !important;
+  color: var(--primary-color) !important;
 }
 
 [data-contrx-theme="black"] [class*="text-red-"],
@@ -160,15 +160,18 @@ body.dark [class*="text-sky-"] {
 }
 
 [data-contrx-theme="black"] [class*="border-slate-"],
-[data-contrx-theme="black"] [class*="border-orange-"],
 [data-contrx-theme="black"] [class*="border-amber-"],
 [data-contrx-theme="black"] [class*="border-red-"],
 [data-contrx-theme="black"] [class*="border-emerald-"],
 [data-contrx-theme="black"] [class*="border-blue-"],
 [data-contrx-theme="black"] [class*="border-sky-"],
-body.dark [class*="border-slate-"],
-body.dark [class*="border-orange-"] {
+body.dark [class*="border-slate-"] {
   border-color: #334155 !important;
+}
+
+[data-contrx-theme="black"] [class*="border-orange-"],
+body.dark [class*="border-orange-"] {
+  border-color: color-mix(in srgb, var(--primary-color) 35%, transparent) !important;
 }
 
 [data-contrx-theme="black"] input,

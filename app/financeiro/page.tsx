@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getCompanyStorageItem } from "@/services/company-storage";
+import { getProperties, type Property } from "@/services/properties.service";
 import {
   getFinancialSummary,
   type FinancialPayable,
@@ -379,6 +380,8 @@ export default function FinancialPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [financialTheme, setFinancialTheme] = useState<ThemeMode>("light");
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>("all");
 
   const loadFinancialSummary = useCallback(async (currentCompanyId: string) => {
     try {
@@ -408,11 +411,16 @@ export default function FinancialPage() {
     if (!companyId) {
       setReceivables([]);
       setPayables([]);
+      setProperties([]);
       setIsLoading(false);
       return;
     }
 
     loadFinancialSummary(companyId);
+
+    getProperties(companyId)
+      .then(setProperties)
+      .catch((err) => console.error("Erro ao carregar bens para filtro financeiro", err));
   }, [companyId, loadFinancialSummary]);
 
   useEffect(() => {
@@ -514,13 +522,21 @@ export default function FinancialPage() {
   }
 
   const balance = useMemo<BalanceSummary>(() => {
-    const openReceivables = receivables.filter((receivable) => {
+    const filteredReceivables = selectedPropertyId === "all"
+      ? receivables
+      : receivables.filter(r => r.propertyId === selectedPropertyId);
+
+    const filteredPayables = selectedPropertyId === "all"
+      ? payables
+      : payables.filter(p => p.propertyId === selectedPropertyId);
+
+    const openReceivables = filteredReceivables.filter((receivable) => {
       if (receivable.status === "Paid") return false;
 
       return isDateInsideRange(receivable.dueDate, startDate, endDate);
     });
 
-    const receivedReceivables = receivables.filter((receivable) => {
+    const receivedReceivables = filteredReceivables.filter((receivable) => {
       if (receivable.status !== "Paid") return false;
 
       return isDateInsideRange(
@@ -530,13 +546,13 @@ export default function FinancialPage() {
       );
     });
 
-    const openPayables = payables.filter((payable) => {
+    const openPayables = filteredPayables.filter((payable) => {
       if (payable.status === "Paid") return false;
 
       return isDateInsideRange(payable.dueDate, startDate, endDate);
     });
 
-    const paidPayables = payables.filter((payable) => {
+    const paidPayables = filteredPayables.filter((payable) => {
       if (payable.status !== "Paid") return false;
 
       return isDateInsideRange(
@@ -574,25 +590,33 @@ export default function FinancialPage() {
       openPayableCount: openPayables.length,
       paidCount: paidPayables.length,
     };
-  }, [receivables, payables, startDate, endDate]);
+  }, [receivables, payables, startDate, endDate, selectedPropertyId]);
 
   const receivableAttentionItems = useMemo(() => {
-    return receivables
+    const filteredReceivables = selectedPropertyId === "all"
+      ? receivables
+      : receivables.filter(r => r.propertyId === selectedPropertyId);
+
+    return filteredReceivables
       .filter((receivable) => receivable.status !== "Paid")
       .filter((receivable) => isDateInsideRange(receivable.dueDate, startDate, endDate))
       .sort(sortUrgentFirst)
       .slice(0, 7)
       .map(mapReceivableToStatementItem);
-  }, [receivables, startDate, endDate]);
+  }, [receivables, startDate, endDate, selectedPropertyId]);
 
   const payableAttentionItems = useMemo(() => {
-    return payables
+    const filteredPayables = selectedPropertyId === "all"
+      ? payables
+      : payables.filter(p => p.propertyId === selectedPropertyId);
+
+    return filteredPayables
       .filter((payable) => payable.status !== "Paid")
       .filter((payable) => isDateInsideRange(payable.dueDate, startDate, endDate))
       .sort(sortUrgentFirst)
       .slice(0, 7)
       .map(mapPayableToStatementItem);
-  }, [payables, startDate, endDate]);
+  }, [payables, startDate, endDate, selectedPropertyId]);
 
   const periodLabel = getPeriodLabel(periodShortcut, startDate, endDate);
   const totalOverdue = balance.overdueReceivable + balance.overduePayable;
@@ -665,7 +689,7 @@ export default function FinancialPage() {
         </div>
 
         <div className="rounded-2xl border border-orange-100 bg-white p-4 shadow-sm dark:border-orange-500/30 dark:bg-slate-900">
-          <div className="grid gap-3 md:grid-cols-[220px_1fr_1fr]">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <label>
               <span className="mb-2 block text-xs font-black uppercase text-slate-500 dark:text-slate-400">
                 Período
@@ -713,6 +737,24 @@ export default function FinancialPage() {
                 }}
                 className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
               />
+            </label>
+
+            <label>
+              <span className="mb-2 block text-xs font-black uppercase text-slate-500 dark:text-slate-400">
+                Filtrar por Bem/Ativo
+              </span>
+              <select
+                value={selectedPropertyId}
+                onChange={(event) => setSelectedPropertyId(event.target.value)}
+                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+              >
+                <option value="all">Todos os bens/ativos</option>
+                {properties.map((prop) => (
+                  <option key={prop.id} value={prop.id}>
+                    {prop.title} {prop.code ? `(${prop.code})` : ""}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
         </div>

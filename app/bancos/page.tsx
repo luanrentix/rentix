@@ -82,6 +82,35 @@ export default function BancosPage() {
   // Institution search state
   const [isBankSearchOpen, setIsBankSearchOpen] = useState(false);
   const [bankSearchQuery, setBankSearchQuery] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [customAlert, setCustomAlert] = useState<{ title: string; message: string; type?: 'error' | 'success' | 'warning' } | null>(null);
+  const [customConfirm, setCustomConfirm] = useState<{ title: string; message: string; onConfirm: () => void; isDanger?: boolean } | null>(null);
+
+  const statementTotals = useMemo(() => {
+    let inflows = 0;
+    let outflows = 0;
+    transactions.forEach((tx) => {
+      const amt = Number(tx.amount);
+      if (tx.type === "INFLOW") {
+        inflows += amt;
+      } else if (tx.type === "OUTFLOW") {
+        outflows += amt;
+      }
+    });
+    return {
+      inflows,
+      outflows,
+      balance: inflows - outflows,
+    };
+  }, [transactions]);
+
+  const showAlert = (message: string, title: string = "Aviso", type: 'error' | 'success' | 'warning' = "warning") => {
+    setCustomAlert({ title, message, type });
+  };
+
+  const showConfirm = (message: string, onConfirm: () => void, title: string = "Confirmar Ação", isDanger: boolean = false) => {
+    setCustomConfirm({ title, message, onConfirm, isDanger });
+  };
 
   // Form states with formatted currency inputs
   const [accountForm, setAccountForm] = useState({
@@ -199,6 +228,8 @@ export default function BancosPage() {
 
   const handleSaveAccount = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
+    setIsSaving(true);
     try {
       const initialBalance = parseCurrencyToNumber(accountForm.initialBalanceStr);
       const limit = parseCurrencyToNumber(accountForm.limitStr);
@@ -219,7 +250,8 @@ export default function BancosPage() {
       if (normalizedForm.active === false) {
         const currentBalance = editingAccount ? Number(editingAccount.currentBalance) : initialBalance;
         if (currentBalance !== 0) {
-          alert(`A conta só pode ser inativada se o saldo estiver zerado. Saldo atual: ${formatCurrency(currentBalance, normalizedForm.currency)}`);
+          showAlert(`A conta só pode ser inativada se o saldo estiver zerado. Saldo atual: ${formatCurrency(currentBalance, normalizedForm.currency)}`, "Aviso", "warning");
+          setIsSaving(false);
           return;
         }
       }
@@ -233,7 +265,9 @@ export default function BancosPage() {
       setIsAccountsListModalOpen(true);
       loadData();
     } catch (err) {
-      alert(getErrorMessage(err, "Erro ao salvar conta bancária."));
+      showAlert(getErrorMessage(err, "Erro ao salvar conta bancária."), "Erro", "error");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -241,28 +275,40 @@ export default function BancosPage() {
     if (acc.active) {
       const currentBalance = Number(acc.currentBalance);
       if (currentBalance !== 0) {
-        alert(`A conta só pode ser inativada se o saldo estiver zerado. Saldo atual: ${formatCurrency(currentBalance, acc.currency)}`);
+        showAlert(`A conta só pode ser inativada se o saldo estiver zerado. Saldo atual: ${formatCurrency(currentBalance, acc.currency)}`, "Aviso", "warning");
         return;
       }
     }
     const actionText = acc.active ? "inativar/inutilizar" : "ativar";
-    if (!confirm(`Deseja realmente ${actionText} a conta "${acc.name}"?`)) return;
-    try {
-      await updateBankAccount(acc.id, { active: !acc.active });
-      loadData();
-    } catch (err) {
-      alert(getErrorMessage(err, "Erro ao alterar status da conta."));
-    }
+    showConfirm(
+      `Deseja realmente ${actionText} a conta "${acc.name}"?`,
+      async () => {
+        try {
+          await updateBankAccount(acc.id, { active: !acc.active });
+          loadData();
+        } catch (err) {
+          showAlert(getErrorMessage(err, "Erro ao alterar status da conta."), "Erro", "error");
+        }
+      },
+      "Confirmar Ação",
+      acc.active
+    );
   };
 
   const handleDeleteAccount = async (id: string) => {
-    if (!confirm("Tem certeza que deseja excluir esta conta? Todas as movimentações vinculadas serão apagadas permanentemente.")) return;
-    try {
-      await deleteBankAccount(id);
-      loadData();
-    } catch (err) {
-      alert(getErrorMessage(err, "Erro ao excluir conta bancária."));
-    }
+    showConfirm(
+      "Tem certeza que deseja excluir esta conta? Todas as movimentações vinculadas serão apagadas permanentemente.",
+      async () => {
+        try {
+          await deleteBankAccount(id);
+          loadData();
+        } catch (err) {
+          showAlert(getErrorMessage(err, "Erro ao excluir conta bancária."), "Erro", "error");
+        }
+      },
+      "Excluir Conta?",
+      true
+    );
   };
 
   // Split transaction categories logic
@@ -303,9 +349,12 @@ export default function BancosPage() {
   // Handle submit for the unified Launch Transaction Modal
   const handleConfirmLaunch = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
+    setIsSaving(true);
     const amount = parseCurrencyToNumber(launchForm.amountStr);
     if (amount <= 0) {
-      alert("O valor do lançamento deve ser maior do que zero.");
+      showAlert("O valor do lançamento deve ser maior do que zero.", "Aviso", "warning");
+      setIsSaving(false);
       return;
     }
 
@@ -317,7 +366,8 @@ export default function BancosPage() {
 
       if (activeTab === "TRANSFERENCIA") {
         if (!launchForm.originBankAccountId || !launchForm.destinationBankAccountId) {
-          alert("Selecione as contas de origem e destino.");
+          showAlert("Selecione as contas de origem e destino.", "Aviso", "warning");
+          setIsSaving(false);
           return;
         }
         const fee = parseCurrencyToNumber(launchForm.feeStr);
@@ -331,7 +381,8 @@ export default function BancosPage() {
         });
       } else {
         if (!launchForm.bankAccountId) {
-          alert("Selecione uma conta financeira.");
+          showAlert("Selecione uma conta financeira.", "Aviso", "warning");
+          setIsSaving(false);
           return;
         }
         
@@ -387,7 +438,9 @@ export default function BancosPage() {
       });
       loadData();
     } catch (err) {
-      alert(getErrorMessage(err, "Erro ao realizar o lançamento financeiro."));
+      showAlert(getErrorMessage(err, "Erro ao realizar o lançamento financeiro."), "Erro", "error");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -415,14 +468,19 @@ export default function BancosPage() {
   };
 
   const handleReconcileTransaction = async (id: string) => {
-    const paymentDate = prompt("Informe a data de liquidação/pagamento (AAAA-MM-DD):", new Date().toISOString().slice(0, 10));
-    if (!paymentDate) return;
-    try {
-      await reconcileBankTransaction(id, paymentDate);
-      loadData();
-    } catch (err) {
-      alert(getErrorMessage(err, "Erro ao conciliar movimentação."));
-    }
+    const today = new Date().toISOString().slice(0, 10);
+    showConfirm(
+      `Deseja liquidar este lançamento com a data de hoje (${new Date().toLocaleDateString("pt-BR")})?`,
+      async () => {
+        try {
+          await reconcileBankTransaction(id, today);
+          loadData();
+        } catch (err) {
+          showAlert(getErrorMessage(err, "Erro ao conciliar movimentação."), "Erro", "error");
+        }
+      },
+      "Liquidar Lançamento"
+    );
   };
 
   // Select a bank from the search list
@@ -507,7 +565,7 @@ export default function BancosPage() {
       <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
-            🏦 Controle Bancário
+            Controle Bancário
           </h1>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
             Gerencie contas correntes, caixas físicos, conciliação e transferências de saldo.
@@ -536,11 +594,10 @@ export default function BancosPage() {
             Lançar Movimento
           </button>
           <button
-            onClick={() => setIsAccountsListModalOpen(true)}
+            onClick={() => handleOpenAccountModal()}
             className="flex h-11 items-center gap-2 rounded-xl bg-orange-500 px-5 text-sm font-black text-white shadow-sm hover:bg-orange-600 transition"
           >
-            <Plus className="h-4 w-4" />
-            Conta Financeira
+            + Conta Financeira
           </button>
         </div>
       </div>
@@ -552,7 +609,10 @@ export default function BancosPage() {
       )}
 
       {/* Top Filter Card */}
-      <div className="grid gap-3 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm sm:grid-cols-2 md:grid-cols-6 items-end mb-6">
+      <div 
+        className="grid gap-3 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm items-end mb-6"
+        style={{ gridTemplateColumns: "repeat(6, minmax(0, 1fr))" }}
+      >
         <div>
           <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Conta</label>
           <select
@@ -647,7 +707,10 @@ export default function BancosPage() {
       </div>
 
       {/* Metrics Cards Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+      <div 
+        className="grid gap-4 mb-6"
+        style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}
+      >
         <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="rounded-2xl bg-orange-50 p-3 text-orange-600">
@@ -710,9 +773,12 @@ export default function BancosPage() {
           <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-4">
+        <div 
+          className="grid gap-6"
+          style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}
+        >
           {/* Left Column: Bank Accounts List */}
-          <div className="lg:col-span-1 space-y-4">
+          <div className="space-y-4" style={{ gridColumn: "span 1 / span 1" }}>
             <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-black text-slate-900">Contas & Caixas</h2>
@@ -813,7 +879,11 @@ export default function BancosPage() {
           </div>
 
           {/* Right Column: Statement & Filter */}
-          <div className="lg:col-span-3 space-y-4" id="print-statement-section">
+          <div 
+            className="space-y-4" 
+            id="print-statement-section"
+            style={{ gridColumn: "span 3 / span 3" }}
+          >
             <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
               
               {/* Print-only header header */}
@@ -918,6 +988,24 @@ export default function BancosPage() {
                         );
                       })}
                     </tbody>
+                    <tfoot className="bg-slate-50 border-t-2 border-slate-100">
+                      <tr className="font-black text-sm text-slate-800">
+                        <td colSpan={3} className="py-3 px-4 rounded-bl-2xl font-black">
+                          Total
+                        </td>
+                        <td className={`py-3 pr-4 text-right font-black ${
+                          statementTotals.balance >= 0 ? "text-emerald-600" : "text-red-600"
+                        }`}>
+                          {statementTotals.balance >= 0 ? "+" : "-"} {formatCurrency(Math.abs(statementTotals.balance))}
+                        </td>
+                        <td className="py-3 pr-4 text-center text-slate-400 font-bold">
+                          —
+                        </td>
+                        <td className="py-3 text-center rounded-br-2xl print-hide text-slate-400 font-bold">
+                          —
+                        </td>
+                      </tr>
+                    </tfoot>
                   </table>
 
                   {transactions.length >= limit && (
@@ -1200,19 +1288,21 @@ export default function BancosPage() {
               <div className="flex gap-2 justify-end pt-3">
                 <button
                   type="button"
+                  disabled={isSaving}
                   onClick={() => {
                     setIsAccountModalOpen(false);
                     setIsAccountsListModalOpen(true);
                   }}
-                  className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50"
+                  className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="h-11 rounded-xl bg-orange-500 px-5 text-sm font-black text-white shadow-sm hover:bg-orange-600"
+                  disabled={isSaving}
+                  className="h-11 rounded-xl bg-orange-500 px-5 text-sm font-black text-white shadow-sm hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Salvar Conta
+                  {isSaving ? "Gravando..." : "Salvar Conta"}
                 </button>
               </div>
             </form>
@@ -1575,19 +1665,25 @@ export default function BancosPage() {
               {editingTransaction && (
                 <button
                   type="button"
-                  onClick={async () => {
-                    if (confirm("Tem certeza que deseja excluir esta movimentação? O saldo da conta será revertido.")) {
-                      try {
-                        await deleteBankTransaction(editingTransaction.id);
-                        setIsTransactionModalOpen(false);
-                        setEditingTransaction(null);
-                        loadData();
-                      } catch (err) {
-                        alert(getErrorMessage(err, "Erro ao excluir movimentação."));
-                      }
-                    }
+                  disabled={isSaving}
+                  onClick={() => {
+                    showConfirm(
+                      "Tem certeza que deseja excluir esta movimentação? O saldo da conta será revertido.",
+                      async () => {
+                        try {
+                          await deleteBankTransaction(editingTransaction.id);
+                          setIsTransactionModalOpen(false);
+                          setEditingTransaction(null);
+                          loadData();
+                        } catch (err) {
+                          showAlert(getErrorMessage(err, "Erro ao excluir movimentação."), "Erro", "error");
+                        }
+                      },
+                      "Excluir Lançamento?",
+                      true
+                    );
                   }}
-                  className="flex-1 h-12 flex items-center justify-center gap-2 rounded-2xl bg-red-50 text-sm font-black text-red-600 hover:bg-red-100 transition"
+                  className="flex-1 h-12 flex items-center justify-center gap-2 rounded-2xl bg-red-50 text-sm font-black text-red-600 hover:bg-red-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Trash2 className="h-4 w-4" />
                   Excluir Lançamento
@@ -1596,10 +1692,11 @@ export default function BancosPage() {
               <button
                 type="submit"
                 form="launch-transaction-form"
-                className="flex-1 h-12 flex items-center justify-center gap-2 rounded-2xl bg-orange-500 text-sm font-black text-white hover:bg-orange-600 shadow-sm transition"
+                disabled={isSaving}
+                className="flex-1 h-12 flex items-center justify-center gap-2 rounded-2xl bg-orange-500 text-sm font-black text-white hover:bg-orange-600 shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Save className="h-4 w-4" />
-                {editingTransaction ? "Salvar Lançamento" : "Confirmar Lançamento"}
+                {isSaving ? "Gravando..." : (editingTransaction ? "Salvar Lançamento" : "Confirmar Lançamento")}
               </button>
             </div>
           </div>
@@ -1654,6 +1751,59 @@ export default function BancosPage() {
                 className="flex-1 h-11 rounded-2xl bg-orange-500 text-xs font-black text-white hover:bg-orange-600 transition"
               >
                 Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {customAlert && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-sm overflow-hidden rounded-[2rem] border border-orange-100 bg-white p-6 shadow-2xl animate-fade-in text-center">
+            <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full text-2xl font-black ${
+              customAlert.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-500'
+            }`}>
+              {customAlert.type === 'error' ? '!' : 'i'}
+            </div>
+            <h3 className="mt-4 text-lg font-black text-slate-950">{customAlert.title}</h3>
+            <p className="mt-2 text-sm font-medium leading-relaxed text-slate-500">{customAlert.message}</p>
+            <button
+              onClick={() => setCustomAlert(null)}
+              className="mt-6 w-full h-11 rounded-2xl bg-orange-500 text-sm font-black text-white hover:bg-orange-600 transition shadow-sm"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+
+      {customConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-sm overflow-hidden rounded-[2rem] border border-slate-100 bg-white p-6 shadow-2xl animate-fade-in text-center">
+            <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full text-2xl font-black ${
+              customConfirm.isDanger ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-500'
+            }`}>
+              ?
+            </div>
+            <h3 className="mt-4 text-lg font-black text-slate-950">{customConfirm.title}</h3>
+            <p className="mt-2 text-sm font-medium leading-relaxed text-slate-500">{customConfirm.message}</p>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setCustomConfirm(null)}
+                className="h-11 rounded-2xl bg-slate-100 text-sm font-black text-slate-700 hover:bg-slate-200 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  customConfirm.onConfirm();
+                  setCustomConfirm(null);
+                }}
+                className={`h-11 rounded-2xl text-sm font-black text-white transition shadow-sm ${
+                  customConfirm.isDanger ? 'bg-red-600 hover:bg-red-700' : 'bg-orange-500 hover:bg-orange-600'
+                }`}
+              >
+                Confirmar
               </button>
             </div>
           </div>

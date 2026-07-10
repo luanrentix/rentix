@@ -17,6 +17,7 @@ type FinancialReceivable = {
   discountAmount: number;
   interestAmount: number;
   remainingAmount: number;
+  propertyId?: string | null;
 };
 
 type FinancialPayable = {
@@ -32,6 +33,7 @@ type FinancialPayable = {
   discountAmount: number;
   interestAmount: number;
   remainingAmount: number;
+  propertyId?: string | null;
 };
 
 type FinancialSummary = {
@@ -81,7 +83,10 @@ export class FinanceiroService {
       this.prisma.contaReceber.findMany({
         where: this.buildReceivableWhere(companyId, dateRange),
         orderBy: { dueDate: 'asc' },
-        include: { payments: { orderBy: { paidAt: 'desc' } } },
+        include: {
+          payments: { orderBy: { paidAt: 'desc' } },
+          contract: true,
+        },
       }),
       this.prisma.contaPagar.findMany({
         where: this.buildPayableWhere(companyId, dateRange),
@@ -94,6 +99,7 @@ export class FinanceiroService {
           dueDate: true,
           amount: true,
           status: true,
+          propertyId: true,
           payments: {
             orderBy: { paidAt: 'desc' },
             select: {
@@ -134,6 +140,7 @@ export class FinanceiroService {
           discountAmount: paymentSummary.discountAmount,
           interestAmount: paymentSummary.interestAmount,
           remainingAmount: paymentSummary.remainingAmount,
+          propertyId: account.contract?.propertyId || null,
         };
       }),
       payables: payables.map<FinancialPayable>((account) => {
@@ -163,6 +170,7 @@ export class FinanceiroService {
           discountAmount: paymentSummary.discountAmount,
           interestAmount: paymentSummary.interestAmount,
           remainingAmount: paymentSummary.remainingAmount,
+          propertyId: account.propertyId || null,
         };
       }),
     };

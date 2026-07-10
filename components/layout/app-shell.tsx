@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { AlertTriangle, CalendarDays, Clock3, Loader2, Maximize2, X } from "lucide-react";
+import { AlertTriangle, Bell, CalendarDays, Clock3, Loader2, Maximize2, X } from "lucide-react";
 import AuthGuard from "@/components/auth/auth-guard";
 import { useAuth } from "@/context/AuthContext";
 import { changePasswordRequest } from "@/services/auth";
@@ -34,6 +34,8 @@ import {
   systemOwnerToolRoutes,
   toolKeyByHref,
 } from "@/services/app-routes";
+import { getChamados } from "@/services/chamados.service";
+import AgendaNotificationListener from "./agenda-notification-listener";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -564,6 +566,27 @@ export default function AppShell({ children }: AppShellProps) {
     [user?.permissions, user?.role],
   );
   const isSystemOwner = isSystemOwnerRole(user?.role);
+  const [unreadSupportCount, setUnreadSupportCount] = useState(0);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || isSystemOwner || !user) return;
+
+    async function checkSupportNotifications() {
+      try {
+        const supportTickets = await getChamados();
+        if (Array.isArray(supportTickets)) {
+          const unread = supportTickets.filter((t) => t.status === "RESPONDIDO").length;
+          setUnreadSupportCount(unread);
+        }
+      } catch (err) {
+        console.error("Erro ao checar notificações de suporte:", err);
+      }
+    }
+
+    void checkSupportNotifications();
+    const interval = setInterval(checkSupportNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [isSystemOwner, user]);
 
   useEffect(() => {
     if (typeof window === "undefined" || isSystemOwner) {
@@ -1177,6 +1200,22 @@ export default function AppShell({ children }: AppShellProps) {
                 <p className="font-bold text-slate-900">{userSettings.name}</p>
               </div>
 
+              {!isSystemOwner && (
+                <Link
+                  href="/suporte"
+                  prefetch={menuLinkPrefetch}
+                  className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-50 border border-slate-200 text-slate-600 hover:bg-orange-50 hover:text-orange-600 transition"
+                  title="Chamados de Suporte"
+                >
+                  <Bell className="h-5 w-5" />
+                  {unreadSupportCount > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white ring-2 ring-white">
+                      {unreadSupportCount}
+                    </span>
+                  )}
+                </Link>
+              )}
+
               <button
                 type="button"
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
@@ -1240,6 +1279,34 @@ export default function AppShell({ children }: AppShellProps) {
                     </Link>
                   )}
 
+                  {isSystemOwner && (
+                    <Link
+                      href="/admin"
+                      prefetch={menuLinkPrefetch}
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition ${
+                        themeSettings.mode !== "light"
+                          ? darkMenuItemClass
+                          : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                      }`}
+                    >
+                      👑 Painel Administrativo
+                    </Link>
+                  )}
+
+                  <Link
+                    href="/suporte"
+                    prefetch={menuLinkPrefetch}
+                    onClick={() => setIsUserMenuOpen(false)}
+                    className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition ${
+                      themeSettings.mode !== "light"
+                        ? darkMenuItemClass
+                        : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                    }`}
+                  >
+                    💬 Suporte
+                  </Link>
+
                   <button
                     type="button"
                     onClick={handleLogout}
@@ -1263,7 +1330,10 @@ export default function AppShell({ children }: AppShellProps) {
                 trialEndsAtLabel={trialEndsAtLabel}
               />
             ) : (
-              children
+              <>
+                {children}
+                <AgendaNotificationListener />
+              </>
             )}
           </main>
 

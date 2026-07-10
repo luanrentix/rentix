@@ -13,6 +13,7 @@ export const authRoutes = ["/login"] as const;
 export const internalUtilityRoutes = [
   "/configuracoes",
   "/financeiro/relatorios",
+  "/suporte",
 ] as const;
 
 export const internalToolRoutes: AppToolRoute[] = [
@@ -81,15 +82,7 @@ export const internalToolRoutes: AppToolRoute[] = [
   },
 ];
 
-export const systemOwnerToolRoutes: AppToolRoute[] = [
-  {
-    label: "Admin",
-    href: "/admin",
-    icon: "SYS",
-    permissionKey: "admin",
-    scope: "internal",
-  },
-];
+export const systemOwnerToolRoutes: AppToolRoute[] = [];
 
 export const toolKeyByHref = Object.fromEntries(
   [...internalToolRoutes, ...systemOwnerToolRoutes].map((route) => [

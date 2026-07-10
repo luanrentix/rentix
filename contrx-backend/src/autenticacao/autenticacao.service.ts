@@ -915,4 +915,20 @@ export class AutenticacaoService {
       success: true,
     };
   }
+
+  async checkEmailExists(email: string): Promise<boolean> {
+    const normalizedEmail = normalizeEmail(email || '');
+    if (!normalizedEmail) return false;
+
+    const user = await this.prisma.user.findUnique({
+      where: {
+        email: normalizedEmail,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    return !!user;
+  }
 }

@@ -77,6 +77,16 @@ async function ensureSchema(client) {
   `);
 
   await client.query(`
+    ALTER TABLE IF EXISTS "pessoas"
+    ADD COLUMN IF NOT EXISTS "foto" TEXT
+  `);
+
+  await client.query(`
+    ALTER TABLE IF EXISTS "imoveis"
+    ADD COLUMN IF NOT EXISTS "fotos" TEXT
+  `);
+
+  await client.query(`
     ALTER TABLE IF EXISTS "contas_pagar"
     ADD COLUMN IF NOT EXISTS "imovel_id" TEXT
   `);

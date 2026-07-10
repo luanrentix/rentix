@@ -20,6 +20,7 @@ export type Person = {
   state?: string | null;
   address?: string | null;
   isTenant?: boolean | null;
+  photo?: string | null;
   createdAt: string;
   updatedAt?: string;
 };
@@ -37,6 +38,7 @@ export type CreatePersonDto = {
   state?: string;
   address?: string;
   isTenant?: boolean;
+  photo?: string;
   status?: ApiPersonStatus;
 };
 

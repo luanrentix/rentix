@@ -360,6 +360,33 @@ function getTypeAccentClass(type: string, isBlackTheme: boolean) {
     : "border-l-orange-500 bg-orange-50/70";
 }
 
+function getDotColorClass(type: string) {
+  const normalizedType = type
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+  if (normalizedType.includes("financeiro") || normalizedType.includes("cobranca")) {
+    return "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.4)]";
+  }
+
+  if (normalizedType.includes("contrato")) {
+    return "bg-violet-500 shadow-[0_0_6px_rgba(139,92,246,0.4)]";
+  }
+
+  if (normalizedType.includes("manutencao")) {
+    return "bg-sky-500 shadow-[0_0_6px_rgba(14,165,233,0.4)]";
+  }
+
+  if (normalizedType.includes("entrega")) {
+    return "bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.4)]";
+  }
+
+  return "bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.4)]";
+}
+
+
 export default function AgendaPage() {
   const { user } = useAuth();
   const companyId = user?.companyId;
@@ -1366,8 +1393,8 @@ export default function AgendaPage() {
             </button>
           </div>
 
-          <div className="mt-4 grid gap-3 xl:grid-cols-[1.4fr_0.7fr_0.7fr_0.8fr_0.7fr]">
-            <Field label="Buscar" isBlackTheme={isBlackTheme}>
+          <div className="mt-4 grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-[1.4fr_0.7fr_0.7fr_0.8fr_0.7fr]">
+            <Field label="Buscar" isBlackTheme={isBlackTheme} className="col-span-2 md:col-span-1">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-orange-600" />
                 <input
@@ -1467,10 +1494,10 @@ export default function AgendaPage() {
           )}
         </section>
 
-        <section className="grid gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(22rem,0.72fr)]">
-          <div className={`rounded-2xl border p-4 shadow-sm lg:p-5 ${cardClass}`}>
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-5 items-start">
+          <div className={`md:col-span-2 rounded-2xl border p-4 shadow-sm md:p-5 w-full ${cardClass}`}>
             <div
-              className={`flex flex-col gap-4 border-b pb-4 lg:flex-row lg:items-center lg:justify-between ${
+              className={`flex flex-col gap-4 border-b pb-4 md:flex-row md:items-center md:justify-between ${
                 isBlackTheme ? "border-[#334155]" : "border-[#e2e8f0]"
               }`}
             >
@@ -1608,45 +1635,50 @@ export default function AgendaPage() {
                           type="button"
                           onClick={() => handleSelectDate(date)}
                           aria-pressed={isSelectedDate}
-                          className={`min-h-16 rounded-xl border p-2 text-left transition xl:min-h-20 ${
+                          style={{ aspectRatio: "1.25 / 1" }}
+                          className={`w-full rounded-xl border p-2 text-left transition-all duration-200 relative flex flex-col justify-between ${
                             isSelectedDate
-                              ? "border-orange-400 bg-orange-50 shadow-sm"
+                              ? "border-orange-500 bg-orange-500/10 shadow-sm ring-1 ring-orange-500/30"
                               : isBlackTheme
-                                ? "border-[#334155] bg-[#020617] hover:border-orange-500/50 hover:bg-orange-950/20"
-                                : "border-[#e2e8f0] bg-[#ffffff] hover:border-orange-200 hover:bg-orange-50/40"
-                          } ${!isCurrentMonth ? "opacity-40" : ""}`}
+                                ? "border-[#334155]/60 bg-[#020617] hover:border-orange-500/40 hover:bg-orange-500/[0.04]"
+                                : "border-[#e2e8f0] bg-[#ffffff] hover:border-orange-500/30 hover:bg-orange-50/30"
+                          } ${!isCurrentMonth ? "opacity-35" : ""}`}
                         >
-                          <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center justify-between w-full">
                             <span
-                              className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-black ${
+                              className={`text-xs font-black flex h-7 w-7 items-center justify-center rounded-lg ${
                                 isToday
-                                  ? "bg-orange-500 text-white"
+                                  ? "bg-orange-500 text-white font-extrabold"
                                   : isSelectedDate
-                                    ? "bg-white text-orange-600"
+                                    ? "bg-orange-500/20 text-orange-600 dark:text-orange-400 font-extrabold"
                                     : isBlackTheme
-                                      ? "bg-[#1e293b] text-[#cbd5e1]"
-                                      : "bg-[#f1f5f9] text-[#334155]"
+                                      ? "text-[#cbd5e1]"
+                                      : "text-slate-700"
                               }`}
                             >
                               {date.getDate()}
                             </span>
                             {dateItems.length > 0 && (
-                              <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-black text-white">
+                              <span className={`text-[10px] font-black rounded-full px-1.5 py-0.5 ${
+                                isBlackTheme 
+                                  ? "bg-orange-950/60 text-orange-400 border border-orange-500/20" 
+                                  : "bg-orange-50 text-orange-700 border border-orange-200"
+                              }`}>
                                 {dateItems.length}
                               </span>
                             )}
                           </div>
 
-                          <div className="mt-2 space-y-1">
+                          <div className="mt-2 space-y-1 w-full flex-1 flex flex-col justify-end">
                             {dateItems.slice(0, 2).map((item) => (
                               <div
                                 key={item.id}
-                                className={`truncate rounded-lg px-2 py-1 text-[10px] font-bold ${
+                                className={`truncate rounded-lg px-2 py-0.5 text-[10px] font-bold w-full ${
                                   item.priority === "high"
-                                    ? "bg-red-600 text-white"
+                                    ? "bg-red-600 text-white shadow-sm"
                                     : isBlackTheme
                                       ? "bg-[#1e293b] text-[#cbd5e1]"
-                                      : "bg-[#f1f5f9] text-[#475569]"
+                                      : "bg-[#f1f5f9] text-[#475569] border border-[#e2e8f0]"
                                 }`}
                               >
                                 {item.time} · {item.title}
@@ -1666,65 +1698,82 @@ export default function AgendaPage() {
                 )}
 
                 {viewMode === "week" && (
-                  <div className="mt-4 grid gap-3 lg:grid-cols-7">
+                  <div className="mt-4 grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7">
                     {weekDays.map((date) => {
                       const dateValue = formatDateToInputValue(date);
                       const items = weekItems.filter((item) => item.date === dateValue);
                       const isToday = dateValue === todayInputValue;
+                      const isSelected = dateValue === selectedDate;
 
                       return (
                         <div
                           key={dateValue}
-                          className={`rounded-xl border p-3 ${
-                            isToday
-                              ? "border-orange-400"
-                              : isBlackTheme
-                                ? "border-[#334155]"
-                                : "border-[#e2e8f0]"
-                          } ${isBlackTheme ? "bg-[#020617]" : "bg-[#ffffff]"}`}
+                          onClick={() => setSelectedDate(dateValue)}
+                          className={`rounded-2xl border p-4.5 cursor-pointer transition-all duration-200 flex flex-col ${
+                            isSelected
+                              ? "border-orange-500 bg-orange-500/5 shadow-md ring-1 ring-orange-500/30"
+                              : isToday
+                                ? "border-orange-500/30 bg-orange-500/[0.02]"
+                                : isBlackTheme
+                                  ? "border-[#334155]/60 bg-[#020617] hover:border-[#334155] hover:bg-orange-500/[0.01]"
+                                  : "border-[#e2e8f0] bg-[#ffffff] hover:border-[#cbd5e1] hover:bg-orange-50/25"
+                          }`}
                         >
-                          <button
-                            type="button"
-                            onClick={() => setSelectedDate(dateValue)}
-                            className="w-full text-left"
-                          >
-                            <p className={`text-xs font-black uppercase ${mutedTextClass}`}>
-                              {weekDayLabels[date.getDay()]}
-                            </p>
-                            <p
-                              className={`mt-1 text-xl font-black ${
-                                isToday ? "text-orange-600" : strongTextClass
-                              }`}
-                            >
-                              {date.getDate()}
-                            </p>
-                          </button>
-                          <div className="mt-3 space-y-2">
+                          <div className="w-full text-left pb-2 border-b border-dashed border-[#e2e8f0] dark:border-[#334155]/60 flex items-center justify-between">
+                            <div>
+                              <p className={`text-[10px] font-black uppercase tracking-wider ${mutedTextClass}`}>
+                                {weekDayLabels[date.getDay()]}
+                              </p>
+                              <p
+                                className={`mt-0.5 text-lg font-black ${
+                                  isToday ? "text-orange-500 font-extrabold" : strongTextClass
+                                }`}
+                              >
+                                {date.getDate()}
+                              </p>
+                            </div>
+                            {items.length > 0 && (
+                              <span className={`text-[10px] font-black rounded-full px-1.5 py-0.5 ${
+                                isBlackTheme 
+                                  ? "bg-orange-950/60 text-orange-400 border border-orange-500/20" 
+                                  : "bg-orange-50 text-orange-700 border border-orange-200"
+                              }`}>
+                                {items.length}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-3 space-y-2 flex-1">
                             {items.length > 0 ? (
                               items.map((item) => (
                                 <button
                                   key={item.id}
                                   type="button"
-                                  onClick={() => handleOpenEditModal(item)}
-                                  className={`w-full rounded-lg border-l-4 p-2.5 text-left text-xs font-bold ${getTypeAccentClass(
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setSelectedDate(dateValue);
+                                    handleOpenEditModal(item);
+                                  }}
+                                  className={`w-full rounded-xl border-l-4 p-2 text-left text-xs font-bold transition hover:-translate-y-0.5 shadow-sm ${getTypeAccentClass(
                                     item.type,
                                     isBlackTheme,
                                   )}`}
                                 >
-                                  <span className="block text-orange-600">{item.time}</span>
-                                  <span className={strongTextClass}>{item.title}</span>
+                                  <span className="block text-orange-600 text-[10px] font-black">{item.time}</span>
+                                  <span className={`line-clamp-2 ${strongTextClass}`}>{item.title}</span>
                                 </button>
                               ))
                             ) : (
-                              <p
-                                className={`rounded-xl border border-dashed p-3 text-center text-xs font-bold ${
-                                  isBlackTheme
-                                    ? "border-[#334155] text-[#64748b]"
-                                    : "border-[#e2e8f0] text-[#94a3b8]"
-                                }`}
-                              >
-                                Livre
-                              </p>
+                              <div className="h-full flex items-center justify-center min-h-[4rem]">
+                                <p
+                                  className={`w-full text-center text-xs font-bold py-4 rounded-xl border border-dashed ${
+                                    isBlackTheme
+                                      ? "border-[#334155]/60 text-[#475569]"
+                                      : "border-[#e2e8f0] text-[#94a3b8]"
+                                  }`}
+                                >
+                                  Livre
+                                </p>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -1750,48 +1799,50 @@ export default function AgendaPage() {
             )}
           </div>
 
-          <aside className="space-y-4 2xl:sticky 2xl:top-4 2xl:self-start">
-            <div className={`rounded-2xl border p-4 shadow-sm lg:p-5 ${cardClass}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-orange-600">
-                    Data selecionada
-                  </p>
-                  <h2 className={`mt-2 text-lg font-black ${strongTextClass}`}>
-                    {getReadableDate(selectedDate)}
-                  </h2>
-                  <p className={`mt-1 text-sm font-semibold ${mutedTextClass}`}>
-                    {selectedDateItems.length} compromisso(s)
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleOpenCreateModal(selectedDate)}
-                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-500 text-white transition hover:bg-orange-600"
-                  aria-label="Criar agendamento na data selecionada"
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
-              </div>
-
-              <div className="mt-4 max-h-[26rem] space-y-3 overflow-y-auto pr-1">
-                {selectedDateItems.length > 0 ? (
-                  selectedDateItems.map((item) => renderScheduleCard(item, true))
-                ) : (
-                  <p
-                    className={`rounded-2xl border border-dashed p-6 text-center text-sm font-bold ${
-                      isBlackTheme
-                        ? "border-[#334155] text-[#94a3b8]"
-                        : "border-[#e2e8f0] text-[#64748b]"
-                    }`}
+          <aside className="md:col-span-1 space-y-4 md:sticky md:top-4 md:self-start">
+            {viewMode !== "day" && (
+              <div className={`rounded-2xl border p-4 shadow-sm md:p-5 ${cardClass}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-orange-600">
+                      DATA SELECIONADA
+                    </p>
+                    <h2 className={`mt-2 text-lg font-black ${strongTextClass}`}>
+                      {getReadableDate(selectedDate)}
+                    </h2>
+                    <p className={`mt-1 text-sm font-semibold ${mutedTextClass}`}>
+                      {selectedDateItems.length} compromisso(s)
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenCreateModal(selectedDate)}
+                    className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-500 text-white transition hover:bg-orange-600"
+                    aria-label="Criar agendamento na data selecionada"
                   >
-                    Nenhum compromisso nesta data.
-                  </p>
-                )}
-              </div>
-            </div>
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
 
-            <div className={`rounded-2xl border p-4 shadow-sm lg:p-5 ${cardClass}`}>
+                <div className="mt-4 max-h-[26rem] space-y-3 overflow-y-auto pr-1">
+                  {selectedDateItems.length > 0 ? (
+                    selectedDateItems.map((item) => renderScheduleCard(item, true))
+                  ) : (
+                    <p
+                      className={`rounded-2xl border border-dashed p-6 text-center text-sm font-bold ${
+                        isBlackTheme
+                          ? "border-[#334155] text-[#94a3b8]"
+                          : "border-[#e2e8f0] text-[#64748b]"
+                      }`}
+                    >
+                      Nenhum compromisso nesta data.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className={`rounded-2xl border p-4 shadow-sm md:p-5 ${cardClass}`}>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-orange-600">
                 Próximos 7 dias
               </p>
@@ -1849,7 +1900,7 @@ export default function AgendaPage() {
               </div>
             </div>
 
-            <div className={`rounded-2xl border p-4 shadow-sm lg:p-5 ${cardClass}`}>
+            <div className={`rounded-2xl border p-4 shadow-sm md:p-5 ${cardClass}`}>
               <p className="text-xs font-black uppercase tracking-[0.18em] text-orange-600">
                 Resumo do mês
               </p>

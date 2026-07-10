@@ -1794,6 +1794,8 @@ export default function ConfiguracoesPage() {
   const [printEditorViewMode, setPrintEditorViewMode] = useState<PrintEditorViewMode>("split");
   const [printImportMessage, setPrintImportMessage] = useState("");
   const [printImportError, setPrintImportError] = useState("");
+  const [showPrintImportSuccessModal, setShowPrintImportSuccessModal] = useState(false);
+  const [printImportSuccessModalDetails, setPrintImportSuccessModalDetails] = useState("");
   const [isImportingPrintTemplate, setIsImportingPrintTemplate] = useState(false);
   const [downloadingPrintTemplateKey, setDownloadingPrintTemplateKey] = useState<PrintDocumentKey | null>(null);
   const [restorePrintModalState, setRestorePrintModalState] = useState<RestorePrintModalState>(defaultRestorePrintModalState);
@@ -2729,11 +2731,14 @@ export default function ConfiguracoesPage() {
       const importSuccessMessage =
         "Arquivo importado com sucesso. É preciso salvar as configurações para gravar a importação.";
 
-      setPrintImportMessage(
+      const details =
         missingVariables.length > 0
           ? `${importSuccessMessage} ${importedStats.variables.length} campo(s) reconhecido(s); revise os campos obrigatórios ausentes: ${missingVariables.join(", ")}.`
-          : `${importSuccessMessage} ${importedStats.variables.length} campo(s) reconhecido(s).`,
-      );
+          : `${importSuccessMessage} ${importedStats.variables.length} campo(s) reconhecido(s).`;
+
+      setPrintImportMessage(details);
+      setPrintImportSuccessModalDetails(details);
+      setShowPrintImportSuccessModal(true);
     } catch (error) {
       setPrintImportError(
         error instanceof Error
@@ -4483,9 +4488,6 @@ export default function ConfiguracoesPage() {
                                   <h4 className="text-sm font-black text-slate-950">
                                     {color.label}
                                   </h4>
-                                  <p className="text-[11px] font-semibold text-slate-500">
-                                    {color.desc}
-                                  </p>
                                 </div>
                               </div>
                               <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-black ${
@@ -4774,6 +4776,27 @@ export default function ConfiguracoesPage() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {showPrintImportSuccessModal && (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-[2rem] border border-emerald-100 bg-white p-6 shadow-2xl">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 mb-4">
+                <span className="text-xl font-bold">✓</span>
+              </div>
+              <h3 className="text-lg font-black text-slate-950">Importado com sucesso!</h3>
+              <p className="mt-2 text-sm text-slate-600 font-medium whitespace-pre-line">
+                {printImportSuccessModalDetails}
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowPrintImportSuccessModal(false)}
+                className="mt-6 w-full rounded-2xl bg-emerald-600 hover:bg-emerald-700 py-3 text-sm font-black text-white transition"
+              >
+                Entendido
+              </button>
             </div>
           </div>
         )}

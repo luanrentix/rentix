@@ -7,3 +7,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 # Deployment and Version Control Rules
 
 - **DO NOT** execute automatic git commits, pushes, or run deploy scripts (`deploy-vps.bat`, etc.) to Oracle VPS, GitHub, or Supabase automatically. Always let the user handle commits, pushes, and deployments manually after they verify their tests.
+
+# Idioma de Comunicação
+
+- Sempre responda e se comunique com o usuário em **português (Brasil)**.
+

@@ -30,6 +30,9 @@ contrx-backend/.local-postgres/
 
 # local dev logs
 /.next-dev*.log
+/.backend-*.log
+/*.log
+/PROJETO_COMPLETO.md
 
 # misc
 .DS_Store

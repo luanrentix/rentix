@@ -15,6 +15,7 @@ import { AgendaModule } from './agenda/agenda.module';
 import { PropertyMovementsModule } from './property-movements/property-movements.module';
 import { AdminModule } from './admin/admin.module';
 import { BancosModule } from './bancos/bancos.module';
+import { ChamadosModule } from './chamados/chamados.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { BancosModule } from './bancos/bancos.module';
     PropertyMovementsModule,
     AdminModule,
     BancosModule,
+    ChamadosModule,
   ],
   controllers: [AppController],
   providers: [AppService],

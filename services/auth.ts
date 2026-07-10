@@ -124,3 +124,15 @@ export async function resetPasswordRequest(
 export async function verifySessionRequest(): Promise<{ active: boolean }> {
   return apiFetch<{ active: boolean }>('/autenticacao/sessao');
 }
+
+export async function checkEmailExistsRequest(
+  email: string,
+): Promise<{ exists: boolean }> {
+  return apiFetch<{ exists: boolean }>(
+    `/autenticacao/verificar-email?email=${encodeURIComponent(email)}`,
+    {
+      method: 'GET',
+      auth: false,
+    },
+  );
+}

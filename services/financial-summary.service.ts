@@ -22,6 +22,7 @@ export type FinancialReceivable = {
   discountAmount?: number;
   interestAmount?: number;
   remainingAmount: number;
+  propertyId?: string | null;
 };
 
 export type FinancialPayable = {
@@ -40,6 +41,7 @@ export type FinancialPayable = {
   discountAmount?: number;
   interestAmount?: number;
   remainingAmount: number;
+  propertyId?: string | null;
 };
 
 export type FinancialSummaryResponse = {

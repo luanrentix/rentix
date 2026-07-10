@@ -2314,17 +2314,20 @@ export default function AccountsReceivablePage() {
         <head>
           <meta charset="utf-8" />
           <title>Carnê de Pagamento</title>
+          <link rel="preconnect" href="https://fonts.googleapis.com">
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+          <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
           <style>
             * { box-sizing: border-box; }
-            body { margin: 0; background: #eef2f7; color: #172033; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            body { margin: 0; background: #eef2f7; color: #172033; font-family: 'Outfit', Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 10px; padding: 14px 24px; background: rgba(255, 255, 255, 0.97); border-bottom: 1px solid #d8dee8; backdrop-filter: blur(10px); }
             .toolbar button { border: 0; border-radius: 8px; padding: 11px 18px; font-size: 12px; font-weight: 900; cursor: pointer; }
             .print-button { background: #0f766e; color: #ffffff; }
             .close-button { background: #f8fafc; color: #172033; border: 1px solid #cbd5e1 !important; }
             @page { size: A4; margin: 7mm; }
             .page { width: min(1080px, calc(100% - 28px)); margin: 14px auto; }
-            .voucher-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-            .summary { margin-bottom: 12px; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; padding: 14px 16px; box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08); }
+            .voucher-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+            .summary { margin-bottom: 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff; padding: 16px; box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08); }
             .summary-header { display: grid; grid-template-columns: 1fr auto; gap: 14px; border-bottom: 2px solid #172033; padding-bottom: 9px; }
             .brand { color: #0f766e; font-size: 9.5px; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; }
             h1, h2 { margin: 5px 0 0; color: #172033; letter-spacing: 0; }
@@ -2336,7 +2339,7 @@ export default function AccountsReceivablePage() {
             th { background: #172033; color: #ffffff; font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; }
             th, td { border: 1px solid #d8dee8; padding: 5px 6px; font-size: 10px; text-align: left; }
             tbody tr:nth-child(even) td { background: #f8fafc; }
-            .voucher { position: relative; overflow: hidden; break-inside: avoid; page-break-inside: avoid; border: 1px solid #c6cfda; border-radius: 4px; background: #ffffff; padding: 10px; min-height: 286px; }
+            .voucher { position: relative; overflow: hidden; break-inside: avoid; page-break-inside: avoid; border: 2px dashed #94a3b8; border-radius: 8px; background: #ffffff; padding: 12px; min-height: 286px; margin-bottom: 20px; }
             .voucher::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: #0f766e; }
             .voucher-header { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 10px; border-bottom: 1.5px solid #172033; padding: 0 0 8px 7px; }
             .voucher-header h2 { text-transform: uppercase; }
@@ -3981,10 +3984,13 @@ export default function AccountsReceivablePage() {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Contrato</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     @page { size: A4; margin: 0; }
     * { box-sizing: border-box; }
-    body { margin: 0; background: #eef2f7; color: #111827; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { margin: 0; background: #eef2f7; color: #111827; font-family: 'Outfit', Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
     .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
     .print-button { background: #f97316; color: #ffffff; }
@@ -4364,9 +4370,12 @@ export default function AccountsReceivablePage() {
         <head>
           <meta charset="utf-8" />
           <title>Recibos de Recebimento</title>
+          <link rel="preconnect" href="https://fonts.googleapis.com">
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+          <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
           <style>
             * { box-sizing: border-box; }
-            body { margin: 0; background: #eef2f7; color: #111827; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            body { margin: 0; background: #eef2f7; color: #111827; font-family: 'Outfit', Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 10px; padding: 12px 18px; background: rgba(255,255,255,.97); border-bottom: 1px solid #d1d5db; }
             .toolbar button { border: 0; border-radius: 8px; padding: 10px 16px; font-size: 12px; font-weight: 800; cursor: pointer; }
             .print-button { background: #f97316; color: #ffffff; }
@@ -4483,9 +4492,12 @@ export default function AccountsReceivablePage() {
         <head>
           <meta charset="utf-8" />
           <title>Recibo de Recebimento</title>
+          <link rel="preconnect" href="https://fonts.googleapis.com">
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+          <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
           <style>
             * { box-sizing: border-box; }
-            body { margin: 0; background: #eef2f7; color: #111827; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            body { margin: 0; background: #eef2f7; color: #111827; font-family: 'Outfit', Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 10px; padding: 12px 18px; background: rgba(255,255,255,.97); border-bottom: 1px solid #d1d5db; }
             .toolbar button { border: 0; border-radius: 8px; padding: 10px 16px; font-size: 12px; font-weight: 800; cursor: pointer; }
             .print-button { background: #f97316; color: #ffffff; }

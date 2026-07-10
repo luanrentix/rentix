@@ -83,6 +83,7 @@ export class ImoveisService {
         garages: data.garages ?? null,
 
         description: data.description || null,
+        photos: data.photos || null,
         isActive: data.isActive ?? true,
       },
       include: {
@@ -240,6 +241,10 @@ export class ImoveisService {
           data.description !== undefined
             ? data.description || null
             : property.description,
+        photos:
+          data.photos !== undefined
+            ? data.photos || null
+            : property.photos,
         isActive: data.isActive ?? property.isActive,
       },
       include: {
@@ -287,7 +292,8 @@ export class ImoveisService {
   private normalizePropertyData<
     TData extends CriarImovelDto | AtualizarImovelDto,
   >(data: TData) {
-    return uppercaseFields(data, [
+    const { photos, ...rest } = data as any;
+    const normalized = uppercaseFields(rest, [
       'title',
       'code',
       'type',
@@ -307,6 +313,7 @@ export class ImoveisService {
       'complement',
       'description',
     ]);
+    return { ...normalized, photos };
   }
 
   private normalizeManagementMode(value?: string | null) {

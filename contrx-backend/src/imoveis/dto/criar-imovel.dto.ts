@@ -131,6 +131,10 @@ export class CriarImovelDto {
   description?: string;
 
   @IsOptional()
+  @IsString()
+  photos?: string;
+
+  @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 }

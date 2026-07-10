@@ -39,6 +39,7 @@ import {
   type SubscriptionStatus,
 } from "@/services/admin.service";
 import { getWhatsAppUrl } from "@/services/whatsapp.service";
+import Link from "next/link";
 
 const roleLabels: Record<string, string> = {
   SYSTEM_OWNER: "Dono do sistema",
@@ -47,6 +48,24 @@ const roleLabels: Record<string, string> = {
   MANAGER: "Gerente",
   USER: "Usuário",
 };
+
+function formatCnpj(cnpj: string | null | undefined): string {
+  if (!cnpj) return "";
+  const digits = cnpj.replace(/\D/g, "");
+  if (digits.length !== 14) return cnpj;
+  return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`;
+}
+
+function formatPhone(phone: string | null | undefined): string {
+  if (!phone) return "";
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length === 11) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  } else if (digits.length === 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return phone;
+}
 
 const adminRoleOptions: AdminUserRole[] = [
   "SYSTEM_OWNER",
@@ -245,6 +264,7 @@ export default function AdminPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [companies, setCompanies] = useState<AdminCompany[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("empresas");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [updatingUserId, setUpdatingUserId] = useState("");
@@ -851,6 +871,19 @@ export default function AdminPage() {
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
+              <Link
+                href="/dashboard"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 text-sm font-black text-slate-700 hover:bg-slate-200 transition shadow-sm"
+              >
+                ⬅️ Voltar ao sistema
+              </Link>
+              <Link
+                href="/admin/chamados"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-black text-white shadow-sm transition hover:opacity-90"
+                style={{ backgroundColor: "var(--primary-color)" }}
+              >
+                💬 Chamados
+              </Link>
               <button
                 type="button"
                 onClick={loadAdminData}
@@ -870,25 +903,6 @@ export default function AdminPage() {
               </button>
             </div>
           </div>
-
-          <div className="grid gap-3 bg-slate-50/70 p-3 md:grid-cols-3">
-            <HeaderSignal
-              icon={<Database className="h-4 w-4" />}
-              label="Dados operacionais"
-              value={totalOperationalRecords}
-            />
-            <HeaderSignal
-              icon={<Settings2 className="h-4 w-4" />}
-              label="Empresas com dados"
-              value={operationalCompaniesTotal}
-            />
-            <HeaderSignal
-              icon={<CircleOff className="h-4 w-4" />}
-              label="Inativos no ambiente"
-              value={inactiveTotal}
-              tone="red"
-            />
-          </div>
         </section>
 
         {!isSystemOwner ? (
@@ -905,19 +919,7 @@ export default function AdminPage() {
           </section>
         ) : (
           <>
-            {errorMessage && (
-              <section className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-                {errorMessage}
-              </section>
-            )}
-
-            {successMessage && (
-              <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
-                {successMessage}
-              </section>
-            )}
-
-            <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 mb-6">
               <MetricCard
                 icon={<UsersRound className="h-5 w-5" />}
                 label="Usuários"
@@ -947,109 +949,134 @@ export default function AdminPage() {
                 tone="red"
               />
             </section>
+            {errorMessage && (
+              <section className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
+                {errorMessage}
+              </section>
+            )}
 
-            <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-                <div className="flex items-center gap-2 text-sm font-black text-slate-700 xl:w-40">
-                  <SlidersHorizontal className="h-4 w-4 text-orange-600" />
-                  Filtros
+            {successMessage && (
+              <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
+                {successMessage}
+              </section>
+            )}
+
+            {/* Navegação por Abas do Painel Administrativo */}
+            <div className="flex border-b border-slate-100 bg-white gap-2 overflow-x-auto shrink-0 mb-6 p-1 rounded-2xl shadow-sm">
+              {[
+                { id: "empresas", label: "Empresas", icon: "🏢" },
+                { id: "usuarios", label: "Usuários", icon: "👥" },
+                { id: "avancado", label: "Avançado & Diagnóstico", icon: "⚙️" }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setSearchTerm("");
+                  }}
+                  className={`py-3 px-6 font-black text-sm flex items-center gap-2 rounded-xl transition shrink-0 ${
+                    activeTab === tab.id
+                      ? "bg-orange-500 text-white shadow-sm"
+                      : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <span>{tab.icon}</span>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {(activeTab === "empresas" || activeTab === "usuarios") && (
+              <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm mb-6">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+                  <div className="flex items-center gap-2 text-sm font-black text-slate-700 xl:w-40">
+                    <SlidersHorizontal className="h-4 w-4 text-orange-600" />
+                    Filtros
+                  </div>
+
+                  <label className="relative block min-w-0 flex-1">
+                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={searchTerm}
+                      onChange={(event) => setSearchTerm(event.target.value)}
+                      placeholder="Buscar empresa, usuário, e-mail, documento ou telefone"
+                      className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-11 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                    />
+                  </label>
+
+                  <select
+                    value={statusFilter}
+                    onChange={(event) =>
+                      setStatusFilter(event.target.value as StatusFilter)
+                    }
+                    className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 xl:w-48"
+                  >
+                    <option value="all">Todos os status</option>
+                    <option value="active">Somente ativos</option>
+                    <option value="inactive">Somente inativos</option>
+                  </select>
+
+                  <select
+                    value={commercialFilter}
+                    onChange={(event) =>
+                      setCommercialFilter(event.target.value as CommercialFilter)
+                    }
+                    className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 xl:w-48"
+                  >
+                    <option value="all">Todos comerciais</option>
+                    {commercialStatusOptions.map((status) => (
+                      <option key={status} value={status}>
+                        {getSubscriptionLabel({ subscriptionStatus: status })}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={dueFilter}
+                    onChange={(event) => setDueFilter(event.target.value as DueFilter)}
+                    className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 xl:w-52"
+                  >
+                    <option value="all">Todos vencimentos</option>
+                    <option value="today">Vencem hoje</option>
+                    <option value="threeDays">Até 3 dias</option>
+                    <option value="sevenDays">Até 7 dias</option>
+                    <option value="expired">Vencidos</option>
+                    <option value="noDueDate">Sem vencimento</option>
+                  </select>
+
+                  <label className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={hideEmptyCompanies}
+                      onChange={(event) => setHideEmptyCompanies(event.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+                    />
+                    Ocultar sem dados
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                  >
+                    <X className="h-4 w-4" />
+                    Limpar
+                  </button>
                 </div>
 
-                <label className="relative block min-w-0 flex-1">
-                  <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(event) => setSearchTerm(event.target.value)}
-                    placeholder="Buscar empresa, usuário, e-mail, documento ou telefone"
-                    className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-11 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
-                  />
-                </label>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs font-black text-slate-500">
+                  <Pill>{activeTab === "empresas" ? topCompanies.length : filteredUsers.length} registros exibidos</Pill>
+                  {hideEmptyCompanies && emptyCompaniesTotal > 0 && activeTab === "empresas" && (
+                    <Pill>{emptyCompaniesTotal} sem dados ocultas</Pill>
+                  )}
+                </div>
+              </section>
+            )}
 
-                <select
-                  value={statusFilter}
-                  onChange={(event) =>
-                    setStatusFilter(event.target.value as StatusFilter)
-                  }
-                  className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 xl:w-48"
-                >
-                  <option value="all">Todos os status</option>
-                  <option value="active">Somente ativos</option>
-                  <option value="inactive">Somente inativos</option>
-                </select>
-
-                <select
-                  value={roleFilter}
-                  onChange={(event) => setRoleFilter(event.target.value)}
-                  className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 xl:w-48"
-                >
-                  <option value="all">Todos os perfis</option>
-                  {roleOptions.map((role) => (
-                    <option key={role} value={role}>
-                      {roleLabels[role] || role}
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  value={commercialFilter}
-                  onChange={(event) =>
-                    setCommercialFilter(event.target.value as CommercialFilter)
-                  }
-                  className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 xl:w-48"
-                >
-                  <option value="all">Todos comerciais</option>
-                  {commercialStatusOptions.map((status) => (
-                    <option key={status} value={status}>
-                      {getSubscriptionLabel({ subscriptionStatus: status })}
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  value={dueFilter}
-                  onChange={(event) => setDueFilter(event.target.value as DueFilter)}
-                  className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 xl:w-52"
-                >
-                  <option value="all">Todos vencimentos</option>
-                  <option value="today">Vencem hoje</option>
-                  <option value="threeDays">Até 3 dias</option>
-                  <option value="sevenDays">Até 7 dias</option>
-                  <option value="expired">Vencidos</option>
-                  <option value="noDueDate">Sem vencimento</option>
-                </select>
-
-                <label className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={hideEmptyCompanies}
-                    onChange={(event) => setHideEmptyCompanies(event.target.checked)}
-                    className="h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
-                  />
-                  Ocultar sem dados
-                </label>
-
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 text-sm font-black text-slate-700 transition hover:bg-slate-200"
-                >
-                  <X className="h-4 w-4" />
-                  Limpar
-                </button>
-              </div>
-
-              <div className="mt-3 flex flex-wrap gap-2 text-xs font-black text-slate-500">
-                <Pill>{filteredUsers.length} usuários</Pill>
-                <Pill>{topCompanies.length} empresas exibidas</Pill>
-                {hideEmptyCompanies && emptyCompaniesTotal > 0 && (
-                  <Pill>{emptyCompaniesTotal} sem dados ocultas</Pill>
-                )}
-                <Pill>{roleOptions.length} perfis</Pill>
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            {activeTab === "empresas" && (
+              <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <PanelHeader
                   title="Empresas"
                   subtitle={
@@ -1083,149 +1110,196 @@ export default function AdminPage() {
                     ))
                   )}
                 </div>
-            </section>
+              </section>
+            )}
 
-            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <PanelHeader
-                title="Usuários cadastrados"
-                subtitle={`Total atual: ${users.length}`}
-                action={<StatusSummary active={summary?.activeUsers ?? 0} inactive={summary?.inactiveUsers ?? 0} />}
-              />
+            {activeTab === "usuarios" && (
+              <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <PanelHeader
+                  title="Usuários cadastrados"
+                  subtitle={`Total atual: ${users.length}`}
+                  action={<StatusSummary active={summary?.activeUsers ?? 0} inactive={summary?.inactiveUsers ?? 0} />}
+                />
 
-              <div className="max-w-full overflow-x-auto overscroll-x-contain">
-                <table className="w-full min-w-[960px] table-fixed text-left text-[13px]">
-                  <colgroup>
-                    <col className="w-[17%]" />
-                    <col className="w-[16%]" />
-                    <col className="w-[17%]" />
-                    <col className="w-[8%]" />
-                    <col className="w-[13%]" />
-                    <col className="w-[15%]" />
-                    <col className="w-[7%]" />
-                    <col className="w-[7%]" />
-                  </colgroup>
-                  <thead className="border-y border-slate-100 bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3">Usuário</th>
-                      <th className="px-4 py-3">Empresa</th>
-                      <th className="px-4 py-3">Perfil</th>
-                      <th className="px-4 py-3">Criado em</th>
-                      <th className="px-4 py-3">Último acesso</th>
-                      <th className="px-4 py-3">Vencimento</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {isLoading ? (
-                      <TableState colSpan={8} message="Carregando usuários..." />
-                    ) : filteredUsers.length === 0 ? (
-                      <TableState colSpan={8} message="Nenhum usuário encontrado." />
-                    ) : (
-                      filteredUsers.map((item) => (
-                        <tr key={item.id} className="bg-white transition hover:bg-slate-50">
-                          <td className="px-4 py-4">
-                            <p className="truncate font-black text-slate-900">{item.name}</p>
-                            <p className="mt-1 truncate text-xs font-semibold text-slate-500">
+                <div className="max-w-full overflow-x-auto overscroll-x-contain">
+                  <table className="w-full min-w-[960px] table-fixed text-left text-[13px]">
+                    <colgroup>
+                      <col className="w-[17%]" />
+                      <col className="w-[16%]" />
+                      <col className="w-[17%]" />
+                      <col className="w-[8%]" />
+                      <col className="w-[13%]" />
+                      <col className="w-[15%]" />
+                      <col className="w-[7%]" />
+                      <col className="w-[7%]" />
+                    </colgroup>
+                    <thead>
+                      <tr className="border-b border-slate-100 text-xs font-black uppercase tracking-wider text-slate-400">
+                        <th className="px-4 py-4">Empresa</th>
+                        <th className="px-4 py-4">Usuário</th>
+                        <th className="px-4 py-4">E-mail</th>
+                        <th className="px-4 py-4">Perfil</th>
+                        <th className="px-4 py-4">Cadastrado em</th>
+                        <th className="px-4 py-4">Último acesso</th>
+                        <th className="px-4 py-4">Vencimento comercial</th>
+                        <th className="px-4 py-4">Status</th>
+                        <th className="sticky right-0 bg-white px-3 py-4 text-right shadow-[-10px_0_16px_rgba(248,250,252,0.88)]"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-semibold text-slate-800">
+                      {isLoading ? (
+                        <tr>
+                          <td colSpan={9} className="px-4 py-8">
+                            <EmptyPanel message="Carregando usuários..." />
+                          </td>
+                        </tr>
+                      ) : filteredUsers.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="px-4 py-8">
+                            <EmptyPanel message="Nenhum usuário encontrado." />
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredUsers.map((item) => (
+                          <tr key={item.id} className="hover:bg-slate-50/50">
+                            <td className="px-4 py-4">
+                              <span className="block font-black text-slate-900">
+                                {getCompanyName(item.company).toUpperCase()}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4">
+                              <span className="block font-bold text-slate-900">
+                                {item.name.toUpperCase()}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 truncate font-bold text-slate-700">
                               {item.email}
-                            </p>
-                          </td>
-                          <td className="truncate px-4 py-4 font-bold text-slate-600">
-                            {getCompanyName(item.company)}
-                          </td>
-                          <td className="px-4 py-4">
-                            <select
-                              value={item.role}
-                              onChange={(event) =>
-                                handleUpdateUserRole(
-                                  item.id,
-                                  event.target.value as AdminUserRole,
-                                )
-                              }
-                              disabled={updatingUserId === item.id}
-                              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {adminRoleOptions.map((role) => (
-                                <option key={role} value={role}>
-                                  {roleLabels[role] || role}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                          <td className="px-4 py-4 font-bold text-slate-500">
-                            {formatDate(item.createdAt)}
-                          </td>
-                          <td className="px-4 py-4 font-bold text-slate-500">
-                            {item.lastLoginAt ? formatDateTime(item.lastLoginAt) : "Nunca"}
-                          </td>
-                          <td className="px-4 py-4">
-                            <div className="grid gap-2">
-                              <input
-                                type="date"
-                                value={getTrialDateInputValue(item.company)}
-                                onChange={(event) =>
-                                  handleUpdateCompanyAccessEndDate(
-                                    item.company,
-                                    event.target.value,
-                                  )
-                                }
-                                disabled={updatingCompanyId === item.company.id}
-                                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
-                              />
-                              <TrialDaysBadge company={item.company} />
+                            </td>
+                            <td className="px-4 py-4">
                               <select
-                                value={item.company.subscriptionStatus || "TRIAL"}
+                                value={item.role}
                                 onChange={(event) =>
-                                  handleUpdateCompanyCommercialStatus(
-                                    item.company,
-                                    event.target.value as SubscriptionStatus,
+                                  handleUpdateUserRole(
+                                    item.id,
+                                    event.target.value as AdminUserRole,
                                   )
                                 }
-                                disabled={updatingCompanyId === item.company.id}
-                                className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                disabled={updatingUserId === item.id}
+                                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
                               >
-                                {commercialStatusOptions.map((status) => (
-                                  <option key={status} value={status}>
-                                    {getSubscriptionLabel({ subscriptionStatus: status })}
+                                {adminRoleOptions.map((role) => (
+                                  <option key={role} value={role}>
+                                    {roleLabels[role] || role}
                                   </option>
                                 ))}
                               </select>
-                            </div>
-                          </td>
-                          <td className="px-4 py-4">
-                            <StatusBadge active={item.isActive} />
-                          </td>
-                          <td className="sticky right-0 bg-white px-3 py-4 text-right shadow-[-10px_0_16px_rgba(248,250,252,0.88)]">
-                            <AdminUserActionsMenu
-                              isOpen={openUserActionsId === item.id}
-                              isUpdatingCompany={updatingCompanyId === item.company.id}
-                              isUpdatingUser={updatingUserId === item.id}
-                              item={item}
-                              onClose={() => setOpenUserActionsId("")}
-                              onOpenChange={(isOpen) =>
-                                setOpenUserActionsId(isOpen ? item.id : "")
-                              }
-                              onOpenHistory={(company) => {
-                                setOpenUserActionsId("");
-                                void handleOpenCommercialHistory(company);
-                              }}
-                              onQuickAction={(company, action) => {
-                                setOpenUserActionsId("");
-                                void handleQuickCommercialAction(company, action);
-                              }}
-                              onToggleUserStatus={(userItem) => {
-                                setOpenUserActionsId("");
-                                void handleToggleUserStatus(userItem);
-                              }}
-                            />
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
+                            </td>
+                            <td className="px-4 py-4 font-bold text-slate-500">
+                              {formatDate(item.createdAt)}
+                            </td>
+                            <td className="px-4 py-4 font-bold text-slate-500">
+                              {item.lastLoginAt ? formatDateTime(item.lastLoginAt) : "Nunca"}
+                            </td>
+                            <td className="px-4 py-4">
+                              <div className="grid gap-2">
+                                <input
+                                  type="date"
+                                  value={getTrialDateInputValue(item.company)}
+                                  onChange={(event) =>
+                                    handleUpdateCompanyAccessEndDate(
+                                      item.company,
+                                      event.target.value,
+                                    )
+                                  }
+                                  disabled={updatingCompanyId === item.company.id}
+                                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                />
+                                <TrialDaysBadge company={item.company} />
+                                <select
+                                  value={item.company.subscriptionStatus || "TRIAL"}
+                                  onChange={(event) =>
+                                    handleUpdateCompanyCommercialStatus(
+                                      item.company,
+                                      event.target.value as SubscriptionStatus,
+                                    )
+                                  }
+                                  disabled={updatingCompanyId === item.company.id}
+                                  className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {commercialStatusOptions.map((status) => (
+                                    <option key={status} value={status}>
+                                      {getSubscriptionLabel({ subscriptionStatus: status })}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </td>
+                            <td className="px-4 py-4">
+                              <StatusBadge active={item.isActive} />
+                            </td>
+                            <td className="sticky right-0 bg-white px-3 py-4 text-right shadow-[-10px_0_16px_rgba(248,250,252,0.88)]">
+                              <AdminUserActionsMenu
+                                isOpen={openUserActionsId === item.id}
+                                isUpdatingCompany={updatingCompanyId === item.company.id}
+                                isUpdatingUser={updatingUserId === item.id}
+                                item={item}
+                                onClose={() => setOpenUserActionsId("")}
+                                onOpenChange={(isOpen) =>
+                                  setOpenUserActionsId(isOpen ? item.id : "")
+                                }
+                                onOpenHistory={(company) => {
+                                  setOpenUserActionsId("");
+                                  void handleOpenCommercialHistory(company);
+                                }}
+                                onQuickAction={(company, action) => {
+                                  setOpenUserActionsId("");
+                                  void handleQuickCommercialAction(company, action);
+                                }}
+                                onToggleUserStatus={(userItem) => {
+                                  setOpenUserActionsId("");
+                                  void handleToggleUserStatus(userItem);
+                                }}
+                              />
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+
+            {activeTab === "avancado" && (
+              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h3 className="text-lg font-black text-slate-900 mb-2">Configurações Avançadas e Diagnóstico</h3>
+                <p className="text-sm text-slate-500 mb-6">Operações críticas e métricas do sistema.</p>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-xl border border-slate-100 p-4 bg-slate-50">
+                    <h4 className="font-bold text-slate-800 mb-1">Status da API e Banco de Dados</h4>
+                    <p className="text-xs text-slate-500 font-semibold mb-3">Conexão ativa com o banco PostgreSQL local.</p>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 border border-emerald-100">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                      Conectado & Operacional
+                    </span>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-100 p-4 bg-slate-50">
+                    <h4 className="font-bold text-slate-800 mb-1">Recarga Forçada do Painel</h4>
+                    <p className="text-xs text-slate-500 font-semibold mb-3">Sincroniza novamente todos os usuários e empresas do servidor.</p>
+                    <button
+                      type="button"
+                      onClick={loadAdminData}
+                      disabled={isLoading}
+                      className="rounded-xl bg-orange-500 hover:bg-orange-600 px-4 py-2 text-xs font-black text-white transition disabled:opacity-50"
+                    >
+                      {isLoading ? "Recarregando..." : "Sincronizar Agora"}
+                    </button>
+                  </div>
+                </div>
+              </section>
+            )}
           </>
         )}
       </div>

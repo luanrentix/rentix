@@ -14,7 +14,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import {
   requestPasswordResetRequest,
@@ -101,6 +101,14 @@ export default function LoginPage() {
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPasswordRecoveryOpen, setIsPasswordRecoveryOpen] = useState(false);
+  const [isTrialLoginNoticeOpen, setIsTrialLoginNoticeOpen] = useState(false);
+  const errorCloseButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (authError && errorCloseButtonRef.current) {
+      errorCloseButtonRef.current.focus();
+    }
+  }, [authError]);
   const [passwordRecoveryStep, setPasswordRecoveryStep] = useState<
     "request" | "reset" | "sent" | "success"
   >("request");
@@ -151,6 +159,11 @@ export default function LoginPage() {
   }
 
   async function handleLogin() {
+    if (authError) {
+      setAuthError(false);
+      return;
+    }
+
     if (!email.trim() || !password) {
       showAuthError("Dados incompletos", "Informe e-mail e senha para entrar.");
       return;
@@ -496,6 +509,7 @@ export default function LoginPage() {
               </div>
 
               <button
+                ref={errorCloseButtonRef}
                 type="button"
                 onClick={() => setAuthError(false)}
                 className="mt-5 h-12 w-full rounded-2xl bg-[#ff4b00] text-sm font-black text-white shadow-[0_12px_24px_rgba(255,75,0,0.24)] transition hover:bg-[#e94400]"

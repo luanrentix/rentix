@@ -72,6 +72,7 @@ type Person = {
   isTenant: boolean;
   status: PersonStatus;
   createdAt: string;
+  photo?: string | null;
 };
 
 type PersonFormData = {
@@ -91,6 +92,7 @@ type PersonFormData = {
   reference: string;
   isTenant: boolean;
   status: PersonStatus;
+  photo: string | null;
 };
 
 type PersonModalDraft = PersonFormData & {
@@ -145,6 +147,7 @@ const emptyFormData: PersonFormData = {
   reference: "",
   isTenant: true,
   status: "active",
+  photo: null,
 };
 
 function convertApiTypeToPersonType(type: ApiPersonType): PersonType {
@@ -181,7 +184,16 @@ function mapApiPersonToPerson(apiPerson: ApiPerson): Person {
     isTenant: apiPerson.isTenant !== false,
     status: convertApiStatusToPersonStatus(apiPerson.status),
     createdAt: apiPerson.createdAt,
+    photo: apiPerson.photo,
   };
+}
+
+function personHasActiveContract(personId: string, contracts: ApiContract[]): boolean {
+  return contracts.some(
+    (contract) =>
+      contract.tenantId === personId &&
+      contract.status === "ACTIVE"
+  );
 }
 
 function formatDocument(value: string, type: PersonType) {
@@ -316,6 +328,7 @@ export default function PeoplePage() {
   const [isModalMinimized, setIsModalMinimized] = useState(false);
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [formData, setFormData] = useState<PersonFormData>(emptyFormData);
+  const [editActiveTab, setEditActiveTab] = useState("identificacao");
   const [isLoadingPeople, setIsLoadingPeople] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSearchingZipCode, setIsSearchingZipCode] = useState(false);
@@ -542,6 +555,7 @@ export default function PeoplePage() {
 
   function openEditModal(person: Person) {
     const addressData = parsePersonAddress(person.address);
+    setEditActiveTab("identificacao");
 
     clearMinimizedModalState("people");
     setEditingPersonId(person.id);
@@ -562,6 +576,7 @@ export default function PeoplePage() {
       reference: addressData.reference,
       isTenant: person.isTenant,
       status: person.status,
+      photo: person.photo || null,
     });
     setPageError(null);
     setZipCodeError(null);
@@ -686,6 +701,11 @@ export default function PeoplePage() {
 
     if (!companyId) {
       setPageError("Empresa do usuário não encontrada. Faça login novamente.");
+      return;
+    }
+
+    if (formData.status === "inactive" && editingPersonId && personHasActiveContract(editingPersonId, contracts)) {
+      setPageError("Não é possível inativar esta pessoa pois ela possui um contrato ativo vinculado.");
       return;
     }
 
@@ -1104,15 +1124,6 @@ export default function PeoplePage() {
                             Editar
                           </button>
 
-                          {person.status === "active" && (
-                            <button
-                              type="button"
-                              onClick={() => openInactivateModal(person)}
-                              className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600 transition hover:bg-red-100"
-                            >
-                              Inativar
-                            </button>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -1336,251 +1347,266 @@ export default function PeoplePage() {
               </div>
             </div>
 
+            {/* Navegação por Abas */}
+            <div className="flex border-b border-slate-100 bg-slate-50/50 px-8 gap-2 overflow-x-auto shrink-0">
+              {[
+                { id: "identificacao", label: "Identificação", icon: "👤" },
+                { id: "contato", label: "Contato", icon: "📞" },
+                { id: "endereco", label: "Endereço", icon: "📍" },
+                { id: "foto", label: "Foto (Em Breve)", icon: "📷" }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setEditActiveTab(tab.id)}
+                  className={`py-4 px-4 font-black text-sm flex items-center gap-2 border-b-2 transition shrink-0 ${
+                    editActiveTab === tab.id
+                      ? "border-orange-500 text-orange-600 bg-white"
+                      : "border-transparent text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  <span>{tab.icon}</span>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
             <form onSubmit={handleSubmit} className="min-h-0 flex-1 overflow-y-auto">
               <div className="px-8 py-6">
-                <div className="grid grid-cols-1 gap-x-4 gap-y-4 md:grid-cols-2">
-                  <FormField label="Nome / Razão social" required>
-                    <input
-                      value={formData.name}
-                      onChange={(event) => updateFormData("name", event.target.value)}
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                    />
-                  </FormField>
-
-                  <FormField label="Tipo de pessoa">
-                    <select
-                      value={formData.type}
-                      onChange={(event) => {
-                        const nextType = event.target.value as PersonType;
-
-                        setFormData((currentFormData) => ({
-                          ...currentFormData,
-                          type: nextType,
-                          document: "",
-                          stateRegistration: "",
-                          identityNumber: "",
-                        }));
-
-                        setCnpjError(null);
-                      }}
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                    >
-                      <option value="individual">Pessoa física</option>
-                      <option value="company">Pessoa jurídica</option>
-                    </select>
-                  </FormField>
-
-                  <FormField label={formData.type === "individual" ? "CPF" : "CNPJ"} required>
-                    <div
-                      className={
-                        formData.type === "company"
-                          ? "grid grid-cols-[1fr_auto] gap-3"
-                          : ""
-                      }
-                    >
+                {editActiveTab === "identificacao" && (
+                  <div className="grid grid-cols-1 gap-x-4 gap-y-4 md:grid-cols-2">
+                    <FormField label="Nome / Razão social" required>
                       <input
-                        value={formData.document}
+                        value={formData.name}
+                        onChange={(event) => updateFormData("name", event.target.value)}
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                      />
+                    </FormField>
+
+                    <FormField label="Tipo de pessoa">
+                      <select
+                        value={formData.type}
+                        onChange={(event) => {
+                          const nextType = event.target.value as PersonType;
+                          setFormData((currentFormData) => ({
+                            ...currentFormData,
+                            type: nextType,
+                            document: "",
+                            stateRegistration: "",
+                            identityNumber: "",
+                          }));
+                          setCnpjError(null);
+                        }}
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                      >
+                        <option value="individual">Pessoa física</option>
+                        <option value="company">Pessoa jurídica</option>
+                      </select>
+                    </FormField>
+
+                    <FormField label={formData.type === "individual" ? "CPF" : "CNPJ"} required>
+                      <div className={formData.type === "company" ? "grid grid-cols-[1fr_auto] gap-3" : ""}>
+                        <input
+                          value={formData.document}
+                          onChange={(event) =>
+                            updateFormData("document", formatDocument(event.target.value, formData.type))
+                          }
+                          placeholder={formData.type === "individual" ? "000.000.000-00" : "00.000.000/0000-00"}
+                          className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                        />
+                        {formData.type === "company" && (
+                          <button
+                            type="button"
+                            onClick={handleSearchCnpj}
+                            disabled={isSearchingCnpj}
+                            className="flex h-11 items-center gap-2 rounded-2xl border border-orange-200 bg-white px-4 text-xs font-black text-orange-600 transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-70"
+                          >
+                            {isSearchingCnpj ? (
+                              <LoaderCircle className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Search className="h-4 w-4" />
+                            )}
+                            {isSearchingCnpj ? "Buscando..." : "Buscar CNPJ"}
+                          </button>
+                        )}
+                      </div>
+                    </FormField>
+
+                    <FormField label={formData.type === "individual" ? "RG / Identidade" : "Inscrição estadual"}>
+                      <input
+                        value={formData.type === "individual" ? formData.identityNumber : formData.stateRegistration}
                         onChange={(event) =>
-                          updateFormData(
-                            "document",
-                            formatDocument(event.target.value, formData.type)
-                          )
-                        }
-                        placeholder={
                           formData.type === "individual"
-                            ? "000.000.000-00"
-                            : "00.000.000/0000-00"
+                            ? updateFormData("identityNumber", event.target.value)
+                            : updateFormData("stateRegistration", event.target.value)
                         }
+                        placeholder={formData.type === "individual" ? "RG / Órgão emissor" : "Inscrição estadual"}
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                      />
+                    </FormField>
+
+                    <FormField label="Status">
+                      <select
+                        value={formData.status}
+                        onChange={(event) => {
+                          const newStatus = event.target.value as PersonStatus;
+                          if (newStatus === "inactive" && editingPersonId && personHasActiveContract(editingPersonId, contracts)) {
+                            alert("Não é possível inativar esta pessoa pois ela possui um contrato ativo vinculado.");
+                            return;
+                          }
+                          updateFormData("status", newStatus);
+                        }}
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                      >
+                        <option value="active">Ativo</option>
+                        <option value="inactive">Inativo</option>
+                      </select>
+                    </FormField>
+
+                    <div className="md:col-span-2">
+                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-orange-200 hover:bg-orange-50">
+                        <input
+                          type="checkbox"
+                          checked={formData.isTenant}
+                          onChange={(event) =>
+                            setFormData((currentFormData) => ({
+                              ...currentFormData,
+                              isTenant: event.target.checked,
+                            }))
+                          }
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                        />
+                        <span>
+                          <span className="block text-sm font-black text-slate-900">
+                            Marcar como inquilino
+                          </span>
+                          <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500">
+                            Marcado aparece para seleção em contratos. Desmarcado continua disponível para contas a receber, contas a pagar e exclusão quando não houver movimentações.
+                          </span>
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {editActiveTab === "contato" && (
+                  <div className="grid grid-cols-1 gap-x-4 gap-y-4 md:grid-cols-2">
+                    <FormField label="Telefone">
+                      <input
+                        value={formData.phone}
+                        onChange={(event) => updateFormData("phone", formatPhone(event.target.value))}
+                        placeholder="(00) 00000-0000"
                         className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                       />
+                    </FormField>
 
-                      {formData.type === "company" && (
+                    <FormField label="E-mail">
+                      <input
+                        value={formData.email}
+                        onChange={(event) => updateFormData("email", event.target.value)}
+                        placeholder="email@exemplo.com"
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                      />
+                    </FormField>
+                  </div>
+                )}
+
+                {editActiveTab === "endereco" && (
+                  <div className="grid grid-cols-1 gap-x-4 gap-y-4 md:grid-cols-2">
+                    <FormField label="CEP">
+                      <div className="grid grid-cols-[1fr_auto] gap-3">
+                        <input
+                          value={formData.zipCode}
+                          onChange={(event) => updateFormData("zipCode", formatZipCode(event.target.value))}
+                          placeholder="00000-000"
+                          className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                        />
                         <button
                           type="button"
-                          onClick={handleSearchCnpj}
-                          disabled={isSearchingCnpj}
+                          onClick={handleSearchZipCode}
+                          disabled={isSearchingZipCode}
                           className="flex h-11 items-center gap-2 rounded-2xl border border-orange-200 bg-white px-4 text-xs font-black text-orange-600 transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-70"
                         >
-                          {isSearchingCnpj ? (
+                          {isSearchingZipCode ? (
                             <LoaderCircle className="h-4 w-4 animate-spin" />
                           ) : (
                             <Search className="h-4 w-4" />
                           )}
-                          {isSearchingCnpj ? "Buscando..." : "Buscar CNPJ"}
+                          {isSearchingZipCode ? "Buscando..." : "Buscar CEP"}
                         </button>
-                      )}
-                    </div>
-                  </FormField>
+                      </div>
+                    </FormField>
 
-                  <FormField
-                    label={
-                      formData.type === "individual"
-                        ? "RG / Identidade"
-                        : "Inscrição estadual"
-                    }
-                  >
-                    <input
-                      value={
-                        formData.type === "individual"
-                          ? formData.identityNumber
-                          : formData.stateRegistration
-                      }
-                      onChange={(event) =>
-                        formData.type === "individual"
-                          ? updateFormData("identityNumber", event.target.value)
-                          : updateFormData("stateRegistration", event.target.value)
-                      }
-                      placeholder={
-                        formData.type === "individual"
-                          ? "RG / Órgão emissor"
-                          : "Inscrição estadual"
-                      }
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                    />
-                  </FormField>
-
-                  <FormField label="Telefone">
-                    <input
-                      value={formData.phone}
-                      onChange={(event) =>
-                        updateFormData("phone", formatPhone(event.target.value))
-                      }
-                      placeholder="(00) 00000-0000"
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                    />
-                  </FormField>
-
-                  <FormField label="E-mail">
-                    <input
-                      value={formData.email}
-                      onChange={(event) => updateFormData("email", event.target.value)}
-                      placeholder="email@exemplo.com"
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                    />
-                  </FormField>
-
-                  <FormField label="CEP">
-                    <div className="grid grid-cols-[1fr_auto] gap-3">
+                    <FormField label="Cidade">
                       <input
-                        value={formData.zipCode}
-                        onChange={(event) =>
-                          updateFormData("zipCode", formatZipCode(event.target.value))
-                        }
-                        placeholder="00000-000"
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                        value={formData.city}
+                        onChange={(event) => updateFormData("city", event.target.value)}
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                       />
+                    </FormField>
 
-                      <button
-                        type="button"
-                        onClick={handleSearchZipCode}
-                        disabled={isSearchingZipCode}
-                        className="flex h-11 items-center gap-2 rounded-2xl border border-orange-200 bg-white px-4 text-xs font-black text-orange-600 transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-70"
-                      >
-                        {isSearchingZipCode ? (
-                          <LoaderCircle className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Search className="h-4 w-4" />
-                        )}
-                        {isSearchingZipCode ? "Buscando..." : "Buscar CEP"}
-                      </button>
-                    </div>
-                  </FormField>
-
-                  <FormField label="Cidade">
-                    <input
-                      value={formData.city}
-                      onChange={(event) => updateFormData("city", event.target.value)}
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                    />
-                  </FormField>
-
-                  <FormField label="UF">
-                    <input
-                      value={formData.state}
-                      onChange={(event) =>
-                        updateFormData("state", event.target.value)
-                      }
-                      maxLength={2}
-                      placeholder="RO"
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                    />
-                  </FormField>
-
-                  <FormField label="Endereço">
-                    <input
-                      value={formData.address}
-                      onChange={(event) => updateFormData("address", event.target.value)}
-                      placeholder="Rua, avenida, travessa..."
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                    />
-                  </FormField>
-
-                  <FormField label="Número">
-                    <input
-                      value={formData.addressNumber}
-                      onChange={(event) =>
-                        updateFormData("addressNumber", event.target.value)
-                      }
-                      placeholder="Nº"
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                    />
-                  </FormField>
-
-                  <FormField label="Bairro">
-                    <input
-                      value={formData.district}
-                      onChange={(event) => updateFormData("district", event.target.value)}
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                    />
-                  </FormField>
-
-                  <FormField label="Referência">
-                    <input
-                      value={formData.reference}
-                      onChange={(event) => updateFormData("reference", event.target.value)}
-                      placeholder="Ponto de referência"
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                    />
-                  </FormField>
-
-                  <FormField label="Status">
-                    <select
-                      value={formData.status}
-                      onChange={(event) =>
-                        updateFormData("status", event.target.value as PersonStatus)
-                      }
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                    >
-                      <option value="active">Ativo</option>
-                      <option value="inactive">Inativo</option>
-                    </select>
-                  </FormField>
-
-                  <div className="md:col-span-2">
-                    <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-orange-200 hover:bg-orange-50">
+                    <FormField label="UF">
                       <input
-                        type="checkbox"
-                        checked={formData.isTenant}
-                        onChange={(event) =>
-                          setFormData((currentFormData) => ({
-                            ...currentFormData,
-                            isTenant: event.target.checked,
-                          }))
-                        }
-                        className="mt-1 h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                        value={formData.state}
+                        onChange={(event) => updateFormData("state", event.target.value)}
+                        maxLength={2}
+                        placeholder="RO"
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                       />
+                    </FormField>
 
-                      <span>
-                        <span className="block text-sm font-black text-slate-900">
-                          Marcar como inquilino
-                        </span>
-                        <span className="mt-1 block text-xs font-semibold leading-5 text-slate-500">
-                          Marcado aparece para seleção em contratos. Desmarcado continua disponível para contas a receber, contas a pagar e exclusão quando não houver movimentações.
-                        </span>
-                      </span>
-                    </label>
+                    <FormField label="Endereço">
+                      <input
+                        value={formData.address}
+                        onChange={(event) => updateFormData("address", event.target.value)}
+                        placeholder="Rua, avenida, travessa..."
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                      />
+                    </FormField>
+
+                    <FormField label="Número">
+                      <input
+                        value={formData.addressNumber}
+                        onChange={(event) => updateFormData("addressNumber", event.target.value)}
+                        placeholder="Nº"
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                      />
+                    </FormField>
+
+                    <FormField label="Bairro">
+                      <input
+                        value={formData.district}
+                        onChange={(event) => updateFormData("district", event.target.value)}
+                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                      />
+                    </FormField>
+
+                    <div className="md:col-span-2">
+                      <FormField label="Referência">
+                        <input
+                          value={formData.reference}
+                          onChange={(event) => updateFormData("reference", event.target.value)}
+                          placeholder="Ponto de referência"
+                          className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                        />
+                      </FormField>
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {editActiveTab === "foto" && (
+                  <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50/50 p-12 text-center">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50 text-orange-500 mb-4 text-2xl">
+                      🔒
+                    </div>
+                    <h4 className="text-base font-black text-slate-800">
+                      Funcionalidade Em Breve
+                    </h4>
+                    <p className="mt-2 max-w-sm text-sm font-semibold text-slate-500 leading-relaxed">
+                      A possibilidade de incluir foto de perfil no cadastro de pessoas está sendo preparada e estará disponível em breve.
+                    </p>
+                  </div>
+                )}
 
                 {cnpjError && (
                   <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">

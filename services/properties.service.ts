@@ -60,6 +60,7 @@ export type Property = {
   garages?: number | null;
 
   description?: string | null;
+  photos?: string | null;
 
   isActive: boolean;
 
@@ -109,6 +110,7 @@ export type CreatePropertyDto = {
   garages?: number;
 
   description?: string;
+  photos?: string;
 
   isActive?: boolean;
 };

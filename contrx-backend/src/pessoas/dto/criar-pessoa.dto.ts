@@ -60,6 +60,10 @@ export class CriarPessoaDto {
   address?: string;
 
   @IsOptional()
+  @IsString()
+  photo?: string;
+
+  @IsOptional()
   @IsIn(['ACTIVE', 'INACTIVE'])
   status?: PersonStatus;
 }

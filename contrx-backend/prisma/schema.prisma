@@ -68,6 +68,7 @@ model Company {
   settings           AppSettings?
   commercialHistories CommercialHistory[]
   bankAccounts       BankAccount[]
+  supportTickets     SupportTicket[]
 
   @@map("empresas")
 }
@@ -127,6 +128,7 @@ model User {
   updatedAt DateTime @updatedAt @map("atualizado_em")
 
   company Company @relation(fields: [companyId], references: [id])
+  supportTickets SupportTicket[]
 
   @@map("usuarios")
 }
@@ -153,6 +155,7 @@ model Person {
   city    String? @map("cidade")
   state   String? @map("estado")
   address String? @map("endereco")
+  photo   String? @map("foto")
 
   createdAt DateTime @default(now()) @map("criado_em")
   updatedAt DateTime @updatedAt @map("atualizado_em")
@@ -205,6 +208,7 @@ model Property {
   garages   Int? @map("garagens")
 
   description String? @map("descricao")
+  photos      String? @map("fotos")
 
   isActive Boolean @default(true) @map("ativo")
 
@@ -569,4 +573,23 @@ model BankTransaction {
   @@index([bankAccountId])
   @@index([competenceDate])
   @@map("movimentacoes_bancarias")
+}
+
+model SupportTicket {
+  id        String   @id @default(uuid())
+  userId    String   @map("usuario_id")
+  companyId String   @map("empresa_id")
+  subject   String   @map("assunto")
+  message   String   @map("mensagem")
+  response  String?  @map("resposta")
+  status    String   @default("ABERTO") @map("status") // ABERTO, RESPONDIDO, FECHADO
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+
+  user    User    @relation(fields: [userId], references: [id])
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@index([userId])
+  @@index([companyId])
+  @@map("chamados_suporte")
 }

@@ -35,6 +35,7 @@ export class PessoasService {
         state: normalizedData.state,
         address: normalizedData.address,
         status: normalizedData.status ?? 'ACTIVE',
+        photo: normalizedData.photo || null,
       },
     });
   }
@@ -170,7 +171,8 @@ export class PessoasService {
   private normalizePersonData<
     TData extends CriarPessoaDto | AtualizarPessoaDto,
   >(data: TData) {
-    return uppercaseFields(data, [
+    const { photo, ...rest } = data as any;
+    const normalized = uppercaseFields(rest, [
       'name',
       'stateRegistration',
       'identityNumber',
@@ -178,5 +180,6 @@ export class PessoasService {
       'state',
       'address',
     ]);
+    return { ...normalized, photo };
   }
 }

@@ -2096,7 +2096,7 @@ export default function ContractsPage() {
         .contrx-contracts-page.contrx-black-theme .bg-orange-50\/50,
         .contrx-contracts-page.contrx-black-theme .bg-orange-50\/60,
         .contrx-contracts-page.contrx-black-theme .bg-orange-50\/40 {
-          background-color: rgba(249, 115, 22, 0.13) !important;
+          background-color: color-mix(in srgb, var(--primary-color) 13%, transparent) !important;
         }
 
         .contrx-contracts-page.contrx-black-theme .bg-red-50,
@@ -2138,7 +2138,7 @@ export default function ContractsPage() {
         .contrx-contracts-page.contrx-black-theme .text-orange-600,
         .contrx-contracts-page.contrx-black-theme .text-orange-700,
         .contrx-contracts-page.contrx-black-theme .text-orange-800 {
-          color: #fb923c !important;
+          color: var(--primary-color) !important;
         }
 
         .contrx-contracts-page.contrx-black-theme .text-red-600,
@@ -2190,7 +2190,7 @@ export default function ContractsPage() {
         }
 
         .contrx-contracts-page.contrx-black-theme thead {
-          background-color: rgba(249, 115, 22, 0.15) !important;
+          background-color: color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
         }
 
         .contrx-contracts-page.contrx-black-theme tbody tr:hover {
@@ -2215,7 +2215,7 @@ export default function ContractsPage() {
         .contrx-contracts-page.contrx-graphite-theme .bg-orange-50\/50,
         .contrx-contracts-page.contrx-graphite-theme .bg-orange-50\/60,
         .contrx-contracts-page.contrx-graphite-theme .bg-orange-50\/40 {
-          background-color: rgba(249, 115, 22, 0.18) !important;
+          background-color: color-mix(in srgb, var(--primary-color) 18%, transparent) !important;
         }
 
         .contrx-contracts-page.contrx-graphite-theme .text-slate-950,
@@ -2251,205 +2251,11 @@ export default function ContractsPage() {
         }
 
         .contrx-contracts-page.contrx-graphite-theme thead {
-          background-color: rgba(249, 115, 22, 0.18) !important;
+          background-color: color-mix(in srgb, var(--primary-color) 18%, transparent) !important;
         }
 
         .contrx-contracts-page.contrx-graphite-theme tbody tr:hover {
           background-color: #162a44 !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light,
-        .contrx-contracts-page .contrx-force-light,
-        .contrx-contracts-page.contrx-force-light .bg-white,
-        .contrx-contracts-page .contrx-force-light .bg-white,
-        .contrx-contracts-page.contrx-force-light .bg-slate-50,
-        .contrx-contracts-page .contrx-force-light .bg-slate-50,
-        .contrx-contracts-page.contrx-force-light .bg-slate-100,
-        .contrx-contracts-page .contrx-force-light .bg-slate-100 {
-          background-color: #ffffff !important;
-          color: #0f172a !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light .bg-slate-50,
-        .contrx-contracts-page .contrx-force-light .bg-slate-50,
-        .contrx-contracts-page.contrx-force-light .bg-slate-100,
-        .contrx-contracts-page .contrx-force-light .bg-slate-100 {
-          background-color: #f8fafc !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light .bg-orange-50,
-        .contrx-contracts-page .contrx-force-light .bg-orange-50,
-        .contrx-contracts-page.contrx-force-light .bg-orange-100,
-        .contrx-contracts-page .contrx-force-light .bg-orange-100,
-        .contrx-contracts-page.contrx-force-light .bg-orange-50\/50,
-        .contrx-contracts-page .contrx-force-light .bg-orange-50\/50,
-        .contrx-contracts-page.contrx-force-light .bg-orange-50\/60,
-        .contrx-contracts-page .contrx-force-light .bg-orange-50\/60,
-        .contrx-contracts-page.contrx-force-light .bg-orange-50\/40,
-        .contrx-contracts-page .contrx-force-light .bg-orange-50\/40 {
-          background-color: #fff7ed !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light .bg-red-50,
-        .contrx-contracts-page .contrx-force-light .bg-red-50,
-        .contrx-contracts-page.contrx-force-light .bg-red-100,
-        .contrx-contracts-page .contrx-force-light .bg-red-100 {
-          background-color: #fef2f2 !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light .bg-emerald-50,
-        .contrx-contracts-page .contrx-force-light .bg-emerald-50,
-        .contrx-contracts-page.contrx-force-light .bg-emerald-100,
-        .contrx-contracts-page .contrx-force-light .bg-emerald-100 {
-          background-color: #ecfdf5 !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light .bg-amber-50,
-        .contrx-contracts-page .contrx-force-light .bg-amber-50,
-        .contrx-contracts-page.contrx-force-light .bg-amber-100,
-        .contrx-contracts-page .contrx-force-light .bg-amber-100 {
-          background-color: #fffbeb !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light .bg-blue-100,
-        .contrx-contracts-page .contrx-force-light .bg-blue-100 {
-          background-color: #dbeafe !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light .text-white,
-        .contrx-contracts-page .contrx-force-light .text-white,
-        .contrx-contracts-page.contrx-force-light .text-slate-950,
-        .contrx-contracts-page .contrx-force-light .text-slate-950,
-        .contrx-contracts-page.contrx-force-light .text-slate-900,
-        .contrx-contracts-page .contrx-force-light .text-slate-900,
-        .contrx-contracts-page.contrx-force-light .text-slate-800,
-        .contrx-contracts-page .contrx-force-light .text-slate-800,
-        .contrx-contracts-page.contrx-force-light .text-slate-700,
-        .contrx-contracts-page .contrx-force-light .text-slate-700 {
-          color: #0f172a !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light .text-slate-600,
-        .contrx-contracts-page .contrx-force-light .text-slate-600,
-        .contrx-contracts-page.contrx-force-light .text-slate-500,
-        .contrx-contracts-page .contrx-force-light .text-slate-500,
-        .contrx-contracts-page.contrx-force-light .text-slate-400,
-        .contrx-contracts-page .contrx-force-light .text-slate-400 {
-          color: #64748b !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light .text-orange-400,
-        .contrx-contracts-page .contrx-force-light .text-orange-400,
-        .contrx-contracts-page.contrx-force-light .text-orange-500,
-        .contrx-contracts-page .contrx-force-light .text-orange-500,
-        .contrx-contracts-page.contrx-force-light .text-orange-600,
-        .contrx-contracts-page .contrx-force-light .text-orange-600,
-        .contrx-contracts-page.contrx-force-light .text-orange-700,
-        .contrx-contracts-page .contrx-force-light .text-orange-700,
-        .contrx-contracts-page.contrx-force-light .text-orange-800,
-        .contrx-contracts-page .contrx-force-light .text-orange-800 {
-          color: #ea580c !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light .text-red-300,
-        .contrx-contracts-page .contrx-force-light .text-red-300,
-        .contrx-contracts-page.contrx-force-light .text-red-600,
-        .contrx-contracts-page .contrx-force-light .text-red-600,
-        .contrx-contracts-page.contrx-force-light .text-red-700,
-        .contrx-contracts-page .contrx-force-light .text-red-700 {
-          color: #dc2626 !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light .text-emerald-700,
-        .contrx-contracts-page .contrx-force-light .text-emerald-700 {
-          color: #047857 !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light .text-amber-700,
-        .contrx-contracts-page .contrx-force-light .text-amber-700 {
-          color: #b45309 !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light .border-orange-100,
-        .contrx-contracts-page .contrx-force-light .border-orange-100,
-        .contrx-contracts-page.contrx-force-light .border-orange-200,
-        .contrx-contracts-page .contrx-force-light .border-orange-200 {
-          border-color: #fed7aa !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light .border-slate-100,
-        .contrx-contracts-page .contrx-force-light .border-slate-100,
-        .contrx-contracts-page.contrx-force-light .border-slate-200,
-        .contrx-contracts-page .contrx-force-light .border-slate-200,
-        .contrx-contracts-page.contrx-force-light .border-slate-300,
-        .contrx-contracts-page .contrx-force-light .border-slate-300,
-        .contrx-contracts-page.contrx-force-light .border-slate-700,
-        .contrx-contracts-page .contrx-force-light .border-slate-700,
-        .contrx-contracts-page.contrx-force-light .border-slate-800,
-        .contrx-contracts-page .contrx-force-light .border-slate-800 {
-          border-color: #e2e8f0 !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light input,
-        .contrx-contracts-page .contrx-force-light input,
-        .contrx-contracts-page.contrx-force-light select,
-        .contrx-contracts-page .contrx-force-light select,
-        .contrx-contracts-page.contrx-force-light textarea,
-        .contrx-contracts-page .contrx-force-light textarea {
-          background-color: #ffffff !important;
-          border-color: #e2e8f0 !important;
-          color: #334155 !important;
-          color-scheme: light !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light input::placeholder,
-        .contrx-contracts-page .contrx-force-light input::placeholder,
-        .contrx-contracts-page.contrx-force-light textarea::placeholder,
-        .contrx-contracts-page .contrx-force-light textarea::placeholder {
-          color: #94a3b8 !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light .bg-slate-900,
-        .contrx-contracts-page .contrx-force-light .bg-slate-900,
-        .contrx-contracts-page.contrx-force-light .bg-slate-950,
-        .contrx-contracts-page .contrx-force-light .bg-slate-950,
-        .contrx-contracts-page.contrx-force-light .bg-slate-800,
-        .contrx-contracts-page .contrx-force-light .bg-slate-800,
-        .contrx-contracts-page.contrx-force-light .bg-slate-700,
-        .contrx-contracts-page .contrx-force-light .bg-slate-700 {
-          background-color: #f8fafc !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light button.bg-slate-900,
-        .contrx-contracts-page .contrx-force-light button.bg-slate-900,
-        .contrx-contracts-page.contrx-force-light button.bg-slate-800,
-        .contrx-contracts-page .contrx-force-light button.bg-slate-800,
-        .contrx-contracts-page.contrx-force-light button.bg-slate-700,
-        .contrx-contracts-page .contrx-force-light button.bg-slate-700 {
-          background-color: #f1f5f9 !important;
-          color: #475569 !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light button.bg-orange-500,
-        .contrx-contracts-page .contrx-force-light button.bg-orange-500 {
-          background-color: #f97316 !important;
-          color: #ffffff !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light button.bg-orange-500:hover,
-        .contrx-contracts-page .contrx-force-light button.bg-orange-500:hover {
-          background-color: #ea580c !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light button.bg-red-500,
-        .contrx-contracts-page .contrx-force-light button.bg-red-500 {
-          background-color: #ef4444 !important;
-          color: #ffffff !important;
-        }
-
-        .contrx-contracts-page.contrx-force-light button.bg-red-500:hover,
-        .contrx-contracts-page .contrx-force-light button.bg-red-500:hover {
-          background-color: #dc2626 !important;
         }
       `}</style>
       <div data-contrx-theme={themeMode} className={`contrx-contracts-page space-y-5 ${contractsThemeClass}`}>

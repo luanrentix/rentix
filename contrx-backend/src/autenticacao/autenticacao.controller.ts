@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 
@@ -30,6 +31,13 @@ import { SystemOwnerGuard } from '../admin/system-owner.guard';
 @Controller('autenticacao')
 export class AutenticacaoController {
   constructor(private readonly authService: AutenticacaoService) {}
+
+  @Get('verificar-email')
+  @UseGuards(RateLimitGuard)
+  async checkEmail(@Query('email') email: string) {
+    const exists = await this.authService.checkEmailExists(email);
+    return { exists };
+  }
 
   @Post('register')
   @UseGuards(JwtGuardAutenticacao, SystemOwnerGuard)

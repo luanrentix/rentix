@@ -16,6 +16,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { checkEmailExistsRequest } from "@/services/auth";
 
 function getSignupErrorMessage(error: unknown) {
   if (error instanceof Error) {
@@ -49,6 +50,7 @@ export default function ExperimentSignupCard() {
   const [password, setPassword] = useState("");
   const [isEmailFocused, setIsEmailFocused] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [emailExistsError, setEmailExistsError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
@@ -57,6 +59,11 @@ export default function ExperimentSignupCard() {
   async function handleCreateAccount() {
     const normalizedEmail = email.trim();
     const phoneDigits = phone.replace(/\D/g, "");
+
+    if (emailExistsError) {
+      setErrorMessage(emailExistsError);
+      return;
+    }
 
     if (!name.trim() || !companyName.trim() || !phoneDigits || !normalizedEmail || !password) {
       setErrorMessage("Preencha nome, empresa, telefone, e-mail e senha para começar.");
@@ -147,12 +154,36 @@ export default function ExperimentSignupCard() {
               type="email"
               placeholder="E-mail profissional"
               value={email}
-              onChange={setEmail}
+              onChange={(value) => {
+                setEmail(value);
+                setEmailExistsError("");
+                setErrorMessage("");
+              }}
               autoComplete="username"
               onFocus={() => setIsEmailFocused(true)}
-              onBlur={() => setIsEmailFocused(false)}
+              onBlur={async () => {
+                setIsEmailFocused(false);
+                const normalizedEmail = email.trim();
+                if (isEmailValid && normalizedEmail) {
+                  try {
+                    const res = await checkEmailExistsRequest(normalizedEmail);
+                    if (res.exists) {
+                      setEmailExistsError("Este e-mail já possui uma conta cadastrada.");
+                    } else {
+                      setEmailExistsError("");
+                    }
+                  } catch (err) {
+                    console.error("Erro ao verificar e-mail:", err);
+                  }
+                }
+              }}
             />
-            {(isEmailFocused || (email && !isEmailValid)) && (
+            {emailExistsError && (
+              <p className="px-2 text-[11px] font-bold text-red-600">
+                {emailExistsError}
+              </p>
+            )}
+            {(isEmailFocused || (email && !isEmailValid)) && !emailExistsError && (
               <p className="px-2 text-[11px] font-bold text-orange-600">
                 Por favor, insira um e-mail válido (ex: nome@empresa.com)
               </p>

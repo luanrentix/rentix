@@ -43,7 +43,7 @@ export type CreateScheduleItemDto = {
 export type UpdateScheduleItemDto = Partial<CreateScheduleItemDto>;
 
 export async function getScheduleItems() {
-  return apiFetch<ScheduleItem[]>('/agenda');
+  return apiFetch<ScheduleItem[]>(`/agenda?_t=${Date.now()}`);
 }
 
 export async function createScheduleItem(data: CreateScheduleItemDto) {
