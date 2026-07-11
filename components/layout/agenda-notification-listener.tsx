@@ -81,7 +81,12 @@ export default function AgendaNotificationListener() {
       if (error && typeof error === "object" && "name" in error && error.name === "SessionReplacedError") {
         return;
       }
-      console.error("Erro ao verificar lembretes de agenda:", error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (errorMsg.includes("Nao foi possivel conectar a API")) {
+        console.warn("Agenda offline: O servidor backend está inacessível.");
+      } else {
+        console.error("Erro ao verificar lembretes de agenda:", error);
+      }
     }
   }, [companyId, dismissedIds, snoozedIds]);
 

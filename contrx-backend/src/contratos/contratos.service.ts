@@ -54,6 +54,8 @@ export class ContratosService {
         include: this.defaultInclude,
       });
 
+      await this.upsertContractDueScheduleItem(tx, contract);
+
       return contract;
     });
   }

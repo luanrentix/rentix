@@ -1855,7 +1855,8 @@ export default function PropertiesPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-2xl border border-slate-200">
+            <>
+              <div className="hidden lg:block overflow-x-auto rounded-2xl border border-slate-200">
               <table className="w-full min-w-[1050px] border-collapse bg-white text-left">
                 <thead className="bg-orange-50">
                   <tr>
@@ -1944,6 +1945,89 @@ export default function PropertiesPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Vista Mobile */}
+            <div className="space-y-4 lg:hidden">
+              {filteredProperties.map((property) => {
+                const currentRentalContract = getCurrentRentalContract(property, contracts);
+                return (
+                  <div
+                    key={property.id}
+                    className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3 ${
+                      !property.isActive ? "opacity-75 bg-slate-50/50" : ""
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenPropertyHistory(property)}
+                          className="block text-sm font-black uppercase text-slate-950 text-left hover:text-orange-600 hover:underline"
+                        >
+                          {property.name}
+                        </button>
+                        {property.code && (
+                          <p className="text-[11px] font-black text-orange-600 mt-0.5">
+                            Código: {property.code}
+                          </p>
+                        )}
+                      </div>
+                      <StatusBadge status={property.status} />
+                    </div>
+
+                    <div className="text-xs space-y-1.5 text-slate-600 border-t border-slate-100 pt-3">
+                      <p>
+                        <span className="font-bold text-slate-400">Categoria:</span>{" "}
+                        {getAssetCategoryLabel(property.assetCategory)} ({getPropertyTypeLabel(property.type)})
+                      </p>
+                      <p>
+                        <span className="font-bold text-slate-400">Localização:</span>{" "}
+                        {property.address || "Não informado"}, {property.city || "-"} / {property.state || "-"}
+                      </p>
+                      <p>
+                        <span className="font-bold text-slate-400">Valor de Locação:</span>{" "}
+                        <span className="font-black text-slate-950">{formatCurrency(property.rentValue)}</span>
+                      </p>
+                      
+                      {currentRentalContract && (
+                        <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-150 mt-1">
+                          <p className="text-[10px] font-black text-slate-400 uppercase">Contrato Ativo</p>
+                          <p className="font-bold text-slate-700 mt-0.5">
+                            {currentRentalContract.tenantName || "Locatário não informado"}
+                          </p>
+                          {currentRentalContract.endDate && (
+                            <p className="text-[10px] text-slate-500 mt-0.5">
+                              Vence em: {formatDate(currentRentalContract.endDate)}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+                      <ActiveBadge isActive={property.isActive} />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenPropertyHistory(property)}
+                          className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-black text-slate-600 transition hover:bg-slate-50"
+                        >
+                          Histórico
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEditProperty(property.id)}
+                          className="rounded-xl bg-orange-500 px-4 py-2 text-xs font-black text-white hover:bg-orange-600"
+                        >
+                          Editar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
           )}
         </div>
 

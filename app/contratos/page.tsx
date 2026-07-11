@@ -2326,7 +2326,8 @@ export default function ContractsPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Vista Desktop */}
+          <div className="hidden lg:block overflow-x-auto">
             <table className="w-full min-w-[900px] text-left">
               <thead className="bg-orange-50">
                 <tr>
@@ -2453,7 +2454,6 @@ export default function ContractsPage() {
                                 <ChevronDown className="h-4 w-4" />
                               </span>
                             </button>
-
                           </div>
                         </div>
                       </td>
@@ -2478,6 +2478,122 @@ export default function ContractsPage() {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Vista Mobile */}
+          <div className="space-y-4 lg:hidden">
+            {isLoadingPageData && (
+              <div className="flex h-32 items-center justify-center bg-white rounded-2xl border border-slate-200">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-orange-200 border-t-orange-600" />
+              </div>
+            )}
+
+            {!isLoadingPageData && filteredContracts.map((contract) => {
+              const displayStatus = getDisplayContractStatus(contract);
+              const receivableSummary = getContractReceivableSummary(contract);
+              const hasPendingReceivables = receivableSummary.pendingCharges.length > 0;
+              const shouldShowExpiredReceivableAlert = displayStatus === "Expired" && hasPendingReceivables;
+
+              return (
+                <div
+                  key={contract.id}
+                  className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3 ${
+                    displayStatus === "Deleted"
+                      ? "opacity-70 bg-slate-50/50"
+                      : displayStatus === "Expired"
+                        ? "border-red-200 bg-red-50/20"
+                        : displayStatus === "Expiring"
+                          ? "border-amber-200 bg-amber-50/25"
+                          : ""
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="text-sm font-black uppercase text-slate-900">
+                        {contract.propertyName || "Não informado"}
+                      </h4>
+                      <p className="text-xs text-slate-505 mt-0.5">
+                        Inquilino: <span className="font-bold text-slate-700">{contract.tenantName || "Não informado"}</span>
+                      </p>
+                    </div>
+                    <StatusBadge status={displayStatus} />
+                  </div>
+
+                  <div className="text-xs space-y-1.5 text-slate-600 border-t border-slate-100 pt-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase">Data de Início</p>
+                        <p className="font-bold mt-0.5">{formatDate(contract.startDate)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase">Data de Fim</p>
+                        <p className="font-bold mt-0.5">{formatDate(contract.endDate)}</p>
+                      </div>
+                    </div>
+
+                    {displayStatus === "Expiring" && (
+                      <p className="text-xs font-black text-amber-700">
+                        ⚠️ Vence em {getDaysUntilDate(contract.endDate)} dia(s)
+                      </p>
+                    )}
+                    {displayStatus === "Expired" && (
+                      <p className="text-xs font-black text-red-700">
+                        ⚠️ Vencido há {Math.abs(getDaysUntilDate(contract.endDate))} dia(s)
+                      </p>
+                    )}
+
+                    <div className="flex items-center justify-between pt-2">
+                      <div>
+                        <p className="text-[10px] text-slate-400 font-black uppercase">Valor do Aluguel</p>
+                        <p className="text-sm font-black text-slate-950 mt-0.5">
+                          {formatCurrency(contract.rentValue)}
+                        </p>
+                      </div>
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 text-[10px] font-black ${
+                          contract.isTemporaryRental
+                            ? "bg-orange-100 text-orange-700"
+                            : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {contract.isTemporaryRental ? "Temporário" : "Padrão"}
+                      </span>
+                    </div>
+
+                    {shouldShowExpiredReceivableAlert && (
+                      <Link
+                        href={`/contas-receber?fromContract=1&contractId=${contract.id}`}
+                        className="flex items-start gap-1.5 rounded-xl bg-red-50 p-2.5 text-[11px] font-bold leading-4 text-red-700 ring-1 ring-red-100 transition hover:bg-red-100"
+                      >
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        <span>
+                          Vencido com {receivableSummary.charges.length} contas a receber vinculadas ({receivableSummary.pendingCharges.length} em aberto).
+                        </span>
+                      </Link>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-end border-t border-slate-100 pt-3">
+                    <button
+                      type="button"
+                      onClick={(event) => handleToggleContractActions(contract.id, event)}
+                      data-contract-action-trigger
+                      className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-100 px-4 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+                      aria-expanded={openActionMenuContractId === contract.id}
+                    >
+                      Ações
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {!isLoadingPageData && filteredContracts.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm font-semibold text-slate-500">
+                Nenhum contrato encontrado.
+              </div>
+            )}
           </div>
         </div>
 

@@ -2400,7 +2400,7 @@ GERADO EM: {currentDate}`;
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="hidden lg:block overflow-x-auto">
             <table className="w-full min-w-[1080px]">
               <thead className="bg-orange-50 dark:bg-orange-950/30">
                 <tr>
@@ -2458,7 +2458,7 @@ GERADO EM: {currentDate}`;
                         {expense.personName || "Pessoa não informada"}
                       </td>
 
-                      <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500">
+                      <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-400 dark:text-slate-505">
                         {expense.propertyName || "Sem bem/ativo vinculado"}
                       </td>
 
@@ -2466,18 +2466,18 @@ GERADO EM: {currentDate}`;
                         {expense.description}
                         {expense.installmentNumber &&
                           expense.installmentTotal && (
-                            <span className="ml-2 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-1 text-xs font-bold text-slate-600 dark:text-slate-400 dark:text-slate-500">
+                            <span className="ml-2 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-1 text-xs font-bold text-slate-600 dark:text-slate-400 dark:text-slate-505">
                               {expense.installmentNumber}/
                               {expense.installmentTotal}
                             </span>
                           )}
                       </td>
 
-                      <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500">
+                      <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-400 dark:text-slate-505">
                         {expense.category || "Outros"}
                       </td>
 
-                      <td className="px-5 py-4 text-center text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500">
+                      <td className="px-5 py-4 text-center text-sm text-slate-600 dark:text-slate-400 dark:text-slate-505">
                         {formatDate(expense.dueDate || expense.date || "")}
                       </td>
 
@@ -2507,7 +2507,6 @@ GERADO EM: {currentDate}`;
                             Ações
                             <span className="text-xs">▼</span>
                           </button>
-
                         </div>
                       </td>
                     </tr>
@@ -2515,6 +2514,82 @@ GERADO EM: {currentDate}`;
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Vista Mobile */}
+          <div className="space-y-4 lg:hidden">
+            {filteredExpenses.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900">
+                Nenhuma conta a pagar encontrada.
+              </div>
+            ) : (
+              filteredExpenses.map((expense) => (
+                <div
+                  key={expense.id}
+                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3 dark:border-slate-700 dark:bg-slate-900"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="text-sm font-black uppercase text-slate-900 dark:text-slate-100">
+                        {expense.personName || "Pessoa não informada"}
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-0.5 dark:text-slate-400">
+                        {expense.propertyName || "Sem bem/ativo vinculado"}
+                      </p>
+                    </div>
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase ${getStatusClassName(
+                        expense.status,
+                      )}`}
+                    >
+                      {getStatusLabel(expense.status)}
+                    </span>
+                  </div>
+
+                  <div className="text-xs space-y-1.5 text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-3">
+                    <p>
+                      <span className="font-bold text-slate-400">Descrição:</span> {expense.description}
+                      {expense.installmentNumber && expense.installmentTotal && (
+                        <span className="ml-2 rounded-full bg-slate-105 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:text-slate-400">
+                          {expense.installmentNumber}/{expense.installmentTotal}
+                        </span>
+                      )}
+                    </p>
+                    <p>
+                      <span className="font-bold text-slate-400">Categoria:</span> {expense.category || "Outros"}
+                    </p>
+                    
+                    <div className="flex items-center justify-between pt-2">
+                      <div>
+                        <p className="text-[10px] text-slate-400 font-black uppercase">Vencimento</p>
+                        <p className="font-bold text-slate-700 dark:text-slate-300 mt-0.5">
+                          {formatDate(expense.dueDate || expense.date || "")}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 font-black uppercase text-right">Valor</p>
+                        <p className="text-sm font-black text-slate-950 dark:text-slate-100 mt-0.5">
+                          {formatCurrency(expense.amount)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end border-t border-slate-100 dark:border-slate-800 pt-3">
+                    <button
+                      type="button"
+                      onClick={(event) => handleToggleExpenseActions(expense, event)}
+                      data-payable-action-trigger
+                      aria-expanded={openActionMenuExpenseId === expense.id}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                    >
+                      Ações
+                      <span className="text-[10px]">▼</span>
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

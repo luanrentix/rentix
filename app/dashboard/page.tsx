@@ -63,6 +63,7 @@ type Contract = {
   propertyId: string;
   tenantId: string;
   startDate: string;
+  endDate?: string;
   value?: number;
   rentValue?: number;
   status: ContractStatus;
@@ -719,6 +720,44 @@ export default function DashboardPage() {
       (contract) => getContractValue(contract) <= 0,
     ).length;
 
+    // Cálculo de contratos vencidos e a vencer nos próximos 30 dias
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const expiringContracts = contracts.filter((contract) => {
+      if (contract.status !== "Active" || !contract.endDate) return false;
+      const end = new Date(contract.endDate);
+      const diffTime = end.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays >= 0 && diffDays <= 30;
+    }).length;
+
+    const expiredContracts = contracts.filter((contract) => {
+      if (contract.status !== "Active" || !contract.endDate) return false;
+      const end = new Date(contract.endDate);
+      const diffTime = end.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays < 0;
+    }).length;
+
+    if (expiredContracts > 0) {
+      alerts.push({
+        id: "expired-contracts-alert",
+        title: `${expiredContracts} contrato(s) vencido(s)`,
+        description: "Contratos ativos cuja data de término já passou. Providencie a renovação ou encerramento.",
+        level: "critical",
+      });
+    }
+
+    if (expiringContracts > 0) {
+      alerts.push({
+        id: "expiring-contracts-alert",
+        title: `${expiringContracts} contrato(s) a vencer em 30 dias`,
+        description: "Contratos ativos perto da data de término. Agende a renovação ou contato.",
+        level: "warning",
+      });
+    }
+
     if (totalProperties === 0) {
       alerts.push({
         id: "no-properties",
@@ -789,11 +828,12 @@ export default function DashboardPage() {
       });
     }
 
-    return alerts.slice(0, 4);
+    return alerts.slice(0, 6);
   }, [
     activeContractsList,
     availablePotentialRevenue,
     availableProperties,
+    contracts,
     occupancyRate,
     todayPayableMovements,
     todayPayableTotal,
@@ -1484,6 +1524,7 @@ function mapApiContractToDashboardContract(contract: ApiContract): Contract {
     propertyId: contract.propertyId,
     tenantId: contract.tenantId,
     startDate: contract.startDate,
+    endDate: contract.endDate,
     rentValue: Number(contract.rentValue || 0),
     status: mapApiContractStatusToDashboardStatus(contract.status),
   };

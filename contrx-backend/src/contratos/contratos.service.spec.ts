@@ -122,7 +122,7 @@ describe('ContratosService', () => {
     });
   });
 
-  it('cria contrato ativo sem gerar parcelas ou agenda automaticamente', async () => {
+  it('cria contrato ativo sem gerar parcelas financeiras automaticamente', async () => {
     const { service, tx } = createService({
       company: {
         findUnique: jest.fn().mockResolvedValue({ id: 'company-1' }),
@@ -151,6 +151,7 @@ describe('ContratosService', () => {
       endDate: new Date('2026-08-01T00:00:00'),
     });
     tx.contaReceber.findMany.mockResolvedValue([]);
+    tx.scheduleItem.findFirst.mockResolvedValue(null);
 
     await service.create(
       {
@@ -169,7 +170,7 @@ describe('ContratosService', () => {
 
     expect(tx.contract.create).toHaveBeenCalled();
     expect(tx.contaReceber.create).not.toHaveBeenCalled();
-    expect(tx.scheduleItem.create).not.toHaveBeenCalled();
+    expect(tx.scheduleItem.create).toHaveBeenCalled();
   });
 
   it('permite contrato temporario do mesmo bem quando o periodo nao conflita', async () => {

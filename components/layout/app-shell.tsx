@@ -569,17 +569,24 @@ export default function AppShell({ children }: AppShellProps) {
   const [unreadSupportCount, setUnreadSupportCount] = useState(0);
 
   useEffect(() => {
-    if (typeof window === "undefined" || isSystemOwner || !user) return;
+    if (typeof window === "undefined" || !user) return;
 
     async function checkSupportNotifications() {
       try {
         const supportTickets = await getChamados();
         if (Array.isArray(supportTickets)) {
-          const unread = supportTickets.filter((t) => t.status === "RESPONDIDO").length;
+          const unread = isSystemOwner
+            ? supportTickets.filter((t) => t.status === "ABERTO").length
+            : supportTickets.filter((t) => t.status === "RESPONDIDO").length;
           setUnreadSupportCount(unread);
         }
       } catch (err) {
-        console.error("Erro ao checar notificações de suporte:", err);
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        if (errorMsg.includes("Nao foi possivel conectar a API")) {
+          console.warn("Suporte offline: O servidor backend está inacessível.");
+        } else {
+          console.error("Erro ao checar notificações de suporte:", err);
+        }
       }
     }
 
@@ -1200,21 +1207,19 @@ export default function AppShell({ children }: AppShellProps) {
                 <p className="font-bold text-slate-900">{userSettings.name}</p>
               </div>
 
-              {!isSystemOwner && (
-                <Link
-                  href="/suporte"
-                  prefetch={menuLinkPrefetch}
-                  className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-50 border border-slate-200 text-slate-600 hover:bg-orange-50 hover:text-orange-600 transition"
-                  title="Chamados de Suporte"
-                >
-                  <Bell className="h-5 w-5" />
-                  {unreadSupportCount > 0 && (
-                    <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white ring-2 ring-white">
-                      {unreadSupportCount}
-                    </span>
-                  )}
-                </Link>
-              )}
+              <Link
+                href={isSystemOwner ? "/admin/chamados" : "/suporte"}
+                prefetch={menuLinkPrefetch}
+                className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-50 border border-slate-200 text-slate-600 hover:bg-orange-50 hover:text-orange-600 transition"
+                title={isSystemOwner ? "Gerenciar Chamados" : "Chamados de Suporte"}
+              >
+                <Bell className="h-5 w-5" />
+                {unreadSupportCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-black text-white ring-2 ring-white">
+                    {unreadSupportCount}
+                  </span>
+                )}
+              </Link>
 
               <button
                 type="button"

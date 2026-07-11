@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
@@ -745,6 +745,12 @@ export default function AccountsReceivablePage() {
       description: string;
       itemValue: string;
     } | null>(null);
+  const [pendingContractScheduleCustomization, setPendingContractScheduleCustomization] =
+    useState<Contract | ContractSchedulePayload | null>(null);
+  const [scheduleRespName, setScheduleRespName] = useState("Administrativo");
+  const [scheduleTime, setScheduleTime] = useState("08:00");
+  const [scheduleReminder, setScheduleReminder] = useState("1 dia antes");
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
   const [pendingDownPaymentFlow, setPendingDownPaymentFlow] =
     useState<{
       downPaymentChargeId: string;
@@ -3577,6 +3583,9 @@ export default function AccountsReceivablePage() {
 
   async function registerContractDueDateOnSchedule(
     contract: Contract | ContractSchedulePayload,
+    customRespName?: string,
+    customTime?: string,
+    customReminder?: string,
   ) {
     if (!contract.endDate) return false;
 
@@ -3615,12 +3624,12 @@ export default function AccountsReceivablePage() {
         customerName: tenantName,
         propertyName,
         date: scheduleDate,
-        time: "08:00",
+        time: customTime || "08:00",
         type: "Contrato",
         status: "scheduled",
         priority: "high",
-        responsibleName: "Administrativo",
-        reminder: "1 dia antes",
+        responsibleName: customRespName || "Administrativo",
+        reminder: customReminder || "1 dia antes",
         notes: [
           `Contrato: ${contractId}`,
           `Vencimento em ${formatDate(contract.endDate)}`,
@@ -3632,6 +3641,44 @@ export default function AccountsReceivablePage() {
     } catch (error) {
       console.warn("Nao foi possivel registrar o vencimento do contrato na agenda.", error);
       return false;
+    }
+  }
+
+  async function handleConfirmCustomSchedule() {
+    if (!pendingContractScheduleCustomization) return;
+    setIsSavingSchedule(true);
+    try {
+      const wasScheduleRegistered = await registerContractDueDateOnSchedule(
+        pendingContractScheduleCustomization,
+        scheduleRespName,
+        scheduleTime,
+        scheduleReminder,
+      );
+
+      setPendingContractScheduleCustomization(null);
+      setPendingContractScheduleNotice({
+        title: wasScheduleRegistered ? "Agenda criada" : "Agenda n�o criada",
+        description: wasScheduleRegistered
+          ? "O vencimento do contrato foi registrado na agenda de acordo com as suas prefer�ncias."
+          : "N�o foi poss�vel registrar o vencimento na agenda automaticamente.",
+        itemValue: pendingContractScheduleCustomization.propertyName || "Contrato vinculado",
+      });
+    } catch (error) {
+      console.error("Erro ao registrar agenda customizada:", error);
+    } finally {
+      setIsSavingSchedule(false);
+    }
+  }
+
+  function handleSkipCustomSchedule() {
+    const contractObj = pendingContractScheduleCustomization;
+    setPendingContractScheduleCustomization(null);
+    if (contractObj) {
+      setPendingContractScheduleNotice({
+        title: "Agenda n�o criada",
+        description: "Voc� optou por n�o criar o lembrete de vencimento na agenda.",
+        itemValue: contractObj.propertyName || "Contrato vinculado",
+      });
     }
   }
 
@@ -5684,7 +5731,7 @@ export default function AccountsReceivablePage() {
             </div>
           )}
 
-          <div className="overflow-x-auto">
+          <div className="hidden lg:block overflow-x-auto">
             <table className="w-full min-w-[980px]">
               <thead className="bg-orange-50 dark:bg-orange-950/30">
                 <tr>
@@ -5814,6 +5861,94 @@ export default function AccountsReceivablePage() {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Vista Mobile */}
+          <div className="space-y-4 lg:hidden">
+            {filteredCharges.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900">
+                Nenhuma conta a receber encontrada.
+              </div>
+            ) : (
+              filteredCharges.map((charge) => (
+                <div
+                  key={charge.id}
+                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3 dark:border-slate-700 dark:bg-slate-900"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedChargeIds.includes(String(charge.id))}
+                        onChange={() => toggleChargeSelection(String(charge.id))}
+                        aria-label={`Selecionar conta de ${charge.tenant}`}
+                        className="h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+                      />
+                      <div>
+                        <h4 className="text-sm font-black uppercase text-slate-900 dark:text-slate-100">
+                          {charge.property || "Sem bem/ativo"}
+                        </h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Inquilino: <span className="font-bold">{charge.tenant}</span>
+                        </p>
+                      </div>
+                    </div>
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase ${getChargeStatusClassName(
+                        charge,
+                      )}`}
+                    >
+                      {getChargeStatusLabel(charge)}
+                    </span>
+                  </div>
+
+                  <div className="text-xs space-y-1.5 text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-3">
+                    {charge.installmentNumber && charge.installmentTotal && (
+                      <p>
+                        <span className="font-bold text-slate-400">Parcela:</span> {charge.installmentNumber}/{charge.installmentTotal}
+                      </p>
+                    )}
+                    
+                    <div className="flex items-center justify-between pt-2">
+                      <div>
+                        <p className="text-[10px] text-slate-400 font-black uppercase">Vencimento</p>
+                        <p className="font-bold text-slate-700 dark:text-slate-300 mt-0.5">
+                          {formatDate(charge.dueDate)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 font-black uppercase text-right">Valor</p>
+                        <p className="text-sm font-black text-slate-950 dark:text-slate-100 mt-0.5">
+                          {formatCurrency(
+                            charge.status === "Paid"
+                              ? getChargePaidAmount(charge)
+                              : getChargeRemainingAmount(charge),
+                          )}
+                        </p>
+                        {hasPartialPayment(charge) && (
+                          <span className="mt-0.5 block text-[10px] font-bold text-slate-500 text-right">
+                            Recebido: {formatCurrency(getChargePaidAmount(charge))}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end border-t border-slate-100 dark:border-slate-800 pt-3">
+                    <button
+                      type="button"
+                      onClick={(event) => handleToggleChargeActions(charge, event)}
+                      data-receivable-action-trigger
+                      aria-expanded={openActionMenuChargeId === charge.id}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+                    >
+                      Ações
+                      <span className="text-[10px]">▼</span>
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -7511,6 +7646,85 @@ export default function AccountsReceivablePage() {
         />
       )}
 
+       {pendingContractScheduleCustomization && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-[2rem] border border-orange-100 bg-white p-8 shadow-2xl">
+            <div className="text-center">
+              <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50 text-xl text-orange-600">??</span>
+              <h3 className="mt-4 text-xl font-black text-slate-950">Personalizar Lembrete de Vencimento</h3>
+              <p className="mt-2 text-sm text-slate-500">
+                Defina como deseja ser notificado sobre o vencimento do contrato do im�vel{" "}
+                <span className="font-bold text-slate-800">
+                  {pendingContractScheduleCustomization.propertyName}
+                </span>.
+              </p>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-500 uppercase">Respons�vel pelo Acompanhamento</label>
+                <input
+                  type="text"
+                  value={scheduleRespName}
+                  onChange={(e) => setScheduleRespName(e.target.value)}
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Hor�rio do Alerta</label>
+                  <input
+                    type="time"
+                    value={scheduleTime}
+                    onChange={(e) => setScheduleTime(e.target.value)}
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Quando Notificar</label>
+                  <select
+                    value={scheduleReminder}
+                    onChange={(e) => setScheduleReminder(e.target.value)}
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                  >
+                    <option value="No dia">No dia do vencimento</option>
+                    <option value="1 dia antes">1 dia antes</option>
+                    <option value="2 dias antes">2 dias antes</option>
+                    <option value="3 dias antes">3 dias antes</option>
+                    <option value="4 dias antes">4 dias antes</option>
+                    <option value="5 dias antes">5 dias antes</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={handleSkipCustomSchedule}
+                disabled={isSavingSchedule}
+                className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+              >Pular</button>
+              <button
+                type="button"
+                onClick={handleConfirmCustomSchedule}
+                disabled={isSavingSchedule}
+                className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isSavingSchedule ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                    Salvando...
+                  </>
+                ) : "Confirmar e Agendar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {pendingContractScheduleNotice && (
         <ConfirmationModal
           icon="OK"
@@ -7898,3 +8112,16 @@ function ConfirmationModal({
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
