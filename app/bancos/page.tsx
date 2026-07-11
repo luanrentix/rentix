@@ -610,8 +610,7 @@ export default function BancosPage() {
 
       {/* Top Filter Card */}
       <div 
-        className="grid gap-3 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm items-end mb-6"
-        style={{ gridTemplateColumns: "repeat(6, minmax(0, 1fr))" }}
+        className="grid grid-cols-1 gap-3 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm items-end mb-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6"
       >
         <div>
           <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Conta</label>
@@ -708,8 +707,7 @@ export default function BancosPage() {
 
       {/* Metrics Cards Grid */}
       <div 
-        className="grid gap-4 mb-6"
-        style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}
+        className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2 lg:grid-cols-4"
       >
         <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3">
@@ -774,11 +772,10 @@ export default function BancosPage() {
         </div>
       ) : (
         <div 
-          className="grid gap-6"
-          style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}
+          className="grid grid-cols-1 gap-6 lg:grid-cols-4"
         >
           {/* Left Column: Bank Accounts List */}
-          <div className="space-y-4" style={{ gridColumn: "span 1 / span 1" }}>
+          <div className="space-y-4 lg:col-span-1">
             <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-black text-slate-900">Contas & Caixas</h2>
@@ -828,7 +825,7 @@ export default function BancosPage() {
                             {acc.accountNumber && ` • C/C ${acc.accountNumber}`}
                           </p>
                         </div>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                        <div className="flex gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition">
                           <button
                             onClick={() => handleToggleActiveAccount(acc)}
                             className={`p-1 rounded-lg transition ${
@@ -880,9 +877,8 @@ export default function BancosPage() {
 
           {/* Right Column: Statement & Filter */}
           <div 
-            className="space-y-4" 
+            className="space-y-4 lg:col-span-3" 
             id="print-statement-section"
-            style={{ gridColumn: "span 3 / span 3" }}
           >
             <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
               
@@ -913,100 +909,189 @@ export default function BancosPage() {
                   Nenhuma movimentação bancária encontrada no período.
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-100 text-xs font-black text-slate-400 uppercase tracking-wider">
-                        <th className="pb-3 pr-4">Data</th>
-                        <th className="pb-3 pr-4">Descrição</th>
-                        <th className="pb-3 pr-4">Conta</th>
-                        <th className="pb-3 pr-4 text-right">Valor</th>
-                        <th className="pb-3 pr-4 text-center">Status</th>
-                        <th className="pb-3 text-center print-hide">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {transactions.map((tx) => {
-                        const amount = Number(tx.amount);
-                        const isOutflow = tx.type === "OUTFLOW";
-                        return (
-                          <tr key={tx.id} className="hover:bg-slate-50/50 transition">
-                            <td className="py-3 pr-4 font-semibold text-slate-600 whitespace-nowrap">
+                <div>
+                  {/* Vista Desktop: Tabela de Transações */}
+                  <div className="hidden lg:block overflow-x-auto">
+                    <table className="w-full border-collapse text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-100 text-xs font-black text-slate-400 uppercase tracking-wider">
+                          <th className="pb-3 pr-4">Data</th>
+                          <th className="pb-3 pr-4">Descrição</th>
+                          <th className="pb-3 pr-4">Conta</th>
+                          <th className="pb-3 pr-4 text-right">Valor</th>
+                          <th className="pb-3 pr-4 text-center">Status</th>
+                          <th className="pb-3 text-center print-hide">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {transactions.map((tx) => {
+                          const amount = Number(tx.amount);
+                          const isOutflow = tx.type === "OUTFLOW";
+                          return (
+                            <tr key={tx.id} className="hover:bg-slate-50/50 transition">
+                              <td className="py-3 pr-4 font-semibold text-slate-600 whitespace-nowrap">
+                                {new Date(tx.competenceDate).toLocaleDateString("pt-BR")}
+                              </td>
+                              <td className="py-3 pr-4">
+                                <p className="font-bold text-slate-800">{tx.description}</p>
+                                {tx.category && (
+                                  <span className="inline-block mt-1 text-[10px] font-black text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                                    {tx.category}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3 pr-4 font-bold text-slate-600 whitespace-nowrap">
+                                {tx.bankAccount?.name}
+                              </td>
+                              <td className={`py-3 pr-4 text-right font-black whitespace-nowrap ${isOutflow ? "text-red-600" : "text-emerald-600"}`}>
+                                {isOutflow ? "-" : "+"} {formatCurrency(amount, tx.bankAccount?.currency)}
+                                {Number(tx.fee) > 0 && (
+                                  <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                                    Tx: {formatCurrency(Number(tx.fee), tx.bankAccount?.currency)}
+                                  </p>
+                                )}
+                              </td>
+                              <td className="py-3 pr-4 text-center whitespace-nowrap">
+                                {tx.status === "CONFIRMED" ? (
+                                  <span className="inline-flex items-center gap-1 text-xs font-black text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">
+                                    Liquidado
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-xs font-black text-orange-700 bg-orange-50 px-2.5 py-1 rounded-full">
+                                    Pendente
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3 text-center whitespace-nowrap print-hide">
+                                <div className="flex items-center justify-center gap-1">
+                                  {tx.status === "PENDING" && (
+                                    <button
+                                      onClick={() => handleReconcileTransaction(tx.id)}
+                                      className="p-1.5 hover:bg-emerald-50 rounded-lg text-emerald-600 hover:text-emerald-700 transition"
+                                      title="Liquidar / Conciliar Lançamento"
+                                    >
+                                      <CheckCircle2 className="h-4 w-4" />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handleOpenEditTransactionModal(tx)}
+                                    className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-700 transition"
+                                    title="Editar Lançamento"
+                                  >
+                                    <Edit2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="bg-slate-50 border-t-2 border-slate-100">
+                        <tr className="font-black text-sm text-slate-800">
+                          <td colSpan={3} className="py-3 px-4 rounded-bl-2xl font-black">
+                            Total
+                          </td>
+                          <td className={`py-3 pr-4 text-right font-black ${
+                            statementTotals.balance >= 0 ? "text-emerald-600" : "text-red-600"
+                          }`}>
+                            {statementTotals.balance >= 0 ? "+" : "-"} {formatCurrency(Math.abs(statementTotals.balance))}
+                          </td>
+                          <td className="py-3 pr-4 text-center text-slate-400 font-bold">
+                            —
+                          </td>
+                          <td className="py-3 text-center rounded-br-2xl print-hide text-slate-400 font-bold">
+                            —
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  {/* Vista Mobile: Cards de Transações */}
+                  <div className="space-y-3 lg:hidden">
+                    {transactions.map((tx) => {
+                      const amount = Number(tx.amount);
+                      const isOutflow = tx.type === "OUTFLOW";
+                      return (
+                        <div
+                          key={tx.id}
+                          className="rounded-2xl border border-slate-150 bg-white p-4 shadow-sm space-y-3"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-slate-500">
                               {new Date(tx.competenceDate).toLocaleDateString("pt-BR")}
-                            </td>
-                            <td className="py-3 pr-4">
-                              <p className="font-bold text-slate-800">{tx.description}</p>
+                            </span>
+                            {tx.status === "CONFIRMED" ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-black text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">
+                                Liquidado
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-black text-orange-700 bg-orange-50 px-2.5 py-0.5 rounded-full">
+                                Pendente
+                              </span>
+                            )}
+                          </div>
+
+                          <div>
+                            <p className="font-bold text-slate-800 text-sm">{tx.description}</p>
+                            <div className="flex items-center gap-2 mt-1">
                               {tx.category && (
-                                <span className="inline-block mt-1 text-[10px] font-black text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                                <span className="inline-block text-[10px] font-black text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
                                   {tx.category}
                                 </span>
                               )}
-                            </td>
-                            <td className="py-3 pr-4 font-bold text-slate-600 whitespace-nowrap">
-                              {tx.bankAccount?.name}
-                            </td>
-                            <td className={`py-3 pr-4 text-right font-black whitespace-nowrap ${isOutflow ? "text-red-600" : "text-emerald-600"}`}>
-                              {isOutflow ? "-" : "+"} {formatCurrency(amount, tx.bankAccount?.currency)}
+                              <span className="text-[11px] font-bold text-slate-400">
+                                • {tx.bankAccount?.name}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-end justify-between pt-2 border-t border-slate-100">
+                            <div>
+                              <p className="text-[10px] text-slate-400 font-black uppercase">Valor</p>
+                              <p className={`text-base font-black ${isOutflow ? "text-red-600" : "text-emerald-600"}`}>
+                                {isOutflow ? "-" : "+"} {formatCurrency(amount, tx.bankAccount?.currency)}
+                              </p>
                               {Number(tx.fee) > 0 && (
-                                <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                                <p className="text-[10px] text-slate-400 font-medium">
                                   Tx: {formatCurrency(Number(tx.fee), tx.bankAccount?.currency)}
                                 </p>
                               )}
-                            </td>
-                            <td className="py-3 pr-4 text-center whitespace-nowrap">
-                              {tx.status === "CONFIRMED" ? (
-                                <span className="inline-flex items-center gap-1 text-xs font-black text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">
-                                  Liquidado
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-xs font-black text-orange-700 bg-orange-50 px-2.5 py-1 rounded-full">
-                                  Pendente
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-3 text-center whitespace-nowrap print-hide">
-                              <div className="flex items-center justify-center gap-1">
-                                {tx.status === "PENDING" && (
-                                  <button
-                                    onClick={() => handleReconcileTransaction(tx.id)}
-                                    className="p-1.5 hover:bg-emerald-50 rounded-lg text-emerald-600 hover:text-emerald-700 transition"
-                                    title="Liquidar / Conciliar Lançamento"
-                                  >
-                                    <CheckCircle2 className="h-4 w-4" />
-                                  </button>
-                                )}
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              {tx.status === "PENDING" && (
                                 <button
-                                  onClick={() => handleOpenEditTransactionModal(tx)}
-                                  className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-700 transition"
-                                  title="Editar Lançamento"
+                                  onClick={() => handleReconcileTransaction(tx.id)}
+                                  className="p-2 hover:bg-emerald-50 rounded-xl text-emerald-600 hover:text-emerald-700 transition border border-emerald-100"
+                                  title="Liquidar / Conciliar Lançamento"
                                 >
-                                  <Edit2 className="h-4 w-4" />
+                                  <CheckCircle2 className="h-4 w-4" />
                                 </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot className="bg-slate-50 border-t-2 border-slate-100">
-                      <tr className="font-black text-sm text-slate-800">
-                        <td colSpan={3} className="py-3 px-4 rounded-bl-2xl font-black">
-                          Total
-                        </td>
-                        <td className={`py-3 pr-4 text-right font-black ${
-                          statementTotals.balance >= 0 ? "text-emerald-600" : "text-red-600"
-                        }`}>
-                          {statementTotals.balance >= 0 ? "+" : "-"} {formatCurrency(Math.abs(statementTotals.balance))}
-                        </td>
-                        <td className="py-3 pr-4 text-center text-slate-400 font-bold">
-                          —
-                        </td>
-                        <td className="py-3 text-center rounded-br-2xl print-hide text-slate-400 font-bold">
-                          —
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
+                              )}
+                              <button
+                                onClick={() => handleOpenEditTransactionModal(tx)}
+                                className="p-2 hover:bg-slate-150 rounded-xl text-slate-500 hover:text-slate-700 transition border border-slate-200 bg-slate-50"
+                                title="Editar Lançamento"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Totalizador Mobile */}
+                    <div className="rounded-2xl bg-slate-50 border border-slate-150 p-4 flex items-center justify-between">
+                      <span className="text-sm font-black text-slate-800">Saldo Geral</span>
+                      <span className={`text-base font-black ${
+                        statementTotals.balance >= 0 ? "text-emerald-600" : "text-red-600"
+                      }`}>
+                        {statementTotals.balance >= 0 ? "+" : "-"} {formatCurrency(Math.abs(statementTotals.balance))}
+                      </span>
+                    </div>
+                  </div>
 
                   {transactions.length >= limit && (
                     <div className="flex justify-center pt-4 border-t border-slate-100 mt-4 print-hide">

@@ -24,7 +24,15 @@ export class ChamadosController {
     @Body() data: CriarChamadoDto,
     @CurrentUser() user: UsuarioAutenticado,
   ) {
-    return this.chamadosService.create(data, user.id, user.companyId);
+    const isSystemOwner =
+      user.role === 'SYSTEM_OWNER' || user.role === 'DONO_SISTEMA';
+    const finalUserId =
+      isSystemOwner && data.targetUserId ? data.targetUserId : user.id;
+    const finalCompanyId =
+      isSystemOwner && data.targetCompanyId
+        ? data.targetCompanyId
+        : user.companyId;
+    return this.chamadosService.create(data, finalUserId, finalCompanyId);
   }
 
   @Get()
@@ -49,6 +57,7 @@ export class ChamadosController {
       data.action,
       data.replyText,
       user.companyId,
+      user.role,
     );
   }
 }

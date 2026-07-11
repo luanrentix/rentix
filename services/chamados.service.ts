@@ -22,6 +22,8 @@ export type SupportTicket = {
 export type CriarChamadoPayload = {
   subject: string;
   message: string;
+  targetUserId?: string;
+  targetCompanyId?: string;
 };
 
 export async function getChamados() {

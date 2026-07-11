@@ -3212,9 +3212,9 @@ export default function ConfiguracoesPage() {
                   </div>
 
                   <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                    <label className="space-y-2">
+                    <label className="space-y-2 lg:col-span-2">
                       <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                        Razão social *
+                        Razão social <span className="text-red-500">*</span>
                       </span>
                       <input
                         type="text"
@@ -3230,9 +3230,9 @@ export default function ConfiguracoesPage() {
                       />
                     </label>
 
-                    <label className="space-y-2">
+                    <label className="space-y-2 lg:col-span-1">
                       <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                        Nome fantasia *
+                        Nome fantasia <span className="text-red-500">*</span>
                       </span>
                       <input
                         type="text"
@@ -3248,9 +3248,9 @@ export default function ConfiguracoesPage() {
                       />
                     </label>
 
-                    <div className="space-y-2">
+                    <div className="space-y-2 lg:col-span-1">
                       <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                        CPF/CNPJ *
+                        CPF/CNPJ <span className="text-red-500">*</span>
                       </span>
                       <div className="flex flex-col gap-2 sm:flex-row">
                         <input
@@ -3272,14 +3272,16 @@ export default function ConfiguracoesPage() {
                           className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                         />
 
-                        <button
-                          type="button"
-                          onClick={handleSearchCompanyDocument}
-                          disabled={isDocumentLookupLoading}
-                          className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {isDocumentLookupLoading ? "Buscando..." : "Buscar CNPJ"}
-                        </button>
+                        {onlyDigits(companySettings.document).length === 14 && (
+                          <button
+                            type="button"
+                            onClick={handleSearchCompanyDocument}
+                            disabled={isDocumentLookupLoading}
+                            className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isDocumentLookupLoading ? "Buscando..." : "Buscar CNPJ"}
+                          </button>
+                        )}
                       </div>
                       {(documentLookupError || validationErrors.document) && (
                         <p className="text-xs font-bold text-red-600">
@@ -3288,7 +3290,7 @@ export default function ConfiguracoesPage() {
                       )}
                     </div>
 
-                    <label className="space-y-2">
+                    <label className="space-y-2 lg:col-span-1">
                       <span className="text-xs font-black uppercase tracking-wide text-slate-500">
                         Inscrição estadual
                       </span>
@@ -3306,7 +3308,7 @@ export default function ConfiguracoesPage() {
                       />
                     </label>
 
-                    <label className="space-y-2">
+                    <label className="space-y-2 lg:col-span-1">
                       <span className="text-xs font-black uppercase tracking-wide text-slate-500">
                         Inscrição municipal
                       </span>
@@ -3324,7 +3326,7 @@ export default function ConfiguracoesPage() {
                       />
                     </label>
 
-                    <label className="space-y-2">
+                    <label className="space-y-2 lg:col-span-1">
                       <span className="text-xs font-black uppercase tracking-wide text-slate-500">
                         Telefone
                       </span>
@@ -3342,7 +3344,7 @@ export default function ConfiguracoesPage() {
                       />
                     </label>
 
-                    <label className="space-y-2 md:col-span-2">
+                    <label className="space-y-2 lg:col-span-2">
                       <span className="text-xs font-black uppercase tracking-wide text-slate-500">
                         E-mail 
                       </span>
@@ -3525,7 +3527,7 @@ export default function ConfiguracoesPage() {
 
                       <label className="space-y-2 md:col-span-2">
                         <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                          Cidade *
+                          Cidade <span className="text-red-500">*</span>
                         </span>
                         <input
                           type="text"
@@ -3543,7 +3545,7 @@ export default function ConfiguracoesPage() {
 
                       <label className="space-y-2">
                         <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                          UF *
+                          UF <span className="text-red-500">*</span>
                         </span>
                         <input
                           type="text"
@@ -3701,7 +3703,7 @@ export default function ConfiguracoesPage() {
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                         <label className="space-y-2">
                           <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                            Nome *
+                            Nome <span className="text-red-500">*</span>
                           </span>
                           <input
                             type="text"
@@ -3719,7 +3721,7 @@ export default function ConfiguracoesPage() {
 
                         <label className="space-y-2">
                           <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-                            E-mail *
+                            E-mail <span className="text-red-500">*</span>
                           </span>
                           <input
                             type="email"

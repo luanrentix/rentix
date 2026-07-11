@@ -210,19 +210,21 @@ export default function SuportePage() {
                     </div>
                   )}
 
-                  {/* Actions for customer */}
-                  {!isSystemOwner && ticket.status === "RESPONDIDO" && (
+                   {/* Actions for customer */}
+                  {!isSystemOwner && ticket.status !== "FECHADO" && (
                     <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-                      <button
-                        onClick={() => {
-                          setRespondingTicketId(respondingTicketId === ticket.id ? null : ticket.id);
-                          setTicketResponse("");
-                        }}
-                        className="rounded-xl px-4 py-2 text-xs font-bold text-white transition hover:opacity-90"
-                        style={{ backgroundColor: "var(--primary-color)" }}
-                      >
-                        {respondingTicketId === ticket.id ? "Cancelar" : "Responder"}
-                      </button>
+                      {ticket.status === "RESPONDIDO" && (
+                        <button
+                          onClick={() => {
+                            setRespondingTicketId(respondingTicketId === ticket.id ? null : ticket.id);
+                            setTicketResponse("");
+                          }}
+                          className="rounded-xl px-4 py-2 text-xs font-bold text-white transition hover:opacity-90"
+                          style={{ backgroundColor: "var(--primary-color)" }}
+                        >
+                          {respondingTicketId === ticket.id ? "Cancelar" : "Responder"}
+                        </button>
+                      )}
                       <button
                         onClick={() => handleClienteAcao(ticket.id, "close")}
                         disabled={isReplying}

@@ -1124,14 +1124,15 @@ export default function AdminPage() {
                 <div className="max-w-full overflow-x-auto overscroll-x-contain">
                   <table className="w-full min-w-[960px] table-fixed text-left text-[13px]">
                     <colgroup>
-                      <col className="w-[17%]" />
                       <col className="w-[16%]" />
-                      <col className="w-[17%]" />
-                      <col className="w-[8%]" />
                       <col className="w-[13%]" />
-                      <col className="w-[15%]" />
+                      <col className="w-[16%]" />
+                      <col className="w-[9%]" />
+                      <col className="w-[10%]" />
+                      <col className="w-[11%]" />
+                      <col className="w-[18%]" />
                       <col className="w-[7%]" />
-                      <col className="w-[7%]" />
+                      <col className="w-[6%]" />
                     </colgroup>
                     <thead>
                       <tr className="border-b border-slate-100 text-xs font-black uppercase tracking-wider text-slate-400">
@@ -1147,7 +1148,7 @@ export default function AdminPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-semibold text-slate-800">
-                      {isLoading ? (
+                       {isLoading ? (
                         <tr>
                           <td colSpan={9} className="px-4 py-8">
                             <EmptyPanel message="Carregando usuários..." />
@@ -1185,7 +1186,7 @@ export default function AdminPage() {
                                   )
                                 }
                                 disabled={updatingUserId === item.id}
-                                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-black text-slate-700 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 {adminRoleOptions.map((role) => (
                                   <option key={role} value={role}>
@@ -1201,7 +1202,7 @@ export default function AdminPage() {
                               {item.lastLoginAt ? formatDateTime(item.lastLoginAt) : "Nunca"}
                             </td>
                             <td className="px-4 py-4">
-                              <div className="grid gap-2">
+                              <div className="grid gap-1.5">
                                 <input
                                   type="date"
                                   value={getTrialDateInputValue(item.company)}
@@ -1212,7 +1213,7 @@ export default function AdminPage() {
                                     )
                                   }
                                   disabled={updatingCompanyId === item.company.id}
-                                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                  className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-black text-slate-700 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
                                 />
                                 <TrialDaysBadge company={item.company} />
                                 <select
@@ -1224,7 +1225,7 @@ export default function AdminPage() {
                                     )
                                   }
                                   disabled={updatingCompanyId === item.company.id}
-                                  className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                  className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-black text-slate-700 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                   {commercialStatusOptions.map((status) => (
                                     <option key={status} value={status}>

@@ -138,6 +138,7 @@ export class ChamadosService {
     action: 'reply' | 'close',
     replyText: string | undefined,
     companyId: string,
+    userRole?: string,
   ) {
     const chamado = await this.prisma.supportTicket.findUnique({
       where: { id },
@@ -147,7 +148,10 @@ export class ChamadosService {
       throw new NotFoundException('Chamado não encontrado.');
     }
 
-    if (chamado.companyId !== companyId) {
+    const isSystemOwner =
+      userRole === 'SYSTEM_OWNER' || userRole === 'DONO_SISTEMA';
+
+    if (!isSystemOwner && chamado.companyId !== companyId) {
       throw new ForbiddenException('Acesso negado.');
     }
 
