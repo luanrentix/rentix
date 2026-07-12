@@ -153,3 +153,31 @@ export async function transferBalance(data: TransferBalanceDto) {
     body: JSON.stringify(data),
   });
 }
+
+export type SharedBankStatementResponse = {
+  companyName: string;
+  filterStartDate?: string | null;
+  filterEndDate?: string | null;
+  filterAccount?: string | null;
+  transactions: BankTransaction[];
+  accounts: BankAccount[];
+};
+
+export async function shareBankStatement(data: {
+  bankAccountId?: string;
+  startDate?: string;
+  endDate?: string;
+  type?: string;
+  status?: string;
+  category?: string;
+  description?: string;
+}) {
+  return apiFetch<{ id: string }>('/bancos/compartilhar', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getSharedBankStatement(id: string) {
+  return apiFetch<SharedBankStatementResponse>(`/extratos-publicos/${id}`);
+}

@@ -69,6 +69,7 @@ model Company {
   commercialHistories CommercialHistory[]
   bankAccounts       BankAccount[]
   supportTickets     SupportTicket[]
+  sharedBankStatements SharedBankStatement[]
 
   @@map("empresas")
 }
@@ -592,4 +593,23 @@ model SupportTicket {
   @@index([userId])
   @@index([companyId])
   @@map("chamados_suporte")
+}
+
+model SharedBankStatement {
+  id                String    @id @default(uuid())
+  companyId         String    @map("empresa_id")
+  bankAccountId     String?   @map("conta_bancaria_id")
+  filterStartDate   String?   @map("data_inicio")
+  filterEndDate     String?   @map("data_fim")
+  filterType        String?   @map("tipo")
+  filterStatus      String?   @map("status")
+  filterCategory    String?   @map("categoria")
+  filterDescription String?   @map("descricao")
+  expiresAt         DateTime  @map("expira_em")
+  createdAt         DateTime  @default(now()) @map("criado_em")
+
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("extratos_compartilhados")
 }

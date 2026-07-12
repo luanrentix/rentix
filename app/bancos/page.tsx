@@ -19,7 +19,8 @@ import {
   AlertCircle,
   Save,
   MinusCircle,
-  Printer
+  Printer,
+  Share2
 } from "lucide-react";
 import {
   getBankAccounts,
@@ -31,16 +32,19 @@ import {
   deleteBankTransaction,
   reconcileBankTransaction,
   transferBalance,
+  shareBankStatement,
   type BankAccount,
   type BankTransaction,
   type BankAccountType,
   type BankTransactionType,
   type BankTransactionStatus
 } from "@/services/bancos.service";
+import { openWhatsAppMessage } from "@/services/whatsapp.service";
 import { useAuth } from "@/context/AuthContext";
 import { getCompanyStorageItem } from "@/services/company-storage";
 import { brazilianBanks, type BrazilianBank } from "@/lib/brazilian-banks";
 import { formatCurrencyInput, parseCurrencyToNumber } from "@/lib/currency";
+import { getPeople, type Person } from "@/services/people.service";
 
 type LaunchTab = "DESPESA" | "RECEITA" | "TRANSFERENCIA";
 
@@ -79,6 +83,10 @@ export default function BancosPage() {
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [editingTransaction, setEditingTransaction] = useState<BankTransaction | null>(null);
   const [keepModalOpen, setKeepModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [sharePhone, setSharePhone] = useState("");
+  const [peopleList, setPeopleList] = useState<Person[]>([]);
+  const [selectedPersonId, setSelectedPersonId] = useState("");
   
   // Institution search state
   const [isBankSearchOpen, setIsBankSearchOpen] = useState(false);
@@ -148,7 +156,7 @@ export default function BancosPage() {
     setIsLoading(true);
     setError("");
     try {
-      const [apiAccounts, apiTransactions] = await Promise.all([
+      const [apiAccounts, apiTransactions, apiPeople] = await Promise.all([
         getBankAccounts(),
         getBankTransactions({
           bankAccountId: filterAccount || undefined,
@@ -159,10 +167,12 @@ export default function BancosPage() {
           category: filterCategory || undefined,
           description: filterDescription || undefined,
           take: limit
-        })
+        }),
+        getPeople(companyId)
       ]);
       setAccounts(apiAccounts);
       setTransactions(apiTransactions);
+      setPeopleList(apiPeople);
     } catch {
       setError("Não foi possível carregar os dados financeiros bancários.");
     } finally {
@@ -310,6 +320,41 @@ export default function BancosPage() {
       "Excluir Conta?",
       true
     );
+  };
+
+  const handleShareWhatsApp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sharePhone) {
+      showAlert("Informe o número do WhatsApp.", "Aviso", "warning");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const res = await shareBankStatement({
+        bankAccountId: filterAccount || undefined,
+        startDate: filterStartDate || undefined,
+        endDate: filterEndDate || undefined,
+        type: filterType || undefined,
+        status: filterStatus || undefined,
+        category: filterCategory || undefined,
+        description: filterDescription || undefined,
+      });
+
+      const url = window.location.origin + "/extrato-compartilhado/" + res.id;
+      const message = `Olá! Segue o link com o extrato financeiro solicitado (válido por 24 horas):\n\n${url}`;
+
+      openWhatsAppMessage({
+        phone: sharePhone,
+        message,
+      });
+      setIsShareModalOpen(false);
+      setSelectedPersonId("");
+    } catch (err) {
+      showAlert(getErrorMessage(err, "Erro ao gerar link de compartilhamento."), "Erro", "error");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Split transaction categories logic
@@ -568,6 +613,60 @@ export default function BancosPage() {
         display: none !important;
       }
     }
+
+    @media (min-width: 768px) {
+      .grid-filtros-fixo {
+        display: grid !important;
+        grid-template-columns: repeat(6, 1fr) !important;
+        gap: 0.75rem !important;
+      }
+      .grid-metricas-fixo {
+        display: grid !important;
+        grid-template-columns: repeat(4, 1fr) !important;
+        gap: 1rem !important;
+      }
+      .grid-conteudo-fixo {
+        display: grid !important;
+        grid-template-columns: 1fr 3fr !important;
+        gap: 1.5rem !important;
+      }
+      .coluna-esquerda-fixa {
+        grid-column: span 1 !important;
+      }
+      .coluna-direita-fixa {
+        grid-column: span 1 !important;
+      }
+      .tabela-desktop-fixa {
+        display: block !important;
+      }
+      .cards-mobile-fixo {
+        display: none !important;
+      }
+    }
+
+    @media (max-width: 767px) {
+      .grid-filtros-fixo {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 0.75rem !important;
+      }
+      .grid-metricas-fixo {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 1rem !important;
+      }
+      .grid-conteudo-fixo {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 1.5rem !important;
+      }
+      .tabela-desktop-fixa {
+        display: none !important;
+      }
+      .cards-mobile-fixo {
+        display: block !important;
+      }
+    }
   `;
 
   return (
@@ -606,7 +705,7 @@ export default function BancosPage() {
             Lançar Movimento
           </button>
           <button
-            onClick={() => handleOpenAccountModal()}
+            onClick={() => setIsAccountsListModalOpen(true)}
             className="flex h-11 items-center gap-2 rounded-xl bg-orange-500 px-5 text-sm font-black text-white shadow-sm hover:bg-orange-600 transition"
           >
             + Conta Financeira
@@ -622,8 +721,7 @@ export default function BancosPage() {
 
       {/* Top Filter Card */}
       <div 
-        className="grid grid-cols-1 gap-3 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm items-end mb-6 sm:grid-cols-2 md:grid-cols-6"
-        style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '0.75rem' }}
+        className="grid grid-cols-1 gap-3 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm items-end mb-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 grid-filtros-fixo"
       >
         <div>
           <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Conta</label>
@@ -720,8 +818,7 @@ export default function BancosPage() {
 
       {/* Metrics Cards Grid */}
       <div 
-        className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2 md:grid-cols-4"
-        style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem' }}
+        className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2 lg:grid-cols-4 grid-metricas-fixo"
       >
         <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3">
@@ -786,11 +883,10 @@ export default function BancosPage() {
         </div>
       ) : (
         <div 
-          className="grid grid-cols-1 gap-6 md:grid-cols-4"
-          style={{ display: 'grid', gridTemplateColumns: '1fr 3fr', gap: '1.5rem' }}
+          className="grid grid-cols-1 gap-6 sm:grid-cols-4 grid-conteudo-fixo"
         >
           {/* Left Column: Bank Accounts List */}
-          <div className="space-y-4 md:col-span-1" style={{ gridColumn: 'span 1' }}>
+          <div className="space-y-4 sm:col-span-1 coluna-esquerda-fixa">
             <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-black text-slate-900">Contas & Caixas</h2>
@@ -840,31 +936,6 @@ export default function BancosPage() {
                             {acc.accountNumber && ` • C/C ${acc.accountNumber}`}
                           </p>
                         </div>
-                        <div className="flex gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition">
-                          <button
-                            onClick={() => handleToggleActiveAccount(acc)}
-                            className={`p-1 rounded-lg transition ${
-                              acc.active ? "hover:bg-slate-100 text-slate-500 hover:text-slate-700" : "hover:bg-emerald-50 text-emerald-600"
-                            }`}
-                            title={acc.active ? "Desativar / Inutilizar" : "Ativar conta"}
-                          >
-                            <Power className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleOpenAccountModal(acc)}
-                            className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-700 transition"
-                            title="Editar"
-                          >
-                            <Edit2 className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteAccount(acc.id)}
-                            className="p-1 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600 transition"
-                            title="Excluir conta"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
                       </div>
 
                       <div className="mt-4 pt-3 border-t border-slate-150/55 flex items-center justify-between">
@@ -892,9 +963,8 @@ export default function BancosPage() {
 
           {/* Right Column: Statement & Filter */}
           <div 
-            className="space-y-4 md:col-span-3" 
+            className="space-y-4 sm:col-span-3 coluna-direita-fixa" 
             id="print-statement-section"
-            style={{ gridColumn: 'span 1' }}
           >
             <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
               
@@ -911,13 +981,22 @@ export default function BancosPage() {
 
               <div className="flex items-center justify-between mb-6 print-hide">
                 <h2 className="text-lg font-black text-slate-900">Extrato Financeiro</h2>
-                <button
-                  onClick={() => window.print()}
-                  className="flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-700 hover:bg-slate-50 transition shadow-sm print-hide"
-                >
-                  <Printer className="h-3.5 w-3.5" />
-                  Imprimir
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setIsShareModalOpen(true)}
+                    className="flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-700 hover:bg-slate-50 transition shadow-sm print-hide"
+                  >
+                    <Share2 className="h-3.5 w-3.5 text-orange-500" />
+                    Compartilhar
+                  </button>
+                  <button
+                    onClick={() => window.print()}
+                    className="flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-700 hover:bg-slate-50 transition shadow-sm print-hide"
+                  >
+                    <Printer className="h-3.5 w-3.5" />
+                    Imprimir
+                  </button>
+                </div>
               </div>
 
               {transactions.length === 0 ? (
@@ -927,7 +1006,7 @@ export default function BancosPage() {
               ) : (
                 <div>
                   {/* Vista Desktop: Tabela de Transações */}
-                  <div className="block overflow-x-auto">
+                  <div className="hidden sm:block overflow-x-auto tabela-desktop-fixa">
                     <table className="w-full border-collapse text-left text-sm">
                       <thead>
                         <tr className="border-b border-slate-100 text-xs font-black text-slate-400 uppercase tracking-wider">
@@ -1040,7 +1119,7 @@ export default function BancosPage() {
                   </div>
 
                   {/* Vista Mobile: Cards de Transações */}
-                  <div className="hidden">
+                  <div className="space-y-3 sm:hidden cards-mobile-fixo">
                     {transactions.map((tx) => {
                       const amount = Number(tx.amount);
                       const isOutflow = tx.type === "OUTFLOW";
@@ -1904,7 +1983,7 @@ export default function BancosPage() {
       )}
 
       {customAlert && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm" style={{ zIndex: 9999 }}>
           <div className="w-full max-w-sm overflow-hidden rounded-[2rem] border border-orange-100 bg-white p-6 shadow-2xl animate-fade-in text-center">
             <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full text-2xl font-black ${
               customAlert.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-500'
@@ -1924,7 +2003,7 @@ export default function BancosPage() {
       )}
 
       {customConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm" style={{ zIndex: 9999 }}>
           <div className="w-full max-w-sm overflow-hidden rounded-[2rem] border border-slate-100 bg-white p-6 shadow-2xl animate-fade-in text-center">
             <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full text-2xl font-black ${
               customConfirm.isDanger ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-500'
@@ -1952,6 +2031,82 @@ export default function BancosPage() {
                 Confirmar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL: COMPARTILHAR EXTRATO WHATSAPP */}
+      {isShareModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm" style={{ zIndex: 9000 }}>
+          <div className="w-full max-w-sm overflow-hidden rounded-[2rem] border border-orange-100 bg-white p-6 shadow-2xl animate-fade-in animate-duration-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-black text-slate-900">Compartilhar Extrato</h3>
+              <button
+                onClick={() => setIsShareModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleShareWhatsApp} className="mt-4 space-y-4">
+              <div>
+                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1.5">Selecionar Pessoa Cadastrada</label>
+                <select
+                  value={selectedPersonId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setSelectedPersonId(id);
+                    const person = peopleList.find((p) => p.id === id);
+                    if (person && person.phone) {
+                      setSharePhone(person.phone.replace(/\D/g, ""));
+                    }
+                  }}
+                  className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 shadow-sm outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                >
+                  <option value="">-- Selecione para preencher (opcional) --</option>
+                  {peopleList
+                    .filter((p) => p.status === "ACTIVE" && p.phone)
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.phone})
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1.5">WhatsApp do Destinatário *</label>
+                <input
+                  type="text"
+                  required
+                  value={sharePhone}
+                  onChange={(e) => {
+                    setSharePhone(e.target.value.replace(/\D/g, ""));
+                    setSelectedPersonId("");
+                  }}
+                  placeholder="Ex: 11999999999"
+                  className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 shadow-sm outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                />
+                <p className="text-[10px] text-slate-400 mt-1 font-semibold">Informe o número com DDD (apenas números)</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsShareModalOpen(false)}
+                  className="h-11 rounded-2xl bg-slate-100 text-sm font-black text-slate-700 hover:bg-slate-200 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="h-11 rounded-2xl bg-orange-500 text-sm font-black text-white hover:bg-orange-600 transition shadow-sm disabled:opacity-50"
+                >
+                  {isSaving ? "Gerando..." : "Compartilhar"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

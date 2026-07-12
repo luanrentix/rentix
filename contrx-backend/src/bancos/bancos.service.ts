@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CriarContaBancariaDto } from './dto/criar-conta-bancaria.dto';
 import { CriarMovimentacaoDto } from './dto/criar-movimentacao.dto';
 import { TransferenciaSaldoDto } from './dto/transferencia-saldo.dto';
+import { CompartilharExtratoDto } from './dto/compartilhar-extrato.dto';
 import {
   BankTransactionType,
   BankTransactionStatus,
@@ -101,7 +102,24 @@ export class BancosService {
   }
 
   async removeAccount(id: string, companyId: string) {
-    await this.findOneAccount(id, companyId);
+    const account = await this.findOneAccount(id, companyId);
+
+    const transactionsCount = await this.prisma.bankTransaction.count({
+      where: { bankAccountId: id },
+    });
+
+    if (transactionsCount > 0) {
+      throw new BadRequestException(
+        'Não é possível excluir uma conta que possui movimentações registradas. Você pode desativá-la caso o saldo esteja zerado.',
+      );
+    }
+
+    if (Number(account.currentBalance) !== 0) {
+      throw new BadRequestException(
+        'Não é possível excluir uma conta com saldo diferente de zero.',
+      );
+    }
+
     return this.prisma.bankAccount.update({
       where: { id },
       data: { deletedAt: new Date() },
@@ -466,5 +484,119 @@ export class BancosService {
 
       return { outflowTx, inflowTx };
     });
+  }
+
+  async shareStatement(dto: CompartilharExtratoDto, companyId: string) {
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+
+    return this.prisma.sharedBankStatement.create({
+      data: {
+        companyId,
+        bankAccountId: dto.bankAccountId || null,
+        filterStartDate: dto.startDate || null,
+        filterEndDate: dto.endDate || null,
+        filterType: dto.type || null,
+        filterStatus: dto.status || null,
+        filterCategory: dto.category || null,
+        filterDescription: dto.description || null,
+        expiresAt,
+      },
+    });
+  }
+
+  async findSharedStatement(id: string) {
+    const shared = await this.prisma.sharedBankStatement.findUnique({
+      where: { id },
+      include: {
+        company: true,
+      },
+    });
+
+    if (!shared) {
+      throw new NotFoundException('Extrato compartilhado não encontrado.');
+    }
+
+    if (new Date() > shared.expiresAt) {
+      throw new BadRequestException(
+        'Este link de extrato compartilhado já expirou (limite de 24 horas).',
+      );
+    }
+
+    const where: any = {
+      bankAccount: {
+        companyId: shared.companyId,
+      },
+    };
+
+    if (shared.bankAccountId) {
+      where.bankAccountId = shared.bankAccountId;
+    }
+
+    if (shared.filterStartDate || shared.filterEndDate) {
+      where.competenceDate = {};
+      if (shared.filterStartDate) {
+        where.competenceDate.gte = new Date(shared.filterStartDate);
+      }
+      if (shared.filterEndDate) {
+        where.competenceDate.lte = new Date(shared.filterEndDate);
+      }
+    }
+
+    if (shared.filterType) {
+      where.type = shared.filterType as any;
+    }
+
+    if (shared.filterStatus) {
+      where.status = shared.filterStatus as any;
+    }
+
+    if (shared.filterCategory) {
+      where.category = {
+        equals: shared.filterCategory,
+        mode: 'insensitive',
+      };
+    }
+
+    if (shared.filterDescription) {
+      where.description = {
+        contains: shared.filterDescription,
+        mode: 'insensitive',
+      };
+    }
+
+    const [transactions, accounts] = await Promise.all([
+      this.prisma.bankTransaction.findMany({
+        where,
+        include: {
+          bankAccount: {
+            select: {
+              name: true,
+              type: true,
+              currency: true,
+            },
+          },
+        },
+        orderBy: {
+          competenceDate: 'desc',
+        },
+      }),
+      this.prisma.bankAccount.findMany({
+        where: {
+          companyId: shared.companyId,
+          active: true,
+          id: shared.bankAccountId || undefined,
+        },
+      }),
+    ]);
+
+    return {
+      companyName: shared.company.tradeName,
+      filterStartDate: shared.filterStartDate,
+      filterEndDate: shared.filterEndDate,
+      filterAccount: shared.bankAccountId,
+      transactions,
+      accounts,
+    };
   }
 }

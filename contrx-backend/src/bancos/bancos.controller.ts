@@ -13,6 +13,7 @@ import { BancosService } from './bancos.service';
 import { CriarContaBancariaDto } from './dto/criar-conta-bancaria.dto';
 import { CriarMovimentacaoDto } from './dto/criar-movimentacao.dto';
 import { TransferenciaSaldoDto } from './dto/transferencia-saldo.dto';
+import { CompartilharExtratoDto } from './dto/compartilhar-extrato.dto';
 import { RequireToolPermission } from '../autenticacao/decorators/tool-permission.decorator';
 import { CurrentUser } from '../autenticacao/decorators/usuario-atual.decorator';
 import { JwtGuardAutenticacao } from '../autenticacao/guards/jwt-autenticacao.guard';
@@ -132,5 +133,13 @@ export class BancosController {
     @CurrentUser() user: UsuarioAutenticado,
   ) {
     return this.bancosService.transfer(dto, user.companyId);
+  }
+
+  @Post('compartilhar')
+  shareStatement(
+    @Body() dto: CompartilharExtratoDto,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    return this.bancosService.shareStatement(dto, user.companyId);
   }
 }
