@@ -78,6 +78,7 @@ export default function BancosPage() {
   const [newCategoryLineIndex, setNewCategoryLineIndex] = useState<number | null>(null);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [editingTransaction, setEditingTransaction] = useState<BankTransaction | null>(null);
+  const [keepModalOpen, setKeepModalOpen] = useState(false);
   
   // Institution search state
   const [isBankSearchOpen, setIsBankSearchOpen] = useState(false);
@@ -422,20 +423,31 @@ export default function BancosPage() {
       }
 
       // Reset form
-      setIsTransactionModalOpen(false);
-      setEditingTransaction(null);
-      setLaunchForm({
-        bankAccountId: "",
-        originBankAccountId: "",
-        destinationBankAccountId: "",
-        amountStr: "R$ 0,00",
-        feeStr: "R$ 0,00",
-        date: new Date().toISOString().slice(0, 10),
-        reconciled: true,
-        description: "",
-        documentNumber: "",
-        categories: [{ category: "", amountStr: "R$ 0,00" }]
-      });
+      if (keepModalOpen) {
+        setLaunchForm((prev) => ({
+          ...prev,
+          amountStr: "R$ 0,00",
+          feeStr: "R$ 0,00",
+          description: "",
+          documentNumber: "",
+          categories: [{ category: "", amountStr: "R$ 0,00" }]
+        }));
+      } else {
+        setIsTransactionModalOpen(false);
+        setEditingTransaction(null);
+        setLaunchForm({
+          bankAccountId: "",
+          originBankAccountId: "",
+          destinationBankAccountId: "",
+          amountStr: "R$ 0,00",
+          feeStr: "R$ 0,00",
+          date: new Date().toISOString().slice(0, 10),
+          reconciled: true,
+          description: "",
+          documentNumber: "",
+          categories: [{ category: "", amountStr: "R$ 0,00" }]
+        });
+      }
       loadData();
     } catch (err) {
       showAlert(getErrorMessage(err, "Erro ao realizar o lançamento financeiro."), "Erro", "error");
@@ -610,7 +622,8 @@ export default function BancosPage() {
 
       {/* Top Filter Card */}
       <div 
-        className="grid grid-cols-1 gap-3 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm items-end mb-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6"
+        className="grid grid-cols-1 gap-3 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm items-end mb-6 sm:grid-cols-2 md:grid-cols-6"
+        style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '0.75rem' }}
       >
         <div>
           <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Conta</label>
@@ -707,7 +720,8 @@ export default function BancosPage() {
 
       {/* Metrics Cards Grid */}
       <div 
-        className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2 lg:grid-cols-4"
+        className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2 md:grid-cols-4"
+        style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem' }}
       >
         <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3">
@@ -772,10 +786,11 @@ export default function BancosPage() {
         </div>
       ) : (
         <div 
-          className="grid grid-cols-1 gap-6 lg:grid-cols-4"
+          className="grid grid-cols-1 gap-6 md:grid-cols-4"
+          style={{ display: 'grid', gridTemplateColumns: '1fr 3fr', gap: '1.5rem' }}
         >
           {/* Left Column: Bank Accounts List */}
-          <div className="space-y-4 lg:col-span-1">
+          <div className="space-y-4 md:col-span-1" style={{ gridColumn: 'span 1' }}>
             <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-black text-slate-900">Contas & Caixas</h2>
@@ -877,8 +892,9 @@ export default function BancosPage() {
 
           {/* Right Column: Statement & Filter */}
           <div 
-            className="space-y-4 lg:col-span-3" 
+            className="space-y-4 md:col-span-3" 
             id="print-statement-section"
+            style={{ gridColumn: 'span 1' }}
           >
             <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
               
@@ -911,7 +927,7 @@ export default function BancosPage() {
               ) : (
                 <div>
                   {/* Vista Desktop: Tabela de Transações */}
-                  <div className="hidden lg:block overflow-x-auto">
+                  <div className="block overflow-x-auto">
                     <table className="w-full border-collapse text-left text-sm">
                       <thead>
                         <tr className="border-b border-slate-100 text-xs font-black text-slate-400 uppercase tracking-wider">
@@ -988,13 +1004,29 @@ export default function BancosPage() {
                       </tbody>
                       <tfoot className="bg-slate-50 border-t-2 border-slate-100">
                         <tr className="font-black text-sm text-slate-800">
-                          <td colSpan={3} className="py-3 px-4 rounded-bl-2xl font-black">
-                            Total
+                          <td colSpan={3} className="py-3 px-4 font-black">
+                            Total Lançamentos
                           </td>
                           <td className={`py-3 pr-4 text-right font-black ${
                             statementTotals.balance >= 0 ? "text-emerald-600" : "text-red-600"
                           }`}>
                             {statementTotals.balance >= 0 ? "+" : "-"} {formatCurrency(Math.abs(statementTotals.balance))}
+                          </td>
+                          <td className="py-3 pr-4 text-center text-slate-400 font-bold">
+                            —
+                          </td>
+                          <td className="py-3 text-center print-hide text-slate-400 font-bold">
+                            —
+                          </td>
+                        </tr>
+                        <tr className="font-black text-sm text-slate-800 border-t border-slate-150">
+                          <td colSpan={3} className="py-3 px-4 rounded-bl-2xl font-black text-slate-500">
+                            {filterAccount ? "Saldo Atual da Conta" : "Saldo Consolidado Atual"}
+                          </td>
+                          <td className={`py-3 pr-4 text-right font-black ${
+                            consolidatedBalance >= 0 ? "text-slate-900" : "text-red-600"
+                          }`}>
+                            {formatCurrency(consolidatedBalance)}
                           </td>
                           <td className="py-3 pr-4 text-center text-slate-400 font-bold">
                             —
@@ -1008,7 +1040,7 @@ export default function BancosPage() {
                   </div>
 
                   {/* Vista Mobile: Cards de Transações */}
-                  <div className="space-y-3 lg:hidden">
+                  <div className="hidden">
                     {transactions.map((tx) => {
                       const amount = Number(tx.amount);
                       const isOutflow = tx.type === "OUTFLOW";
@@ -1083,13 +1115,25 @@ export default function BancosPage() {
                     })}
 
                     {/* Totalizador Mobile */}
-                    <div className="rounded-2xl bg-slate-50 border border-slate-150 p-4 flex items-center justify-between">
-                      <span className="text-sm font-black text-slate-800">Saldo Geral</span>
-                      <span className={`text-base font-black ${
-                        statementTotals.balance >= 0 ? "text-emerald-600" : "text-red-600"
-                      }`}>
-                        {statementTotals.balance >= 0 ? "+" : "-"} {formatCurrency(Math.abs(statementTotals.balance))}
-                      </span>
+                    <div className="rounded-2xl bg-slate-50 border border-slate-150 p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-500">Movimentação no Período</span>
+                        <span className={`text-sm font-black ${
+                          statementTotals.balance >= 0 ? "text-emerald-600" : "text-red-600"
+                        }`}>
+                          {statementTotals.balance >= 0 ? "+" : "-"} {formatCurrency(Math.abs(statementTotals.balance))}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                        <span className="text-sm font-black text-slate-800">
+                          {filterAccount ? "Saldo Atual da Conta" : "Saldo Consolidado"}
+                        </span>
+                        <span className={`text-base font-black ${
+                          consolidatedBalance >= 0 ? "text-slate-900" : "text-red-600"
+                        }`}>
+                          {formatCurrency(consolidatedBalance)}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -1455,7 +1499,7 @@ export default function BancosPage() {
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/60 p-3 backdrop-blur-sm sm:items-center sm:p-4">
           <div 
             className="my-3 flex max-h-[calc(100dvh-1.5rem)] w-full max-w-lg flex-col space-y-4 overflow-hidden rounded-3xl border border-slate-100 bg-white p-4 shadow-2xl animate-fade-in sm:my-0 sm:max-h-[95vh] sm:p-6"
-            style={{ height: '620px' }}
+            style={{ height: '750px' }}
           >
             {/* Centered title with Back/Arrow left */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-shrink-0">
@@ -1741,6 +1785,23 @@ export default function BancosPage() {
                       Soma: <span className={categoriesSum === parseCurrencyToNumber(launchForm.amountStr) ? "text-emerald-600" : "text-orange-500"}>{formatCurrency(categoriesSum)}</span> / {launchForm.amountStr}
                     </span>
                   </div>
+                </div>
+              )}
+
+              {/* Keep modal open checkbox (only for new transactions) */}
+              {!editingTransaction && (
+                <div className="flex items-center gap-3 p-3 rounded-2xl bg-orange-50/40 border border-orange-100/60 mt-2">
+                  <input
+                    type="checkbox"
+                    id="keepModalOpen"
+                    checked={keepModalOpen}
+                    onChange={(e) => setKeepModalOpen(e.target.checked)}
+                    className="h-5 w-5 rounded border-slate-350 text-orange-500 focus:ring-orange-400 cursor-pointer"
+                  />
+                  <label htmlFor="keepModalOpen" className="text-xs font-bold text-slate-600 select-none cursor-pointer flex flex-col">
+                    <span className="font-black text-slate-800">Manter janela aberta</span>
+                    <span className="text-[10px] text-slate-400 mt-0.5">Mantém a conta e data selecionadas para realizar múltiplos lançamentos em sequência</span>
+                  </label>
                 </div>
               )}
             </form>
