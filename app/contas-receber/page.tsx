@@ -7615,7 +7615,39 @@ export default function AccountsReceivablePage() {
           itemLabel="Contrato vinculado"
           itemValue={
             pendingContractPrintRequest.propertyName ||
-            properties.find((property) => String(property.id) === String(pendingContra       {pendingContractScheduleCustomization && (
+            properties.find((property) => String(property.id) === String(pendingContractPrintRequest.propertyId))?.name ||
+            "Não informado"
+          }
+          details={
+            <>
+              <p>
+                Inquilino:{" "}
+                {pendingContractPrintRequest.tenantName ||
+                  tenants.find((tenant) => String(tenant.id) === String(pendingContractPrintRequest.tenantId))?.name ||
+                  "Não informado"}
+              </p>
+              <p>
+                Tipo:{" "}
+                {pendingContractPrintRequest.isTemporaryRental
+                  ? "Contrato temporário"
+                  : "Contrato padrão"}
+              </p>
+              <p>Início: {formatContractDateForTemplate(pendingContractPrintRequest.startDate)}</p>
+              <p>Fim: {formatContractDateForTemplate(pendingContractPrintRequest.endDate)}</p>
+            </>
+          }
+          confirmLabel="Imprimir contrato"
+          cancelLabel="Imprimir depois"
+          tone="orange"
+          onCancel={closeContractPrintQuestion}
+          onConfirm={confirmContractPrintQuestion}
+          isBlackTheme={isBlackTheme}
+          themeClass={accountsReceivableThemeClass}
+          zIndex="z-[90]"
+        />
+      )}
+
+      {pendingContractScheduleCustomization && (
         <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm animate-fade-in">
           <div className="w-full max-w-lg rounded-[2.5rem] border border-orange-100 bg-white p-8 shadow-2xl dark:border-slate-800 dark:bg-slate-900 transition-all transform scale-100">
             <div className="text-center">
@@ -7685,34 +7717,6 @@ export default function AccountsReceivablePage() {
                 onClick={handleConfirmCustomSchedule}
                 disabled={isSavingSchedule}
                 className="rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-black text-white hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600 shadow-md hover:shadow-emerald-500/10 transition disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {isSavingSchedule ? (
-                  <>
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
-                    Salvando...
-                  </>
-                ) : "Confirmar e Agendar"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}           </select>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={handleSkipCustomSchedule}
-                disabled={isSavingSchedule}
-                className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-500 hover:bg-slate-50 disabled:opacity-50"
-              >Pular</button>
-              <button
-                type="button"
-                onClick={handleConfirmCustomSchedule}
-                disabled={isSavingSchedule}
-                className="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isSavingSchedule ? (
                   <>

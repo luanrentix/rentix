@@ -32,6 +32,9 @@ if errorlevel 1 (
   exit /b 1
 )
 
+echo [*] Limpando cache de build anterior...
+if exist .next rmdir /s /q .next
+
 call npm run build
 if errorlevel 1 (
   echo Build do frontend falhou. Deploy cancelado.
@@ -94,7 +97,7 @@ if errorlevel 1 (
 
 echo.
 echo === Atualizando VPS ===
-"%GIT_BASH%" -lc "ssh -i %SSH_KEY% %VPS_USER%@%VPS_HOST% 'cd %VPS_PATH% && git pull && docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build && docker image prune -f && docker compose -f docker-compose.prod.yml ps && curl -I https://www.contrx.com.br && curl -I https://api.contrx.com.br'"
+"%GIT_BASH%" -lc "ssh -i %SSH_KEY% %VPS_USER%@%VPS_HOST% 'cd %VPS_PATH% && git pull && docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build && docker image prune -f && docker builder prune -f && docker compose -f docker-compose.prod.yml ps && curl -I https://www.contrx.com.br && curl -I https://api.contrx.com.br'"
 if errorlevel 1 (
   echo Deploy remoto falhou.
   exit /b 1
