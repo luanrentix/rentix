@@ -327,6 +327,13 @@ export default function AccountsPayablePage() {
       setPaymentRecords(nextPaymentRecords);
       setTenants(apiPeople.map(mapApiPersonToTenant));
       setProperties(apiProperties.map(mapApiPropertyToProperty));
+
+      const queryParams = new URLSearchParams(window.location.search);
+      const searchTermFromQuery = queryParams.get("searchTerm");
+
+      if (searchTermFromQuery) {
+        setSearch(searchTermFromQuery);
+      }
     } catch (error) {
       console.error("Não foi possível carregar contas a pagar.", error);
     }

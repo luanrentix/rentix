@@ -48,6 +48,7 @@ type StatementItem = {
   amount: number;
   status: FinancialStatus;
   negative: boolean;
+  searchTerm?: string;
 };
 
 type ThemeMode = "light" | "black" | "graphite";
@@ -981,8 +982,8 @@ function InsightCard({
 
 function StatementList({
   title,
-  items,
   emptyMessage,
+  items,
   actionLabel,
   onAction,
 }: {
@@ -992,6 +993,12 @@ function StatementList({
   actionLabel: string;
   onAction: () => void;
 }) {
+  const handleItemClick = (item: StatementItem) => {
+    const targetPage = item.negative ? "/contas-pagar" : "/contas-receber";
+    const searchParam = item.searchTerm ? `?searchTerm=${encodeURIComponent(item.searchTerm)}` : "";
+    window.location.href = `${targetPage}${searchParam}`;
+  };
+
   return (
     <div className="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm dark:border-orange-500/30 dark:bg-slate-900">
       <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
@@ -1012,45 +1019,85 @@ function StatementList({
         </button>
       </div>
 
-      <div className="divide-y divide-slate-100 dark:divide-slate-700">
+      <div>
         {items.length === 0 ? (
           <div className="px-5 py-8 text-sm font-semibold text-slate-500 dark:text-slate-400">
             {emptyMessage}
           </div>
         ) : (
-          items.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={onAction}
-              className="flex w-full flex-col gap-3 px-5 py-4 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800/70 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-black text-slate-900 dark:text-slate-100">
-                  {item.title}
-                </p>
-                <p className="mt-1 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
-                  <span className="truncate">{item.subtitle}</span>
-                  <span className="inline-flex items-center gap-1">
-                    <CalendarDays className="h-3.5 w-3.5" />
-                    {formatDate(item.date)}
-                  </span>
-                </p>
-              </div>
-
-              <div className="shrink-0 text-left sm:text-right">
-                <p
-                  className={`text-base font-black ${
-                    item.negative ? "text-red-600" : "text-emerald-600"
-                  }`}
+          <>
+            {/* Vista Mobile (Feed de botões) */}
+            <div className="divide-y divide-slate-100 dark:divide-slate-700 lg:hidden">
+              {items.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleItemClick(item)}
+                  className="flex w-full flex-col gap-3 px-5 py-4 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800/70 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  {item.negative ? "- " : ""}
-                  {formatCurrency(item.amount)}
-                </p>
-                <FinancialStatusBadge status={item.status} />
-              </div>
-            </button>
-          ))
+                  <div className="min-w-0">
+                    <p className="truncate font-black text-slate-900 dark:text-slate-100">
+                      {item.title}
+                    </p>
+                    <p className="mt-1 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                      <span className="truncate">{item.subtitle}</span>
+                      <span className="inline-flex items-center gap-1">
+                        <CalendarDays className="h-3.5 w-3.5" />
+                        {formatDate(item.date)}
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="shrink-0 text-left sm:text-right">
+                    <p
+                      className={`text-base font-black ${
+                        item.negative ? "text-red-600" : "text-emerald-600"
+                      }`}
+                    >
+                      {item.negative ? "- " : ""}
+                      {formatCurrency(item.amount)}
+                    </p>
+                    <FinancialStatusBadge status={item.status} />
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* Vista Desktop (Tabela Estruturada) */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40">
+                    <th className="px-5 py-3 text-xs font-black text-slate-500 uppercase dark:text-slate-400">Lançamento / Origem</th>
+                    <th className="px-5 py-3 text-xs font-black text-slate-500 uppercase dark:text-slate-400">Imóvel / Categoria</th>
+                    <th className="px-5 py-3 text-xs font-black text-slate-500 uppercase dark:text-slate-400">Data de Vencimento</th>
+                    <th className="px-5 py-3 text-xs font-black text-slate-500 uppercase dark:text-slate-400">Valor</th>
+                    <th className="px-5 py-3 text-xs font-black text-slate-500 uppercase dark:text-slate-400">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                  {items.map((item) => (
+                    <tr
+                      key={item.id}
+                      onClick={() => handleItemClick(item)}
+                      className="cursor-pointer transition hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                    >
+                      <td className="px-5 py-4 font-black text-slate-900 dark:text-slate-100 text-sm max-w-[200px] truncate">{item.title}</td>
+                      <td className="px-5 py-4 text-sm font-semibold text-slate-500 dark:text-slate-400 max-w-[200px] truncate">{item.subtitle}</td>
+                      <td className="px-5 py-4 text-sm font-semibold text-slate-500 dark:text-slate-400">{formatDate(item.date)}</td>
+                      <td className={`px-5 py-4 text-sm font-black ${item.negative ? "text-red-600" : "text-emerald-600"}`}>
+                        {item.negative ? "- " : ""}
+                        {formatCurrency(item.amount)}
+                      </td>
+                      <td className="px-5 py-4">
+                        <FinancialStatusBadge status={item.status} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -1085,6 +1132,7 @@ function mapReceivableToStatementItem(receivable: FinancialReceivable): Statemen
     amount: receivable.remainingAmount,
     status: receivable.status,
     negative: false,
+    searchTerm: receivable.tenantName || receivable.propertyName || "",
   };
 }
 
@@ -1097,6 +1145,7 @@ function mapPayableToStatementItem(payable: FinancialPayable): StatementItem {
     amount: payable.remainingAmount,
     status: payable.status,
     negative: true,
+    searchTerm: payable.personName || payable.description || "",
   };
 }
 

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
@@ -773,6 +773,15 @@ export default function AccountsReceivablePage() {
         getProperties(currentCompanyId),
         getPeople(currentCompanyId),
       ]);
+      const queryParams = new URLSearchParams(window.location.search);
+      const cameFromContract = queryParams.get("fromContract") === "1";
+      const contractIdFromQuery = queryParams.get("contractId");
+      const searchTermFromQuery = queryParams.get("searchTerm");
+
+      if (searchTermFromQuery) {
+        setSearch(searchTermFromQuery);
+        setIsSearchOpen(true);
+      };
       const nextManualCharges = apiCharges.map(mapApiReceivableToCharge);
       const nextContracts = apiContracts.map(mapApiContractToReceivableContract);
       const nextTenants = apiPeople.map(mapApiPersonToReceivableTenant);
@@ -788,9 +797,9 @@ export default function AccountsReceivablePage() {
       setProperties(apiProperties.map(mapApiPropertyToReceivableProperty));
       setTenants(nextTenants);
 
-      const queryParams = new URLSearchParams(window.location.search);
-      const cameFromContract = queryParams.get("fromContract") === "1";
-      const contractIdFromQuery = queryParams.get("contractId");
+
+
+
 
       if (cameFromContract && contractIdFromQuery) {
         setFocusedContractId(String(contractIdFromQuery));
