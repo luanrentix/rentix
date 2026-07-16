@@ -24,6 +24,11 @@
 /backups/
 contrx-backend/backups/
 contrx-backend/.local-postgres/
+*.zip
+*.rar
+*.tar.gz
+*.7z
+
 
 # generated local exports
 /PROJETO_EXPORTADO.md

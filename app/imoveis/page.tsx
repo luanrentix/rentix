@@ -459,7 +459,12 @@ export default function PropertiesPage() {
         normalizeSearchText(property.name).includes(normalizedSearch) ||
         normalizeSearchText(property.address).includes(normalizedSearch) ||
         normalizeSearchText(property.city).includes(normalizedSearch) ||
-        normalizeSearchText(property.neighborhood).includes(normalizedSearch);
+        normalizeSearchText(property.neighborhood).includes(normalizedSearch) ||
+        normalizeSearchText(property.licensePlate || "").includes(normalizedSearch) ||
+        normalizeSearchText(property.serialNumber || "").includes(normalizedSearch) ||
+        normalizeSearchText(property.brand || "").includes(normalizedSearch) ||
+        normalizeSearchText(property.model || "").includes(normalizedSearch) ||
+        normalizeSearchText(property.patrimonyCode || "").includes(normalizedSearch);
 
       const matchesRegistration =
         registrationFilter === "All" ||
@@ -2446,15 +2451,17 @@ export default function PropertiesPage() {
 
 
 
-                      <FormField label="Código Patrimonial">
-                        <input
-                          type="text"
-                          value={patrimonyCode}
-                          onChange={(event) => setPatrimonyCode(toUpperText(event.target.value))}
-                          placeholder="Ex: PAT-2023"
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        />
-                      </FormField>
+                      {assetCategory !== "PROPERTY" && (
+                        <FormField label="Código Patrimonial">
+                          <input
+                            type="text"
+                            value={patrimonyCode}
+                            onChange={(event) => setPatrimonyCode(toUpperText(event.target.value))}
+                            placeholder="Ex: PAT-2023"
+                            className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          />
+                        </FormField>
+                      )}
 
                       {editingPropertyId && (
                         <div className="flex flex-col gap-2 rounded-2xl border border-slate-100 bg-slate-50/50 p-4 col-span-2 md:col-span-1">
@@ -2654,25 +2661,29 @@ export default function PropertiesPage() {
                         />
                       </FormField>
 
-                      <FormField label="Número de Série">
-                        <input
-                          type="text"
-                          value={serialNumber}
-                          onChange={(event) => setSerialNumber(toUpperText(event.target.value))}
-                          placeholder="Ex: CAT0320DL12345"
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        />
-                      </FormField>
+                      {assetCategory !== "VEHICLE" && (
+                        <FormField label="Número de Série">
+                          <input
+                            type="text"
+                            value={serialNumber}
+                            onChange={(event) => setSerialNumber(toUpperText(event.target.value))}
+                            placeholder="Ex: CAT0320DL12345"
+                            className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          />
+                        </FormField>
+                      )}
 
-                      <FormField label="Placa (se houver)">
-                        <input
-                          type="text"
-                          value={licensePlate}
-                          onChange={(event) => setLicensePlate(toUpperText(event.target.value))}
-                          placeholder="Ex: ABC1D23"
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                        />
-                      </FormField>
+                      {assetCategory === "VEHICLE" && (
+                        <FormField label="Placa" required>
+                          <input
+                            type="text"
+                            value={licensePlate}
+                            onChange={(event) => setLicensePlate(toUpperText(event.target.value))}
+                            placeholder="Ex: ABC1D23"
+                            className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold uppercase text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                          />
+                        </FormField>
+                      )}
 
                       <FormField label="Ano de Fabricação">
                         <input

@@ -196,6 +196,29 @@ function personHasActiveContract(personId: string, contracts: ApiContract[]): bo
   );
 }
 
+function personHasRelationships(
+  personId: string,
+  properties: ApiProperty[],
+  contracts: ApiContract[],
+  receivables: ReceivableAccount[],
+  payables: PayableAccount[]
+): boolean {
+  const hasOwnedProperties = properties.some(
+    (property) => String(property.ownerId || "") === String(personId)
+  );
+  const hasTenantContracts = contracts.some(
+    (contract) => String(contract.tenantId || "") === String(personId)
+  );
+  const hasReceivables = receivables.some(
+    (account) => String(account.tenantId || "") === String(personId)
+  );
+  const hasPayables = payables.some(
+    (account) => String(account.personId || "") === String(personId)
+  );
+
+  return hasOwnedProperties || hasTenantContracts || hasReceivables || hasPayables;
+}
+
 function formatDocument(value: string, type: PersonType) {
   const digits = value.replace(/\D/g, "").slice(0, type === "individual" ? 11 : 14);
 
@@ -853,6 +876,14 @@ export default function PeoplePage() {
     const selectedPerson = people.find((person) => person.id === editingPersonId);
 
     if (!selectedPerson) return;
+
+    if (personHasRelationships(selectedPerson.id, properties, contracts, receivableAccounts, payableAccounts)) {
+      setToast({
+        type: "error",
+        message: "Não é possível excluir esta pessoa pois ela possui propriedades vinculadas, contratos ativos/pendentes ou movimentações financeiras no histórico. Sugerimos inativar a pessoa em vez de excluí-la.",
+      });
+      return;
+    }
 
     setPersonToDelete(selectedPerson);
   }

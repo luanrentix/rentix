@@ -98,7 +98,7 @@ type FinancialMovement = {
 };
 
 type ThemeMode = "light" | "black" | "graphite";
-type DashboardFinancialPeriod = "CurrentMonth" | "CurrentYear" | "All";
+type DashboardFinancialPeriod = "CurrentMonth" | "CurrentYear" | "All" | "Custom";
 
 const chartColors = {
   orange: "#f97316",
@@ -219,6 +219,8 @@ export default function DashboardPage() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [financialPeriod, setFinancialPeriod] =
     useState<DashboardFinancialPeriod>("CurrentMonth");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
   const [revenueChartView, setRevenueChartView] = useState<"month" | "day">(
     "month",
   );
@@ -259,10 +261,25 @@ export default function DashboardPage() {
     setFinancialSummaryError("");
 
     try {
-      const [apiProperties, apiContracts, appSettings] = await Promise.all([
+      const [apiProperties, apiContracts, appSettings, financialSummary] = await Promise.all([
         getProperties(currentCompanyId),
         getContracts(currentCompanyId),
         getAppSettings(currentCompanyId).catch(() => null),
+        getFinancialSummary(
+          currentCompanyId,
+          getFinancialSummaryFilters(financialPeriod, customStartDate, customEndDate),
+          forceRefresh,
+        ).catch((error) => {
+          setFinancialSummaryError(
+            error instanceof Error
+              ? error.message
+              : "Não foi possível carregar o resumo financeiro.",
+          );
+          return {
+            receivables: [],
+            payables: [],
+          };
+        })
       ]);
 
       if (appSettings && appSettings.companySettings) {
@@ -274,22 +291,6 @@ export default function DashboardPage() {
           JSON.stringify(appSettings.companySettings),
         );
       }
-      const financialSummary = await getFinancialSummary(
-        currentCompanyId,
-        getFinancialSummaryFilters(financialPeriod),
-        forceRefresh,
-      ).catch((error) => {
-        setFinancialSummaryError(
-          error instanceof Error
-            ? error.message
-            : "Nao foi possivel carregar o resumo financeiro.",
-        );
-
-        return {
-          receivables: [],
-          payables: [],
-        };
-      });
 
       const normalizedContracts = apiContracts.map(mapApiContractToDashboardContract);
       const activePropertyIds = new Set(
@@ -328,7 +329,50 @@ export default function DashboardPage() {
     } finally {
       setIsDashboardLoading(false);
     }
-  }, [financialPeriod]);
+  }, [financialPeriod, customStartDate, customEndDate]);
+
+  const exportToCSV = () => {
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+    csvContent += "CONTRX - RELATÓRIO DO DASHBOARD\n";
+    csvContent += `Filtro de Período:;${getFinancialPeriodLabel(financialPeriod)}\n`;
+    if (financialPeriod === "Custom") {
+      csvContent += `Datas:;${customStartDate || "Início"} até ${customEndDate || "Fim"}\n`;
+    }
+    csvContent += `Data de Exportação:;${new Date().toLocaleDateString("pt-BR")} ${new Date().toLocaleTimeString("pt-BR")}\n\n`;
+
+    csvContent += "INDICADORES CHAVE\n";
+    csvContent += "Indicador;Valor;Detalhe\n";
+    csvContent += `Receita mensal prevista;"${formatCurrency(monthlyRevenue)}";"${formatCurrency(annualRevenueProjection)} projetado ao ano"\n`;
+    csvContent += `Taxa de ocupação;"${occupancyRate}%";"${rentedProperties} de ${totalProperties} bens/ativos alugados"\n`;
+    csvContent += `Contratos ativos;"${activeContracts}";"${finishedContracts} finalizado(s)"\n`;
+    csvContent += `A receber em aberto;"${formatCurrency(openReceivableTotal)}";"${formatCurrency(overdueReceivableTotal)} vencido(s)"\n`;
+    csvContent += `Recebido confirmado;"${formatCurrency(receivedTotal)}";"${receivables.filter((item) => item.status === "Paid").length} lancamento(s) pago(s)"\n`;
+    csvContent += `A pagar em aberto;"${formatCurrency(openPayableTotal)}";"${payables.filter((item) => item.status !== "Paid").length} lancamento(s) pendente(s)"\n`;
+    csvContent += `Potencial disponível;"${formatCurrency(availablePotentialRevenue)}";"${availableProperties} bem(ns) sem contrato"\n\n`;
+
+    csvContent += "CONTAS A RECEBER NO PERÍODO\n";
+    csvContent += "Inquilino;Imóvel;Vencimento;Valor;Status\n";
+    receivables.forEach((item) => {
+      const statusLabel = item.status === "Paid" ? "Recebido" : "Pendente";
+      csvContent += `"${item.tenantName}";"${item.propertyName || ""}";"${item.dueDate ? new Date(item.dueDate).toLocaleDateString("pt-BR") : ""}";"${formatCurrency(item.amount)}";"${statusLabel}"\n`;
+    });
+    csvContent += "\n";
+
+    csvContent += "CONTAS A PAGAR NO PERÍODO\n";
+    csvContent += "Descrição;Fornecedor;Vencimento;Valor;Status\n";
+    payables.forEach((item) => {
+      const statusLabel = item.status === "Paid" ? "Pago" : "Pendente";
+      csvContent += `"${item.description}";"${item.personName || ""}";"${item.dueDate ? new Date(item.dueDate).toLocaleDateString("pt-BR") : ""}";"${formatCurrency(item.amount)}";"${statusLabel}"\n`;
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `contrx_dashboard_${getFinancialPeriodLabel(financialPeriod).toLowerCase().replace(/ /g, "_")}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   useEffect(() => {
     if (!companyId) return;
@@ -714,6 +758,7 @@ export default function DashboardPage() {
     0,
   );
 
+  /* eslint-disable react-hooks/preserve-manual-memoization */
   const dashboardAlerts = useMemo<DashboardAlert[]>(() => {
     const alerts: DashboardAlert[] = [];
     const contractsWithoutValue = activeContractsList.filter(
@@ -841,6 +886,7 @@ export default function DashboardPage() {
     todayReceivableTotal,
     totalProperties,
   ]);
+  /* eslint-enable react-hooks/preserve-manual-memoization */
 
   const steps = [
     {
@@ -897,7 +943,28 @@ export default function DashboardPage() {
                 <option value="CurrentMonth">Mês atual</option>
                 <option value="CurrentYear">Ano atual</option>
                 <option value="All">Todos</option>
+                <option value="Custom">Customizado</option>
               </select>
+
+              {financialPeriod === "Custom" && (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    className="h-11 rounded-md border border-slate-200 bg-white px-2 text-xs font-bold text-slate-600 shadow-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    aria-label="Data inicial"
+                  />
+                  <span className="text-slate-400 text-xs font-bold">até</span>
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    className="h-11 rounded-md border border-slate-200 bg-white px-2 text-xs font-bold text-slate-600 shadow-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    aria-label="Data final"
+                  />
+                </div>
+              )}
 
               <div className="flex h-11 items-center rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 shadow-sm">
                 <span className="inline-flex items-center gap-2">
@@ -913,6 +980,15 @@ export default function DashboardPage() {
                   </span>
                 )}
               </div>
+
+              <button
+                type="button"
+                onClick={exportToCSV}
+                disabled={isDashboardLoading}
+                className="h-11 rounded-md border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 hover:bg-slate-50 transition shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Exportar CSV
+              </button>
 
               <button
                 type="button"
@@ -934,12 +1010,6 @@ export default function DashboardPage() {
           {!dashboardError && financialSummaryError && (
             <div className="rounded-3xl border border-orange-100 bg-orange-50 p-5 text-sm font-bold text-orange-700 shadow-sm">
               Resumo financeiro indisponivel no momento: {financialSummaryError}
-            </div>
-          )}
-
-          {isDashboardLoading && !dashboardError && (
-            <div className="rounded-3xl border border-orange-100 bg-white p-5 text-sm font-bold text-slate-600 shadow-sm">
-              Carregando indicadores da Dashboard...
             </div>
           )}
 
@@ -1026,6 +1096,7 @@ export default function DashboardPage() {
               value={formatCurrency(monthlyRevenue)}
               detail={`${formatCurrency(annualRevenueProjection)} projetado ao ano`}
               trend={`${revenueEfficiency}% da capacidade`}
+              isLoading={isDashboardLoading}
             />
 
             <MetricCard
@@ -1034,6 +1105,7 @@ export default function DashboardPage() {
               value={`${occupancyRate}%`}
               detail={`${rentedProperties} de ${totalProperties} bens/ativos alugados`}
               trend={`${vacancyRate}% disponível`}
+              isLoading={isDashboardLoading}
             />
 
             <MetricCard
@@ -1042,6 +1114,7 @@ export default function DashboardPage() {
               value={activeContracts}
               detail={`${finishedContracts} finalizado(s)`}
               trend={`${formatCurrency(averageTicket)} ticket médio`}
+              isLoading={isDashboardLoading}
             />
 
             <MetricCard
@@ -1050,6 +1123,7 @@ export default function DashboardPage() {
               value={formatCurrency(openReceivableTotal)}
               detail={`${formatCurrency(overdueReceivableTotal)} vencido(s)`}
               trend="Financeiro real"
+              isLoading={isDashboardLoading}
             />
           </div>
 
@@ -1059,121 +1133,130 @@ export default function DashboardPage() {
               value={formatCurrency(receivedTotal)}
               detail={`${receivables.filter((item) => item.status === "Paid").length} paga(s) no ${getFinancialPeriodLabel(financialPeriod).toLowerCase()}`}
               tone="green"
+              isLoading={isDashboardLoading}
             />
             <FinancialSummaryCard
               title="A pagar em aberto"
               value={formatCurrency(openPayableTotal)}
               detail={`${payables.filter((item) => item.status !== "Paid").length} pendente(s) no ${getFinancialPeriodLabel(financialPeriod).toLowerCase()}`}
               tone="red"
+              isLoading={isDashboardLoading}
             />
             <FinancialSummaryCard
               title="Potencial disponível"
               value={formatCurrency(availablePotentialRevenue)}
               detail={`${availableProperties} bem(ns)/ativo(s) sem contrato ativo`}
               tone="slate"
+              isLoading={isDashboardLoading}
             />
           </div>
 
           <div className="grid gap-6 xl:grid-cols-12">
-            <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-8">
-              <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <h2 className="text-lg font-black text-slate-950">
-                    Evolução da receita contratada
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {revenueChartDescription}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex rounded-full bg-slate-50 p-1">
-                    <button
-                      type="button"
-                      onClick={() => setRevenueChartView("month")}
-                      className={`rounded-full px-3 py-2 text-xs font-black transition ${
-                        revenueChartView === "month"
-                          ? "bg-orange-500 text-white shadow-sm"
-                          : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
-                      }`}
-                    >
-                      Mês
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setRevenueChartView("day")}
-                      className={`rounded-full px-3 py-2 text-xs font-black transition ${
-                        revenueChartView === "day"
-                          ? "bg-orange-500 text-white shadow-sm"
-                          : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
-                      }`}
-                    >
-                      Dia
-                    </button>
+            {isDashboardLoading ? (
+              <div className="xl:col-span-8">
+                <ChartSkeleton />
+              </div>
+            ) : (
+              <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-8">
+                <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <h2 className="text-lg font-black text-slate-950">
+                      Evolução da receita contratada
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {revenueChartDescription}
+                    </p>
                   </div>
 
-                  <ChartBadge label="Receita prevista" color="bg-orange-500" />
-                  <ChartBadge label="Contratos" color="bg-slate-400" />
-                </div>
-              </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex rounded-full bg-slate-50 p-1">
+                      <button
+                        type="button"
+                        onClick={() => setRevenueChartView("month")}
+                        className={`rounded-full px-3 py-2 text-xs font-black transition ${
+                          revenueChartView === "month"
+                            ? "bg-orange-500 text-white shadow-sm"
+                            : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                        }`}
+                      >
+                        Mês
+                      </button>
 
-              <div className="h-80 min-h-[320px] min-w-0">
-                <ResponsiveContainer
-                  width="100%"
-                  height="100%"
-                  minWidth={0}
-                  minHeight={320}
-                >
-                  <ComposedChart data={selectedRevenueChartData}>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      stroke="#e2e8f0"
-                    />
-                    <XAxis dataKey="month" tickLine={false} axisLine={false} />
-                    <YAxis
-                      yAxisId="revenue"
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(value) => compactCurrency(Number(value))}
-                    />
-                    <YAxis
-                      yAxisId="contracts"
-                      orientation="right"
-                      tickLine={false}
-                      axisLine={false}
-                      allowDecimals={false}
-                    />
-                    <Tooltip
-                      formatter={(value, name) => {
-                        if (name === "expected")
-                          return [formatCurrency(Number(value)), "Receita prevista"];
-                        return [Number(value), "Contratos"];
-                      }}
-                      labelFormatter={(label) =>
-                        `${revenueChartView === "month" ? "Mês" : "Dia"}: ${label}`
-                      }
-                    />
-                    <Bar
-                      yAxisId="revenue"
-                      dataKey="expected"
-                      radius={[12, 12, 0, 0]}
-                      fill={chartColors.orange}
-                      barSize={revenueChartView === "month" ? 44 : 18}
-                    />
-                    <Line
-                      yAxisId="contracts"
-                      type="monotone"
-                      dataKey="activeContracts"
-                      stroke={chartColors.slate}
-                      strokeWidth={3}
-                      dot={{ r: 4 }}
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-            </section>
+                      <button
+                        type="button"
+                        onClick={() => setRevenueChartView("day")}
+                        className={`rounded-full px-3 py-2 text-xs font-black transition ${
+                          revenueChartView === "day"
+                            ? "bg-orange-500 text-white shadow-sm"
+                            : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                        }`}
+                      >
+                        Dia
+                      </button>
+                    </div>
+
+                    <ChartBadge label="Receita prevista" color="bg-orange-500" />
+                    <ChartBadge label="Contratos" color="bg-slate-400" />
+                  </div>
+                </div>
+
+                <div className="h-80 min-h-[320px] min-w-0">
+                  <ResponsiveContainer
+                    width="100%"
+                    height="100%"
+                    minWidth={0}
+                    minHeight={320}
+                  >
+                    <ComposedChart data={selectedRevenueChartData}>
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        vertical={false}
+                        stroke="#e2e8f0"
+                      />
+                      <XAxis dataKey="month" tickLine={false} axisLine={false} />
+                      <YAxis
+                        yAxisId="revenue"
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(value) => compactCurrency(Number(value))}
+                      />
+                      <YAxis
+                        yAxisId="contracts"
+                        orientation="right"
+                        tickLine={false}
+                        axisLine={false}
+                        allowDecimals={false}
+                      />
+                      <Tooltip
+                        formatter={(value, name) => {
+                          if (name === "expected")
+                            return [formatCurrency(Number(value)), "Receita prevista"];
+                          return [Number(value), "Contratos"];
+                        }}
+                        labelFormatter={(label) =>
+                          `${revenueChartView === "month" ? "Mês" : "Dia"}: ${label}`
+                        }
+                      />
+                      <Bar
+                        yAxisId="revenue"
+                        dataKey="expected"
+                        radius={[12, 12, 0, 0]}
+                        fill={chartColors.orange}
+                        barSize={revenueChartView === "month" ? 44 : 18}
+                      />
+                      <Line
+                        yAxisId="contracts"
+                        type="monotone"
+                        dataKey="activeContracts"
+                        stroke={chartColors.slate}
+                        strokeWidth={3}
+                        dot={{ r: 4 }}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </section>
+            )}
 
             <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-4">
               <h2 className="text-lg font-black text-slate-950">
@@ -1229,91 +1312,97 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid gap-6 xl:grid-cols-12">
-            <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-8">
-              <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <h2 className="text-lg font-black text-slate-950">
-                    Evolução de contratos
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    {contractChartDescription}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex rounded-full bg-slate-50 p-1">
-                    <button
-                      type="button"
-                      onClick={() => setContractChartView("month")}
-                      className={`rounded-full px-3 py-2 text-xs font-black transition ${
-                        contractChartView === "month"
-                          ? "bg-orange-500 text-white shadow-sm"
-                          : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
-                      }`}
-                    >
-                      Mês
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setContractChartView("day")}
-                      className={`rounded-full px-3 py-2 text-xs font-black transition ${
-                        contractChartView === "day"
-                          ? "bg-orange-500 text-white shadow-sm"
-                          : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
-                      }`}
-                    >
-                      Dia
-                    </button>
+            {isDashboardLoading ? (
+              <div className="xl:col-span-8">
+                <ChartSkeleton />
+              </div>
+            ) : (
+              <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-8">
+                <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <h2 className="text-lg font-black text-slate-950">
+                      Evolução de contratos
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {contractChartDescription}
+                    </p>
                   </div>
 
-                  <ChartBadge label="Iniciados" color="bg-orange-500" />
-                  <ChartBadge label="Ativos" color="bg-slate-400" />
-                </div>
-              </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex rounded-full bg-slate-50 p-1">
+                      <button
+                        type="button"
+                        onClick={() => setContractChartView("month")}
+                        className={`rounded-full px-3 py-2 text-xs font-black transition ${
+                          contractChartView === "month"
+                            ? "bg-orange-500 text-white shadow-sm"
+                            : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                        }`}
+                      >
+                        Mês
+                      </button>
 
-              <div className="h-72 min-h-[288px] min-w-0">
-                <ResponsiveContainer
-                  width="100%"
-                  height="100%"
-                  minWidth={0}
-                  minHeight={288}
-                >
-                  <ComposedChart data={selectedContractEvolutionData}>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      stroke="#e2e8f0"
-                    />
-                    <XAxis dataKey="month" tickLine={false} axisLine={false} />
-                    <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
-                    <Tooltip
-                      formatter={(value, name) => {
-                        if (name === "createdContracts")
-                          return [Number(value), "Iniciados"];
-                        return [Number(value), "Ativos"];
-                      }}
-                      labelFormatter={(label) =>
-                        `${contractChartView === "month" ? "Mês" : "Dia"}: ${label}`
-                      }
-                    />
-                    <Bar
-                      dataKey="createdContracts"
-                      radius={[12, 12, 0, 0]}
-                      fill={chartColors.orange}
-                      barSize={contractChartView === "month" ? 44 : 18}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="activeContracts"
-                      stroke={chartColors.slate}
-                      strokeWidth={3}
-                      dot={{ r: 4 }}
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-            </section>
+                      <button
+                        type="button"
+                        onClick={() => setContractChartView("day")}
+                        className={`rounded-full px-3 py-2 text-xs font-black transition ${
+                          contractChartView === "day"
+                            ? "bg-orange-500 text-white shadow-sm"
+                            : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                        }`}
+                      >
+                        Dia
+                      </button>
+                    </div>
+
+                    <ChartBadge label="Iniciados" color="bg-orange-500" />
+                    <ChartBadge label="Ativos" color="bg-slate-400" />
+                  </div>
+                </div>
+
+                <div className="h-72 min-h-[288px] min-w-0">
+                  <ResponsiveContainer
+                    width="100%"
+                    height="100%"
+                    minWidth={0}
+                    minHeight={288}
+                  >
+                    <ComposedChart data={selectedContractEvolutionData}>
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        vertical={false}
+                        stroke="#e2e8f0"
+                      />
+                      <XAxis dataKey="month" tickLine={false} axisLine={false} />
+                      <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
+                      <Tooltip
+                        formatter={(value, name) => {
+                          if (name === "createdContracts")
+                            return [Number(value), "Iniciados"];
+                          return [Number(value), "Ativos"];
+                        }}
+                        labelFormatter={(label) =>
+                          `${contractChartView === "month" ? "Mês" : "Dia"}: ${label}`
+                        }
+                      />
+                      <Bar
+                        dataKey="createdContracts"
+                        radius={[12, 12, 0, 0]}
+                        fill={chartColors.orange}
+                        barSize={contractChartView === "month" ? 44 : 18}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="activeContracts"
+                        stroke={chartColors.slate}
+                        strokeWidth={3}
+                        dot={{ r: 4 }}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </section>
+            )}
 
             <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-4">
               <h2 className="text-lg font-black text-slate-950">
@@ -1341,9 +1430,24 @@ type MetricCardProps = {
   value: string | number;
   detail: string;
   trend: string;
+  isLoading?: boolean;
 };
 
-function MetricCard({ icon, title, value, detail, trend }: MetricCardProps) {
+function MetricCard({ icon, title, value, detail, trend, isLoading }: MetricCardProps) {
+  if (isLoading) {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm animate-pulse">
+        <div className="flex items-center justify-between gap-3">
+          <div className="h-10 w-10 shrink-0 rounded-md bg-slate-100" />
+          <div className="h-5 w-16 rounded-full bg-slate-100" />
+        </div>
+        <div className="mt-4 h-3.5 w-24 rounded bg-slate-100" />
+        <div className="mt-2 h-6 w-32 rounded bg-slate-100" />
+        <div className="mt-2 h-3.5 w-40 rounded bg-slate-100" />
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md">
       <div className="flex items-center justify-between gap-3">
@@ -1413,15 +1517,26 @@ type FinancialSummaryCardProps = {
   value: string;
   detail: string;
   tone: "orange" | "slate" | "green" | "red";
+  isLoading?: boolean;
 };
 
-function FinancialSummaryCard({ title, value, detail, tone }: FinancialSummaryCardProps) {
+function FinancialSummaryCard({ title, value, detail, tone, isLoading }: FinancialSummaryCardProps) {
   const toneClassName = {
     orange: "bg-orange-50 text-orange-700",
     slate: "bg-slate-100 text-slate-700",
     green: "bg-emerald-50 text-emerald-700",
     red: "bg-red-50 text-red-700",
   }[tone];
+
+  if (isLoading) {
+    return (
+      <div className="rounded-lg px-4 py-3.5 bg-slate-100 animate-pulse">
+        <div className="h-3 w-28 rounded bg-slate-200" />
+        <div className="mt-3 h-5.5 w-36 rounded bg-slate-200" />
+        <div className="mt-2 h-3 w-44 rounded bg-slate-200" />
+      </div>
+    );
+  }
 
   return (
     <div className={`rounded-lg px-4 py-3.5 ${toneClassName}`}>
@@ -1430,6 +1545,32 @@ function FinancialSummaryCard({ title, value, detail, tone }: FinancialSummaryCa
       </p>
       <p className="mt-2 text-lg font-black">{value}</p>
       <p className="mt-1 text-xs font-bold opacity-80">{detail}</p>
+    </div>
+  );
+}
+
+function ChartSkeleton() {
+  return (
+    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm animate-pulse h-80 min-h-[320px]">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
+        <div className="space-y-2">
+          <div className="h-4 w-40 rounded bg-slate-200" />
+          <div className="h-3.5 w-64 rounded bg-slate-100" />
+        </div>
+        <div className="flex gap-2">
+          <div className="h-8 w-16 rounded-full bg-slate-100" />
+          <div className="h-8 w-24 rounded-full bg-slate-100" />
+        </div>
+      </div>
+      <div className="h-56 w-full flex items-end justify-between gap-4 pt-4">
+        <div className="h-[20%] w-full rounded bg-slate-100" />
+        <div className="h-[40%] w-full rounded bg-slate-100" />
+        <div className="h-[60%] w-full rounded bg-slate-100" />
+        <div className="h-[30%] w-full rounded bg-slate-100" />
+        <div className="h-[50%] w-full rounded bg-slate-100" />
+        <div className="h-[80%] w-full rounded bg-slate-100" />
+        <div className="h-[45%] w-full rounded bg-slate-100" />
+      </div>
     </div>
   );
 }
@@ -1601,8 +1742,19 @@ function getLastThirtyDays() {
   });
 }
 
-function getFinancialSummaryFilters(period: DashboardFinancialPeriod) {
+function getFinancialSummaryFilters(
+  period: DashboardFinancialPeriod,
+  customStart?: string,
+  customEnd?: string
+) {
   const today = new Date();
+
+  if (period === "Custom") {
+    return {
+      startDate: customStart || undefined,
+      endDate: customEnd || undefined,
+    };
+  }
 
   if (period === "All") return {};
 
@@ -1626,6 +1778,7 @@ function getFinancialSummaryFilters(period: DashboardFinancialPeriod) {
 function getFinancialPeriodLabel(period: DashboardFinancialPeriod) {
   if (period === "CurrentYear") return "ano atual";
   if (period === "All") return "período completo";
+  if (period === "Custom") return "período personalizado";
 
   return "mês atual";
 }

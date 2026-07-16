@@ -590,6 +590,130 @@ export default function BancosPage() {
     setThemeMode(mode);
   }, [companyId]);
 
+  // Calculando saldos progressivos para o extrato de impressão
+  const transactionsWithSaldos: (BankTransaction & { saldoAfter?: number })[] = [...transactions];
+  let currentAccumulated = consolidatedBalance;
+  for (let i = 0; i < transactionsWithSaldos.length; i++) {
+    transactionsWithSaldos[i] = {
+      ...transactionsWithSaldos[i],
+      saldoAfter: currentAccumulated
+    };
+    const amount = Number(transactionsWithSaldos[i].amount);
+    if (transactionsWithSaldos[i].type === "INFLOW") {
+      currentAccumulated -= amount;
+    } else {
+      currentAccumulated += amount;
+    }
+  }
+  const saldoAnterior = currentAccumulated;
+
+  const debitosAConfirmar = transactions
+    .filter(tx => tx.type === "OUTFLOW" && tx.status === "PENDING")
+    .reduce((acc, tx) => acc + Number(tx.amount), 0);
+
+  const creditosAConfirmar = transactions
+    .filter(tx => tx.type === "INFLOW" && tx.status === "PENDING")
+    .reduce((acc, tx) => acc + Number(tx.amount), 0);
+
+  const saldoTotalComPendentes = consolidatedBalance + creditosAConfirmar - debitosAConfirmar;
+
+  const activeAccount = accounts.find(acc => acc.id === filterAccount);
+  const correntistaNome = activeAccount ? activeAccount.name : "CONSOLIDADO (TODAS AS CONTAS)";
+  const contaNumero = activeAccount && activeAccount.accountNumber ? activeAccount.accountNumber : "—";
+  const agenciaNumero = activeAccount && activeAccount.agency ? activeAccount.agency : "—";
+
+  const handlePrint = () => {
+    const printContent = document.getElementById("print-layout-exclusivo")?.innerHTML;
+    if (!printContent) return;
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "none";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(`
+      <html>
+        <head>
+          <title>Extrato de Conta Bancária</title>
+          <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+          <style>
+            @page {
+              size: auto;
+              margin: 10mm !important;
+            }
+            body {
+              font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+              padding: 0;
+              margin: 0;
+              background: white;
+              color: #0f172a;
+            }
+            table {
+              width: 100% !important;
+              border-collapse: collapse !important;
+              margin-top: 15px !important;
+            }
+            th {
+              border-bottom: 2.5px solid #475569 !important;
+              color: #0f172a !important;
+              font-weight: 800 !important;
+              padding: 10px 6px !important;
+              text-transform: uppercase !important;
+              font-size: 11px !important;
+            }
+            td {
+              border-bottom: 1px solid #e2e8f0 !important;
+              padding: 10px 6px !important;
+              color: #1e293b !important;
+              font-size: 12px !important;
+            }
+            tfoot tr {
+              background-color: #f8fafc !important;
+              font-weight: bold !important;
+            }
+            tfoot td {
+              border-top: 2.5px solid #94a3b8 !important;
+              border-bottom: none !important;
+              padding: 12px 6px !important;
+            }
+            .text-red-600 {
+              color: #e11d48 !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .text-emerald-600 {
+              color: #059669 !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+          </style>
+        </head>
+        <body>
+          <div style="width: 100%;">
+            ${printContent}
+          </div>
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() {
+                window.frameElement.remove();
+              }, 1000);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    doc.close();
+  };
+
   const contrxPrintStyle = `
     @media print {
       body * {
@@ -597,20 +721,6 @@ export default function BancosPage() {
       }
       #print-statement-section, #print-statement-section * {
         visibility: visible;
-      }
-      #print-statement-section {
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-        background: white !important;
-        color: black !important;
-        box-shadow: none !important;
-        border: none !important;
-        padding: 0 !important;
-      }
-      .print-hide {
-        display: none !important;
       }
     }
 
@@ -671,9 +781,9 @@ export default function BancosPage() {
 
   return (
     <div data-contrx-theme={themeMode} className="space-y-6">
-      <style>{contrxPrintStyle}</style>
+      <style dangerouslySetInnerHTML={{ __html: contrxPrintStyle }} />
       {/* Top Header */}
-      <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 md:flex-row md:items-center md:justify-between no-print">
         <div>
           <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
             Controle Bancário
@@ -721,7 +831,7 @@ export default function BancosPage() {
 
       {/* Top Filter Card */}
       <div 
-        className="grid grid-cols-1 gap-3 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm items-end mb-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 grid-filtros-fixo"
+        className="grid grid-cols-1 gap-3 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm items-end mb-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 grid-filtros-fixo no-print"
       >
         <div>
           <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Conta</label>
@@ -818,7 +928,7 @@ export default function BancosPage() {
 
       {/* Metrics Cards Grid */}
       <div 
-        className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2 lg:grid-cols-4 grid-metricas-fixo"
+        className="grid grid-cols-1 gap-4 mb-6 sm:grid-cols-2 lg:grid-cols-4 grid-metricas-fixo no-print"
       >
         <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3">
@@ -886,7 +996,7 @@ export default function BancosPage() {
           className="grid grid-cols-1 gap-6 sm:grid-cols-4 grid-conteudo-fixo"
         >
           {/* Left Column: Bank Accounts List */}
-          <div className="space-y-4 sm:col-span-1 coluna-esquerda-fixa">
+          <div className="space-y-4 sm:col-span-1 coluna-esquerda-fixa no-print">
             <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-black text-slate-900">Contas & Caixas</h2>
@@ -966,32 +1076,114 @@ export default function BancosPage() {
             className="space-y-4 sm:col-span-3 coluna-direita-fixa" 
             id="print-statement-section"
           >
-            <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+            <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm print:!border-none print:!shadow-none print:!p-0 print:!bg-transparent">
               
-              {/* Print-only header header */}
-              <div className="hidden print:block mb-6 border-b pb-4">
-                <h1 className="text-xl font-black uppercase text-slate-900">Extrato Financeiro</h1>
-                <p className="text-xs font-bold text-slate-500 mt-1">
-                  Empresa: CONTRX PROJETOS
-                </p>
-                <p className="text-xs font-bold text-slate-500">
-                  Período: {filterStartDate ? new Date(filterStartDate).toLocaleDateString('pt-BR') : 'Início'} a {filterEndDate ? new Date(filterEndDate).toLocaleDateString('pt-BR') : 'Fim'}
-                </p>
+              {/* LAYOUT DE IMPRESSÃO EXCLUSIVO (MODELO DO USUÁRIO) */}
+              <div id="print-layout-exclusivo" className="hidden print:block text-slate-900 font-sans text-xs w-full">
+                {/* Cabeçalho Superior */}
+                <div className="flex justify-between items-center border-b pb-4 mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-slate-900 text-white font-black px-3 py-1 rounded text-base tracking-widest">
+                      CONTRX
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-slate-400">Empresa</p>
+                      <h2 className="text-sm font-bold uppercase text-slate-800">CONTRX PROJETOS</h2>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-bold text-slate-500">
+                      Período: {filterStartDate ? new Date(filterStartDate).toLocaleDateString('pt-BR') : 'Início'} a {filterEndDate ? new Date(filterEndDate).toLocaleDateString('pt-BR') : 'Fim'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Subcabeçalho de Informações do Banco (Faixa Cinza) */}
+                <div className="grid grid-cols-3 bg-slate-100 p-2 text-[10px] font-bold uppercase tracking-wider text-slate-700 border-y border-slate-200 mb-4">
+                  <div>
+                    CORRENTISTA: <span className="text-slate-950 font-black">{correntistaNome}</span>
+                  </div>
+                  <div className="text-center">
+                    CONTA NÚMERO: <span className="text-slate-950 font-black">{contaNumero}</span>
+                  </div>
+                  <div className="text-right">
+                    AGÊNCIA: <span className="text-slate-950 font-black">{agenciaNumero}</span>
+                  </div>
+                </div>
+
+                {/* Resumo Inicial (Saldo Anterior) */}
+                <div className="flex justify-end mb-2 text-xs font-bold text-slate-700 pr-2">
+                  <div className="flex justify-between w-[220px]">
+                    <span>Saldo Anterior:</span>
+                    <span className="text-slate-950 font-black">{formatCurrency(saldoAnterior)}</span>
+                  </div>
+                </div>
+
+                {/* Tabela do Extrato Impresso */}
+                <table className="w-full border-collapse text-xs mt-2">
+                  <thead>
+                    <tr className="border-b border-slate-350 text-[10px] font-black text-slate-600 uppercase tracking-wider">
+                      <th className="pb-2 text-left w-[12%]">Data</th>
+                      <th className="pb-2 text-left w-[45%]">Histórico/Favorecido</th>
+                      <th className="pb-2 text-left w-[20%]">Conta</th>
+                      <th className="pb-2 text-right w-[11%]">Valor D/C</th>
+                      <th className="pb-2 text-right w-[12%]">Saldo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transactionsWithSaldos.slice().reverse().map((tx) => {
+                      const amount = Number(tx.amount);
+                      const isOutflow = tx.type === "OUTFLOW";
+                      return (
+                        <tr key={tx.id} className="border-b border-slate-100">
+                          <td className="py-2.5 text-slate-700 whitespace-nowrap">
+                            {new Date(tx.competenceDate).toLocaleDateString("pt-BR")}
+                          </td>
+                          <td className="py-2.5 text-slate-800">
+                            <span className="font-bold">{tx.description}</span>
+                            {tx.category && (
+                              <span className="text-[9px] text-slate-400 font-bold ml-2 uppercase">
+                                • {tx.category}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 text-left text-slate-600 font-semibold whitespace-nowrap">
+                            {tx.bankAccount?.name}
+                          </td>
+                          <td className={`py-2.5 text-right font-bold ${isOutflow ? "text-red-600" : "text-emerald-600"}`}>
+                            {isOutflow ? "-" : ""} {formatCurrency(amount).replace("R$", "").trim()} {isOutflow ? "D" : "C"}
+                          </td>
+                          <td className="py-2.5 text-right font-black text-slate-900">
+                            {formatCurrency(tx.saldoAfter ?? 0).replace("R$", "").trim()}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+
+                {/* Rodapé de Totais do Extrato */}
+                <div className="flex flex-col items-end mt-4 pt-2 border-t border-slate-300 pr-2 space-y-1">
+                  <div className="flex justify-between w-[280px] text-sm font-black text-slate-800 border-t border-slate-300 pt-2">
+                    <span>SALDO:</span>
+                    <span className="text-slate-950 font-black">{formatCurrency(consolidatedBalance)}</span>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex items-center justify-between mb-6 print-hide">
+              <div className="flex items-center justify-between mb-6 no-print">
                 <h2 className="text-lg font-black text-slate-900">Extrato Financeiro</h2>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setIsShareModalOpen(true)}
-                    className="flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-700 hover:bg-slate-50 transition shadow-sm print-hide"
+                    className="flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-700 hover:bg-slate-50 transition shadow-sm no-print"
                   >
                     <Share2 className="h-3.5 w-3.5 text-orange-500" />
                     Compartilhar
                   </button>
                   <button
-                    onClick={() => window.print()}
-                    className="flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-700 hover:bg-slate-50 transition shadow-sm print-hide"
+                    onClick={handlePrint}
+                    className="flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-700 hover:bg-slate-50 transition shadow-sm no-print"
                   >
                     <Printer className="h-3.5 w-3.5" />
                     Imprimir
@@ -1000,13 +1192,12 @@ export default function BancosPage() {
               </div>
 
               {transactions.length === 0 ? (
-                <div className="text-center py-12 text-sm text-slate-400 font-medium print-hide">
+                <div className="text-center py-12 text-sm text-slate-400 font-medium no-print">
                   Nenhuma movimentação bancária encontrada no período.
                 </div>
               ) : (
                 <div>
-                  {/* Vista Desktop: Tabela de Transações */}
-                  <div className="hidden sm:block overflow-x-auto tabela-desktop-fixa">
+                  <div className="hidden sm:block overflow-x-auto tabela-desktop-fixa no-print">
                     <table className="w-full border-collapse text-left text-sm">
                       <thead>
                         <tr className="border-b border-slate-100 text-xs font-black text-slate-400 uppercase tracking-wider">
@@ -1015,7 +1206,7 @@ export default function BancosPage() {
                           <th className="pb-3 pr-4">Conta</th>
                           <th className="pb-3 pr-4 text-right">Valor</th>
                           <th className="pb-3 pr-4 text-center">Status</th>
-                          <th className="pb-3 text-center print-hide">Ações</th>
+                          <th className="pb-3 text-center no-print">Ações</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
@@ -1057,7 +1248,7 @@ export default function BancosPage() {
                                   </span>
                                 )}
                               </td>
-                              <td className="py-3 text-center whitespace-nowrap print-hide">
+                              <td className="py-3 text-center whitespace-nowrap no-print">
                                 <div className="flex items-center justify-center gap-1">
                                   {tx.status === "PENDING" && (
                                     <button
@@ -1094,7 +1285,7 @@ export default function BancosPage() {
                           <td className="py-3 pr-4 text-center text-slate-400 font-bold">
                             —
                           </td>
-                          <td className="py-3 text-center print-hide text-slate-400 font-bold">
+                          <td className="py-3 text-center no-print text-slate-400 font-bold">
                             —
                           </td>
                         </tr>
@@ -1110,7 +1301,7 @@ export default function BancosPage() {
                           <td className="py-3 pr-4 text-center text-slate-400 font-bold">
                             —
                           </td>
-                          <td className="py-3 text-center rounded-br-2xl print-hide text-slate-400 font-bold">
+                          <td className="py-3 text-center rounded-br-2xl no-print text-slate-400 font-bold">
                             —
                           </td>
                         </tr>
@@ -1119,7 +1310,7 @@ export default function BancosPage() {
                   </div>
 
                   {/* Vista Mobile: Cards de Transações */}
-                  <div className="space-y-3 sm:hidden cards-mobile-fixo">
+                  <div className="space-y-3 sm:hidden no-print cards-mobile-fixo">
                     {transactions.map((tx) => {
                       const amount = Number(tx.amount);
                       const isOutflow = tx.type === "OUTFLOW";
@@ -1892,10 +2083,26 @@ export default function BancosPage() {
                   type="button"
                   disabled={isSaving}
                   onClick={() => {
+                    const isTransfer = !!editingTransaction.transferGroupId;
+                    const confirmMessage = isTransfer
+                      ? "Este lançamento faz parte de uma transferência. Excluir este lançamento excluirá automaticamente a entrada e a saída correspondente. Tem certeza?"
+                      : "Tem certeza que deseja excluir esta movimentação? O saldo da conta será revertido.";
+                    
                     showConfirm(
-                      "Tem certeza que deseja excluir esta movimentação? O saldo da conta será revertido.",
+                      confirmMessage,
                       async () => {
                         try {
+                          if (isTransfer) {
+                            // Find and delete the related transaction in the other account
+                            const relatedTx = transactions.find(
+                              (tx) =>
+                                tx.transferGroupId === editingTransaction.transferGroupId &&
+                                tx.id !== editingTransaction.id
+                            );
+                            if (relatedTx) {
+                              await deleteBankTransaction(relatedTx.id);
+                            }
+                          }
                           await deleteBankTransaction(editingTransaction.id);
                           setIsTransactionModalOpen(false);
                           setEditingTransaction(null);
