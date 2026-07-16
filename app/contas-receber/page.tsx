@@ -3666,10 +3666,10 @@ export default function AccountsReceivablePage() {
 
       setPendingContractScheduleCustomization(null);
       setPendingContractScheduleNotice({
-        title: wasScheduleRegistered ? "Agenda criada" : "Agenda n�o criada",
+        title: wasScheduleRegistered ? "Agenda criada" : "Agenda não criada",
         description: wasScheduleRegistered
-          ? "O vencimento do contrato foi registrado na agenda de acordo com as suas prefer�ncias."
-          : "N�o foi poss�vel registrar o vencimento na agenda automaticamente.",
+          ? "O vencimento do contrato foi registrado na agenda de acordo com as suas preferências."
+          : "Não foi possível registrar o vencimento na agenda automaticamente.",
         itemValue: pendingContractScheduleCustomization.propertyName || "Contrato vinculado",
       });
     } catch (error) {
@@ -3684,8 +3684,8 @@ export default function AccountsReceivablePage() {
     setPendingContractScheduleCustomization(null);
     if (contractObj) {
       setPendingContractScheduleNotice({
-        title: "Agenda n�o criada",
-        description: "Voc� optou por n�o criar o lembrete de vencimento na agenda.",
+        title: "Agenda não criada",
+        description: "Você optou por não criar o lembrete de vencimento na agenda.",
         itemValue: contractObj.propertyName || "Contrato vinculado",
       });
     }
@@ -3784,16 +3784,8 @@ export default function AccountsReceivablePage() {
 
     if (!wasContractPrintOpened) return;
 
-    const wasScheduleRegistered = await registerContractDueDateOnSchedule(contractToPrint);
-
     setPendingContractPrintRequest(null);
-    setPendingContractScheduleNotice({
-      title: wasScheduleRegistered ? "Agenda criada" : "Agenda não criada",
-      description: wasScheduleRegistered
-        ? "O vencimento do contrato foi registrado na agenda após a impressão."
-        : "O contrato foi aberto para impressão, mas não foi possível registrar o vencimento na agenda automaticamente.",
-      itemValue: contractToPrint.propertyName || "Contrato vinculado",
-    });
+    setPendingContractScheduleCustomization(contractToPrint);
   }
 
   function getContractPrintCompanySettings() {
@@ -7623,47 +7615,17 @@ export default function AccountsReceivablePage() {
           itemLabel="Contrato vinculado"
           itemValue={
             pendingContractPrintRequest.propertyName ||
-            properties.find((property) => String(property.id) === String(pendingContractPrintRequest.propertyId))?.name ||
-            "Não informado"
-          }
-          details={
-            <>
-              <p>
-                Inquilino:{" "}
-                {pendingContractPrintRequest.tenantName ||
-                  tenants.find((tenant) => String(tenant.id) === String(pendingContractPrintRequest.tenantId))?.name ||
-                  "Não informado"}
-              </p>
-              <p>
-                Tipo:{" "}
-                {pendingContractPrintRequest.isTemporaryRental
-                  ? "Contrato temporário"
-                  : "Contrato padrão"}
-              </p>
-              <p>Início: {formatContractDateForTemplate(pendingContractPrintRequest.startDate)}</p>
-              <p>Fim: {formatContractDateForTemplate(pendingContractPrintRequest.endDate)}</p>
-            </>
-          }
-          confirmLabel="Imprimir contrato"
-          cancelLabel="Imprimir depois"
-          tone="orange"
-          onCancel={closeContractPrintQuestion}
-          onConfirm={confirmContractPrintQuestion}
-          isBlackTheme={isBlackTheme}
-          themeClass={accountsReceivableThemeClass}
-          zIndex="z-[90]"
-        />
-      )}
-
-       {pendingContractScheduleCustomization && (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-[2rem] border border-orange-100 bg-white p-8 shadow-2xl">
+            properties.find((property) => String(property.id) === String(pendingContra       {pendingContractScheduleCustomization && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-lg rounded-[2.5rem] border border-orange-100 bg-white p-8 shadow-2xl dark:border-slate-800 dark:bg-slate-900 transition-all transform scale-100">
             <div className="text-center">
-              <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50 text-xl text-orange-600">??</span>
-              <h3 className="mt-4 text-xl font-black text-slate-950">Personalizar Lembrete de Vencimento</h3>
-              <p className="mt-2 text-sm text-slate-500">
-                Defina como deseja ser notificado sobre o vencimento do contrato do im�vel{" "}
-                <span className="font-bold text-slate-800">
+              <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 dark:bg-orange-950/40 text-2xl shadow-md animate-bounce" role="img" aria-label="Calendário">
+                📅
+              </span>
+              <h3 className="mt-4 text-xl font-black text-slate-950 dark:text-white">Personalizar Lembrete de Vencimento</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                Defina como deseja ser notificado sobre o vencimento do contrato do imóvel{" "}
+                <span className="font-extrabold text-slate-800 dark:text-slate-200">
                   {pendingContractScheduleCustomization.propertyName}
                 </span>.
               </p>
@@ -7671,32 +7633,32 @@ export default function AccountsReceivablePage() {
 
             <div className="mt-6 space-y-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold text-slate-500 uppercase">Respons�vel pelo Acompanhamento</label>
+                <label className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Responsável pelo Acompanhamento</label>
                 <input
                   type="text"
                   value={scheduleRespName}
                   onChange={(e) => setScheduleRespName(e.target.value)}
-                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                  className="h-12 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold text-slate-500 uppercase">Hor�rio do Alerta</label>
+                  <label className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Horário do Alerta</label>
                   <input
                     type="time"
                     value={scheduleTime}
                     onChange={(e) => setScheduleTime(e.target.value)}
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                    className="h-12 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                   />
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold text-slate-500 uppercase">Quando Notificar</label>
+                  <label className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Quando Notificar</label>
                   <select
                     value={scheduleReminder}
                     onChange={(e) => setScheduleReminder(e.target.value)}
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                    className="h-12 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                   >
                     <option value="No dia">No dia do vencimento</option>
                     <option value="1 dia antes">1 dia antes</option>
@@ -7704,7 +7666,37 @@ export default function AccountsReceivablePage() {
                     <option value="3 dias antes">3 dias antes</option>
                     <option value="4 dias antes">4 dias antes</option>
                     <option value="5 dias antes">5 dias antes</option>
+                    <option value="6 dias antes">6 dias antes</option>
+                    <option value="1 semana antes">1 semana antes (7 dias antes)</option>
                   </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={handleSkipCustomSchedule}
+                disabled={isSavingSchedule}
+                className="rounded-2xl border border-slate-200 dark:border-slate-700 px-6 py-3 text-sm font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50"
+              >Pular</button>
+              <button
+                type="button"
+                onClick={handleConfirmCustomSchedule}
+                disabled={isSavingSchedule}
+                className="rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-black text-white hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600 shadow-md hover:shadow-emerald-500/10 transition disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isSavingSchedule ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                    Salvando...
+                  </>
+                ) : "Confirmar e Agendar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}           </select>
                 </div>
               </div>
             </div>
