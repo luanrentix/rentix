@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
@@ -36,6 +37,16 @@ import {
   setCompanyStorageItem,
 } from "@/services/company-storage";
 import { openWhatsAppMessage } from "@/services/whatsapp.service";
+import {
+  generatePaymentCarnet as printPaymentCarnet,
+  openAccountsReceivableReport as printAccountsReceivableReport,
+  openContractPrintWindow as printContractPrintWindow,
+  generatePaymentReceiptBatch as printPaymentReceiptBatch,
+  generatePaymentReceipt as printPaymentReceipt,
+} from "./printing";
+import { useReceivableSelection } from "./hooks/useReceivableSelection";
+import { useReceivableFilters } from "./hooks/useReceivableFilters";
+import { useReceivableCalculations } from "./hooks/useReceivableCalculations";
 
 type ThemeMode = "light" | "black" | "graphite";
 
@@ -663,6 +674,136 @@ export default function AccountsReceivablePage() {
   const [paymentRecords, setPaymentRecords] = useState<ChargePayment[]>([]);
   const [manualCharges, setManualCharges] = useState<Charge[]>([]);
 
+  const {
+    getChargePayments,
+    getChargePayment,
+    getChargePaidAmount,
+    getChargeSettlementAmount,
+    getChargeRemainingAmount,
+  } = useReceivableCalculations(paymentRecords);
+
+  const getContractAmount = useCallback((contract: Contract) => {
+    return normalizeAmount(
+      contract.value ??
+        contract.amount ??
+        contract.rentValue ??
+        contract.monthlyValue ??
+        0,
+    );
+  }, []);
+
+  const automaticCharges = useMemo<Charge[]>(() => {
+    const today = new Date();
+    const manualContractIds = new Set(
+      manualCharges
+        .map((charge) => String(charge.contractId || ""))
+        .filter(Boolean),
+    );
+
+    return contracts
+      .filter((contract) => contract.status === "Active")
+      .filter((contract) => !manualContractIds.has(String(contract.id)))
+      .map((contract) => {
+        const property = properties.find(
+          (item) => item.id === contract.propertyId,
+        );
+
+        const tenant = tenants.find((item) => item.id === contract.tenantId);
+
+        const dueDate = new Date();
+        dueDate.setDate(new Date(contract.startDate).getDate());
+
+        const id = `${contract.id}-${dueDate.toISOString()}`;
+        const isPaid = paid.includes(id);
+
+        let status: Charge["status"] = "Pending";
+
+        if (isPaid) {
+          status = "Paid";
+        } else if (dueDate < today) {
+          status = "Overdue";
+        }
+
+        return {
+          id,
+          property: property?.name || "Bem/Ativo",
+          tenant: tenant?.name || "Inquilino",
+          dueDate: dueDate.toISOString(),
+          amount: getContractAmount(contract),
+          status,
+        };
+      });
+  }, [contracts, properties, tenants, paid, manualCharges, getContractAmount]);
+
+  const manualChargesWithStatus = useMemo<Charge[]>(() => {
+    const today = new Date();
+
+    return manualCharges.map((charge) => {
+      let status: Charge["status"] = "Pending";
+
+      if (paid.includes(charge.id)) {
+        status = "Paid";
+      } else if (new Date(charge.dueDate) < today) {
+        status = "Overdue";
+      }
+
+      return {
+        ...charge,
+        status,
+      };
+    });
+  }, [manualCharges, paid]);
+
+  const charges = useMemo<Charge[]>(() => {
+    const manualChargeIds = new Set(
+      manualChargesWithStatus.map((charge) => String(charge.id)),
+    );
+
+    const automaticChargesWithoutManualAdjustments = automaticCharges.filter(
+      (charge) => !manualChargeIds.has(String(charge.id)),
+    );
+
+    return [
+      ...automaticChargesWithoutManualAdjustments,
+      ...manualChargesWithStatus,
+    ];
+  }, [automaticCharges, manualChargesWithStatus]);
+
+  const {
+    statusFilter,
+    setStatusFilter,
+    selectedTenant,
+    setSelectedTenant,
+    focusedContractId,
+    setFocusedContractId,
+    search,
+    setSearch,
+    filteredTenants,
+    filteredCharges,
+    totalReceivable,
+    totalPaid,
+    totalOverdue,
+  } = useReceivableFilters({
+    charges,
+    tenants,
+    getChargeRemainingAmount,
+    getChargePaidAmount,
+    initialStatusFilter: DEFAULT_RECEIVABLE_STATUS_FILTER,
+  });
+
+  const selectableChargeIds = useMemo(() => {
+    return filteredCharges.map((charge) => String(charge.id));
+  }, [filteredCharges]);
+
+  const {
+    selectedChargeIds,
+    setSelectedChargeIds,
+    toggleChargeSelection,
+    toggleAllVisibleChargeSelection,
+    clearChargeSelection,
+    allVisibleChargesSelected,
+  } = useReceivableSelection(selectableChargeIds);
+
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [autoOpenSearch, setAutoOpenSearch] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -672,13 +813,7 @@ export default function AccountsReceivablePage() {
     "payment" | "delete" | "reversal" | "print" | null
   >(null);
 
-  const [search, setSearch] = useState("");
-  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
-  const [focusedContractId, setFocusedContractId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>(
-    DEFAULT_RECEIVABLE_STATUS_FILTER,
-  );
-  const [selectedChargeIds, setSelectedChargeIds] = useState<string[]>([]);
+
   const [openActionMenuChargeId, setOpenActionMenuChargeId] = useState<string | null>(null);
   const [actionMenuPosition, setActionMenuPosition] =
     useState<ActionMenuPosition | null>(null);
@@ -1014,92 +1149,7 @@ export default function AccountsReceivablePage() {
     );
   }, [companyId, statusFilter]);
 
-  const getContractAmount = useCallback((contract: Contract) => {
-    return normalizeAmount(
-      contract.value ??
-        contract.amount ??
-        contract.rentValue ??
-        contract.monthlyValue ??
-        0,
-    );
-  }, []);
 
-  const automaticCharges = useMemo<Charge[]>(() => {
-    const today = new Date();
-    const manualContractIds = new Set(
-      manualCharges
-        .map((charge) => String(charge.contractId || ""))
-        .filter(Boolean),
-    );
-
-    return contracts
-      .filter((contract) => contract.status === "Active")
-      .filter((contract) => !manualContractIds.has(String(contract.id)))
-      .map((contract) => {
-        const property = properties.find(
-          (item) => item.id === contract.propertyId,
-        );
-
-        const tenant = tenants.find((item) => item.id === contract.tenantId);
-
-        const dueDate = new Date();
-        dueDate.setDate(new Date(contract.startDate).getDate());
-
-        const id = `${contract.id}-${dueDate.toISOString()}`;
-        const isPaid = paid.includes(id);
-
-        let status: Charge["status"] = "Pending";
-
-        if (isPaid) {
-          status = "Paid";
-        } else if (dueDate < today) {
-          status = "Overdue";
-        }
-
-        return {
-          id,
-          property: property?.name || "Bem/Ativo",
-          tenant: tenant?.name || "Inquilino",
-          dueDate: dueDate.toISOString(),
-          amount: getContractAmount(contract),
-          status,
-        };
-      });
-  }, [contracts, properties, tenants, paid, manualCharges, getContractAmount]);
-
-  const manualChargesWithStatus = useMemo<Charge[]>(() => {
-    const today = new Date();
-
-    return manualCharges.map((charge) => {
-      let status: Charge["status"] = "Pending";
-
-      if (paid.includes(charge.id)) {
-        status = "Paid";
-      } else if (new Date(charge.dueDate) < today) {
-        status = "Overdue";
-      }
-
-      return {
-        ...charge,
-        status,
-      };
-    });
-  }, [manualCharges, paid]);
-
-  const charges = useMemo<Charge[]>(() => {
-    const manualChargeIds = new Set(
-      manualChargesWithStatus.map((charge) => String(charge.id)),
-    );
-
-    const automaticChargesWithoutManualAdjustments = automaticCharges.filter(
-      (charge) => !manualChargeIds.has(String(charge.id)),
-    );
-
-    return [
-      ...automaticChargesWithoutManualAdjustments,
-      ...manualChargesWithStatus,
-    ];
-  }, [automaticCharges, manualChargesWithStatus]);
 
   const openActionMenuCharge = useMemo(() => {
     return openActionMenuChargeId
@@ -1156,32 +1206,7 @@ export default function AccountsReceivablePage() {
     setActionMenuPosition(null);
   }
 
-  function toggleChargeSelection(chargeId: string) {
-    setSelectedChargeIds((currentChargeIds) =>
-      currentChargeIds.includes(chargeId)
-        ? currentChargeIds.filter((currentChargeId) => currentChargeId !== chargeId)
-        : [...currentChargeIds, chargeId],
-    );
-  }
 
-  function toggleAllVisibleChargeSelection() {
-    if (allVisibleChargesSelected) {
-      setSelectedChargeIds((currentChargeIds) =>
-        currentChargeIds.filter(
-          (currentChargeId) => !selectableChargeIds.includes(currentChargeId),
-        ),
-      );
-      return;
-    }
-
-    setSelectedChargeIds((currentChargeIds) =>
-      Array.from(new Set([...currentChargeIds, ...selectableChargeIds])),
-    );
-  }
-
-  function clearChargeSelection() {
-    setSelectedChargeIds([]);
-  }
 
   useEffect(() => {
     if (!openActionMenuChargeId) return;
@@ -1227,51 +1252,7 @@ export default function AccountsReceivablePage() {
     };
   }, [openActionMenuChargeId]);
 
-  const getChargePayments = useCallback((chargeId: string) => {
-    return paymentRecords
-      .filter(
-        (paymentRecord) => String(paymentRecord.chargeId) === String(chargeId),
-      )
-      .sort(
-        (firstPayment, secondPayment) =>
-          new Date(secondPayment.paidAt).getTime() -
-          new Date(firstPayment.paidAt).getTime(),
-      );
-  }, [paymentRecords]);
 
-  const getChargePayment = useCallback((chargeId: string) => {
-    return getChargePayments(chargeId)[0];
-  }, [getChargePayments]);
-
-  const getChargePaidAmount = useCallback((charge: Charge) => {
-    const backendPaidAmount = Number(charge.paidAmount || 0);
-
-    if (backendPaidAmount > 0) return backendPaidAmount;
-
-    return getChargePayments(charge.id).reduce(
-      (total, paymentRecord) => total + paymentRecord.amountPaid,
-      0,
-    );
-  }, [getChargePayments]);
-
-  const getChargeSettlementAmount = useCallback((charge: Charge) => {
-    return getChargePayments(charge.id).reduce((total, paymentRecord) => {
-      return (
-        total +
-        paymentRecord.amountPaid +
-        paymentRecord.discount -
-        paymentRecord.interest
-      );
-    }, 0);
-  }, [getChargePayments]);
-
-  const getChargeRemainingAmount = useCallback((charge: Charge) => {
-    if (typeof charge.remainingAmount === "number") {
-      return Math.max(charge.remainingAmount, 0);
-    }
-
-    return Math.max(charge.amount - getChargeSettlementAmount(charge), 0);
-  }, [getChargeSettlementAmount]);
 
   useEffect(() => {
     window.dispatchEvent(new Event("contrx-receivables-updated"));
@@ -1279,30 +1260,7 @@ export default function AccountsReceivablePage() {
     window.dispatchEvent(new Event("contrx-financial-updated"));
   }, [charges, paymentRecords]);
 
-  const filteredCharges = useMemo(() => {
-    let result = charges;
 
-    if (focusedContractId) {
-      result = result.filter(
-        (charge) => String(charge.contractId || "") === String(focusedContractId),
-      );
-    }
-
-    if (selectedTenant) {
-      result = result.filter(
-        (charge) =>
-          String(charge.tenantId || "") === String(selectedTenant.id) ||
-          (!charge.tenantId &&
-            charge.tenant.toLowerCase() === selectedTenant.name.toLowerCase()),
-      );
-    }
-
-    if (statusFilter !== "All") {
-      result = result.filter((charge) => charge.status === statusFilter);
-    }
-
-    return result;
-  }, [charges, focusedContractId, selectedTenant, statusFilter]);
 
   useEffect(() => {
     const availableChargeIds = new Set(charges.map((charge) => String(charge.id)));
@@ -1310,50 +1268,20 @@ export default function AccountsReceivablePage() {
     setSelectedChargeIds((currentChargeIds) =>
       currentChargeIds.filter((chargeId) => availableChargeIds.has(String(chargeId))),
     );
-  }, [charges]);
-
-  const totalReceivable = useMemo(() => {
-    return filteredCharges
-      .filter((charge) => charge.status !== "Paid")
-      .reduce((total, charge) => total + getChargeRemainingAmount(charge), 0);
-  }, [filteredCharges, getChargeRemainingAmount]);
-
-  const totalPaid = useMemo(() => {
-    return filteredCharges
-      .filter((charge) => charge.status === "Paid")
-      .reduce((total, charge) => total + getChargePaidAmount(charge), 0);
-  }, [filteredCharges, getChargePaidAmount]);
-
-  const totalOverdue = useMemo(() => {
-    return filteredCharges
-      .filter((charge) => charge.status === "Overdue")
-      .reduce((total, charge) => total + getChargeRemainingAmount(charge), 0);
-  }, [filteredCharges, getChargeRemainingAmount]);
+  }, [charges, setSelectedChargeIds]);
 
   const selectedCharges = useMemo(() => {
     const selectedIds = new Set(selectedChargeIds.map(String));
-
     return filteredCharges.filter((charge) => selectedIds.has(String(charge.id)));
   }, [filteredCharges, selectedChargeIds]);
 
-  const selectableChargeIds = filteredCharges.map((charge) => String(charge.id));
+  const selectedPendingCharges = useMemo(() => {
+    return selectedCharges.filter((charge) => charge.status !== "Paid");
+  }, [selectedCharges]);
 
-  const allVisibleChargesSelected =
-    selectableChargeIds.length > 0 &&
-    selectableChargeIds.every((chargeId) => selectedChargeIds.includes(chargeId));
-
-  const selectedPendingCharges = selectedCharges.filter(
-    (charge) => charge.status !== "Paid",
-  );
-  const selectedPaidCharges = selectedCharges.filter((charge) =>
-    Boolean(getChargePayment(charge.id)),
-  );
-
-  const filteredTenants = useMemo(() => {
-    return tenants.filter((tenant) =>
-      tenant.name.toLowerCase().includes(search.toLowerCase()),
-    );
-  }, [tenants, search]);
+  const selectedPaidCharges = useMemo(() => {
+    return selectedCharges.filter((charge) => Boolean(getChargePayment(charge.id)));
+  }, [selectedCharges, getChargePayment]);
 
   const isEditingPaidCharge = editingChargeId
     ? paid.includes(editingChargeId)
@@ -2174,6 +2102,17 @@ export default function AccountsReceivablePage() {
   }
 
   async function generatePaymentCarnet(carnetCharges: Charge[]) {
+    await printPaymentCarnet({
+      carnetCharges,
+      companySettings: getCompanySettingsForCarnet(),
+      paymentBookletInstructions: getPaymentBookletInstructions(),
+      renderPaymentBookletTemplate,
+      renderPaymentBookletInstructions,
+      setChargeFormError,
+    });
+  }
+
+  async function localGeneratePaymentCarnet(carnetCharges: Charge[]) {
     if (carnetCharges.length === 0) return;
 
     const printWindow = window.open(
@@ -2458,6 +2397,41 @@ export default function AccountsReceivablePage() {
   }
 
   function openAccountsReceivableReport(shouldPrint: boolean) {
+    if (reportDueFilter === "DateRange" && !reportStartDate && !reportEndDate) {
+      setReportFormError("Informe ao menos uma data inicial ou final para gerar relatório por período.");
+      return;
+    }
+    if (reportStartDate && reportEndDate && reportStartDate > reportEndDate) {
+      setReportFormError("A data inicial não pode ser maior que a data final.");
+      return;
+    }
+    const reportCharges = getReportFilteredCharges();
+    if (reportCharges.length === 0) {
+      setReportFormError("Nenhuma conta encontrada para os filtros informados.");
+      return;
+    }
+    printAccountsReceivableReport({
+      shouldPrint,
+      reportDueFilter,
+      reportStartDate,
+      reportEndDate,
+      reportTenantId,
+      reportStatusFilter,
+      reportCharges,
+      tenants,
+      getChargeRemainingAmount,
+      getChargePaidAmount,
+      getReportTotalAmount,
+      getPaymentMethodLabel,
+      getStatusLabel,
+      getStatusFilterLabel,
+      getReportDueFilterLabel,
+      paymentRecords,
+      setReportFormError,
+    });
+  }
+
+  function localOpenAccountsReceivableReport(shouldPrint: boolean) {
     setReportFormError("");
 
     if (reportDueFilter === "DateRange" && !reportStartDate && !reportEndDate) {
@@ -2518,11 +2492,11 @@ export default function AccountsReceivablePage() {
           ? payment.paymentItems
               .map(
                 (item) =>
-                  `${getPaymentMethodLabel(item.method)} (${formatCurrency(item.amount)})`,
+                  `${getPaymentMethodLabel(item.method as PaymentMethod)} (${formatCurrency(item.amount)})`,
               )
               .join(", ")
           : payment
-            ? getPaymentMethodLabel(payment.method)
+            ? getPaymentMethodLabel(payment.method as PaymentMethod)
             : "-";
 
         return `
@@ -4311,7 +4285,16 @@ export default function AccountsReceivablePage() {
     openReceivePaymentModal(chargesToReceive[0], chargesToReceive);
   }
 
-  function generatePaymentReceiptBatch(receiptItems: ReceiptPrintItem[]) {
+  function generatePaymentReceiptBatch(receiptItems: any[]) {
+    printPaymentReceiptBatch({
+      receiptItems,
+      companySettings: getCompanySettingsForCarnet(),
+      getPaymentMethodLabel,
+      setPaymentFormError,
+    });
+  }
+
+  function localGeneratePaymentReceiptBatch(receiptItems: ReceiptPrintItem[]) {
     if (receiptItems.length === 0) return;
 
     const receiptWindow = window.open(
@@ -4490,7 +4473,17 @@ export default function AccountsReceivablePage() {
     receiptWindow.document.close();
   }
 
-  function generatePaymentReceipt(charge: Charge, paymentRecord: ChargePayment) {
+  function generatePaymentReceipt(charge: Charge, paymentRecord: any) {
+    printPaymentReceipt({
+      charge,
+      paymentRecord,
+      companySettings: getCompanySettingsForCarnet(),
+      getPaymentMethodLabel,
+      setPaymentFormError,
+    });
+  }
+
+  function localGeneratePaymentReceipt(charge: Charge, paymentRecord: ChargePayment) {
     const receiptWindow = window.open(
       "",
       "_blank",
@@ -4728,7 +4721,7 @@ export default function AccountsReceivablePage() {
       const updatedPaymentRecord: ChargePayment = {
         chargeId: editingChargeId,
         paidAt: new Date(`${formPaymentDate}T00:00:00`).toISOString(),
-        method: currentPaymentRecord?.method || "Cash",
+        method: (currentPaymentRecord?.method || "Cash") as PaymentMethod,
         interest: currentPaymentRecord?.interest || 0,
         discount: currentPaymentRecord?.discount || 0,
         amountPaid:

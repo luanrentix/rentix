@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MouseEvent } from "react";
@@ -24,6 +25,10 @@ import {
   getCompanyStorageItem,
   setCompanyStorageItem,
 } from "@/services/company-storage";
+import { getCachedCompanySettings } from "@/services/settings-cache";
+import { useExpenseCalculations } from "./hooks/useExpenseCalculations";
+import { useExpenseFilters } from "./hooks/useExpenseFilters";
+import { generateExpensePaymentReceipt } from "./printing";
 
 type ThemeMode = "light" | "black" | "graphite";
 type PersonType = "Individual" | "Company";
@@ -243,8 +248,76 @@ export default function AccountsPayablePage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [paymentRecords, setPaymentRecords] = useState<ExpensePayment[]>([]);
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
-  const [search, setSearch] = useState("");
+  function getStartOfDay(date: Date) {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    return start;
+  }
+
+  function getCompanySettingsForReceipt() {
+    const defaultCompanySettings = {
+      companyName: "Contrx",
+      tradeName: "Contrx",
+      document: "",
+      phone: "",
+      email: "",
+      city: "",
+    };
+
+    try {
+      const cachedCompanySettings = getCachedCompanySettings();
+
+      if (!cachedCompanySettings) {
+        return defaultCompanySettings;
+      }
+
+      const source =
+        cachedCompanySettings.company &&
+        typeof cachedCompanySettings.company === "object" &&
+        !Array.isArray(cachedCompanySettings.company)
+          ? (cachedCompanySettings.company as Record<string, unknown>)
+          : (cachedCompanySettings as Record<string, unknown>);
+
+      return {
+        companyName: String(source.companyName || "Contrx"),
+        tradeName: String(source.tradeName || source.companyName || "Contrx"),
+        document: String(source.document || ""),
+        phone: String(source.phone || ""),
+        email: String(source.email || ""),
+        city: String(source.city || ""),
+      };
+    } catch {
+      return defaultCompanySettings;
+    }
+  }
+
+  const {
+    getExpensePayment,
+    getExpensePayments,
+    getExpensePaidAmount,
+    getExpenseSettlementAmount,
+    getExpenseRemainingAmount,
+  } = useExpenseCalculations(paymentRecords);
+
+  const {
+    statusFilter,
+    setStatusFilter,
+    search,
+    setSearch,
+    expensesWithStatus,
+    filteredExpenses,
+    totalPayable,
+    totalPaid,
+    totalOverdue,
+  } = useExpenseFilters({
+    expenses,
+    getExpensePayment,
+    getExpenseSettlementAmount,
+    getExpenseRemainingAmount,
+    getExpensePaidAmount,
+    getStartOfDay,
+    initialStatusFilter: "All",
+  });
   const [openActionMenuExpenseId, setOpenActionMenuExpenseId] = useState<
     string | null
   >(null);
@@ -449,92 +522,6 @@ export default function AccountsPayablePage() {
     setCompanyStorageItem(companyId, "contrx_payable_status_filter", statusFilter);
   }, [companyId, statusFilter]);
 
-  const getExpensePayment = useCallback((expenseId: string) => {
-    return paymentRecords.find(
-      (paymentRecord) => String(paymentRecord.expenseId) === String(expenseId),
-    );
-  }, [paymentRecords]);
-
-  const getExpensePayments = useCallback((expenseId: string) => {
-    return paymentRecords.filter(
-      (paymentRecord) => String(paymentRecord.expenseId) === String(expenseId),
-    );
-  }, [paymentRecords]);
-
-  const getExpensePaidAmount = useCallback((expense: Expense) => {
-    const paymentTotal = getExpensePayments(expense.id).reduce(
-      (total, paymentRecord) => total + paymentRecord.amountPaid,
-      0,
-    );
-
-    return paymentTotal || (expense.status === "Paid" ? expense.amount : 0);
-  }, [getExpensePayments]);
-
-  const getExpenseSettlementAmount = useCallback((expenseId: string) => {
-    return getExpensePayments(expenseId).reduce(
-      (total, paymentRecord) =>
-        total +
-        paymentRecord.amountPaid +
-        paymentRecord.discount -
-        paymentRecord.interest,
-      0,
-    );
-  }, [getExpensePayments]);
-
-  const getExpenseRemainingAmount = useCallback((expense: Expense) => {
-    if (expense.status === "Paid" && !getExpensePayment(expense.id)) return 0;
-
-    return Math.max(expense.amount - getExpenseSettlementAmount(expense.id), 0);
-  }, [getExpensePayment, getExpenseSettlementAmount]);
-
-  const expensesWithStatus = useMemo<Expense[]>(() => {
-    const today = getStartOfDay(new Date());
-
-    return expenses.map((expense) => {
-      const paymentRecord = getExpensePayment(expense.id);
-      const dueDate = getStartOfDay(
-        new Date(expense.dueDate || expense.date || new Date().toISOString()),
-      );
-
-      let status: ExpenseStatus = "Pending";
-
-      if (paymentRecord && getExpenseSettlementAmount(expense.id) >= expense.amount) {
-        status = "Paid";
-      } else if (!paymentRecord && expense.status === "Paid") {
-        status = "Paid";
-      } else if (dueDate < today) {
-        status = "Overdue";
-      }
-
-      return {
-        ...expense,
-        status,
-      };
-    });
-  }, [expenses, getExpensePayment, getExpenseSettlementAmount]);
-
-  const filteredExpenses = useMemo(() => {
-    let result = expensesWithStatus;
-
-    if (search.trim()) {
-      const normalizedSearch = search.trim().toLowerCase();
-
-      result = result.filter(
-        (expense) =>
-          expense.description.toLowerCase().includes(normalizedSearch) ||
-          (expense.personName || "").toLowerCase().includes(normalizedSearch) ||
-          (expense.propertyName || "").toLowerCase().includes(normalizedSearch) ||
-          (expense.category || "").toLowerCase().includes(normalizedSearch),
-      );
-    }
-
-    if (statusFilter !== "All") {
-      result = result.filter((expense) => expense.status === statusFilter);
-    }
-
-    return result;
-  }, [expensesWithStatus, search, statusFilter]);
-
   const openActionMenuExpense = useMemo(() => {
     return openActionMenuExpenseId
       ? expensesWithStatus.find(
@@ -542,6 +529,8 @@ export default function AccountsPayablePage() {
         ) || null
       : null;
   }, [expensesWithStatus, openActionMenuExpenseId]);
+
+
 
   function getFloatingActionMenuPosition(
     buttonRect: DOMRect,
@@ -633,23 +622,7 @@ export default function AccountsPayablePage() {
     };
   }, [openActionMenuExpenseId]);
 
-  const totalPayable = useMemo(() => {
-    return filteredExpenses
-      .filter((expense) => expense.status !== "Paid")
-      .reduce((total, expense) => total + getExpenseRemainingAmount(expense), 0);
-  }, [filteredExpenses, getExpenseRemainingAmount]);
 
-  const totalPaid = useMemo(() => {
-    return filteredExpenses
-      .filter((expense) => expense.status === "Paid")
-      .reduce((total, expense) => total + getExpensePaidAmount(expense), 0);
-  }, [filteredExpenses, getExpensePaidAmount]);
-
-  const totalOverdue = useMemo(() => {
-    return filteredExpenses
-      .filter((expense) => expense.status === "Overdue")
-      .reduce((total, expense) => total + getExpenseRemainingAmount(expense), 0);
-  }, [filteredExpenses, getExpenseRemainingAmount]);
 
   const isEditingPaidExpense = editingExpenseId
     ? Boolean(getExpensePayment(editingExpenseId))
@@ -672,12 +645,7 @@ export default function AccountsPayablePage() {
     return getLocalDateValue(new Date(dateValue));
   }
 
-  function getStartOfDay(date: Date) {
-    const normalizedDate = new Date(date);
-    normalizedDate.setHours(0, 0, 0, 0);
 
-    return normalizedDate;
-  }
 
   function getEndOfDay(date: Date) {
     const normalizedDate = new Date(date);
@@ -1146,7 +1114,7 @@ export default function AccountsPayablePage() {
       const updatedPaymentRecord: ExpensePayment = {
         expenseId: editingExpenseId,
         paidAt: new Date(`${formPaymentDate}T00:00:00`).toISOString(),
-        method: currentPaymentRecord?.method || "Cash",
+        method: (currentPaymentRecord?.method || "Cash") as PaymentMethod,
         paymentItems: currentPaymentRecord?.paymentItems,
         interest: currentPaymentRecord?.interest || 0,
         discount: currentPaymentRecord?.discount || 0,
@@ -1550,6 +1518,17 @@ export default function AccountsPayablePage() {
     savePaymentRecords(updatedPaymentRecords);
     closePayExpenseModal();
     setProcessingConfirmation(null);
+
+    const targetExpense = expenses.find(e => String(e.id) === String(expensePendingPaymentReceipt.id)) || expensePendingPaymentReceipt;
+    const finalPaymentRecord = updatedPaymentRecords.find(pr => String(pr.expenseId) === String(targetExpense.id)) || paymentRecord;
+    
+    generateExpensePaymentReceipt({
+      expense: targetExpense,
+      paymentRecord: finalPaymentRecord,
+      companySettings: getCompanySettingsForReceipt(),
+      getPaymentMethodLabel,
+      setPaymentFormError,
+    });
   }
 
   function openDeleteExpenseConfirmation() {
@@ -1677,6 +1656,25 @@ export default function AccountsPayablePage() {
     setReportEndDate("");
     setReportFormError("");
     setIsReportOpen(true);
+  }
+
+  function reprintExpensePaymentReceipt(expense: Expense) {
+    const paymentRecord = getExpensePayment(expense.id);
+
+    if (!paymentRecord) {
+      setPaymentFormError(
+        "Não existe recibo salvo para esta despesa. Confirme o pagamento antes de reimprimir.",
+      );
+      return;
+    }
+
+    generateExpensePaymentReceipt({
+      expense,
+      paymentRecord,
+      companySettings: getCompanySettingsForReceipt(),
+      getPaymentMethodLabel,
+      setPaymentFormError,
+    });
   }
 
   function closeReportModal() {
@@ -1869,13 +1867,13 @@ GERADO EM: {currentDate}`;
           ? payment.paymentItems
               .map(
                 (item) =>
-                  `${getPaymentMethodLabel(item.method)} (${formatCurrency(
+                  `${getPaymentMethodLabel(item.method as PaymentMethod)} (${formatCurrency(
                     item.amount,
                   )})`,
               )
               .join(", ")
           : payment
-            ? getPaymentMethodLabel(payment.method)
+            ? getPaymentMethodLabel(payment.method as PaymentMethod)
             : "-";
 
         return `
@@ -2632,16 +2630,28 @@ GERADO EM: {currentDate}`;
           )}
 
           {getExpensePayment(openActionMenuExpense.id) && (
-            <button
-              type="button"
-              onClick={() => {
-                handleCloseExpenseActions();
-                openPaymentReversalConfirmation(openActionMenuExpense);
-              }}
-              className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-red-700 transition hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/30"
-            >
-              Estornar pagamento
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  handleCloseExpenseActions();
+                  reprintExpensePaymentReceipt(openActionMenuExpense);
+                }}
+                className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-teal-700 transition hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-950/30"
+              >
+                Imprimir Recibo
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleCloseExpenseActions();
+                  openPaymentReversalConfirmation(openActionMenuExpense);
+                }}
+                className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-red-700 transition hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/30"
+              >
+                Estornar pagamento
+              </button>
+            </>
           )}
         </div>
       )}

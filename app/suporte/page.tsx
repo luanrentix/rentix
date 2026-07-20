@@ -5,18 +5,39 @@ import { ArrowLeft, MessageSquare, Plus, Send, Clock, User, Building, Shield } f
 import { useAuth } from "@/context/AuthContext";
 import { getChamados, criarChamado, clienteAcaoChamado, type SupportTicket } from "@/services/chamados.service";
 import { getCompanyStorageItem } from "@/services/company-storage";
+import { useSupportTickets } from "./hooks/useSupportTickets";
+import { useSupportForm } from "./hooks/useSupportForm";
+
+function parseMessageWithAttachment(messageText: string) {
+  const attachmentRegex = /--- ATTACHMENT: (.*?) \| (.*?) ---/;
+  const match = messageText.match(attachmentRegex);
+
+  if (match) {
+    const cleanMessage = messageText.replace(attachmentRegex, "").trim();
+    const fileName = match[1];
+    const base64 = match[2];
+    
+    return {
+      message: cleanMessage,
+      attachment: {
+        name: fileName,
+        content: base64,
+        isImage: base64.startsWith("data:image/"),
+      }
+    };
+  }
+
+  return {
+    message: messageText,
+    attachment: null,
+  };
+}
 
 export default function SuportePage() {
   const { user } = useAuth();
   const companyId = user?.companyId;
   const [themeMode, setThemeMode] = useState("light");
-  const [chamados, setChamados] = useState<SupportTicket[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [view, setView] = useState<"list" | "new">("list");
-  const [respondingTicketId, setRespondingTicketId] = useState<string | null>(null);
-  const [ticketResponse, setTicketResponse] = useState("");
-  const [isReplying, setIsReplying] = useState(false);
 
   useEffect(() => {
     if (!companyId) return;
@@ -24,85 +45,38 @@ export default function SuportePage() {
     setThemeMode(mode);
   }, [companyId]);
 
-  // Form states
-  const [subject, setSubject] = useState("");
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-
   const isSystemOwner = user?.role === "SYSTEM_OWNER" || user?.role === "DONO_SISTEMA";
+  const {
+    chamados,
+    loading,
+    respondingTicketId,
+    setRespondingTicketId,
+    ticketResponse,
+    setTicketResponse,
+    isReplying,
+    fetchTickets,
+    handleClienteAcao,
+  } = useSupportTickets(companyId);
 
-  // Fetch tickets
-  const fetchTickets = async () => {
-    try {
-      setLoading(true);
-      const data = await getChamados();
-      setChamados(data);
-    } catch (err) {
-      console.error("Erro ao buscar chamados:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleClienteAcao = async (ticketId: string, action: "reply" | "close") => {
-    if (action === "reply" && !ticketResponse.trim()) {
-      alert("Por favor, digite sua resposta.");
-      return;
-    }
-
-    try {
-      setIsReplying(true);
-      await clienteAcaoChamado(ticketId, action, action === "reply" ? ticketResponse : undefined);
-      setRespondingTicketId(null);
-      setTicketResponse("");
-      await fetchTickets();
-    } catch (err) {
-      console.error("Erro ao realizar ação no chamado:", err);
-    } finally {
-      setIsReplying(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchTickets();
-  }, []);
-
-  // Handle submit ticket
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
-
-    if (!subject.trim()) {
-      setError("O assunto é obrigatório.");
-      return;
-    }
-    if (!message.trim()) {
-      setError("A mensagem é obrigatória.");
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-      await criarChamado({ subject, message });
-      setSuccess("Chamado enviado com sucesso para o proprietário do sistema!");
-      setSubject("");
-      setMessage("");
-      
-      // Refresh tickets list and go back after 2 seconds
-      fetchTickets();
-      setTimeout(() => {
-        setView("list");
-        setSuccess("");
-      }, 2000);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Ocorreu um erro ao enviar o chamado.";
-      setError(errorMessage);
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const {
+    subject,
+    setSubject,
+    message,
+    setMessage,
+    error,
+    setError,
+    success,
+    setSuccess,
+    submitting,
+    attachmentBase64,
+    attachmentName,
+    attachmentPreview,
+    handleFileChange,
+    removeAttachment,
+    handleSubmit,
+  } = useSupportForm({
+    onSubmitSuccess: () => setView("list"),
+  });
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleString("pt-BR", {
@@ -197,9 +171,44 @@ export default function SuportePage() {
                     </div>
                   </div>
 
-                  <p className="mt-3 text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">
-                    {ticket.message}
-                  </p>
+                  {(() => {
+                    const parsed = parseMessageWithAttachment(ticket.message);
+                    return (
+                      <>
+                        <p className="mt-3 text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">
+                          {parsed.message}
+                        </p>
+                        {parsed.attachment && (
+                          <div className="mt-3 rounded-2xl border border-slate-100 bg-slate-50 p-3 max-w-sm">
+                            <span className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Anexo</span>
+                            {parsed.attachment.isImage ? (
+                              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                                <img
+                                  src={parsed.attachment.content}
+                                  alt={parsed.attachment.name}
+                                  className="max-h-48 w-full object-contain cursor-pointer transition hover:opacity-90"
+                                  onClick={() => {
+                                    const win = window.open();
+                                    if (win) {
+                                      win.document.write(`<img src="${parsed.attachment?.content}" style="max-width:100%; max-height:100vh; display:block; margin:auto;" />`);
+                                    }
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <a
+                                href={parsed.attachment.content}
+                                download={parsed.attachment.name}
+                                className="flex items-center gap-2 text-xs font-bold text-orange-600 hover:underline"
+                              >
+                                📥 {parsed.attachment.name}
+                              </a>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
 
                   {ticket.response && (
                     <div className="mt-4 rounded-2xl bg-orange-50/50 border border-orange-100 p-4">
@@ -338,7 +347,7 @@ export default function SuportePage() {
               />
             </div>
 
-            <div className="mb-8">
+            <div className="mb-6">
               <label htmlFor="message" className="mb-2 block text-sm font-bold text-slate-800">
                 Mensagem *
               </label>
@@ -351,6 +360,54 @@ export default function SuportePage() {
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3.5 text-sm font-medium focus:border-orange-500 focus:outline-none"
                 required
               />
+            </div>
+
+            <div className="mb-8">
+              <span className="mb-2 block text-sm font-bold text-slate-800">
+                Anexar evidência (opcional)
+              </span>
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-3">
+                  <label
+                    htmlFor="attachment"
+                    className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-3 text-xs font-bold text-slate-600 transition hover:bg-slate-100"
+                  >
+                    📎 Selecionar arquivo (Max 5MB)
+                  </label>
+                  <input
+                    type="file"
+                    id="attachment"
+                    accept="image/*,application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleFileChange(file);
+                    }}
+                  />
+                  {attachmentName && (
+                    <div className="flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                      <span>{attachmentName}</span>
+                      <button
+                        type="button"
+                        onClick={removeAttachment}
+                        className="text-red-500 hover:text-red-700 font-bold ml-1"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {attachmentPreview && attachmentPreview !== "document" && (
+                  <div className="mt-2 h-32 w-32 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                    <img
+                      src={attachmentPreview}
+                      alt="Preview"
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex justify-end gap-3">

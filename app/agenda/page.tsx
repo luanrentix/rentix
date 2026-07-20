@@ -39,6 +39,8 @@ import {
   getCompanyStorageItem,
   setCompanyStorageItem,
 } from "@/services/company-storage";
+import { useCalendarNavigation } from "./hooks/useCalendarNavigation";
+import { useAgendaFilters } from "./hooks/useAgendaFilters";
 
 type ScheduleStatus = "scheduled" | "completed" | "canceled";
 type SchedulePriority = "low" | "medium" | "high";
@@ -396,16 +398,58 @@ export default function AgendaPage() {
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [people, setPeople] = useState<AgendaPerson[]>([]);
   const [properties, setProperties] = useState<AgendaProperty[]>([]);
-  const [selectedDate, setSelectedDate] = useState(todayInputValue);
-  const [currentCalendarDate, setCurrentCalendarDate] = useState(() =>
-    createDateFromInputValue(todayInputValue),
-  );
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<ScheduleStatus | "all">("all");
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [responsibleFilter, setResponsibleFilter] = useState("all");
-  const [priorityFilter, setPriorityFilter] = useState<SchedulePriority | "all">("all");
-  const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
+  const {
+    selectedDate,
+    setSelectedDate,
+    viewMode,
+    setViewMode,
+    currentCalendarDate,
+    setCurrentCalendarDate,
+    calendarDays,
+    weekDays,
+    moveSelectedDateByDays,
+    handlePreviousPeriod,
+    handleNextPeriod,
+    handleSelectDate,
+    handleTodayClick,
+    handleDateInputChange,
+  } = useCalendarNavigation(todayInputValue);
+
+  const {
+    searchTerm,
+    setSearchTerm,
+    statusFilter,
+    setStatusFilter,
+    typeFilter,
+    setTypeFilter,
+    responsibleFilter,
+    setResponsibleFilter,
+    priorityFilter,
+    setPriorityFilter,
+    filteredItems,
+    selectedDateItems,
+    weekItems,
+    monthItems,
+    nextSevenDaysItems,
+    scheduledCount,
+    completedCount,
+    todayCount,
+    highPriorityCount,
+    overdueCount,
+    activeFilterCount,
+    calendarSubtitle,
+    handleClearFilters,
+  } = useAgendaFilters({
+    scheduleItems,
+    selectedDate,
+    weekDays,
+    currentCalendarDate,
+    todayInputValue,
+    viewMode: viewMode as any,
+    createDateFromInputValue,
+    formatDateToInputValue,
+    getWeekRangeLabel,
+  });
   const [themeMode, setThemeMode] = useState<ThemeMode>("light");
   const [isBlackTheme, setIsBlackTheme] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
@@ -426,12 +470,7 @@ export default function AgendaPage() {
   const [actionMenuPosition, setActionMenuPosition] =
     useState<ActionMenuPosition | null>(null);
 
-  const calendarDays = useMemo(
-    () => getMonthDays(currentCalendarDate),
-    [currentCalendarDate],
-  );
-  const weekDays = useMemo(() => getWeekDays(selectedDate), [selectedDate]);
-  const normalizedSearchTerm = normalizeText(searchTerm);
+
 
   const uniqueTypeOptions = useMemo(() => {
     const storedTypes = scheduleItems.map((item) => item.type).filter(Boolean);
@@ -447,101 +486,7 @@ export default function AgendaPage() {
     return Array.from(new Set([...responsibleOptions, ...storedResponsibleNames]));
   }, [scheduleItems]);
 
-  const filteredItems = useMemo(() => {
-    return scheduleItems
-      .filter((item) => {
-        if (statusFilter !== "all" && item.status !== statusFilter) return false;
-        if (typeFilter !== "all" && item.type !== typeFilter) return false;
-        if (responsibleFilter !== "all" && item.responsibleName !== responsibleFilter) return false;
-        if (priorityFilter !== "all" && item.priority !== priorityFilter) return false;
-        if (!normalizedSearchTerm) return true;
-
-        return [
-          item.title,
-          item.customerName,
-          item.propertyName,
-          item.type,
-          item.responsibleName,
-          item.notes,
-        ].some((value) => normalizeText(value).includes(normalizedSearchTerm));
-      })
-      .sort((firstItem, secondItem) =>
-        getTimeValue(firstItem).localeCompare(getTimeValue(secondItem)),
-      );
-  }, [
-    scheduleItems,
-    normalizedSearchTerm,
-    statusFilter,
-    typeFilter,
-    responsibleFilter,
-    priorityFilter,
-  ]);
-
-  const selectedDateItems = useMemo(
-    () => filteredItems.filter((item) => item.date === selectedDate),
-    [filteredItems, selectedDate],
-  );
-
-  const weekItems = useMemo(() => {
-    const weekDateValues = weekDays.map((date) => formatDateToInputValue(date));
-
-    return filteredItems.filter((item) => weekDateValues.includes(item.date));
-  }, [filteredItems, weekDays]);
-
-  const monthItems = useMemo(() => {
-    const month = currentCalendarDate.getMonth();
-    const year = currentCalendarDate.getFullYear();
-
-    return filteredItems.filter((item) => {
-      const itemDate = createDateFromInputValue(item.date);
-
-      return itemDate.getMonth() === month && itemDate.getFullYear() === year;
-    });
-  }, [filteredItems, currentCalendarDate]);
-
-  const nextSevenDaysItems = useMemo(() => {
-    const startDate = createDateFromInputValue(todayInputValue);
-    const endDate = createDateFromInputValue(addDaysToInputValue(todayInputValue, 7));
-
-    return scheduleItems
-      .filter((item) => {
-        const itemDate = createDateFromInputValue(item.date);
-
-        return itemDate >= startDate && itemDate <= endDate && item.status === "scheduled";
-      })
-      .sort((firstItem, secondItem) =>
-        getTimeValue(firstItem).localeCompare(getTimeValue(secondItem)),
-      )
-      .slice(0, 6);
-  }, [scheduleItems, todayInputValue]);
-
-  const scheduledCount = scheduleItems.filter(
-    (item) => item.status === "scheduled",
-  ).length;
-  const completedCount = scheduleItems.filter(
-    (item) => item.status === "completed",
-  ).length;
-  const todayCount = scheduleItems.filter((item) => item.date === todayInputValue).length;
-  const highPriorityCount = scheduleItems.filter(
-    (item) => item.priority === "high" && item.status === "scheduled",
-  ).length;
-  const overdueCount = scheduleItems.filter(
-    (item) => item.date < todayInputValue && item.status === "scheduled",
-  ).length;
-  const activeFilterCount = [
-    searchTerm.trim(),
-    statusFilter !== "all",
-    typeFilter !== "all",
-    responsibleFilter !== "all",
-    priorityFilter !== "all",
-  ].filter(Boolean).length;
   const selectedDateLabel = getReadableDate(selectedDate);
-  const calendarSubtitle =
-    viewMode === "month"
-      ? `${monthItems.length} compromisso(s) neste mes`
-      : viewMode === "week"
-        ? `${weekItems.length} compromisso(s) de ${getWeekRangeLabel(weekDays)}`
-        : `${selectedDateItems.length} compromisso(s) no dia`;
 
   const openActionMenuSchedule = useMemo(() => {
     return openActionMenuScheduleId
@@ -829,59 +774,7 @@ export default function AgendaPage() {
     setActionMenuPosition(null);
   }
 
-  function moveSelectedDateByDays(amount: number) {
-    const nextSelectedDate = addDaysToInputValue(selectedDate, amount);
-    const nextDate = createDateFromInputValue(nextSelectedDate);
 
-    setSelectedDate(nextSelectedDate);
-    setCurrentCalendarDate(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1));
-  }
-
-  function handlePreviousPeriod() {
-    if (viewMode === "month") {
-      setCurrentCalendarDate(
-        new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() - 1, 1),
-      );
-      return;
-    }
-
-    moveSelectedDateByDays(viewMode === "week" ? -7 : -1);
-  }
-
-  function handleNextPeriod() {
-    if (viewMode === "month") {
-      setCurrentCalendarDate(
-        new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() + 1, 1),
-      );
-      return;
-    }
-
-    moveSelectedDateByDays(viewMode === "week" ? 7 : 1);
-  }
-
-  function handleSelectDate(date: Date) {
-    const nextDateValue = formatDateToInputValue(date);
-
-    setSelectedDate(nextDateValue);
-    setCurrentCalendarDate(new Date(date.getFullYear(), date.getMonth(), 1));
-  }
-
-  function handleTodayClick() {
-    const today = new Date();
-    const dateValue = formatDateToInputValue(today);
-
-    setTodayInputValue(dateValue);
-    setSelectedDate(dateValue);
-    setCurrentCalendarDate(new Date(today.getFullYear(), today.getMonth(), 1));
-  }
-
-  function handleDateInputChange(value: string) {
-    if (!value) return;
-
-    const newDate = createDateFromInputValue(value);
-    setSelectedDate(value);
-    setCurrentCalendarDate(new Date(newDate.getFullYear(), newDate.getMonth(), 1));
-  }
 
   function handleOpenCreateModal(dateValue = selectedDate) {
     setEditingScheduleId(null);
@@ -1090,13 +983,7 @@ export default function AgendaPage() {
     }
   }
 
-  function handleClearFilters() {
-    setSearchTerm("");
-    setStatusFilter("all");
-    setTypeFilter("all");
-    setResponsibleFilter("all");
-    setPriorityFilter("all");
-  }
+
 
   function getStatusFilterLabel(status: ScheduleStatus | "all") {
     if (status === "all") return "Todos";
