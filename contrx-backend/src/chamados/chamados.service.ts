@@ -55,6 +55,37 @@ export class ChamadosService {
   async findAll(userId: string, companyId: string, role: string) {
     const isSystemOwner = role === 'SYSTEM_OWNER' || role === 'DONO_SISTEMA';
 
+    try {
+      // Para fins de resiliência e integridade referencial em ambientes de teste/produção
+      // onde chaves físicas podem estar desabilitadas, removemos chamados órfãos antes do fetch.
+      const existingUsers = await this.prisma.user.findMany({
+        select: { id: true },
+      });
+      const existingCompanies = await this.prisma.company.findMany({
+        select: { id: true },
+      });
+
+      const userIds = existingUsers.map((user) => user.id);
+      const companyIds = existingCompanies.map((company) => company.id);
+
+      await this.prisma.supportTicket.deleteMany({
+        where: {
+          OR: [
+            { userId: { notIn: userIds } },
+            { companyId: { notIn: companyIds } },
+          ],
+        },
+      });
+    } catch (cleanupError) {
+      this.logger.warn(
+        `Falha ao limpar chamados órfãos: ${
+          cleanupError instanceof Error
+            ? cleanupError.message
+            : String(cleanupError)
+        }`,
+      );
+    }
+
     if (isSystemOwner) {
       // Dono do sistema visualiza todos os chamados
       return this.prisma.supportTicket.findMany({
