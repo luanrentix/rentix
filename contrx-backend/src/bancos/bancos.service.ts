@@ -487,8 +487,17 @@ export class BancosService {
   }
 
   async shareStatement(dto: CompartilharExtratoDto, companyId: string) {
+    // Limpa extratos expirados para evitar acúmulo de lixo no banco de dados
+    await this.prisma.sharedBankStatement
+      .deleteMany({
+        where: {
+          expiresAt: { lt: new Date() },
+        },
+      })
+      .catch(() => {});
+
     const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24);
+    expiresAt.setDate(expiresAt.getDate() + 7);
 
     return this.prisma.sharedBankStatement.create({
       data: {
@@ -506,6 +515,15 @@ export class BancosService {
   }
 
   async findSharedStatement(id: string) {
+    // Limpa extratos expirados para manter a tabela limpa
+    await this.prisma.sharedBankStatement
+      .deleteMany({
+        where: {
+          expiresAt: { lt: new Date() },
+        },
+      })
+      .catch(() => {});
+
     const shared = await this.prisma.sharedBankStatement.findUnique({
       where: { id },
       include: {
@@ -514,12 +532,19 @@ export class BancosService {
     });
 
     if (!shared) {
-      throw new NotFoundException('Extrato compartilhado não encontrado.');
+      throw new NotFoundException(
+        'Extrato compartilhado não encontrado ou expirado.',
+      );
     }
 
     if (new Date() > shared.expiresAt) {
+      // Remove o registro da tabela imediatamente se expirou
+      await this.prisma.sharedBankStatement
+        .delete({ where: { id } })
+        .catch(() => {});
+
       throw new BadRequestException(
-        'Este link de extrato compartilhado já expirou (limite de 24 horas).',
+        'Este link de extrato compartilhado já expirou (limite de 7 dias).',
       );
     }
 

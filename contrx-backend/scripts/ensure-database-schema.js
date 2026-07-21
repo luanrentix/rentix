@@ -131,6 +131,34 @@ async function ensureSchema(client) {
     END
     $$;
   `);
+
+  await client.query(`
+    DO $$
+    BEGIN
+      IF to_regclass('public.extratos_compartilhados') IS NOT NULL AND to_regclass('public.impressos_compartilhados') IS NULL THEN
+        ALTER TABLE "extratos_compartilhados" RENAME TO "impressos_compartilhados";
+      END IF;
+    END
+    $$;
+  `);
+
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS "impressos_compartilhados" (
+      "id" TEXT NOT NULL,
+      "empresa_id" TEXT NOT NULL,
+      "conta_bancaria_id" TEXT,
+      "data_inicio" TEXT,
+      "data_fim" TEXT,
+      "tipo" TEXT,
+      "status" TEXT,
+      "categoria" TEXT,
+      "descricao" TEXT,
+      "expira_em" TIMESTAMP(3) NOT NULL,
+      "criado_em" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+      CONSTRAINT "impressos_compartilhados_pkey" PRIMARY KEY ("id")
+    );
+  `);
 }
 
 async function main() {

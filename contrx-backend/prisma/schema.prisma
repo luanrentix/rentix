@@ -611,5 +611,5 @@ model SharedBankStatement {
   company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
-  @@map("extratos_compartilhados")
+  @@map("impressos_compartilhados")
 }

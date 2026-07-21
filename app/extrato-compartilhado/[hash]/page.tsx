@@ -77,7 +77,7 @@ export default function ExtratoCompartilhadoPage() {
           <h2 className="text-lg font-black text-slate-900 uppercase">Link Expirado ou Inválido</h2>
           <p className="text-sm font-semibold text-slate-500 leading-relaxed">
             {error.includes("expirou") 
-              ? "Este link de extrato compartilhado expirou por atingir o limite máximo de 24 horas de validade."
+              ? "Este link de extrato compartilhado expirou por atingir o limite máximo de 7 dias de validade."
               : error}
           </p>
           <div className="pt-2 text-xs font-bold text-slate-400">
@@ -115,7 +115,7 @@ export default function ExtratoCompartilhadoPage() {
             <h1 className="text-xl font-black text-slate-950 mt-1">Extrato Compartilhado</h1>
             <p className="text-xs font-bold text-slate-400 mt-1 flex items-center gap-1.5">
               <Calendar className="h-3.5 w-3.5" />
-              Válido por 24h a partir da data de envio
+              Válido por 7 dias a partir da data de envio
             </p>
           </div>
           <button

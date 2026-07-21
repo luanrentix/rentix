@@ -342,7 +342,7 @@ export default function BancosPage() {
       });
 
       const url = window.location.origin + "/extrato-compartilhado/" + res.id;
-      const message = `Olá! Segue o link com o extrato financeiro solicitado (válido por 24 horas):\n\n${url}`;
+      const message = `Olá! Segue o link com o extrato financeiro solicitado (válido por 7 dias):\n\n${url}`;
 
       openWhatsAppMessage({
         phone: sharePhone,
@@ -478,20 +478,7 @@ export default function BancosPage() {
           categories: [{ category: "", amountStr: "R$ 0,00" }]
         }));
       } else {
-        setIsTransactionModalOpen(false);
-        setEditingTransaction(null);
-        setLaunchForm({
-          bankAccountId: "",
-          originBankAccountId: "",
-          destinationBankAccountId: "",
-          amountStr: "R$ 0,00",
-          feeStr: "R$ 0,00",
-          date: new Date().toISOString().slice(0, 10),
-          reconciled: true,
-          description: "",
-          documentNumber: "",
-          categories: [{ category: "", amountStr: "R$ 0,00" }]
-        });
+        handleCloseTransactionModal();
       }
       loadData();
     } catch (err) {
@@ -499,6 +486,34 @@ export default function BancosPage() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const resetLaunchForm = () => {
+    setEditingTransaction(null);
+    const defaultAccountId = accounts.find((acc) => acc.active)?.id || "";
+    setLaunchForm({
+      bankAccountId: defaultAccountId,
+      originBankAccountId: defaultAccountId,
+      destinationBankAccountId: "",
+      amountStr: "R$ 0,00",
+      feeStr: "R$ 0,00",
+      date: new Date().toISOString().slice(0, 10),
+      reconciled: true,
+      description: "",
+      documentNumber: "",
+      categories: [{ category: "", amountStr: "R$ 0,00" }]
+    });
+  };
+
+  const handleOpenNewTransactionModal = (tab: LaunchTab = "DESPESA") => {
+    resetLaunchForm();
+    setActiveTab(tab);
+    setIsTransactionModalOpen(true);
+  };
+
+  const handleCloseTransactionModal = () => {
+    setIsTransactionModalOpen(false);
+    resetLaunchForm();
   };
 
   const handleOpenEditTransactionModal = (tx: BankTransaction) => {
@@ -795,20 +810,14 @@ export default function BancosPage() {
 
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => {
-              setActiveTab("TRANSFERENCIA");
-              setIsTransactionModalOpen(true);
-            }}
+            onClick={() => handleOpenNewTransactionModal("TRANSFERENCIA")}
             className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50 transition"
           >
             <ArrowLeftRight className="h-4 w-4 text-orange-500" />
             Transferir
           </button>
           <button
-            onClick={() => {
-              setActiveTab("DESPESA");
-              setIsTransactionModalOpen(true);
-            }}
+            onClick={() => handleOpenNewTransactionModal("DESPESA")}
             className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50 transition"
           >
             <TrendingUp className="h-4 w-4 text-emerald-600" />
@@ -1567,7 +1576,7 @@ export default function BancosPage() {
 
             <form onSubmit={handleSaveAccount} className="space-y-4">
               <div>
-                <label className="block text-xs font-black uppercase text-slate-500 mb-1">Nome da Conta / Identificação</label>
+                <label className="block text-xs font-black uppercase text-slate-500 mb-1">Nome da Conta / Identificação <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   required
@@ -1580,7 +1589,7 @@ export default function BancosPage() {
 
               {/* Institution Select (Dropdown searchable modal trigger) */}
               <div>
-                <label className="block text-xs font-black uppercase text-slate-500 mb-1">Instituição Financeira</label>
+                <label className="block text-xs font-black uppercase text-slate-500 mb-1">Instituição Financeira <span className="text-red-500">*</span></label>
                 <button
                   type="button"
                   onClick={() => {
@@ -1598,7 +1607,7 @@ export default function BancosPage() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-black uppercase text-slate-500 mb-1">Tipo de Conta</label>
+                  <label className="block text-xs font-black uppercase text-slate-500 mb-1">Tipo de Conta <span className="text-red-500">*</span></label>
                   <select
                     value={accountForm.type}
                     onChange={(e) => setAccountForm({ ...accountForm, type: e.target.value as BankAccountType })}
@@ -1611,7 +1620,7 @@ export default function BancosPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-black uppercase text-slate-500 mb-1">Moeda</label>
+                  <label className="block text-xs font-black uppercase text-slate-500 mb-1">Moeda <span className="text-red-500">*</span></label>
                   <input
                     type="text"
                     required
@@ -1658,7 +1667,7 @@ export default function BancosPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-black uppercase text-slate-500 mb-1">Limite Crédito</label>
+                  <label className="block text-xs font-black uppercase text-slate-500 mb-1">Limite Crédito <span className="text-red-500">*</span></label>
                   <input
                     type="text"
                     required
@@ -1775,15 +1784,17 @@ export default function BancosPage() {
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-shrink-0">
               <button
                 type="button"
-                onClick={() => setIsTransactionModalOpen(false)}
+                onClick={handleCloseTransactionModal}
                 className="text-slate-400 hover:text-slate-600 transition"
               >
                 <ArrowLeftRight className="h-5 w-5 rotate-185" />
               </button>
-              <h3 className="text-lg font-black text-slate-900 tracking-tight">Novo Lançamento</h3>
+              <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                {editingTransaction ? "Editar Lançamento" : "Novo Lançamento"}
+              </h3>
               <button
                 type="button"
-                onClick={() => setIsTransactionModalOpen(false)}
+                onClick={handleCloseTransactionModal}
                 className="text-slate-400 hover:text-slate-600 transition"
               >
                 <X className="h-5 w-5" />
@@ -1799,7 +1810,7 @@ export default function BancosPage() {
               {activeTab === "TRANSFERENCIA" ? (
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1">Origem (Débito) *</label>
+                    <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1">Origem (Débito) <span className="text-red-500">*</span></label>
                     <select
                       required
                       value={launchForm.originBankAccountId}
@@ -1817,7 +1828,7 @@ export default function BancosPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1">Destino (Crédito) *</label>
+                    <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1">Destino (Crédito) <span className="text-red-500">*</span></label>
                     <select
                       required
                       value={launchForm.destinationBankAccountId}
@@ -1837,7 +1848,7 @@ export default function BancosPage() {
                 </div>
               ) : (
                 <div>
-                  <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1">Conta Financeira *</label>
+                  <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1">Conta Financeira <span className="text-red-500">*</span></label>
                   <select
                     required
                     value={launchForm.bankAccountId}
@@ -1891,7 +1902,7 @@ export default function BancosPage() {
               {/* Value and Date Inputs side-by-side */}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1">Valor *</label>
+                  <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1">Valor <span className="text-red-500">*</span></label>
                   <input
                     type="text"
                     required
@@ -1913,7 +1924,7 @@ export default function BancosPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1">Data *</label>
+                  <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1">Data <span className="text-red-500">*</span></label>
                   <input
                     type="date"
                     required
@@ -1956,7 +1967,7 @@ export default function BancosPage() {
 
               {/* Description Input */}
               <div>
-                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1">Descrição *</label>
+                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1">Descrição <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   required
@@ -2104,8 +2115,7 @@ export default function BancosPage() {
                             }
                           }
                           await deleteBankTransaction(editingTransaction.id);
-                          setIsTransactionModalOpen(false);
-                          setEditingTransaction(null);
+                          handleCloseTransactionModal();
                           loadData();
                         } catch (err) {
                           showAlert(getErrorMessage(err, "Erro ao excluir movimentação."), "Erro", "error");
@@ -2149,7 +2159,7 @@ export default function BancosPage() {
             </div>
             
             <div className="space-y-3">
-              <label className="block text-xs font-black uppercase tracking-wider text-slate-400">Nome da Categoria *</label>
+              <label className="block text-xs font-black uppercase tracking-wider text-slate-400">Nome da Categoria <span className="text-red-500">*</span></label>
               <input
                 type="text"
                 required
@@ -2282,7 +2292,7 @@ export default function BancosPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1.5">WhatsApp do Destinatário *</label>
+                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1.5">WhatsApp do Destinatário <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   required
