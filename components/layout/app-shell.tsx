@@ -8,6 +8,8 @@ import { AlertTriangle, Bell, CalendarDays, Clock3, Loader2, Maximize2, X } from
 import AuthGuard from "@/components/auth/auth-guard";
 import { useAuth } from "@/context/AuthContext";
 import { changePasswordRequest } from "@/services/auth";
+import { checkApiHealth } from "@/services/api";
+import packageJson from "../../package.json";
 import {
   getCompanyStorageItem,
   setCompanyStorageItem,
@@ -546,6 +548,23 @@ export default function AppShell({ children }: AppShellProps) {
   const [resetConfirmationText, setResetConfirmationText] = useState("");
   const [resetError, setResetError] = useState("");
   const [isTrialLoginNoticeOpen, setIsTrialLoginNoticeOpen] = useState(false);
+  const [isApiOnline, setIsApiOnline] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    async function verifyHealth() {
+      const online = await checkApiHealth();
+      if (active) {
+        setIsApiOnline(online);
+      }
+    }
+    verifyHealth();
+    const interval = setInterval(verifyHealth, 20000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   const lockedUserEmail = user?.email || userSettings.email;
   const companyDisplayName =
@@ -1182,6 +1201,23 @@ export default function AppShell({ children }: AppShellProps) {
               );
             })}
           </nav>
+
+          <div className="border-t border-orange-100 p-4 mt-auto">
+            <div className="flex items-center gap-2 justify-center lg:justify-start">
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isApiOnline ? "bg-emerald-400" : "bg-red-400"}`}></span>
+                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isApiOnline ? "bg-emerald-500" : "bg-red-500"}`}></span>
+              </span>
+              
+              <span className={`text-[10px] font-bold text-slate-400 whitespace-nowrap transition-all duration-300 ease-in-out ${
+                isSidebarOpen
+                  ? "max-w-48 translate-x-0 opacity-100"
+                  : "max-w-0 -translate-x-2 overflow-hidden opacity-0"
+              }`}>
+                v{packageJson.version} • {isApiOnline ? "Banco Online" : "Banco Offline"}
+              </span>
+            </div>
+          </div>
         </aside>
 
         <div

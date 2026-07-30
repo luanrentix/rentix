@@ -180,4 +180,14 @@ export async function apiFetch<TResponse>(
   return response.json() as Promise<TResponse>;
 }
 
+export async function checkApiHealth(): Promise<boolean> {
+  try {
+    const baseUrl = getApiBaseUrl();
+    const res = await fetch(baseUrl, { method: 'GET', cache: 'no-store' });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export { getApiBaseUrl };
