@@ -855,4 +855,83 @@ export class ContasReceberService {
 
     return dueDate;
   }
+
+  async shareReceivableReport(dto: any, companyId: string) {
+    await this.prisma.sharedBankStatement
+      .deleteMany({
+        where: {
+          expiresAt: { lt: new Date() },
+        },
+      })
+      .catch(() => {});
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    return this.prisma.sharedBankStatement.create({
+      data: {
+        companyId,
+        documentType: 'RELATORIO_CONTAS_RECEBER',
+        tenantId: dto.tenantId || null,
+        filterStartDate: dto.startDate || null,
+        filterEndDate: dto.endDate || null,
+        filterStatus: dto.status || null,
+        filterDue: dto.dueFilter || null,
+        expiresAt,
+      },
+    });
+  }
+
+  async findSharedReceivableReport(id: string) {
+    await this.prisma.sharedBankStatement
+      .deleteMany({
+        where: {
+          expiresAt: { lt: new Date() },
+        },
+      })
+      .catch(() => {});
+
+    const shared = await this.prisma.sharedBankStatement.findUnique({
+      where: { id },
+      include: {
+        company: true,
+      },
+    });
+
+    if (!shared) {
+      throw new NotFoundException(
+        'Relatório compartilhado não encontrado ou expirado.',
+      );
+    }
+
+    if (new Date() > shared.expiresAt) {
+      await this.prisma.sharedBankStatement
+        .delete({ where: { id } })
+        .catch(() => {});
+
+      throw new BadRequestException(
+        'Este link de relatório compartilhado já expirou (limite de 7 dias).',
+      );
+    }
+
+    const accounts = await this.findAll(shared.companyId);
+
+    return {
+      company: {
+        id: shared.company.id,
+        tradeName: shared.company.tradeName,
+        companyName: shared.company.companyName,
+        document: shared.company.document,
+        phone: shared.company.phone,
+        email: shared.company.email,
+      },
+      filterStartDate: shared.filterStartDate,
+      filterEndDate: shared.filterEndDate,
+      filterStatus: shared.filterStatus,
+      filterDue: shared.filterDue,
+      tenantId: shared.tenantId,
+      expiresAt: shared.expiresAt,
+      accounts,
+    };
+  }
 }

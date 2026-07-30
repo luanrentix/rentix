@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
+import { Share2 } from "lucide-react";
 import QRCode from "qrcode";
 import { useAuth } from "@/context/AuthContext";
 import { PersonCreateModal } from "@/components/people/person-create-modal";
@@ -14,6 +15,7 @@ import {
   receiveAccountsBatch,
   replaceReceivedAccountPayment,
   reverseReceivedAccount,
+  shareReceivableReport,
   updateReceivableAccount,
   type PaymentMethod as ApiPaymentMethod,
   type ReceivableAccount,
@@ -2428,6 +2430,31 @@ export default function AccountsReceivablePage() {
       getReportDueFilterLabel,
       paymentRecords,
       setReportFormError,
+      onShare: async () => {
+        try {
+          const res = await shareReceivableReport({
+            tenantId: reportTenantId || undefined,
+            startDate: reportStartDate || undefined,
+            endDate: reportEndDate || undefined,
+            status: reportStatusFilter || undefined,
+            dueFilter: reportDueFilter || undefined,
+          });
+
+          const url = window.location.origin + "/relatorio-receber-compartilhado/" + res.id;
+
+          if (navigator.clipboard) {
+            await navigator.clipboard.writeText(url);
+            window.alert("Link do relatório gerado e copiado para a área de transferência! (Válido por 7 dias)");
+          } else {
+            window.alert(`Link gerado: ${url}`);
+          }
+          return url;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Erro ao gerar link de compartilhamento.";
+          window.alert(msg);
+          throw err;
+        }
+      },
     });
   }
 

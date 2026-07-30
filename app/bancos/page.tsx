@@ -113,6 +113,35 @@ export default function BancosPage() {
     };
   }, [transactions]);
 
+  const defaultCategories = useMemo(() => [
+    "ALUGUEL",
+    "SALÁRIO",
+    "SERVIÇOS",
+    "MANUTENÇÃO",
+    "FORNECEDORES",
+    "IMPOSTOS",
+    "VENDAS",
+    "RENDIMENTOS",
+    "TRANSFERÊNCIA",
+    "OUTROS"
+  ], []);
+
+  const allCategories = useMemo(() => {
+    const categoriesSet = new Set<string>(defaultCategories);
+
+    customCategories.forEach((cat) => {
+      if (cat.trim()) categoriesSet.add(cat.trim().toUpperCase());
+    });
+
+    transactions.forEach((tx) => {
+      if (tx.category && tx.category.trim()) {
+        categoriesSet.add(tx.category.trim().toUpperCase());
+      }
+    });
+
+    return Array.from(categoriesSet).sort();
+  }, [customCategories, transactions, defaultCategories]);
+
   const showAlert = (message: string, title: string = "Aviso", type: 'error' | 'success' | 'warning' = "warning") => {
     setCustomAlert({ title, message, type });
   };
@@ -921,16 +950,9 @@ export default function BancosPage() {
             className="h-10 w-full rounded-xl border border-slate-200 bg-white px-2 text-xs font-bold text-slate-700 outline-none focus:border-orange-500 cursor-pointer uppercase"
           >
             <option value="">Todas</option>
-            <option value="ALUGUEL">ALUGUEL</option>
-            <option value="SALÁRIO">SALÁRIO</option>
-            <option value="SERVIÇOS">SERVIÇOS</option>
-            <option value="MANUTENÇÃO">MANUTENÇÃO</option>
-            <option value="FORNECEDORES">FORNECEDORES</option>
-            <option value="IMPOSTOS">IMPOSTOS</option>
-            <option value="VENDAS">VENDAS</option>
-            <option value="RENDIMENTOS">RENDIMENTOS</option>
-            <option value="TRANSFERÊNCIA">TRANSFERÊNCIA</option>
-            <option value="OUTROS">OUTROS</option>
+            {allCategories.map((cat) => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
           </select>
         </div>
       </div>
@@ -2005,16 +2027,7 @@ export default function BancosPage() {
                           className="flex-1 h-10 rounded-xl border border-slate-250 bg-white px-2.5 text-xs font-bold text-slate-850 shadow-sm outline-none"
                         >
                           <option value="">Categoria...</option>
-                          <option value="ALUGUEL">ALUGUEL</option>
-                          <option value="SALÁRIO">SALÁRIO</option>
-                          <option value="SERVIÇOS">SERVIÇOS</option>
-                          <option value="MANUTENÇÃO">MANUTENÇÃO</option>
-                          <option value="FORNECEDORES">FORNECEDORES</option>
-                          <option value="IMPOSTOS">IMPOSTOS</option>
-                          <option value="VENDAS">VENDAS</option>
-                          <option value="RENDIMENTOS">RENDIMENTOS</option>
-                          <option value="OUTROS">OUTROS</option>
-                          {customCategories.map((cat) => (
+                          {allCategories.map((cat) => (
                             <option key={cat} value={cat}>{cat}</option>
                           ))}
                         </select>

@@ -180,6 +180,41 @@ export async function reverseReceivedAccount(id: string) {
   });
 }
 
+export async function shareReceivableReport(data: {
+  tenantId?: string;
+  startDate?: string;
+  endDate?: string;
+  status?: string;
+  dueFilter?: string;
+}) {
+  return apiFetch<{ id: string }>('/contas-receber/relatorio-compartilhado', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getSharedReceivableReport(id: string) {
+  return apiFetch<{
+    company: {
+      id: string;
+      tradeName: string;
+      corporateName: string;
+      cnpj: string | null;
+      phone: string | null;
+      email: string | null;
+      logoUrl: string | null;
+      address: string | null;
+    };
+    filterStartDate: string | null;
+    filterEndDate: string | null;
+    filterStatus: string | null;
+    filterDue: string | null;
+    tenantId: string | null;
+    expiresAt: string;
+    accounts: ReceivableAccount[];
+  }>(`/relatorios-receber-publicos/${id}`);
+}
+
 export async function getPayableAccounts(companyId: string) {
   void companyId;
   return apiFetch<PayableAccount[]>('/contas-pagar');

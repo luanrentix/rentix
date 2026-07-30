@@ -483,6 +483,7 @@ export function openAccountsReceivableReport(params: {
   getReportDueFilterLabel: (filter: any) => string;
   paymentRecords: ChargePayment[];
   setReportFormError: (msg: string) => void;
+  onShare?: () => Promise<any>;
 }) {
   const {
     shouldPrint,
@@ -502,6 +503,7 @@ export function openAccountsReceivableReport(params: {
     getReportDueFilterLabel,
     paymentRecords,
     setReportFormError,
+    onShare,
   } = params;
 
   const selectedReportTenant = tenants.find((tenant) => String(tenant.id) === String(reportTenantId));
@@ -559,6 +561,12 @@ export function openAccountsReceivableReport(params: {
     return;
   }
 
+  (reportWindow as any).handleShareReceivableReport = async () => {
+    if (onShare) {
+      await onShare();
+    }
+  };
+
   reportWindow.document.write(`
     <!doctype html>
     <html lang="pt-BR">
@@ -572,6 +580,8 @@ export function openAccountsReceivableReport(params: {
           .toolbar-button { border: 0; border-radius: 12px; padding: 11px 18px; font-size: 13px; font-weight: 800; cursor: pointer; transition: 0.2s ease; }
           .toolbar-button.print { background: #059669; color: #ffffff; box-shadow: 0 8px 18px rgba(5, 150, 105, 0.2); }
           .toolbar-button.print:hover { background: #047857; }
+          .toolbar-button.share { background: #f97316; color: #ffffff; box-shadow: 0 8px 18px rgba(249, 115, 22, 0.2); }
+          .toolbar-button.share:hover { background: #ea580c; }
           .toolbar-button.close { background: #e2e8f0; color: #0f172a; }
           .toolbar-button.close:hover { background: #cbd5e1; }
           .report-page { width: min(1180px, calc(100% - 48px)); margin: 28px auto; padding: 32px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 18px; box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12); }
@@ -595,9 +605,34 @@ export function openAccountsReceivableReport(params: {
             .summary { grid-template-columns: repeat(4, 1fr); }
           }
         </style>
+        <script>
+          async function shareReport() {
+            const btn = document.querySelector('.toolbar-button.share');
+            if (btn) {
+              btn.disabled = true;
+              btn.textContent = 'Gerando...';
+            }
+            try {
+              if (window.handleShareReceivableReport) {
+                await window.handleShareReceivableReport();
+              } else {
+                alert('Função de compartilhamento não disponível nesta janela.');
+              }
+            } catch (err) {
+              console.error(err);
+              alert('Erro: ' + (err.message || err));
+            } finally {
+              if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Compartilhar link';
+              }
+            }
+          }
+        </script>
       </head>
       <body>
         <div class="report-toolbar no-print">
+          <button class="toolbar-button share" type="button" onclick="shareReport()">Compartilhar link</button>
           <button class="toolbar-button print" type="button" onclick="window.print()">Imprimir</button>
           <button class="toolbar-button close" type="button" onclick="window.close()">Fechar relatório</button>
         </div>

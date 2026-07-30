@@ -97,4 +97,12 @@ export class ContasReceberController {
   ) {
     return this.contasReceberService.reversePayment(id, user.companyId);
   }
+
+  @Post('relatorio-compartilhado')
+  shareReport(@Body() data: any, @CurrentUser() user: UsuarioAutenticado) {
+    return this.contasReceberService.shareReceivableReport(
+      data,
+      user.companyId,
+    );
+  }
 }

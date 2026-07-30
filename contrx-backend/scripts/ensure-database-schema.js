@@ -138,6 +138,9 @@ async function ensureSchema(client) {
       IF to_regclass('public.extratos_compartilhados') IS NOT NULL AND to_regclass('public.impressos_compartilhados') IS NULL THEN
         ALTER TABLE "extratos_compartilhados" RENAME TO "impressos_compartilhados";
       END IF;
+      IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'extratos_compartilhados_pkey') THEN
+        ALTER TABLE "impressos_compartilhados" RENAME CONSTRAINT "extratos_compartilhados_pkey" TO "impressos_compartilhados_pkey";
+      END IF;
     END
     $$;
   `);
@@ -147,9 +150,12 @@ async function ensureSchema(client) {
       "id" TEXT NOT NULL,
       "empresa_id" TEXT NOT NULL,
       "conta_bancaria_id" TEXT,
+      "tipo_documento" TEXT DEFAULT 'EXTRATO_BANCARIO',
+      "cliente_id" TEXT,
       "data_inicio" TEXT,
       "data_fim" TEXT,
       "tipo" TEXT,
+      "filtro_vencimento" TEXT,
       "status" TEXT,
       "categoria" TEXT,
       "descricao" TEXT,
@@ -158,6 +164,22 @@ async function ensureSchema(client) {
 
       CONSTRAINT "impressos_compartilhados_pkey" PRIMARY KEY ("id")
     );
+  `);
+
+  await client.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='impressos_compartilhados' AND column_name='tipo_documento') THEN
+        ALTER TABLE "impressos_compartilhados" ADD COLUMN "tipo_documento" TEXT DEFAULT 'EXTRATO_BANCARIO';
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='impressos_compartilhados' AND column_name='cliente_id') THEN
+        ALTER TABLE "impressos_compartilhados" ADD COLUMN "cliente_id" TEXT;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='impressos_compartilhados' AND column_name='filtro_vencimento') THEN
+        ALTER TABLE "impressos_compartilhados" ADD COLUMN "filtro_vencimento" TEXT;
+      END IF;
+    END
+    $$;
   `);
 }
 
