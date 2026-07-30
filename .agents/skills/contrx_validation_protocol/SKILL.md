@@ -23,4 +23,7 @@ Quando o usuário disser "iniciar", "iniciar verificações", "rodar protocolo" 
 4. **Verificação de Arquivos Inúteis / Limpeza**:
    - Checar por arquivos temporários ou backups compactados (.zip, .rar, etc.) soltos na raiz que possam ser apagados ou ignorados.
 
+5. **Versionamento Automático (Bump de Versão)**:
+   - Incrementar automaticamente a versão da aplicação (versão de patch) nos arquivos `package.json` da raiz e do backend (por exemplo, `1.0.1` para `1.0.2`) a cada execução bem-sucedida do protocolo de validação pré-deploy.
+
 Ao final, consolide todos os resultados em uma tabela informativa e confirme se o projeto está pronto para deploy manual pelo usuário.
