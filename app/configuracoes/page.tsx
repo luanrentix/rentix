@@ -341,16 +341,16 @@ const maxCompanyLogoSizeInBytes = 2 * 1024 * 1024;
 
 const defaultThemeSettings: ThemeSettings = {
   mode: "light",
-  accent: "violet",
+  accent: "orange",
 };
 
 const accentColors = [
-  { key: "violet", label: "Violeta", desc: "O padrão — confiante e levemente descontraído.", color: "#8b5cf6" },
-  { key: "emerald", label: "Esmeralda", desc: "Focado em crescimento, amigável e moderno.", color: "#10b981" },
+  { key: "orange", label: "Laranja", desc: "A identidade clássica e marcante do Contrx.", color: "#f97316" },
   { key: "cobalt", label: "Cobalto", desc: "Azul B2B-SaaS limpo — calmo e corporativo.", color: "#2563eb" },
-  { key: "amber", label: "Âmbar", desc: "Quente e amigável — ótimo para equipes de PMEs.", color: "#f59e0b" },
-  { key: "rose", label: "Rosa", desc: "Ousado e moderno — ideal para criadores e inovação.", color: "#f43f5e" },
-  { key: "orange", label: "Laranja", desc: "A identidade clássica do Contrx.", color: "#f97316" },
+  { key: "emerald", label: "Esmeralda", desc: "Focado em crescimento, amigável e moderno.", color: "#10b981" },
+  { key: "violet", label: "Violeta", desc: "Elegante e moderno — tom roxo vibrante.", color: "#8b5cf6" },
+  { key: "amber", label: "Âmbar", desc: "Quente e amigável — tom dourado.", color: "#f59e0b" },
+  { key: "rose", label: "Rosa", desc: "Ousado e moderno — tom rosa marcante.", color: "#f43f5e" },
 ];
 
 const settingsStorageKeys = {
@@ -423,10 +423,10 @@ function normalizeThemeMode(value: unknown): ThemeMode {
 }
 
 function normalizeThemeSettings(settings?: Partial<ThemeSettings> | null): ThemeSettings {
-  const allowedAccents = ["violet", "emerald", "cobalt", "amber", "rose", "orange"];
+  const allowedAccents = ["orange", "cobalt", "emerald", "violet", "amber", "rose"];
   const accent = settings?.accent && allowedAccents.includes(settings.accent) 
     ? settings.accent 
-    : "violet";
+    : "orange";
   return {
     ...defaultThemeSettings,
     ...(settings || {}),
@@ -456,12 +456,12 @@ function readThemeSettingsFromStorage(companyId?: string): ThemeSettings {
       const parsedValue = JSON.parse(storedValue) as Partial<ThemeSettings> | string;
 
       if (typeof parsedValue === "string") {
-        return { mode: normalizeThemeMode(parsedValue), accent: "violet" };
+        return { mode: normalizeThemeMode(parsedValue), accent: "orange" };
       }
 
       return normalizeThemeSettings(parsedValue);
     } catch {
-      return { mode: normalizeThemeMode(storedValue), accent: "violet" };
+      return { mode: normalizeThemeMode(storedValue), accent: "orange" };
     }
   }
 
@@ -4468,7 +4468,7 @@ export default function ConfiguracoesPage() {
                     </h3>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                       {accentColors.map((color) => {
-                        const isActive = (themeSettings.accent || "violet") === color.key;
+                        const isActive = (themeSettings.accent || "orange") === color.key;
                         return (
                           <button
                             key={color.key}

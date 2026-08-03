@@ -4,12 +4,12 @@ import Link from "next/link";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { AlertTriangle, Bell, CalendarDays, Clock3, Loader2, Maximize2, X } from "lucide-react";
+import { AlertTriangle, Bell, CalendarDays, Clock3, Command, Loader2, Maximize2, Search, X } from "lucide-react";
 import AuthGuard from "@/components/auth/auth-guard";
 import { useAuth } from "@/context/AuthContext";
 import { changePasswordRequest } from "@/services/auth";
 import { checkApiHealth } from "@/services/api";
-import packageJson from "../../package.json";
+import packageJson from "@/package.json";
 import {
   getCompanyStorageItem,
   setCompanyStorageItem,
@@ -201,7 +201,7 @@ const defaultCompanySettings: CompanySettings = {
 
 const defaultThemeSettings: ThemeSettings = {
   mode: "light",
-  accent: "violet",
+  accent: "orange",
 };
 
 function getInitialLetters(name: string) {
@@ -326,10 +326,10 @@ function normalizeThemeMode(value: unknown): ThemeMode {
 }
 
 function normalizeThemeSettings(settings?: Partial<ThemeSettings> | null): ThemeSettings {
-  const allowedAccents = ["violet", "emerald", "cobalt", "amber", "rose", "orange"];
+  const allowedAccents = ["orange", "cobalt", "emerald", "violet", "amber", "rose"];
   const accent = settings?.accent && allowedAccents.includes(settings.accent) 
     ? settings.accent 
-    : "violet";
+    : "orange";
   return {
     ...defaultThemeSettings,
     ...(settings || {}),
@@ -361,12 +361,12 @@ function readThemeSettingsFromStorage(companyId?: string): ThemeSettings {
       const parsedValue = JSON.parse(storedValue) as Partial<ThemeSettings> | string;
 
       if (typeof parsedValue === "string") {
-        return { mode: normalizeThemeMode(parsedValue), accent: "violet" };
+        return { mode: normalizeThemeMode(parsedValue), accent: "orange" };
       }
 
       return normalizeThemeSettings(parsedValue);
     } catch {
-      return { mode: normalizeThemeMode(storedValue), accent: "violet" };
+      return { mode: normalizeThemeMode(storedValue), accent: "orange" };
     }
   }
 
@@ -549,6 +549,8 @@ export default function AppShell({ children }: AppShellProps) {
   const [resetError, setResetError] = useState("");
   const [isTrialLoginNoticeOpen, setIsTrialLoginNoticeOpen] = useState(false);
   const [isApiOnline, setIsApiOnline] = useState(true);
+  const [isQuickSearchOpen, setIsQuickSearchOpen] = useState(false);
+  const [quickSearchQuery, setQuickSearchQuery] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -613,6 +615,17 @@ export default function AppShell({ children }: AppShellProps) {
     const interval = setInterval(checkSupportNotifications, 30000);
     return () => clearInterval(interval);
   }, [isSystemOwner, user]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setIsQuickSearchOpen((prev) => !prev);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined" || isSystemOwner) {
@@ -1135,74 +1148,97 @@ export default function AppShell({ children }: AppShellProps) {
             </div>
           </div>
 
-          <div
-            className={`hidden overflow-hidden border-b border-orange-100 px-4 transition-all duration-300 ease-in-out lg:block ${
-              isSidebarOpen ? "max-h-14 py-3 opacity-100" : "max-h-0 py-0 opacity-0"
-            }`}
-          >
-            <label className="flex items-center gap-2 whitespace-nowrap text-xs font-semibold text-slate-600">
-              <input
-                type="checkbox"
-                checked={isSidebarLocked}
-                onChange={(event) => {
-                  const isChecked = event.target.checked;
-
-                  setIsSidebarLocked(isChecked);
-                  setIsSidebarExpanded(isChecked);
-
-                  setCompanyStorageItem(
-                    companyId,
-                    "contrx_sidebar_locked",
-                    String(isChecked),
-                  );
-                }}
-              />
-              Fixar
-            </label>
-          </div>
-
-          <nav className="flex-1 space-y-2 overflow-y-auto overflow-x-hidden px-2 py-4 lg:py-6">
-            {visibleMenuItems.map((item) => {
-              const isActive = isActiveRoute(item.href);
+          <nav className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-2 py-3 lg:py-4">
+            {["PRINCIPAL", "OPERACIONAL", "FINANCEIRO"].map((sectionKey) => {
+              const sectionItems = visibleMenuItems.filter(
+                (item) => item.category === sectionKey || (!item.category && sectionKey === "PRINCIPAL")
+              );
+              if (sectionItems.length === 0) return null;
 
               return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  prefetch={menuLinkPrefetch}
-                  title={!isSidebarOpen ? item.label : undefined}
-                  onClick={handleCloseMobileSidebar}
-                  className={`group flex items-center overflow-hidden rounded-2xl px-3 py-3.5 text-sm font-bold transition-colors duration-200 lg:py-4 ${
-                    isActive
-                      ? "bg-orange-500 text-white shadow-md shadow-orange-100"
-                      : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
-                  }`}
-                >
-                  <span
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors duration-200 ${
-                      isActive
-                        ? "bg-white/20"
-                        : "bg-slate-100 group-hover:bg-orange-100"
+                <div key={sectionKey} className="space-y-1">
+                  <div
+                    className={`px-3 pt-2 pb-1 text-[10px] font-black uppercase tracking-wider text-slate-400 transition-all duration-300 ${
+                      isSidebarOpen ? "opacity-100 max-h-8" : "opacity-0 max-h-0 overflow-hidden"
                     }`}
                   >
-                    {item.icon}
-                  </span>
+                    {sectionKey}
+                  </div>
+                  {sectionItems.map((item) => {
+                    const isActive = isActiveRoute(item.href);
 
-                  <span
-                    className={`ml-4 whitespace-nowrap transition-all duration-300 ease-in-out ${
-                      isSidebarOpen
-                        ? "max-w-48 translate-x-0 opacity-100"
-                        : "max-w-0 -translate-x-2 overflow-hidden opacity-0"
-                    }`}
-                  >
-                    {item.label}
-                  </span>
-                </Link>
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        prefetch={menuLinkPrefetch}
+                        title={!isSidebarOpen ? item.label : undefined}
+                        onClick={handleCloseMobileSidebar}
+                        className={`group flex items-center overflow-hidden rounded-2xl px-3 py-2.5 text-sm font-bold transition-colors duration-200 ${
+                          isActive
+                            ? "bg-orange-500 text-white shadow-md shadow-orange-100"
+                            : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                        }`}
+                      >
+                        <span
+                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors duration-200 ${
+                            isActive
+                              ? "bg-white/20"
+                              : "bg-slate-100 group-hover:bg-orange-100"
+                          }`}
+                        >
+                          {item.icon}
+                        </span>
+
+                        <span
+                          className={`ml-3 whitespace-nowrap transition-all duration-300 ease-in-out ${
+                            isSidebarOpen
+                              ? "max-w-48 translate-x-0 opacity-100"
+                              : "max-w-0 -translate-x-2 overflow-hidden opacity-0"
+                          }`}
+                        >
+                          {item.label}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
               );
             })}
           </nav>
 
-          <div className="border-t border-orange-100 p-4 mt-auto">
+          <div className="border-t border-orange-100 p-4 mt-auto space-y-3">
+            <div className="hidden lg:block">
+              <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap text-xs font-bold text-slate-500 hover:text-orange-600 transition">
+                <input
+                  type="checkbox"
+                  checked={isSidebarLocked}
+                  onChange={(event) => {
+                    const isChecked = event.target.checked;
+
+                    setIsSidebarLocked(isChecked);
+                    setIsSidebarExpanded(isChecked);
+
+                    setCompanyStorageItem(
+                      companyId,
+                      "contrx_sidebar_locked",
+                      String(isChecked),
+                    );
+                  }}
+                  className="rounded border-slate-300 text-orange-500 focus:ring-orange-400"
+                />
+                <span
+                  className={`whitespace-nowrap transition-all duration-300 ease-in-out ${
+                    isSidebarOpen
+                      ? "max-w-48 opacity-100"
+                      : "max-w-0 overflow-hidden opacity-0"
+                  }`}
+                >
+                  Fixar Menu
+                </span>
+              </label>
+            </div>
+
             <div className="flex items-center gap-2 justify-center lg:justify-start">
               <span className="relative flex h-2.5 w-2.5 shrink-0">
                 <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isApiOnline ? "bg-emerald-400" : "bg-red-400"}`}></span>

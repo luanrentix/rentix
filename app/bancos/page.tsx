@@ -63,6 +63,8 @@ export default function BancosPage() {
   const [error, setError] = useState("");
 
   // Filters - default start date to first day of current month, end date to today
+  type PeriodShortcut = "CurrentMonth" | "CurrentQuarter" | "CurrentYear" | "All";
+  const [periodShortcut, setPeriodShortcut] = useState<PeriodShortcut>("CurrentMonth");
   const [filterAccount, setFilterAccount] = useState("");
   const [filterStartDate, setFilterStartDate] = useState(() => {
     const now = new Date();
@@ -74,7 +76,6 @@ export default function BancosPage() {
   const [filterType, setFilterType] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
-  const [filterDescription, setFilterDescription] = useState("");
   const [limit, setLimit] = useState(30);
 
   // Modals state
@@ -224,7 +225,6 @@ export default function BancosPage() {
           type: filterType || undefined,
           status: filterStatus || undefined,
           category: filterCategory || undefined,
-          description: filterDescription || undefined,
           take: limit
         }),
         getPeople(companyId)
@@ -245,7 +245,6 @@ export default function BancosPage() {
     filterType,
     filterStatus,
     filterCategory,
-    filterDescription,
     limit
   ]);
 
@@ -397,7 +396,6 @@ export default function BancosPage() {
         type: filterType || undefined,
         status: filterStatus || undefined,
         category: filterCategory || undefined,
-        description: filterDescription || undefined,
       });
 
       const url = window.location.origin + "/extrato-compartilhado/" + res.id;
@@ -623,12 +621,45 @@ export default function BancosPage() {
     setIsBankSearchOpen(false);
   };
 
-  // Consolidated calculations (only for active accounts)
+  // Helper to handle Period Shortcut updates (same rule as Financeiro module)
+  const updatePeriodShortcut = (nextShortcut: "CurrentMonth" | "CurrentQuarter" | "CurrentYear" | "All") => {
+    setPeriodShortcut(nextShortcut);
+    const now = new Date();
+
+    if (nextShortcut === "CurrentMonth") {
+      setFilterStartDate(new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10));
+      setFilterEndDate(now.toISOString().slice(0, 10));
+      return;
+    }
+
+    if (nextShortcut === "CurrentQuarter") {
+      const currentQuarterMonth = Math.floor(now.getMonth() / 3) * 3;
+      setFilterStartDate(new Date(now.getFullYear(), currentQuarterMonth, 1).toISOString().slice(0, 10));
+      setFilterEndDate(now.toISOString().slice(0, 10));
+      return;
+    }
+
+    if (nextShortcut === "CurrentYear") {
+      setFilterStartDate(new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10));
+      setFilterEndDate(now.toISOString().slice(0, 10));
+      return;
+    }
+
+    if (nextShortcut === "All") {
+      setFilterStartDate("");
+      setFilterEndDate("");
+    }
+  };
+
+  // Consolidated balance calculation adjusted by period and transactions in filter
   const consolidatedBalance = useMemo(() => {
-    return accounts
+    const activeAccountsBalance = accounts
       .filter((acc) => acc.active && (!filterAccount || acc.id === filterAccount))
       .reduce((sum, acc) => sum + Number(acc.currentBalance), 0);
-  }, [accounts, filterAccount]);
+
+    // If filtering by dates, calculate balance resulting from filtered confirmed transactions
+    return statementTotals.balance !== 0 ? statementTotals.balance : activeAccountsBalance;
+  }, [accounts, filterAccount, statementTotals.balance]);
 
   const totalCreditLimit = useMemo(() => {
     return accounts
@@ -917,11 +948,27 @@ export default function BancosPage() {
         </div>
 
         <div>
+          <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Período</label>
+          <select
+            value={periodShortcut}
+            onChange={(e) => updatePeriodShortcut(e.target.value as "CurrentMonth" | "CurrentQuarter" | "CurrentYear" | "All")}
+            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-2 text-xs font-bold text-slate-700 outline-none focus:border-orange-500 cursor-pointer"
+          >
+            <option value="CurrentMonth">Mês Atual</option>
+            <option value="CurrentQuarter">Trimestre Atual</option>
+            <option value="CurrentYear">Ano Atual</option>
+            <option value="All">Todo o Período</option>
+          </select>
+        </div>
+
+        <div>
           <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Início</label>
           <input
             type="date"
             value={filterStartDate}
-            onChange={(e) => setFilterStartDate(e.target.value)}
+            onChange={(e) => {
+              setFilterStartDate(e.target.value);
+            }}
             className="h-10 w-full rounded-xl border border-slate-200 bg-white px-2 text-xs font-bold text-slate-700 outline-none focus:border-orange-500"
           />
         </div>
@@ -931,19 +978,10 @@ export default function BancosPage() {
           <input
             type="date"
             value={filterEndDate}
-            onChange={(e) => setFilterEndDate(e.target.value)}
+            onChange={(e) => {
+              setFilterEndDate(e.target.value);
+            }}
             className="h-10 w-full rounded-xl border border-slate-200 bg-white px-2 text-xs font-bold text-slate-700 outline-none focus:border-orange-500"
-          />
-        </div>
-
-        <div>
-          <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5">Descrição</label>
-          <input
-            type="text"
-            placeholder="BUSCAR..."
-            value={filterDescription}
-            onChange={(e) => setFilterDescription(e.target.value.toUpperCase())}
-            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-700 outline-none focus:border-orange-500 uppercase placeholder:text-slate-350"
           />
         </div>
 

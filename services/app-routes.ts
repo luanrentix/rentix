@@ -6,6 +6,7 @@ export type AppToolRoute = {
   icon: string;
   permissionKey: string;
   scope: AppRouteScope;
+  category?: "PRINCIPAL" | "OPERACIONAL" | "FINANCEIRO";
 };
 
 export const publicRoutes = ["/"] as const;
@@ -23,48 +24,7 @@ export const internalToolRoutes: AppToolRoute[] = [
     icon: "🏠",
     permissionKey: "dashboard",
     scope: "internal",
-  },
-  {
-    label: "Bens/Ativos",
-    href: "/imoveis",
-    icon: "🏢",
-    permissionKey: "properties",
-    scope: "internal",
-  },
-  {
-    label: "Pessoas",
-    href: "/pessoas",
-    icon: "👥",
-    permissionKey: "people",
-    scope: "internal",
-  },
-  {
-    label: "Contratos",
-    href: "/contratos",
-    icon: "📄",
-    permissionKey: "contracts",
-    scope: "internal",
-  },
-  {
-    label: "Financeiro",
-    href: "/financeiro",
-    icon: "💰",
-    permissionKey: "financial",
-    scope: "internal",
-  },
-  {
-    label: "Contas a Receber",
-    href: "/contas-receber",
-    icon: "📥",
-    permissionKey: "accountsReceivable",
-    scope: "internal",
-  },
-  {
-    label: "Contas a Pagar",
-    href: "/contas-pagar",
-    icon: "📤",
-    permissionKey: "accountsPayable",
-    scope: "internal",
+    category: "PRINCIPAL",
   },
   {
     label: "Agenda",
@@ -72,6 +32,55 @@ export const internalToolRoutes: AppToolRoute[] = [
     icon: "📅",
     permissionKey: "schedule",
     scope: "internal",
+    category: "PRINCIPAL",
+  },
+  {
+    label: "Bens/Ativos",
+    href: "/imoveis",
+    icon: "🏢",
+    permissionKey: "properties",
+    scope: "internal",
+    category: "OPERACIONAL",
+  },
+  {
+    label: "Pessoas",
+    href: "/pessoas",
+    icon: "👥",
+    permissionKey: "people",
+    scope: "internal",
+    category: "OPERACIONAL",
+  },
+  {
+    label: "Contratos",
+    href: "/contratos",
+    icon: "📄",
+    permissionKey: "contracts",
+    scope: "internal",
+    category: "OPERACIONAL",
+  },
+  {
+    label: "Financeiro",
+    href: "/financeiro",
+    icon: "💰",
+    permissionKey: "financial",
+    scope: "internal",
+    category: "FINANCEIRO",
+  },
+  {
+    label: "Contas a Receber",
+    href: "/contas-receber",
+    icon: "📥",
+    permissionKey: "accountsReceivable",
+    scope: "internal",
+    category: "FINANCEIRO",
+  },
+  {
+    label: "Contas a Pagar",
+    href: "/contas-pagar",
+    icon: "📤",
+    permissionKey: "accountsPayable",
+    scope: "internal",
+    category: "FINANCEIRO",
   },
   {
     label: "Banco",
@@ -79,6 +88,7 @@ export const internalToolRoutes: AppToolRoute[] = [
     icon: "🏦",
     permissionKey: "bank",
     scope: "internal",
+    category: "FINANCEIRO",
   },
 ];
 
