@@ -469,6 +469,11 @@ export default function AgendaPage() {
   const [openActionMenuScheduleId, setOpenActionMenuScheduleId] = useState<string | null>(null);
   const [actionMenuPosition, setActionMenuPosition] =
     useState<ActionMenuPosition | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    dateValue: string;
+  } | null>(null);
 
 
 
@@ -1521,7 +1526,21 @@ export default function AgendaPage() {
                           key={inputDateValue}
                           type="button"
                           onClick={() => handleSelectDate(date)}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            handleSelectDate(date);
+                            setContextMenu({
+                              x: e.clientX,
+                              y: e.clientY,
+                              dateValue: inputDateValue,
+                            });
+                          }}
                           aria-pressed={isSelectedDate}
+                          title={
+                            dateItems.length > 0
+                              ? `${date.getDate()} de ${monthNames[date.getMonth()]}: ${dateItems.map(i => `${i.time} - ${i.title}`).join("; ")} (Clique com botão direito para novo agendamento)`
+                              : `${date.getDate()} de ${monthNames[date.getMonth()]}: Nenhum compromisso (Clique com botão direito para novo agendamento)`
+                          }
                           style={{ aspectRatio: "1.25 / 1" }}
                           className={`w-full rounded-xl border p-2 text-left transition-all duration-200 relative flex flex-col justify-between ${
                             isSelectedDate
@@ -1560,6 +1579,7 @@ export default function AgendaPage() {
                             {dateItems.slice(0, 2).map((item) => (
                               <div
                                 key={item.id}
+                                title={`${item.time} - ${item.title}${item.customerName ? ` (${item.customerName})` : ""}`}
                                 className={`truncate rounded-lg px-2 py-0.5 text-[10px] font-bold w-full ${
                                   item.priority === "high"
                                     ? "bg-red-600 text-white shadow-sm"
@@ -2254,6 +2274,40 @@ export default function AgendaPage() {
                 Excluir
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MENU CONTEXTUAL DE BOTÃO DIREITO NA AGENDA */}
+      {contextMenu && (
+        <div
+          className="fixed inset-0 z-50 bg-transparent"
+          onClick={() => setContextMenu(null)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setContextMenu(null);
+          }}
+        >
+          <div
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+            className={`fixed z-50 w-56 overflow-hidden rounded-2xl border p-1.5 shadow-2xl animate-fade-in ${
+              isBlackTheme
+                ? "border-[#334155] bg-[#0d1b2e] text-[#f8fafc]"
+                : "border-orange-100 bg-white text-slate-900 shadow-orange-100/50"
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                const targetDate = contextMenu.dateValue;
+                setContextMenu(null);
+                handleOpenCreateModal(targetDate);
+              }}
+              className="flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-left text-xs font-black text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/40 transition"
+            >
+              <Plus className="h-4 w-4 shrink-0 text-orange-500" />
+              <span>Criar Lançamento / Agendamento</span>
+            </button>
           </div>
         </div>
       )}

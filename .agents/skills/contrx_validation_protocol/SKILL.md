@@ -4,6 +4,8 @@ description: Protocolo padrão de validação local e pré-deploy para o projeto
 ---
 # Protocolo de Validação Pré-Deploy Contrx
 
+**Versão Atual Validada Localmente**: `v1.0.4` (Anterior em Produção: `v1.0.3`)
+
 Quando o usuário disser "iniciar", "iniciar verificações", "rodar protocolo" ou similar, execute AUTOMATICAMENTE os seguintes passos em segundo plano ou sequencialmente:
 
 1. **Validação do Frontend (Lint e Build)**:
@@ -11,19 +13,27 @@ Quando o usuário disser "iniciar", "iniciar verificações", "rodar protocolo" 
    - Rodar `npm run build` na raiz.
 
 2. **Validação do Backend (Lint, Testes e Build)**:
-   - Rodar `npm --prefix contrx-backend run lint`.
-   - Rodar `npm --prefix contrx-backend run test`.
-   - Rodar `npm --prefix contrx-backend run build`.
+   - Rodar `npm --prefix contrx-backend run lint` (se houver script).
+   - Rodar `npm --prefix contrx-backend run test` (se houver script).
+   - Rodar `npm --prefix contrx-backend run build` (se houver script).
 
-3. **Ajustes e Verificação de Telas Mobile**:
+3. **Ajustes de Responsividade Mobile & Padrão Visual ERP**:
    - Analisar a responsividade das páginas principais do frontend (`dashboard`, `imoveis`, `pessoas`, `bancos`, `admin`, etc.).
-   - Verificar se tabelas, modais, cards de KPI e menus do dashboard quebram no layout móvel ou necessitam de ajustes CSS/Tailwind (como rolagem horizontal nas tabelas, flex direction no mobile, etc.).
-   - Propor ou aplicar correções necessárias para garantir excelente experiência de uso em smartphones e tablets.
+   - Verificar tabelas, modais, cards de KPI e menus no layout móvel (rolagem horizontal, flex-col no mobile).
+   - Verificar padronização de fontes e tamanhos de texto no padrão ERP (tipografia limpa, hierarquia de títulos, tamanhos legíveis e profissionais).
+   - Propor ou aplicar correções necessárias no CSS/Tailwind.
 
-4. **Verificação de Arquivos Inúteis / Limpeza**:
-   - Checar por arquivos temporários ou backups compactados (.zip, .rar, etc.) soltos na raiz que possam ser apagados ou ignorados.
+4. **Verificação de Arquivos Inúteis e Limpeza**:
+   - Mapear e sinalizar/remover arquivos temporários, logs, builds de teste ou arquivos desnecessários para liberar espaço.
 
-5. **Versionamento Automático (Bump de Versão)**:
-   - Incrementar automaticamente a versão da aplicação (versão de patch) nos arquivos `package.json` da raiz e do backend (por exemplo, `1.0.1` para `1.0.2`) a cada execução bem-sucedida do protocolo de validação pré-deploy.
+5. **Versionamento e Execução do Script de Deploy/Atualização**:
+   - Incrementar/verificar a versão nos arquivos de configuração/package.json.
+   - Apontar o script `C:\Users\MacOS\Documents\Contrx\ATUALIZA-VERSÃO.BAT` para atualização de versão/envio, **respeitando estritamente a regra de não enviar nada automaticamente para produção** (apenas realizar os ajustes e preparar o ambiente/script para quando você autorizar a execução manual).
 
-Ao final, consolide todos os resultados em uma tabela informativa e confirme se o projeto está pronto para deploy manual pelo usuário.
+6. **Alerta de Atualização do Supabase**:
+   - Sempre que houver novas migrations, alterações de schema do Prisma ou necessidade de atualizar o banco remoto, **avisar expressamente o usuário** na tabela final de resultados que a opção `[2] Atualizar Estrutura do Supabase` do script `ATUALIZA-VERSÃO.BAT` precisará ser executada.
+
+7. **Não Enviar Nada Automaticamente**:
+   - Garantir que nada seja enviado para produção (Oracle, GitHub, Supabase) sem autorização prévia.
+
+Ao final, consolide todos os resultados em uma tabela informativa e aguarde instrução do usuário.

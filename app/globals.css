@@ -1144,5 +1144,27 @@ textarea {
   --tw-shadow-color: var(--primary-shadow-color) !important;
 }
 
+/* UNIVERSAL RESIZABLE & DRAGGABLE MODALS (ALL MODULES) */
+div[class*="fixed"][class*="z-50"] > div[class*="rounded"],
+div[class*="fixed"][class*="z-40"] > div[class*="rounded"],
+div[class*="fixed"][class*="z-30"] > div[class*="rounded"] {
+  resize: both !important;
+  overflow: auto !important;
+  min-width: 320px !important;
+  min-height: 200px !important;
+}
+
+/* MODAL DRAG HANDLE CURSOR & DRAGGABLE POINTER */
+div[class*="fixed"][class*="z-50"] > div[class*="rounded"] > div:first-child,
+div[class*="fixed"][class*="z-40"] > div[class*="rounded"] > div:first-child {
+  cursor: grab;
+  user-select: none;
+}
+
+div[class*="fixed"][class*="z-50"] > div[class*="rounded"] > div:first-child:active,
+div[class*="fixed"][class*="z-40"] > div[class*="rounded"] > div:first-child:active {
+  cursor: grabbing;
+}
+
 
 

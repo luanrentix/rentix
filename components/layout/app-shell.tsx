@@ -603,8 +603,11 @@ export default function AppShell({ children }: AppShellProps) {
         }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
-        if (errorMsg.includes("Nao foi possivel conectar a API")) {
-          console.warn("Suporte offline: O servidor backend está inacessível.");
+        if (
+          errorMsg.includes("Nao foi possivel conectar a API") ||
+          errorMsg.includes("Banco de dados indisponivel")
+        ) {
+          console.warn("Suporte offline: O servidor ou banco de dados está inacessível.");
         } else {
           console.error("Erro ao checar notificações de suporte:", err);
         }
@@ -625,6 +628,75 @@ export default function AppShell({ children }: AppShellProps) {
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    let activeModal: HTMLElement | null = null;
+    let activeHeader: HTMLElement | null = null;
+    let startX = 0;
+    let startY = 0;
+    let initialLeft = 0;
+    let initialTop = 0;
+
+    function handleMouseDown(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target) return;
+
+      // Check if clicking inside interactive controls
+      if (target.closest("button, input, select, textarea, a, label, [role='button']")) return;
+
+      // Find top modal dialog container
+      const modalContainer = target.closest<HTMLElement>(
+        "div[class*='fixed'][class*='z-50'] > div[class*='rounded'], div[class*='fixed'][class*='z-40'] > div[class*='rounded']"
+      );
+
+      if (!modalContainer) return;
+
+      // Header is the first child div of modal
+      const header = modalContainer.firstElementChild as HTMLElement;
+      if (!header || !header.contains(target)) return;
+
+      activeModal = modalContainer;
+      activeHeader = header;
+      startX = e.clientX;
+      startY = e.clientY;
+
+      const rect = modalContainer.getBoundingClientRect();
+      initialLeft = rect.left;
+      initialTop = rect.top;
+
+      // Set fixed positioning explicitly so transform doesn't interfere
+      modalContainer.style.position = "fixed";
+      modalContainer.style.left = `${initialLeft}px`;
+      modalContainer.style.top = `${initialTop}px`;
+      modalContainer.style.margin = "0";
+
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    }
+
+    function handleMouseMove(e: MouseEvent) {
+      if (!activeModal) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+
+      activeModal.style.left = `${initialLeft + dx}px`;
+      activeModal.style.top = `${initialTop + dy}px`;
+    }
+
+    function handleMouseUp() {
+      activeModal = null;
+      activeHeader = null;
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    }
+
+    document.addEventListener("mousedown", handleMouseDown);
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
   }, []);
 
   useEffect(() => {

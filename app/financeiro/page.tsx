@@ -53,320 +53,6 @@ type StatementItem = {
 
 type ThemeMode = "light" | "black" | "graphite";
 
-const contrxFinancialThemeStyle = `
-  .contrx-financial-page {
-    color: #0f172a;
-  }
-
-  .contrx-financial-action-button {
-    cursor: pointer;
-    will-change: transform, box-shadow, filter;
-    transition:
-      transform 160ms ease,
-      box-shadow 160ms ease,
-      background-color 160ms ease,
-      border-color 160ms ease,
-      color 160ms ease,
-      filter 160ms ease;
-  }
-
-  .contrx-financial-action-button:hover {
-    transform: translateY(-2px);
-    filter: saturate(1.08);
-  }
-
-  .contrx-financial-action-button:active {
-    transform: translateY(0) scale(0.98);
-    filter: saturate(0.98);
-  }
-
-  .contrx-financial-action-button:focus-visible {
-    outline: 3px solid rgba(249, 115, 22, 0.28);
-    outline-offset: 3px;
-  }
-
-  .contrx-financial-action-button:disabled {
-    cursor: wait;
-    opacity: 0.72;
-    transform: none;
-  }
-
-  .contrx-financial-action-button-emerald:hover {
-    box-shadow: 0 14px 28px rgba(16, 185, 129, 0.18);
-  }
-
-  .contrx-financial-action-button-red:hover {
-    box-shadow: 0 14px 28px rgba(239, 68, 68, 0.16);
-  }
-
-  .contrx-financial-action-button-orange:hover {
-    box-shadow: 0 14px 28px rgba(249, 115, 22, 0.18);
-  }
-
-  .contrx-financial-action-button-slate:hover {
-    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
-  }
-
-  .contrx-financial-page-light,
-  .contrx-financial-page-light * {
-    color-scheme: light;
-  }
-
-  .contrx-financial-page-light .bg-white {
-    background-color: #ffffff !important;
-  }
-
-  .contrx-financial-page-light .bg-slate-50 {
-    background-color: #f8fafc !important;
-  }
-
-  .contrx-financial-page-light .bg-slate-100 {
-    background-color: #f1f5f9 !important;
-  }
-
-  .contrx-financial-page-light .bg-orange-50,
-  .contrx-financial-page-light .bg-orange-100 {
-    background-color: #fff7ed !important;
-  }
-
-  .contrx-financial-page-light .bg-red-50,
-  .contrx-financial-page-light .bg-red-100 {
-    background-color: #fef2f2 !important;
-  }
-
-  .contrx-financial-page-light .bg-emerald-50,
-  .contrx-financial-page-light .bg-emerald-100 {
-    background-color: #ecfdf5 !important;
-  }
-
-  .contrx-financial-page-light .text-slate-950,
-  .contrx-financial-page-light .text-slate-900,
-  .contrx-financial-page-light .text-slate-800,
-  .contrx-financial-page-light .text-slate-700 {
-    color: #0f172a !important;
-  }
-
-  .contrx-financial-page-light .text-slate-600 {
-    color: #475569 !important;
-  }
-
-  .contrx-financial-page-light .text-slate-500 {
-    color: #64748b !important;
-  }
-
-  .contrx-financial-page-light .text-slate-400 {
-    color: #94a3b8 !important;
-  }
-
-  .contrx-financial-page-light .text-orange-600,
-  .contrx-financial-page-light .text-orange-700 {
-    color: #ea580c !important;
-  }
-
-  .contrx-financial-page-light .text-red-600,
-  .contrx-financial-page-light .text-red-700 {
-    color: #dc2626 !important;
-  }
-
-  .contrx-financial-page-light .text-emerald-600,
-  .contrx-financial-page-light .text-emerald-700 {
-    color: #059669 !important;
-  }
-
-  .contrx-financial-page-light .border-orange-100,
-  .contrx-financial-page-light .border-slate-100,
-  .contrx-financial-page-light .border-slate-200,
-  .contrx-financial-page-light .border-red-100 {
-    border-color: #fed7aa !important;
-  }
-
-  .contrx-financial-page-light input,
-  .contrx-financial-page-light select {
-    background-color: #ffffff !important;
-    border-color: #e2e8f0 !important;
-    color: #0f172a !important;
-  }
-
-  .contrx-financial-page-black {
-    color: #f8fafc;
-  }
-
-  .contrx-financial-page-black .bg-white {
-    background: linear-gradient(145deg, #0f172a 0%, #111827 100%) !important;
-  }
-
-  .contrx-financial-page-black .bg-slate-50,
-  .contrx-financial-page-black .bg-slate-100 {
-    background-color: #111827 !important;
-  }
-
-  .contrx-financial-page-black .bg-orange-50,
-  .contrx-financial-page-black .bg-orange-100 {
-    background-color: rgba(249, 115, 22, 0.14) !important;
-  }
-
-  .contrx-financial-page-black .bg-red-50,
-  .contrx-financial-page-black .bg-red-100 {
-    background-color: rgba(239, 68, 68, 0.14) !important;
-  }
-
-  .contrx-financial-page-black .bg-emerald-50,
-  .contrx-financial-page-black .bg-emerald-100 {
-    background-color: rgba(16, 185, 129, 0.14) !important;
-  }
-
-  .contrx-financial-page-black .text-slate-950,
-  .contrx-financial-page-black .text-slate-900,
-  .contrx-financial-page-black .text-slate-800,
-  .contrx-financial-page-black .text-slate-700 {
-    color: #f8fafc !important;
-  }
-
-  .contrx-financial-page-black .text-slate-600,
-  .contrx-financial-page-black .text-slate-500,
-  .contrx-financial-page-black .text-slate-400 {
-    color: #cbd5e1 !important;
-  }
-
-  .contrx-financial-page-black .text-orange-600,
-  .contrx-financial-page-black .text-orange-700 {
-    color: #fb923c !important;
-  }
-
-  .contrx-financial-page-black .text-red-600,
-  .contrx-financial-page-black .text-red-700 {
-    color: #f87171 !important;
-  }
-
-  .contrx-financial-page-black .text-emerald-600,
-  .contrx-financial-page-black .text-emerald-700 {
-    color: #34d399 !important;
-  }
-
-  .contrx-financial-page-black .border-orange-100,
-  .contrx-financial-page-black .border-orange-500\\/30,
-  .contrx-financial-page-black .border-red-100,
-  .contrx-financial-page-black .border-red-500\\/30,
-  .contrx-financial-page-black .border-slate-100,
-  .contrx-financial-page-black .border-slate-200,
-  .contrx-financial-page-black .border-slate-700 {
-    border-color: #334155 !important;
-  }
-
-  .contrx-financial-page-black input,
-  .contrx-financial-page-black select {
-    background-color: #020617 !important;
-    border-color: #334155 !important;
-    color: #f8fafc !important;
-  }
-
-  .contrx-financial-page-black option {
-    background-color: #020617 !important;
-    color: #f8fafc !important;
-  }
-
-  .contrx-financial-page-black .shadow-sm,
-  .contrx-financial-page-black .shadow-md {
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38) !important;
-  }
-
-  .contrx-financial-page-black .hover\\:bg-slate-50:hover,
-  .contrx-financial-page-black .hover\\:bg-slate-100:hover,
-  .contrx-financial-page-black .hover\\:bg-slate-200:hover {
-    background-color: #1e293b !important;
-  }
-
-  .contrx-financial-page-graphite {
-    color: #f8fafc;
-    color-scheme: dark;
-  }
-
-  .contrx-financial-page-graphite .bg-white {
-    background: linear-gradient(145deg, #0d1b2e 0%, #07111f 100%) !important;
-  }
-
-  .contrx-financial-page-graphite .bg-slate-50,
-  .contrx-financial-page-graphite .bg-slate-100 {
-    background-color: #0d1b2e !important;
-  }
-
-  .contrx-financial-page-graphite .bg-orange-50,
-  .contrx-financial-page-graphite .bg-orange-100 {
-    background-color: rgba(249, 115, 22, 0.18) !important;
-  }
-
-  .contrx-financial-page-graphite .bg-red-50,
-  .contrx-financial-page-graphite .bg-red-100 {
-    background-color: rgba(239, 68, 68, 0.16) !important;
-  }
-
-  .contrx-financial-page-graphite .bg-emerald-50,
-  .contrx-financial-page-graphite .bg-emerald-100 {
-    background-color: rgba(16, 185, 129, 0.16) !important;
-  }
-
-  .contrx-financial-page-graphite .text-slate-950,
-  .contrx-financial-page-graphite .text-slate-900,
-  .contrx-financial-page-graphite .text-slate-800,
-  .contrx-financial-page-graphite .text-slate-700 {
-    color: #f8fafc !important;
-  }
-
-  .contrx-financial-page-graphite .text-slate-600,
-  .contrx-financial-page-graphite .text-slate-500,
-  .contrx-financial-page-graphite .text-slate-400 {
-    color: #b6c6dc !important;
-  }
-
-  .contrx-financial-page-graphite .text-orange-600,
-  .contrx-financial-page-graphite .text-orange-700 {
-    color: #ff8a3d !important;
-  }
-
-  .contrx-financial-page-graphite .text-red-600,
-  .contrx-financial-page-graphite .text-red-700 {
-    color: #f87171 !important;
-  }
-
-  .contrx-financial-page-graphite .text-emerald-600,
-  .contrx-financial-page-graphite .text-emerald-700 {
-    color: #34d399 !important;
-  }
-
-  .contrx-financial-page-graphite .border-orange-100,
-  .contrx-financial-page-graphite .border-orange-500\\/30,
-  .contrx-financial-page-graphite .border-red-100,
-  .contrx-financial-page-graphite .border-red-500\\/30,
-  .contrx-financial-page-graphite .border-slate-100,
-  .contrx-financial-page-graphite .border-slate-200,
-  .contrx-financial-page-graphite .border-slate-700 {
-    border-color: #24405f !important;
-  }
-
-  .contrx-financial-page-graphite input,
-  .contrx-financial-page-graphite select {
-    background-color: #07111f !important;
-    border-color: #24405f !important;
-    color: #f8fafc !important;
-  }
-
-  .contrx-financial-page-graphite option {
-    background-color: #07111f !important;
-    color: #f8fafc !important;
-  }
-
-  .contrx-financial-page-graphite .shadow-sm,
-  .contrx-financial-page-graphite .shadow-md {
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.3) !important;
-  }
-
-  .contrx-financial-page-graphite .hover\\:bg-slate-50:hover,
-  .contrx-financial-page-graphite .hover\\:bg-slate-100:hover,
-  .contrx-financial-page-graphite .hover\\:bg-slate-200:hover {
-    background-color: #162a44 !important;
-  }
-`;
-
 export default function FinancialPage() {
   const { user } = useAuth();
   const companyId = user?.companyId;
@@ -625,19 +311,8 @@ export default function FinancialPage() {
   const isProjectedPositive = balance.projectedBalance >= 0;
 
   return (
-    <>
-      <style>{contrxFinancialThemeStyle}</style>
-      <div
-        data-contrx-theme={financialTheme}
-        className={`contrx-financial-page space-y-6 ${
-          financialTheme === "black"
-            ? "contrx-financial-page-black"
-            : financialTheme === "graphite"
-              ? "contrx-financial-page-graphite"
-              : "contrx-financial-page-light"
-        }`}
-      >
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <h1 className="text-2xl font-black tracking-tight text-slate-950 dark:text-white sm:text-3xl">
               Financeiro
@@ -825,7 +500,7 @@ export default function FinancialPage() {
           </section>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <MetricCard
             icon={<ArrowUpCircle className="h-5 w-5" />}
             title="A receber"
@@ -853,6 +528,15 @@ export default function FinancialPage() {
             value={formatCurrency(balance.totalPaid)}
             detail={`${balance.paidCount} despesa(s)`}
             tone="slate"
+          />
+          <MetricCard
+            icon={<AlertCircle className="h-5 w-5" />}
+            title="Taxa Inadimplência"
+            value={`${(
+              (balance.overdueReceivable / (balance.totalReceived + balance.totalToReceive || 1)) * 100
+            ).toFixed(1)}%`}
+            detail={balance.overdueReceivable > 0 ? "Requer cobrança" : "Excelente pontualidade"}
+            tone={balance.overdueReceivable > 0 ? "red" : "emerald"}
           />
         </div>
 
@@ -898,7 +582,6 @@ export default function FinancialPage() {
           />
         </div>
       </div>
-    </>
   );
 }
 

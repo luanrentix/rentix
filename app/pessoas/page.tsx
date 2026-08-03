@@ -1089,7 +1089,8 @@ export default function PeoplePage() {
                         <button
                           type="button"
                           onClick={() => openPersonHistory(person)}
-                          className="block max-w-[420px] truncate text-left text-sm font-black uppercase text-slate-950 transition hover:text-orange-600 hover:underline"
+                          style={{ fontWeight: 900 }}
+                          className="block max-w-[420px] truncate text-left text-base font-black uppercase text-slate-950 dark:text-white transition hover:text-orange-600 hover:underline tracking-tight"
                           title="Clique para ver o histórico desta pessoa"
                         >
                           {person.name}
@@ -1191,7 +1192,8 @@ export default function PeoplePage() {
                     <button
                       type="button"
                       onClick={() => openPersonHistory(person)}
-                      className="block text-sm font-black uppercase text-slate-950 text-left hover:text-orange-600 hover:underline"
+                      style={{ fontWeight: 900 }}
+                      className="block text-base font-black uppercase text-slate-950 dark:text-white text-left hover:text-orange-600 hover:underline"
                     >
                       {person.name}
                     </button>

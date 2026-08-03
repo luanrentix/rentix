@@ -82,8 +82,11 @@ export default function AgendaNotificationListener() {
         return;
       }
       const errorMsg = error instanceof Error ? error.message : String(error);
-      if (errorMsg.includes("Nao foi possivel conectar a API")) {
-        console.warn("Agenda offline: O servidor backend está inacessível.");
+      if (
+        errorMsg.includes("Nao foi possivel conectar a API") ||
+        errorMsg.includes("Banco de dados indisponivel")
+      ) {
+        console.warn("Lembretes da agenda: Banco de dados ou API temporariamente indisponível.");
       } else {
         console.error("Erro ao verificar lembretes de agenda:", error);
       }
