@@ -62,10 +62,15 @@ export default function BancosPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Filters
+  // Filters - default start date to first day of current month, end date to today
   const [filterAccount, setFilterAccount] = useState("");
-  const [filterStartDate, setFilterStartDate] = useState("");
-  const [filterEndDate, setFilterEndDate] = useState("");
+  const [filterStartDate, setFilterStartDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  });
+  const [filterEndDate, setFilterEndDate] = useState(() => {
+    return new Date().toISOString().slice(0, 10);
+  });
   const [filterType, setFilterType] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
@@ -81,6 +86,8 @@ export default function BancosPage() {
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryLineIndex, setNewCategoryLineIndex] = useState<number | null>(null);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [editingCategoryOldName, setEditingCategoryOldName] = useState<string | null>(null);
+  const [inactiveCategories, setInactiveCategories] = useState<string[]>([]);
   const [editingTransaction, setEditingTransaction] = useState<BankTransaction | null>(null);
   const [keepModalOpen, setKeepModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -139,8 +146,31 @@ export default function BancosPage() {
       }
     });
 
-    return Array.from(categoriesSet).sort();
-  }, [customCategories, transactions, defaultCategories]);
+    return Array.from(categoriesSet)
+      .filter((cat) => !inactiveCategories.includes(cat))
+      .sort();
+  }, [customCategories, transactions, defaultCategories, inactiveCategories]);
+
+  const allCategoriesWithStatus = useMemo(() => {
+    const categoriesSet = new Set<string>(defaultCategories);
+
+    customCategories.forEach((cat) => {
+      if (cat.trim()) categoriesSet.add(cat.trim().toUpperCase());
+    });
+
+    transactions.forEach((tx) => {
+      if (tx.category && tx.category.trim()) {
+        categoriesSet.add(tx.category.trim().toUpperCase());
+      }
+    });
+
+    return Array.from(categoriesSet)
+      .map((cat) => ({
+        name: cat,
+        active: !inactiveCategories.includes(cat)
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [customCategories, transactions, defaultCategories, inactiveCategories]);
 
   const showAlert = (message: string, title: string = "Aviso", type: 'error' | 'success' | 'warning' = "warning") => {
     setCustomAlert({ title, message, type });
@@ -519,10 +549,9 @@ export default function BancosPage() {
 
   const resetLaunchForm = () => {
     setEditingTransaction(null);
-    const defaultAccountId = accounts.find((acc) => acc.active)?.id || "";
     setLaunchForm({
-      bankAccountId: defaultAccountId,
-      originBankAccountId: defaultAccountId,
+      bankAccountId: "",
+      originBankAccountId: "",
       destinationBankAccountId: "",
       amountStr: "R$ 0,00",
       feeStr: "R$ 0,00",
@@ -2015,7 +2044,7 @@ export default function BancosPage() {
               {/* Split Categorization Section */}
               {activeTab !== "TRANSFERENCIA" && (
                 <div className="space-y-3 pt-2">
-                  <label className="block text-xs font-black uppercase tracking-wider text-slate-400">Classificação do Lançamento</label>
+                  <label className="block text-xs font-black uppercase tracking-wider text-slate-400">Classificação do Lançamento <span className="text-red-500">*</span></label>
                   
                   {launchForm.categories.map((item, idx) => (
                     <div key={idx} className="flex gap-2 items-center bg-slate-50 p-2.5 rounded-2xl border border-slate-200">
@@ -2158,54 +2187,197 @@ export default function BancosPage() {
         </div>
       )}
 
+      {/* MODAL: GERENCIAMENTO DE CATEGORIAS */}
       {isNewCategoryModalOpen && (
         <div className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-slate-900/60 p-3 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="my-3 w-full max-w-sm space-y-4 rounded-3xl border border-slate-100 bg-white p-4 shadow-2xl animate-fade-in sm:my-0 sm:p-6">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-black text-slate-900">Nova Categoria</h3>
+          <div className="my-3 flex max-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col space-y-4 overflow-hidden rounded-3xl border border-slate-100 bg-white p-4 shadow-2xl animate-fade-in sm:my-0 sm:max-h-[90vh] sm:p-6">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-shrink-0">
+              <h3 className="text-base font-black text-slate-900">Gerenciar Classificações</h3>
               <button
-                onClick={() => setIsNewCategoryModalOpen(false)}
+                type="button"
+                onClick={() => {
+                  setIsNewCategoryModalOpen(false);
+                  setEditingCategoryOldName(null);
+                  setNewCategoryName("");
+                }}
                 className="text-slate-400 hover:text-slate-600 transition"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             
-            <div className="space-y-3">
-              <label className="block text-xs font-black uppercase tracking-wider text-slate-400">Nome da Categoria <span className="text-red-500">*</span></label>
-              <input
-                type="text"
-                required
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value.toUpperCase())}
-                placeholder="EX: COMBUSTÍVEL, REFEIÇÃO..."
-                className="w-full h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 shadow-sm outline-none transition focus:border-orange-500 uppercase"
-              />
+            {/* Form de adicionar / editar categoria */}
+            <div className="space-y-2 flex-shrink-0 bg-slate-50 p-3 rounded-2xl border border-slate-200">
+              <label className="block text-xs font-black uppercase tracking-wider text-slate-500">
+                {editingCategoryOldName ? `Editar: ${editingCategoryOldName}` : "Nova Classificação"}
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value.toUpperCase())}
+                  placeholder="EX: COMBUSTÍVEL, REFEIÇÃO..."
+                  className="flex-1 h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-sm outline-none transition focus:border-orange-500 uppercase"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!newCategoryName.trim()) return;
+                    const cleanName = newCategoryName.trim().toUpperCase();
+
+                    if (editingCategoryOldName) {
+                      // Editar
+                      if (editingCategoryOldName !== cleanName) {
+                        setCustomCategories((prev) =>
+                          prev.map((c) => (c === editingCategoryOldName ? cleanName : c))
+                        );
+                        // Atualiza seleções atuais no form se necessário
+                        if (newCategoryLineIndex !== null) {
+                          handleCategoryLineChange(newCategoryLineIndex, "category", cleanName);
+                        }
+                      }
+                      setEditingCategoryOldName(null);
+                    } else {
+                      // Criar nova
+                      if (!customCategories.includes(cleanName)) {
+                        setCustomCategories((prev) => [...prev, cleanName]);
+                      }
+                      // Se foi clicado pelo botão de uma linha específica, seleciona ela
+                      if (newCategoryLineIndex !== null) {
+                        handleCategoryLineChange(newCategoryLineIndex, "category", cleanName);
+                      }
+                    }
+                    setNewCategoryName("");
+                  }}
+                  className="h-10 px-4 rounded-xl bg-orange-500 text-xs font-black text-white hover:bg-orange-600 transition flex items-center gap-1 flex-shrink-0"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  {editingCategoryOldName ? "Salvar" : "Adicionar"}
+                </button>
+              </div>
             </div>
 
-            <div className="flex gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsNewCategoryModalOpen(false)}
-                className="flex-1 h-11 rounded-2xl border border-slate-200 text-xs font-black text-slate-700 hover:bg-slate-50 transition"
-              >
-                Cancelar
-              </button>
+            {/* Lista de categorias cadastradas */}
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+              <label className="block text-xs font-black uppercase tracking-wider text-slate-400">
+                Classificações Cadastradas ({allCategoriesWithStatus.length})
+              </label>
+
+              {allCategoriesWithStatus.length === 0 ? (
+                <div className="text-center py-6 text-xs text-slate-400 font-semibold">
+                  Nenhuma classificação cadastrada.
+                </div>
+              ) : (
+                allCategoriesWithStatus.map((cat) => (
+                  <div
+                    key={cat.name}
+                    className={`flex items-center justify-between p-2.5 rounded-xl border transition ${
+                      cat.active
+                        ? "bg-white border-slate-200 hover:border-slate-300"
+                        : "bg-slate-100 border-slate-200 opacity-60"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-black ${cat.active ? "text-slate-800" : "text-slate-400 line-through"}`}>
+                        {cat.name}
+                      </span>
+                      {!cat.active && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500 uppercase">
+                          Inativa
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      {/* Selecionar esta categoria para o lançamento */}
+                      {newCategoryLineIndex !== null && cat.active && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleCategoryLineChange(newCategoryLineIndex, "category", cat.name);
+                            setIsNewCategoryModalOpen(false);
+                            setNewCategoryName("");
+                            setEditingCategoryOldName(null);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 text-[11px] font-black transition"
+                        >
+                          Usar
+                        </button>
+                      )}
+
+                      {/* Editar */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingCategoryOldName(cat.name);
+                          setNewCategoryName(cat.name);
+                        }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+                        title="Editar Nome"
+                      >
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </button>
+
+                      {/* Inativar / Ativar */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (cat.active) {
+                            setInactiveCategories((prev) => [...prev, cat.name]);
+                          } else {
+                            setInactiveCategories((prev) => prev.filter((c) => c !== cat.name));
+                          }
+                        }}
+                        className={`p-1.5 rounded-lg transition ${
+                          cat.active
+                            ? "text-amber-500 hover:bg-amber-50"
+                            : "text-emerald-600 hover:bg-emerald-50"
+                        }`}
+                        title={cat.active ? "Inativar Classificação" : "Ativar Classificação"}
+                      >
+                        <Power className="h-3.5 w-3.5" />
+                      </button>
+
+                      {/* Excluir */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          showConfirm(
+                            `Deseja realmente excluir a classificação "${cat.name}"?`,
+                            () => {
+                              setCustomCategories((prev) => prev.filter((c) => c !== cat.name));
+                              setInactiveCategories((prev) => prev.filter((c) => c !== cat.name));
+                              if (editingCategoryOldName === cat.name) {
+                                setEditingCategoryOldName(null);
+                                setNewCategoryName("");
+                              }
+                            },
+                            "Excluir Classificação?",
+                            true
+                          );
+                        }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
+                        title="Excluir Classificação"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-slate-100 flex-shrink-0">
               <button
                 type="button"
                 onClick={() => {
-                  if (newCategoryName.trim() && newCategoryLineIndex !== null) {
-                    const cleanName = newCategoryName.trim().toUpperCase();
-                    if (!customCategories.includes(cleanName)) {
-                      setCustomCategories((prev) => [...prev, cleanName]);
-                    }
-                    handleCategoryLineChange(newCategoryLineIndex, "category", cleanName);
-                    setIsNewCategoryModalOpen(false);
-                  }
+                  setIsNewCategoryModalOpen(false);
+                  setEditingCategoryOldName(null);
+                  setNewCategoryName("");
                 }}
-                className="flex-1 h-11 rounded-2xl bg-orange-500 text-xs font-black text-white hover:bg-orange-600 transition"
+                className="w-full h-11 rounded-2xl border border-slate-200 text-xs font-black text-slate-700 hover:bg-slate-50 transition"
               >
-                Salvar
+                Concluir
               </button>
             </div>
           </div>
