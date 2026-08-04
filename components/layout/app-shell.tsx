@@ -1312,7 +1312,7 @@ export default function AppShell({ children }: AppShellProps) {
             </div>
 
             <div className="flex items-center gap-2 justify-center lg:justify-start">
-              <span className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className="relative flex h-2.5 w-2.5 shrink-0" title={isApiOnline ? "Banco Online" : "Banco Offline"}>
                 <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isApiOnline ? "bg-emerald-400" : "bg-red-400"}`}></span>
                 <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isApiOnline ? "bg-emerald-500" : "bg-red-500"}`}></span>
               </span>
@@ -1322,7 +1322,7 @@ export default function AppShell({ children }: AppShellProps) {
                   ? "max-w-48 translate-x-0 opacity-100"
                   : "max-w-0 -translate-x-2 overflow-hidden opacity-0"
               }`}>
-                v{packageJson.version} • {isApiOnline ? "Banco Online" : "Banco Offline"}
+                v{packageJson.version}
               </span>
             </div>
           </div>
