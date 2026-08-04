@@ -2276,16 +2276,16 @@ GERADO EM: {currentDate}`;
 
       <div
         data-contrx-theme={themeMode}
-        className={`${accountsPayableThemeClass} space-y-5`}
+        className={`${accountsPayableThemeClass} space-y-3 sm:space-y-4`}
       >
         <div>
-          <p className="text-sm font-semibold text-orange-600">Financeiro</p>
+          <p className="text-xs font-semibold text-orange-600">Financeiro</p>
 
-          <h1 className="mt-1 text-2xl font-black text-slate-900 dark:text-slate-100 sm:text-3xl">
+          <h1 className="text-xl font-black text-slate-900 dark:text-slate-100 sm:text-2xl">
             Contas a Pagar
           </h1>
 
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
             Cadastre, acompanhe e controle suas despesas financeiras.
           </p>
         </div>
@@ -2523,7 +2523,7 @@ GERADO EM: {currentDate}`;
           </div>
 
           {/* Vista Mobile */}
-          <div className="space-y-4 lg:hidden">
+          <div className="space-y-4 p-4 lg:hidden">
             {filteredExpenses.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900">
                 Nenhuma conta a pagar encontrada.

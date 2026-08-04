@@ -1167,7 +1167,7 @@ export default function AccountsReceivablePage() {
     const viewportPadding = 16;
     const availableBottomSpace = window.innerHeight - buttonRect.bottom;
     const top =
-      availableBottomSpace < estimatedMenuHeight
+      availableBottomSpace < estimatedMenuHeight + 20
         ? Math.max(viewportPadding, buttonRect.top - estimatedMenuHeight - 8)
         : buttonRect.bottom + 8;
     const left = Math.min(
@@ -5885,7 +5885,7 @@ export default function AccountsReceivablePage() {
           </div>
 
           {/* Vista Mobile */}
-          <div className="space-y-4 lg:hidden">
+          <div className="space-y-4 p-4 lg:hidden">
             {filteredCharges.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900">
                 Nenhuma conta a receber encontrada.

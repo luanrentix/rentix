@@ -1953,7 +1953,7 @@ export default function PropertiesPage() {
             </div>
 
             {/* Vista Mobile */}
-            <div className="space-y-4 lg:hidden">
+            <div className="space-y-4 p-4 lg:hidden">
               {filteredProperties.map((property) => {
                 const currentRentalContract = getCurrentRentalContract(property, contracts);
                 return (

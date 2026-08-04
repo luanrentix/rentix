@@ -2136,7 +2136,7 @@ export default function ContractsPage() {
           </div>
 
           {/* Vista Mobile */}
-          <div className="space-y-4 lg:hidden">
+          <div className="space-y-4 p-4 lg:hidden">
             {isLoadingPageData && (
               <div className="flex h-32 items-center justify-center bg-white rounded-2xl border border-slate-200">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-orange-200 border-t-orange-600" />

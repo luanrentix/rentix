@@ -81,8 +81,16 @@ export default function AdminChamadosPage() {
       setTickets(Array.isArray(nextTickets) ? nextTickets : []);
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Não foi possível carregar os chamados.";
-      if (msg.includes("Internal server error") || msg.includes("500") || msg.includes("conectar") || msg.includes("indisponivel")) {
-        setErrorMessage("O serviço de chamados está temporariamente indisponível. Verifique se o servidor backend e o banco de dados estão online.");
+      if (
+        msg.includes("Internal server error") ||
+        msg.includes("500") ||
+        msg.includes("conectar") ||
+        msg.includes("indisponivel") ||
+        msg.includes("Request failed")
+      ) {
+        setErrorMessage(
+          "O serviço de chamados está temporariamente indisponível no servidor. Verifique se o backend NestJS e o banco PostgreSQL na VPS estão ativos e conectados.",
+        );
       } else {
         setErrorMessage(msg);
       }
