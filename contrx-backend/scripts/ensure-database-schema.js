@@ -181,6 +181,40 @@ async function ensureSchema(client) {
     END
     $$;
   `);
+
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS "chamados_suporte" (
+      "id" TEXT NOT NULL,
+      "usuario_id" TEXT NOT NULL,
+      "empresa_id" TEXT NOT NULL,
+      "assunto" TEXT NOT NULL,
+      "mensagem" TEXT NOT NULL,
+      "resposta" TEXT,
+      "status" TEXT NOT NULL DEFAULT 'ABERTO',
+      "criado_em" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "atualizado_em" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+      CONSTRAINT "chamados_suporte_pkey" PRIMARY KEY ("id")
+    );
+  `);
+
+  await client.query(`
+    DO $$
+    DECLARE
+      t text;
+    BEGIN
+      FOR t IN
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_type = 'BASE TABLE'
+          AND table_name NOT LIKE '_prisma%'
+      LOOP
+        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', t);
+      END LOOP;
+    END
+    $$;
+  `);
 }
 
 async function main() {

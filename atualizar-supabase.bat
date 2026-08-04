@@ -115,11 +115,20 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/2] Aplicando migrations pendentes no Supabase...
+echo [2/3] Aplicando migrations pendentes no Supabase...
 node scripts\apply-pending-migrations.js
 if errorlevel 1 (
   popd
   echo ERRO: falha ao aplicar migrations no Supabase.
+  goto :error_exit
+)
+
+echo.
+echo [3/3] Garantindo a integridade do schema e ativando RLS nas tabelas...
+node scripts\ensure-database-schema.js
+if errorlevel 1 (
+  popd
+  echo ERRO: falha ao garantir schema e ativar RLS no Supabase.
   goto :error_exit
 )
 popd
