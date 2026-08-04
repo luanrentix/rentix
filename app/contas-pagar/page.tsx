@@ -540,7 +540,7 @@ export default function AccountsPayablePage() {
     const viewportPadding = 16;
     const availableBottomSpace = window.innerHeight - buttonRect.bottom;
     const top =
-      availableBottomSpace < estimatedMenuHeight
+      availableBottomSpace < estimatedMenuHeight + 20
         ? Math.max(viewportPadding, buttonRect.top - estimatedMenuHeight - 8)
         : buttonRect.bottom + 8;
     const left = Math.min(
@@ -560,9 +560,10 @@ export default function AccountsPayablePage() {
       return;
     }
 
+    const hasPayment = Boolean(getExpensePayment(expense.id));
     const visibleActionCount =
-      1 + (expense.status !== "Paid" ? 1 : 0) + (getExpensePayment(expense.id) ? 1 : 0);
-    const estimatedMenuHeight = visibleActionCount * 48 + 16;
+      1 + (expense.status !== "Paid" ? 1 : 0) + (hasPayment ? 2 : 0);
+    const estimatedMenuHeight = visibleActionCount * 50 + 20;
 
     setActionMenuPosition(
       getFloatingActionMenuPosition(
@@ -3201,17 +3202,44 @@ GERADO EM: {currentDate}`;
             </div>
 
             <div className="flex-1 space-y-5 overflow-y-auto p-6">
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4">
-                <p className="text-sm font-black text-slate-900 dark:text-slate-100">
-                  {expensePendingPaymentReceipt.description}
-                </p>
+              <div className="rounded-2xl border border-red-200 bg-red-50/60 p-5 dark:border-red-900/50 dark:bg-red-950/30">
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between border-b border-red-200/60 pb-3 dark:border-red-900/40">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-wider text-red-700 dark:text-red-400">
+                      Detalhamento da Conta a Pagar
+                    </p>
+                    <h3 className="text-base font-black text-slate-900 dark:text-white mt-0.5">
+                      {expensePendingPaymentReceipt.description}
+                    </h3>
+                  </div>
 
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                  Valor original:{" "}
-                  <strong>
-                    {formatCurrency(expensePendingPaymentReceipt.amount)}
-                  </strong>
-                </p>
+                  <span className="inline-flex w-fit rounded-xl border border-red-200 bg-white px-3.5 py-1.5 text-xs font-black uppercase tracking-wide text-red-700 shadow-sm dark:border-red-900 dark:bg-slate-900 dark:text-red-300">
+                    A Pagar
+                  </span>
+                </div>
+
+                <div className="mt-4 grid gap-4 text-xs font-bold text-slate-700 dark:text-slate-300 md:grid-cols-3">
+                  <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-xl border border-red-100 dark:border-red-900/30">
+                    <span className="block text-[10px] font-black uppercase text-slate-400">Fornecedor / Favorecido</span>
+                    <span className="text-sm font-black text-slate-950 dark:text-white truncate block mt-0.5">
+                      {expensePendingPaymentReceipt.personName || "Não informado"}
+                    </span>
+                  </div>
+
+                  <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-xl border border-red-100 dark:border-red-900/30">
+                    <span className="block text-[10px] font-black uppercase text-slate-400">Bem / Ativo</span>
+                    <span className="text-sm font-black text-slate-950 dark:text-white truncate block mt-0.5">
+                      {expensePendingPaymentReceipt.propertyName || "Não informado"}
+                    </span>
+                  </div>
+
+                  <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-xl border border-red-100 dark:border-red-900/30">
+                    <span className="block text-[10px] font-black uppercase text-slate-400">Valor Original</span>
+                    <span className="text-sm font-black text-slate-950 dark:text-white truncate block mt-0.5">
+                      {formatCurrency(expensePendingPaymentReceipt.amount)}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               <div className="grid gap-4 md:grid-cols-4">

@@ -6503,10 +6503,10 @@ export default function AccountsReceivablePage() {
       {isCreateOpen && (
         <div className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${accountsReceivableThemeClass}`}>
           <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
-            <div className="border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-orange-50 to-white dark:from-orange-950/40 dark:to-slate-900 p-6">
+            <div className="border-b border-slate-100 dark:border-slate-700 bg-white p-6 dark:bg-slate-900">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-xl shadow-lg shadow-orange-500/20 dark:shadow-orange-950/30">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-xl font-black text-white shadow-lg shadow-orange-500/20">
                     💰
                   </div>
 
@@ -6524,6 +6524,7 @@ export default function AccountsReceivablePage() {
                 </div>
 
                 <button
+                  type="button"
                   onClick={closeCreateModal}
                   className={`flex h-10 w-10 items-center justify-center rounded-xl shadow-sm ring-1 transition ${
                     isBlackTheme
@@ -7018,15 +7019,20 @@ export default function AccountsReceivablePage() {
               </div>
             </div>
 
-            <div className={`flex-1 space-y-4 overflow-x-hidden overflow-y-auto p-4 sm:p-5 ${isBlackTheme ? "bg-[#0f172a]" : "bg-[#f8fafc]"}`}>
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30">
-                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                  <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
-                    {isBatchPayment ? "Cobranças selecionadas" : "Cobrança selecionada"}
-                  </p>
+            <div className={`flex-1 space-y-4 overflow-x-hidden overflow-y-auto p-4 sm:p-6 ${isBlackTheme ? "bg-[#0f172a]" : "bg-[#f8fafc]"}`}>
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between border-b border-emerald-200/60 pb-3 dark:border-emerald-900/40">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                      {isBatchPayment ? "Lote de cobranças selecionadas" : "Detalhes da cobrança"}
+                    </p>
+                    <h3 className="text-base font-black text-slate-900 dark:text-white mt-0.5">
+                      {isBatchPayment ? `${paymentModalCharges.length} contas selecionadas para liquidação` : chargePendingPaymentReceipt.tenant}
+                    </h3>
+                  </div>
 
                   <span
-                    className={`inline-flex w-fit rounded-full border px-3 py-1 text-xs font-black uppercase tracking-wide ${getReceiptStatusClassName(
+                    className={`inline-flex w-fit rounded-xl border px-3.5 py-1.5 text-xs font-black uppercase tracking-wide shadow-sm ${getReceiptStatusClassName(
                       paymentModalReferenceCharge || chargePendingPaymentReceipt,
                     )}`}
                   >
@@ -7036,65 +7042,60 @@ export default function AccountsReceivablePage() {
                   </span>
                 </div>
 
-                <div className="mt-3 grid gap-3 text-sm text-slate-700 dark:text-slate-300 md:grid-cols-2">
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">
-                      Inquilino:
-                    </span>{" "}
-                    {isBatchPayment ? "Vários selecionados" : chargePendingPaymentReceipt.tenant}
-                  </p>
+                <div className="mt-4 grid gap-4 text-xs font-bold text-slate-700 dark:text-slate-300 md:grid-cols-3">
+                  <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
+                    <span className="block text-[10px] font-black uppercase text-slate-400">Inquilino / Cliente</span>
+                    <span className="text-sm font-black text-slate-950 dark:text-white truncate block mt-0.5">
+                      {isBatchPayment ? "Vários selecionados" : chargePendingPaymentReceipt.tenant}
+                    </span>
+                  </div>
 
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">Bem/Ativo:</span>{" "}
-                    {isBatchPayment ? "Vários bens/ativos" : chargePendingPaymentReceipt.property}
-                  </p>
+                  <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
+                    <span className="block text-[10px] font-black uppercase text-slate-400">Bem / Ativo</span>
+                    <span className="text-sm font-black text-slate-950 dark:text-white truncate block mt-0.5">
+                      {isBatchPayment ? "Vários bens/ativos" : chargePendingPaymentReceipt.property}
+                    </span>
+                  </div>
 
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">
-                      Vencimento:
-                    </span>{" "}
-                    {isBatchPayment ? "Conforme contas selecionadas" : formatDate(chargePendingPaymentReceipt.dueDate)}
-                  </p>
-
-                  <p>
-                    <span className="font-black text-slate-950 dark:text-white">
-                      Saldo em aberto:
-                    </span>{" "}
-                    {formatCurrency(paymentModalRemainingAmount)}
-                  </p>
+                  <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
+                    <span className="block text-[10px] font-black uppercase text-slate-400">Vencimento</span>
+                    <span className="text-sm font-black text-slate-950 dark:text-white truncate block mt-0.5">
+                      {isBatchPayment ? "Vários vencimentos" : formatDate(chargePendingPaymentReceipt.dueDate)}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-4">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-                  <p className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    Original
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    Valor Original
                   </p>
-                  <p className="mt-2 text-lg font-black text-slate-950 dark:text-white">
+                  <p className="mt-1 text-lg font-black text-slate-950 dark:text-white">
                     {formatCurrency(paymentModalOriginalAmount)}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-                  <p className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    Em aberto
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    Saldo Em Aberto
                   </p>
-                  <p className="mt-2 text-lg font-black text-slate-950 dark:text-white">
+                  <p className="mt-1 text-lg font-black text-slate-950 dark:text-white">
                     {formatCurrency(paymentModalRemainingAmount)}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm dark:border-emerald-900/50 dark:bg-slate-900">
-                  <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
-                    Recebendo
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm dark:border-emerald-900/40 dark:bg-slate-900">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                    Valor Recebendo
                   </p>
-                  <p className="mt-2 text-lg font-black text-emerald-700 dark:text-emerald-300">
+                  <p className="mt-1 text-lg font-black text-emerald-700 dark:text-emerald-300">
                     {formatCurrency(paymentModalFinalAmount)}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-                  <p className="text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    Restará
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    Saldo Remanescente
                   </p>
-                  <p className="mt-2 text-lg font-black text-slate-950 dark:text-white">
+                  <p className="mt-1 text-lg font-black text-slate-950 dark:text-white">
                     {formatCurrency(paymentModalBalanceAfterPayment)}
                   </p>
                 </div>

@@ -112,33 +112,52 @@ function generatePixPayload(params: {
   txId: string;
   description?: string;
 }): string {
-  const { pixKey, merchantName, merchantCity, amount, txId, description } = params;
+  const { pixKey, pixKeyType, merchantName, merchantCity, amount, txId, description } = params;
 
-  if (!pixKey) return "";
+  if (!pixKey || !pixKey.trim()) return "";
+
+  let cleanPixKey = pixKey.trim();
+  const lowerKeyType = (pixKeyType || "").toLowerCase();
+
+  if (lowerKeyType.includes("phone") || lowerKeyType.includes("telef") || lowerKeyType.includes("celular")) {
+    const digits = cleanPixKey.replace(/\D/g, "");
+    cleanPixKey = digits.length === 11 ? `+55${digits}` : digits.length === 13 && digits.startsWith("55") ? `+${digits}` : cleanPixKey;
+  } else if (lowerKeyType.includes("cpf") || lowerKeyType.includes("cnpj") || lowerKeyType.includes("doc")) {
+    cleanPixKey = cleanPixKey.replace(/\D/g, "");
+  }
+
+  if (!cleanPixKey) return "";
 
   const formattedAmount = amount.toFixed(2);
-  const cleanMerchantName = merchantName
+  const cleanMerchantName = (merchantName || "Contrx")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-zA-Z0-9 ]/g, "")
-    .slice(0, 25);
-  const cleanMerchantCity = merchantCity
+    .trim()
+    .slice(0, 25) || "CONTRX";
+
+  const cleanMerchantCity = (merchantCity || "Brasil")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-zA-Z0-9 ]/g, "")
-    .slice(0, 15);
+    .trim()
+    .slice(0, 15) || "BRASIL";
+
   const cleanTxId = txId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 25) || "***";
 
   let merchantAccountInfo = formatEmvField("00", "br.gov.bcb.pix");
-  merchantAccountInfo += formatEmvField("01", pixKey);
+  merchantAccountInfo += formatEmvField("01", cleanPixKey);
 
   if (description) {
     const cleanDesc = description
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-zA-Z0-9 ]/g, "")
+      .trim()
       .slice(0, 25);
-    merchantAccountInfo += formatEmvField("02", cleanDesc);
+    if (cleanDesc) {
+      merchantAccountInfo += formatEmvField("02", cleanDesc);
+    }
   }
 
   const additionalDataField = formatEmvField("05", cleanTxId);

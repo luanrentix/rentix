@@ -78,11 +78,15 @@ export default function AdminChamadosPage() {
       setIsLoading(true);
       setErrorMessage("");
       const nextTickets = await getChamados();
-      setTickets(nextTickets || []);
+      setTickets(Array.isArray(nextTickets) ? nextTickets : []);
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Não foi possível carregar os chamados.",
-      );
+      const msg = error instanceof Error ? error.message : "Não foi possível carregar os chamados.";
+      if (msg.includes("Internal server error") || msg.includes("500") || msg.includes("conectar") || msg.includes("indisponivel")) {
+        setErrorMessage("O serviço de chamados está temporariamente indisponível. Verifique se o servidor backend e o banco de dados estão online.");
+      } else {
+        setErrorMessage(msg);
+      }
+      setTickets([]);
     } finally {
       setIsLoading(false);
     }
