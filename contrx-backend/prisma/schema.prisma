@@ -70,6 +70,7 @@ model Company {
   bankAccounts       BankAccount[]
   supportTickets     SupportTicket[]
   sharedBankStatements SharedBankStatement[]
+  systemFiles        SystemFile[]
 
   @@map("empresas")
 }
@@ -295,6 +296,7 @@ model Contract {
 
   finishedAt   DateTime? @map("finalizado_em")
   finishReason String?   @map("motivo_finalizacao")
+  signedContractPdf String? @map("contrato_assinado_pdf")
 
   createdAt DateTime @default(now()) @map("criado_em")
   updatedAt DateTime @updatedAt @map("atualizado_em")
@@ -615,4 +617,39 @@ model SharedBankStatement {
 
   @@index([companyId])
   @@map("impressos_compartilhados")
+}
+
+enum SystemFileType {
+  IMAGE
+  PDF
+  DOCUMENT
+  OTHER
+}
+
+enum SystemFileEntity {
+  PROPERTY
+  PERSON
+  CONTRACT
+  COMPANY
+  OTHER
+}
+
+model SystemFile {
+  id         String           @id @default(uuid())
+  companyId  String           @map("empresa_id")
+  entityType SystemFileEntity @map("tipo_entidade")
+  entityId   String           @map("entidade_id")
+  url        String           @map("url")
+  type       SystemFileType   @map("tipo_arquivo")
+  size       Int?             @map("tamanho")
+  originalName String?        @map("nome_original")
+
+  createdAt  DateTime         @default(now()) @map("criado_em")
+  updatedAt  DateTime         @updatedAt @map("atualizado_em")
+
+  company    Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([entityType, entityId])
+  @@map("arquivos_sistema")
 }

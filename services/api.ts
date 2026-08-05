@@ -140,7 +140,13 @@ export async function apiFetch<TResponse>(
 
   const headers = new Headers(options.headers);
 
-  headers.set('Content-Type', 'application/json');
+  // Não sobrescrever Content-Type se for FormData
+  if (!(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  } else {
+    // Para FormData, o navegador precisa definir o Content-Type automaticamente com o boundary correto.
+    headers.delete('Content-Type');
+  }
 
   if (options.auth !== false && token) {
     headers.set('Authorization', `Bearer ${token}`);
@@ -191,3 +197,20 @@ export async function checkApiHealth(): Promise<boolean> {
 }
 
 export { getApiBaseUrl };
+
+export const api = {
+  get: async (endpoint: string) => {
+    const data = await apiFetch(endpoint, { method: 'GET' });
+    return { data };
+  },
+  post: async (endpoint: string, data: any, options: any = {}) => {
+    const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+    const reqOptions: any = { 
+      method: 'POST', 
+      headers: options.headers || {},
+      body: isFormData ? data : JSON.stringify(data)
+    };
+    const responseData = await apiFetch(endpoint, reqOptions);
+    return { data: responseData };
+  }
+};

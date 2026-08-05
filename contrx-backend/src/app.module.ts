@@ -16,6 +16,7 @@ import { PropertyMovementsModule } from './property-movements/property-movements
 import { AdminModule } from './admin/admin.module';
 import { BancosModule } from './bancos/bancos.module';
 import { ChamadosModule } from './chamados/chamados.module';
+import { FilesModule } from './files/files.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { ChamadosModule } from './chamados/chamados.module';
     AdminModule,
     BancosModule,
     ChamadosModule,
+    FilesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

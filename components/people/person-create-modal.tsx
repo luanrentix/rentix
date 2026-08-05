@@ -101,6 +101,7 @@ export function PersonCreateModal({
 }: PersonCreateModalProps) {
   const [formData, setFormData] = useState<PersonFormData>(emptyFormData);
   const [activeTab, setActiveTab] = useState("identificacao");
+  const [selectedPersonFile, setSelectedPersonFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isSearchingZipCode, setIsSearchingZipCode] = useState(false);
   const [isSearchingCnpj, setIsSearchingCnpj] = useState(false);
@@ -330,6 +331,23 @@ export function PersonCreateModal({
 
       const createdPerson = await createPerson(personData);
 
+      if (selectedPersonFile && companyId) {
+        const formDataApi = new FormData();
+        formDataApi.append("file", selectedPersonFile);
+        formDataApi.append("companyId", companyId);
+        formDataApi.append("entityType", "PERSON");
+        formDataApi.append("entityId", createdPerson.id);
+
+        try {
+          const { api } = await import("@/services/api");
+          await api.post("/files/upload", formDataApi, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+        } catch (err) {
+          console.error("Erro ao fazer upload da foto na criação", err);
+        }
+      }
+
       onCreated(createdPerson);
       setFormData(emptyFormData);
       onDraftChange?.(emptyFormData);
@@ -346,7 +364,7 @@ export function PersonCreateModal({
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 px-4 py-6 backdrop-blur-sm">
-      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
+      <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
         <div className="flex items-start justify-between border-b border-orange-100 px-8 py-6">
               <div>
                 <h2 className="text-2xl font-black tracking-tight text-slate-950">
@@ -389,7 +407,7 @@ export function PersonCreateModal({
             { id: "identificacao", label: "Identificação", icon: "👤" },
             { id: "contato", label: "Contato", icon: "📞" },
             { id: "endereco", label: "Endereço", icon: "📍" },
-            { id: "foto", label: "Foto (Em Breve)", icon: "📷" }
+            { id: "foto", label: "Foto", icon: "📷" }
           ].map(tab => (
             <button
               key={tab.id}
@@ -621,16 +639,38 @@ export function PersonCreateModal({
             )}
 
             {activeTab === "foto" && (
-              <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50/50 p-12 text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50 text-orange-500 mb-4 text-2xl">
-                  🔒
+              <div className="flex flex-col gap-4">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      if (file.size > 10 * 1024 * 1024) {
+                        setFormError("A foto excede o tamanho máximo de 10MB.");
+                        return;
+                      }
+                      setSelectedPersonFile(file);
+                    }
+                  }}
+                  className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-2xl file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
+                />
+                
+                <div className="flex flex-wrap gap-4 mt-4">
+                  {selectedPersonFile && (
+                    <div className="relative w-32 h-32 rounded-full overflow-hidden border border-slate-200">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={URL.createObjectURL(selectedPersonFile)} alt="Foto nova" className="w-full h-full object-cover opacity-80" />
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPersonFile(null)}
+                        className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md hover:text-red-500"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <h4 className="text-base font-black text-slate-800">
-                  Funcionalidade Em Breve
-                </h4>
-                <p className="mt-2 max-w-sm text-sm font-semibold text-slate-500 leading-relaxed">
-                  A possibilidade de incluir foto de perfil no cadastro de pessoas está sendo preparada e estará disponível em breve.
-                </p>
               </div>
             )}
 

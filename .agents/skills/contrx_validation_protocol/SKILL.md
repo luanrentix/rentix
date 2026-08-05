@@ -4,7 +4,7 @@ description: Protocolo padrão de validação local e pré-deploy para o projeto
 ---
 # Protocolo de Validação Pré-Deploy Contrx
 
-**Versão Atual Validada Localmente**: `v1.0.6` (Anterior em Produção: `v1.0.3`)
+**Versão Atual Validada Localmente**: `v1.0.7` (Anterior em Produção: `v1.0.3`)
 
 Quando o usuário disser "iniciar", "iniciar verificações", "rodar protocolo" ou similar, execute AUTOMATICAMENTE os seguintes passos em segundo plano ou sequencialmente:
 
@@ -26,14 +26,18 @@ Quando o usuário disser "iniciar", "iniciar verificações", "rodar protocolo" 
 4. **Verificação de Arquivos Inúteis e Limpeza**:
    - Mapear e sinalizar/remover arquivos temporários, logs, builds de teste ou arquivos desnecessários para liberar espaço.
 
-5. **Versionamento e Execução do Script de Deploy/Atualização**:
+5. **Mapeamento e Listagem de Mudanças Realizadas (Changelog/Git Diff)**:
+   - Verificar arquivos alterados, adicionados ou removidos via `git status` e `git diff`.
+   - Listar detalhadamente na resposta final quais funcionalidades, componentes ou arquivos foram modificados nesta versão para transparência total antes do deploy.
+
+6. **Versionamento e Execução do Script de Deploy/Atualização**:
    - Incrementar/verificar a versão nos arquivos de configuração/package.json.
    - Apontar o script `C:\Users\MacOS\Documents\Contrx\ATUALIZA-VERSÃO.BAT` para atualização de versão/envio, **respeitando estritamente a regra de não enviar nada automaticamente para produção** (apenas realizar os ajustes e preparar o ambiente/script para quando você autorizar a execução manual).
 
-6. **Alerta de Atualização do Supabase**:
-   - Sempre que houver novas migrations, alterações de schema do Prisma ou necessidade de atualizar o banco remoto, **avisar expressamente o usuário** na tabela final de resultados que a opção `[2] Atualizar Estrutura do Supabase` do script `ATUALIZA-VERSÃO.BAT` precisará ser executada.
+7. **Alerta de Atualização do Supabase**:
+   - Foram identificadas alterações recentes no `schema.prisma`. Recomenda-se rodar a Opção `[2] Atualizar Estrutura do Supabase` do script `ATUALIZA-VERSÃO.BAT` caso haja novas migrations a serem sincronizadas no banco remoto.
 
-7. **Não Enviar Nada Automaticamente**:
+8. **Não Enviar Nada Automaticamente**:
    - Garantir que nada seja enviado para produção (Oracle, GitHub, Supabase) sem autorização prévia.
 
-Ao final, consolide todos os resultados em uma tabela informativa e aguarde instrução do usuário.
+Ao final, consolide todos os resultados em uma tabela informativa, inclua a **seção detalhada de mudanças realizadas** e aguarde instrução do usuário.

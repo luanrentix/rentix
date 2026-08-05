@@ -17,7 +17,7 @@ import {
   getPropertyMovements,
   type PropertyMovement as ApiPropertyMovement,
 } from "@/services/property-movements.service";
-import { isSessionReplacedError } from "@/services/api";
+import { api, isSessionReplacedError } from "@/services/api";
 import { getCompanyStorageItem } from "@/services/company-storage";
 import { getCachedCompanySettings } from "@/services/settings-cache";
 import {
@@ -339,7 +339,7 @@ export default function PropertiesPage() {
   const [companySettings, setCompanySettings] = useState<CompanySettings>(
     getEmptyCompanySettings()
   );
-  const [reportMode, setReportMode] = useState<"General" | "Rental">("General");
+  const [reportMode, setReportMode] = useState<"General" | "Rental" | "Photos">("General");
 
   const [code, setCode] = useState("");
   const [assetCategory, setAssetCategory] = useState<AssetCategory>("PROPERTY");
@@ -373,6 +373,9 @@ export default function PropertiesPage() {
   const [isSavingProperty, setIsSavingProperty] = useState(false);
   const [formActiveTab, setFormActiveTab] = useState("identificacao");
   const [photos, setPhotos] = useState<string[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadedPhotos, setUploadedPhotos] = useState<any[]>([]);
+  const [historyPhotos, setHistoryPhotos] = useState<any[]>([]);
   const [customAlert, setCustomAlert] = useState<{
     title: string;
     description: string;
@@ -594,6 +597,37 @@ export default function PropertiesPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (isFormOpen && editingPropertyId) {
+      const companyId = getCurrentCompanyId();
+      if (companyId) {
+        import("@/services/api").then(({ api }) => {
+          api.get(`/files/entity/PROPERTY/${editingPropertyId}`).then((res) => {
+            setUploadedPhotos(Array.isArray(res.data) ? res.data : []);
+          }).catch(console.error);
+        });
+      }
+    } else if (!isFormOpen && !isFormMinimized) {
+      setUploadedPhotos([]);
+    }
+  }, [isFormOpen, editingPropertyId, isFormMinimized]);
+
+  useEffect(() => {
+    if (historyProperty) {
+      const companyId = getCurrentCompanyId();
+      if (!companyId) return;
+      import("@/services/api").then(({ api }) => {
+        api.get(`/files/entity/PROPERTY/${historyProperty.id}`).then((res) => {
+          setHistoryPhotos(Array.isArray(res.data) ? res.data : []);
+        }).catch(() => {
+          setHistoryPhotos([]);
+        });
+      });
+    } else {
+      setHistoryPhotos([]);
+    }
+  }, [historyProperty]);
+
   function savePropertyMovements(updatedMovements: PropertyMovement[]) {
     setPropertyMovements(updatedMovements);
   }
@@ -663,6 +697,8 @@ export default function PropertiesPage() {
     setEditingPropertyId(null);
     setFormActiveTab("identificacao");
     setPhotos([]);
+    setSelectedFiles([]);
+    setUploadedPhotos([]);
   }
 
   function getPropertyModalDraft(): PropertyModalDraft {
@@ -1048,6 +1084,22 @@ export default function PropertiesPage() {
         ? await updateProperty(editingPropertyId, payload)
         : await createProperty(payload);
 
+      if (selectedFiles.length > 0 && companyId) {
+        await Promise.all(
+          selectedFiles.map((file) => {
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("companyId", companyId);
+            formData.append("entityType", "PROPERTY");
+            formData.append("entityId", savedProperty.id);
+
+            return api.post("/files/upload", formData, {
+              headers: { "Content-Type": "multipart/form-data" },
+            });
+          })
+        );
+      }
+
       const normalizedProperty = normalizeApiProperty(savedProperty, contracts);
 
       setProperties((currentProperties) =>
@@ -1111,6 +1163,11 @@ export default function PropertiesPage() {
     );
     setOwnerPayoutDay(property.ownerPayoutDay ? String(property.ownerPayoutDay) : "");
     setAutoCreateOwnerPayable(property.autoCreateOwnerPayable);
+
+    setUploadedPhotos([]);
+
+
+    setFormActiveTab("identificacao");
     setPhotos(property.photos ? JSON.parse(property.photos) : []);
     clearMinimizedModalState("properties");
     setIsFormMinimized(false);
@@ -1889,7 +1946,7 @@ export default function PropertiesPage() {
                           type="button"
                           onClick={() => handleOpenPropertyHistory(property)}
                           style={{ fontWeight: 900 }}
-                          className="block max-w-[320px] truncate text-left text-base font-black uppercase text-slate-950 dark:text-white underline-offset-4 transition hover:text-orange-600 hover:underline tracking-tight"
+                          className="block max-w-[320px] truncate text-left text-base font-black uppercase text-slate-950 underline-offset-4 transition hover:text-orange-600 hover:underline tracking-tight"
                           title="Clique para ver o histórico deste bem/ativo"
                         >
                           {property.name}
@@ -2039,7 +2096,7 @@ export default function PropertiesPage() {
 
         {historyProperty && (
           <div className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
-            <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
+            <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
               <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-100 bg-white px-8 py-6 print:hidden">
                 <div>
                   <h2 className="text-2xl font-black text-slate-950">
@@ -2073,6 +2130,18 @@ export default function PropertiesPage() {
                     }`}
                   >
                     Histórico de aluguel
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setReportMode("Photos")}
+                    className={`rounded-2xl px-5 py-3 text-sm font-black transition ${
+                      reportMode === "Photos"
+                        ? "bg-slate-900 text-white"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    }`}
+                  >
+                    Fotos
                   </button>
 
                   <button
@@ -2270,11 +2339,30 @@ export default function PropertiesPage() {
                         )}
                       </div>
                     )}
+
+                    {reportMode === "Photos" && (
+                      <div data-report-section="photos" className="mt-4 print:hidden">
+                        {historyPhotos.length === 0 ? (
+                          <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm font-semibold text-slate-500">
+                            Nenhuma foto registrada para este bem/ativo.
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {historyPhotos.map((photo) => (
+                              <div key={photo.id} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={process.env.NEXT_PUBLIC_API_URL + photo.url} alt="Foto" className="w-full h-full object-cover" />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="report-footer">
                     <span>
-                      {getCompanyDisplayName(companySettings)} • {reportMode === "Rental" ? "Histórico de aluguel do bem/ativo" : "Histórico geral do bem/ativo"}
+                      {getCompanyDisplayName(companySettings)} • {reportMode === "Rental" ? "Histórico de aluguel do bem/ativo" : reportMode === "Photos" ? "Fotos do bem/ativo" : "Histórico geral do bem/ativo"}
                     </span>
                     <span>
                       Gerado em {formatDateTime(new Date().toISOString())}
@@ -2375,7 +2463,7 @@ export default function PropertiesPage() {
                   { id: "dados", label: assetCategory === "PROPERTY" ? "Endereço e Características" : "Dados Técnicos", icon: "⚙️" },
                   { id: "gestao", label: "Gestão e Repasse", icon: "🔄" },
                   { id: "valores", label: "Valores", icon: "💵" },
-                  { id: "fotos", label: "Fotos (Em Breve)", icon: "📷" }
+                  { id: "fotos", label: "Fotos", icon: "📷" }
                 ].map(tab => (
                   <button
                     key={tab.id}
@@ -2796,11 +2884,18 @@ export default function PropertiesPage() {
                     <div className="grid gap-5 md:grid-cols-2">
                       <FormField label="Valor de Aluguel Sugerido" required>
                         <input
-                          type="number"
-                          step="0.01"
+                          type="text"
                           value={rentValue}
-                          onChange={(event) => setRentValue(event.target.value)}
-                          placeholder="Ex: 1200.00"
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, "");
+                            if (!value) {
+                              setRentValue("");
+                              return;
+                            }
+                            const num = Number(value) / 100;
+                            setRentValue(formatCurrency(num));
+                          }}
+                          placeholder="Ex: R$ 1.200,00"
                           className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                         />
                       </FormField>
@@ -2823,18 +2918,49 @@ export default function PropertiesPage() {
                 {formActiveTab === "fotos" && (
                   <FormSection
                     title="Fotos do Bem/Ativo"
-                    description="Galeria de imagens e arquivos visuais do bem."
+                    description="Galeria de imagens (máx. 5 fotos, até 10MB cada)."
                   >
-                    <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50/50 p-12 text-center">
-                      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50 text-orange-500 mb-4 text-2xl">
-                        🔒
+                    <div className="flex flex-col gap-4">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files || []);
+                          if (files.length + selectedFiles.length > 5) {
+                            showAlert("Você só pode enviar até 5 fotos no total.", "Limite de fotos", "⚠️");
+                            return;
+                          }
+                          const validFiles = files.filter(f => f.size <= 10 * 1024 * 1024);
+                          if (validFiles.length !== files.length) {
+                            showAlert("Algumas fotos excedem o tamanho máximo de 10MB e foram ignoradas.", "Aviso de tamanho", "⚠️");
+                          }
+                          setSelectedFiles((prev) => [...prev, ...validFiles].slice(0, 5));
+                        }}
+                        className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-2xl file:border-0 file:text-sm file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
+                      />
+                      
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                        {uploadedPhotos.map((photo) => (
+                          <div key={photo.id} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={process.env.NEXT_PUBLIC_API_URL + photo.url} alt="Foto" className="w-full h-full object-cover" />
+                          </div>
+                        ))}
+                        {selectedFiles.map((file, idx) => (
+                          <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={URL.createObjectURL(file)} alt="Foto nova" className="w-full h-full object-cover opacity-80" />
+                            <button
+                              type="button"
+                              onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== idx))}
+                              className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md hover:text-red-500"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                      <h4 className="text-base font-black text-slate-800">
-                        Funcionalidade Em Breve
-                      </h4>
-                      <p className="mt-2 max-w-sm text-sm font-semibold text-slate-500 leading-relaxed">
-                        A possibilidade de incluir fotos diretamente no cadastro de bens e ativos está sendo preparada e estará disponível em breve.
-                      </p>
                     </div>
                   </FormSection>
                 )}

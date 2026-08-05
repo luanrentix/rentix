@@ -267,6 +267,9 @@ export default function ContractsPage() {
   const [printableContract, setPrintableContract] = useState<Contract | null>(null);
   const printableContractFrameRef = useRef<HTMLIFrameElement | null>(null);
 
+  const [printableAdendum, setPrintableAdendum] = useState<{contract: Contract, renewal: ContractRenewalRecord} | null>(null);
+  const printableAdendumFrameRef = useRef<HTMLIFrameElement | null>(null);
+
   const [propertyId, setPropertyId] = useState("");
   const [tenantId, setTenantId] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -289,6 +292,7 @@ export default function ContractsPage() {
   const [renewalNotes, setRenewalNotes] = useState("");
   const [renewalError, setRenewalError] = useState("");
   const [isRenewingContract, setIsRenewingContract] = useState(false);
+  const [promptParcelasContract, setPromptParcelasContract] = useState<Contract | null>(null);
   const [finishContract, setFinishContract] = useState<Contract | null>(null);
   const [finishReason, setFinishReason] = useState("");
   const [finishReasonError, setFinishReasonError] = useState("");
@@ -299,6 +303,9 @@ export default function ContractsPage() {
   const [actionMenuPosition, setActionMenuPosition] = useState<ActionMenuPosition | null>(null);
   const [selectedContractDetails, setSelectedContractDetails] = useState<Contract | null>(null);
   const [contractDetailsActiveTab, setContractDetailsActiveTab] = useState<ContractDetailsTab>("Data");
+  const [contractSignedPdfFile, setContractSignedPdfFile] = useState<File | null>(null);
+  const [uploadedContractSignedPdf, setUploadedContractSignedPdf] = useState<any>(null);
+  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
 
   const isEditing = editingContractId !== null;
   const companyId = user?.companyId;
@@ -311,6 +318,24 @@ export default function ContractsPage() {
   );
 
   useEffect(() => {
+    if (selectedContractDetails) {
+      const compId = companyId;
+      if (compId) {
+        import("@/services/api").then(({ api }) => {
+          api.get(`/files/entity/CONTRACT/${selectedContractDetails.id}`).then((res) => {
+            if (Array.isArray(res.data) && res.data.length > 0) {
+              setUploadedContractSignedPdf(res.data[0]);
+            }
+          }).catch(console.error);
+        });
+      }
+    } else {
+      setUploadedContractSignedPdf(null);
+    }
+  }, [selectedContractDetails]);
+
+  useEffect(() => {
+    const active = true;
     function applyStoredTheme() {
       const storedThemeSettings = getCompanyStorageItem(
         companyId,
@@ -1323,6 +1348,8 @@ export default function ContractsPage() {
     setSelectedContractDetails(contract);
     setContractDetailsActiveTab("Data");
     setOpenActionMenuContractId(null);
+    setContractSignedPdfFile(null);
+    setUploadedContractSignedPdf(null);
   }
 
   function sendContractWhatsAppMessage(contract: Contract) {
@@ -1554,6 +1581,7 @@ export default function ContractsPage() {
       return;
     }
 
+    let renewedContractRef: Contract | null = null;
     try {
       setIsRenewingContract(true);
       const savedContract = await renewContract(renewalContract.id, {
@@ -1562,6 +1590,7 @@ export default function ContractsPage() {
         notes: renewalNotes.trim() || undefined,
       });
       const renewedContract = mapApiContractToContract(savedContract);
+      renewedContractRef = renewedContract;
 
       setContracts((currentContracts) =>
         currentContracts.map((contract) =>
@@ -1594,6 +1623,19 @@ export default function ContractsPage() {
     setRenewalRentValue("");
     setRenewalNotes("");
     setRenewalError("");
+
+    if (renewedContractRef) {
+      if (renewedContractRef.renewalHistory && renewedContractRef.renewalHistory.length > 0) {
+        // Abre o Aditivo para impressão imediatamente
+        setPrintableAdendum({
+          contract: renewedContractRef,
+          renewal: renewedContractRef.renewalHistory[0] // O backend retorna history ordenado decrescente (o 0 é o atual)
+        });
+      }
+      
+      // Deixa engatilhado o modal que pergunta se quer gerar parcelas (vai aparecer quando fechar o aditivo)
+      setPromptParcelasContract(renewedContractRef);
+    }
   }
 
   function handleOpenFinishModal(contract: Contract) {
@@ -1662,6 +1704,14 @@ export default function ContractsPage() {
 
   function handleClosePrintableContract() {
     setPrintableContract(null);
+  }
+
+  function handleOpenPrintableAdendum(contract: Contract, renewal: ContractRenewalRecord) {
+    setPrintableAdendum({ contract, renewal });
+  }
+
+  function handleClosePrintableAdendum() {
+    setPrintableAdendum(null);
   }
 
   function handlePrintPrintableContract() {
@@ -2275,14 +2325,6 @@ export default function ContractsPage() {
               handleCloseContractActions();
               handleOpenPrintableContract(openActionMenuContract);
             }}
-            onWhatsApp={() => {
-              handleCloseContractActions();
-              sendContractWhatsAppMessage(openActionMenuContract);
-            }}
-            onEdit={() => {
-              handleCloseContractActions();
-              handleRequestEditContract(openActionMenuContract);
-            }}
             onDelete={() => handleOpenStatusReasonModal(openActionMenuContract, "Deleted")}
           />
         )}
@@ -2512,39 +2554,140 @@ export default function ContractsPage() {
                   )}
 
                   {contractDetailsActiveTab === "Prints" && (
-                    <div className="grid gap-5 md:grid-cols-2">
-                      <div className="rounded-3xl border border-orange-100 bg-orange-50 p-6">
-                        <p className="text-sm font-black uppercase tracking-wide text-orange-600">Contrato</p>
-                        <h3 className="mt-3 text-2xl font-black text-slate-950">
-                           {selectedContractDetails.isTemporaryRental ? "Contrato temporário" : "Contrato padrão residencial"}
-                        </h3>
-                        <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
-                          Usa o mesmo modelo configurado na ferramenta de contratos e em Configurações &gt; Impresso.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenPrintableContract(selectedContractDetails)}
-                          className="mt-5 rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
-                        >
-                          Abrir impressão do contrato
-                        </button>
+                    <>
+                      <div className="grid gap-5 md:grid-cols-2">
+                        <div className="rounded-3xl border border-orange-100 bg-orange-50 p-6">
+                          <p className="text-sm font-black uppercase tracking-wide text-orange-600">Contrato</p>
+                          <h3 className="mt-3 text-2xl font-black text-slate-950">
+                             {selectedContractDetails.isTemporaryRental ? "Contrato temporário" : "Contrato padrão residencial"}
+                          </h3>
+                          <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+                            Usa o mesmo modelo configurado na ferramenta de contratos e em Configurações &gt; Impresso.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenPrintableContract(selectedContractDetails)}
+                            className="mt-5 rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                          >
+                            Abrir impressão do contrato
+                          </button>
+                        </div>
+
+                        <div className="rounded-3xl border border-blue-100 bg-blue-50 p-6 flex flex-col justify-between">
+                          <div>
+                            <p className="text-sm font-black uppercase tracking-wide text-blue-600">Contrato Assinado (PDF)</p>
+                            <h3 className="mt-3 text-2xl font-black text-slate-950">
+                              Upload de Documento
+                            </h3>
+                            <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+                              Anexe aqui o contrato digitalizado já assinado pelas partes.
+                            </p>
+                          </div>
+                          
+                          <div className="mt-5 space-y-4">
+                            {uploadedContractSignedPdf && !contractSignedPdfFile && (
+                              <div className="flex items-center gap-3 bg-white p-3 rounded-2xl border border-blue-200">
+                                <FileText className="h-6 w-6 text-blue-600 shrink-0" />
+                                <div className="flex-1 truncate">
+                                  <p className="text-sm font-bold text-slate-700 truncate">{uploadedContractSignedPdf.filename}</p>
+                                </div>
+                                <a
+                                  href={process.env.NEXT_PUBLIC_API_URL + uploadedContractSignedPdf.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-sm font-black text-blue-600 hover:underline"
+                                >
+                                  Visualizar
+                                </a>
+                              </div>
+                            )}
+                            
+                            <input
+                              type="file"
+                              accept="application/pdf"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  if (file.size > 10 * 1024 * 1024) {
+                                    alert("O arquivo excede o limite de 10MB.");
+                                    return;
+                                  }
+                                  setContractSignedPdfFile(file);
+                                  
+                                  const compId = companyId;
+                                  if (!compId) return;
+                                  
+                                  setIsUploadingPdf(true);
+                                  try {
+                                    const formData = new FormData();
+                                    formData.append("file", file);
+                                    formData.append("companyId", compId);
+                                    formData.append("entityType", "CONTRACT");
+                                    formData.append("entityId", selectedContractDetails.id);
+                                    
+                                    const { api } = await import("@/services/api");
+                                    const res = await api.post("/files/upload", formData, {
+                                      headers: { "Content-Type": "multipart/form-data" }
+                                    });
+                                    setUploadedContractSignedPdf(res.data);
+                                    alert("Upload de PDF concluído com sucesso.");
+                                  } catch (err) {
+                                    alert("Erro ao enviar PDF.");
+                                    console.error(err);
+                                  } finally {
+                                    setIsUploadingPdf(false);
+                                  }
+                                }
+                              }}
+                              className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-2xl file:border-0 file:text-sm file:font-black file:bg-blue-600 file:text-white hover:file:bg-blue-700 disabled:opacity-50"
+                              disabled={isUploadingPdf}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="rounded-3xl border border-slate-100 bg-slate-50 p-6">
+                          <p className="text-sm font-black uppercase tracking-wide text-slate-500">Carnê</p>
+                          <h3 className="mt-3 text-2xl font-black text-slate-950">Parcelas financeiras</h3>
+                          <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+                            O carnê permanece no módulo Contas a Receber para manter o fluxo financeiro centralizado.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => (window.location.href = "/contas-receber")}
+                            className="mt-5 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-md shadow-slate-100 transition hover:bg-slate-800"
+                          >
+                            Ir para Contas a Receber
+                          </button>
+                        </div>
                       </div>
 
-                      <div className="rounded-3xl border border-slate-100 bg-slate-50 p-6">
-                        <p className="text-sm font-black uppercase tracking-wide text-slate-500">Carnê</p>
-                        <h3 className="mt-3 text-2xl font-black text-slate-950">Parcelas financeiras</h3>
-                        <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
-                          O carnê permanece no módulo Contas a Receber para manter o fluxo financeiro centralizado.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => (window.location.href = "/contas-receber")}
-                          className="mt-5 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-md shadow-slate-100 transition hover:bg-slate-800"
-                        >
-                          Ir para Contas a Receber
-                        </button>
-                      </div>
-                    </div>
+                      {selectedContractDetails.renewalHistory && selectedContractDetails.renewalHistory.length > 0 && (
+                        <div className="rounded-3xl border border-emerald-100 bg-emerald-50 p-6 mt-5">
+                          <p className="text-sm font-black uppercase tracking-wide text-emerald-600">Aditivos</p>
+                          <h3 className="mt-3 text-2xl font-black text-slate-950">Aditivos de Renovação</h3>
+                          <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
+                            Gerar documento de aditivo para as renovações realizadas.
+                          </p>
+                          <div className="mt-4 space-y-3">
+                            {selectedContractDetails.renewalHistory.map((renewal, index) => (
+                               <div key={index} className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 bg-white p-3 rounded-2xl border border-emerald-200">
+                                 <div>
+                                   <p className="text-sm font-bold text-slate-700">De {formatDate(renewal.previousEndDate)} para {formatDate(renewal.newEndDate)}</p>
+                                   <p className="text-xs text-slate-500">Valor: {formatCurrency(renewal.previousRentValue)} para {formatCurrency(renewal.newRentValue)}</p>
+                                 </div>
+                                 <button
+                                   type="button"
+                                   onClick={() => handleOpenPrintableAdendum(selectedContractDetails, renewal)}
+                                   className="rounded-xl bg-emerald-100 px-4 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-200 whitespace-nowrap text-center"
+                                 >
+                                   Gerar Aditivo
+                                 </button>
+                               </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {contractDetailsActiveTab === "Notes" && (
@@ -2563,85 +2706,104 @@ export default function ContractsPage() {
           );
         })()}
 
-
         {renewalContract && (
-          <div className="fixed inset-0 z-[68] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
-            <div className={`w-full max-w-2xl rounded-[2rem] border border-emerald-100 bg-white p-8 shadow-2xl ${contractsThemeClass}`}>
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-50 text-emerald-600">
-                <RefreshCw className="h-8 w-8" />
-              </div>
-
-              <div className="mt-5 text-center">
-                <h3 className="text-2xl font-black text-slate-950">
-                  Renovar contrato
-                </h3>
-                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
-                  Atualize a data final e, se necessário, o valor do aluguel para manter o contrato ativo.
-                </p>
-              </div>
-
-              <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
-                <p className="text-sm font-black text-slate-900">
-                  {renewalContract.propertyName || "Contrato"}
-                </p>
-                <p className="mt-1 text-xs font-semibold text-slate-500">
-                  {renewalContract.tenantName || "Pessoa não informada"} ⬢ Vence em {formatDate(renewalContract.endDate)}
-                </p>
-              </div>
-
-              <div className="mt-6 grid gap-5 md:grid-cols-2">
-                <FormField label="Nova data final" required>
-                  <input
-                    type="date"
-                    value={renewalEndDate}
-                    onChange={(event) => {
-                      setRenewalEndDate(event.target.value);
-                      setRenewalError("");
-                    }}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                  />
-                </FormField>
-
-                <FormField label="Novo valor do aluguel" required>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={renewalRentValue}
-                    onChange={(event) => {
-                      setRenewalRentValue(formatCurrencyInput(event.target.value));
-                      setRenewalError("");
-                    }}
-                    placeholder="R$ 0,00"
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                  />
-                </FormField>
-              </div>
-
-              <div className="mt-5">
-                <label className="mb-2 block text-sm font-black text-slate-700">
-                  Observação da renovação
-                </label>
-                <textarea
-                  value={renewalNotes}
-                  onChange={(event) => setRenewalNotes(event.target.value)}
-                  placeholder="Opcional: descreva alguma condição da renovação"
-                  rows={3}
-                  className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                />
-              </div>
-
-              {renewalError && (
-                <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
-                  {renewalError}
+          <div className="fixed inset-0 z-[68] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+            <div className={`flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] border border-emerald-100 bg-white shadow-2xl ${contractsThemeClass}`}>
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 bg-white px-6 py-5 lg:px-8 lg:py-6">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-600">
+                    RENOVAÇÃO DE CONTRATO
+                  </p>
+                  <h2 className="mt-1 text-2xl font-black text-slate-950">
+                    Renovar contrato
+                  </h2>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                    Atualize a data final e o valor para manter o contrato ativo.
+                  </p>
                 </div>
-              )}
+                <button
+                  type="button"
+                  onClick={handleCloseRenewalModal}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-900"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
 
-              <div className="mt-8 grid grid-cols-2 gap-3">
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto bg-slate-50/50 px-6 py-6 lg:px-8 lg:py-8">
+                <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                      <RefreshCw className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-slate-900">
+                        {renewalContract.propertyName || "Contrato"}
+                      </p>
+                      <p className="mt-0.5 text-xs font-semibold text-slate-500">
+                        {renewalContract.tenantName || "Pessoa não informada"} <span className="mx-1">•</span> Vence em {formatDate(renewalContract.endDate)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 grid gap-5 md:grid-cols-2">
+                  <FormField label="Nova data final" required>
+                    <input
+                      type="date"
+                      value={renewalEndDate}
+                      onChange={(event) => {
+                        setRenewalEndDate(event.target.value);
+                        setRenewalError("");
+                      }}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    />
+                  </FormField>
+
+                  <FormField label="Novo valor do aluguel" required>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={renewalRentValue}
+                      onChange={(event) => {
+                        setRenewalRentValue(formatCurrencyInput(event.target.value));
+                        setRenewalError("");
+                      }}
+                      placeholder="R$ 0,00"
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    />
+                  </FormField>
+                </div>
+
+                <div className="mt-5">
+                  <label className="mb-2 block text-sm font-black text-slate-700">
+                    Observação da renovação
+                  </label>
+                  <textarea
+                    value={renewalNotes}
+                    onChange={(event) => setRenewalNotes(event.target.value)}
+                    placeholder="Opcional: descreva alguma condição da renovação"
+                    rows={3}
+                    className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  />
+                </div>
+
+                {renewalError && (
+                  <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                    {renewalError}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex flex-col-reverse items-center justify-end gap-3 border-t border-slate-100 bg-white px-6 py-5 sm:flex-row lg:px-8">
                 <button
                   type="button"
                   onClick={handleCloseRenewalModal}
                   disabled={isRenewingContract}
-                  className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="w-full rounded-2xl px-6 py-3.5 text-center text-sm font-black text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                 >
                   Cancelar
                 </button>
@@ -2650,9 +2812,49 @@ export default function ContractsPage() {
                   type="button"
                   onClick={handleConfirmContractRenewal}
                   disabled={isRenewingContract}
-                  className="rounded-2xl bg-emerald-600 px-5 py-4 text-sm font-black text-white shadow-md shadow-emerald-100 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="w-full rounded-2xl bg-emerald-600 px-6 py-3.5 text-center text-sm font-black text-white shadow-md shadow-emerald-100 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
                 >
                   {isRenewingContract ? "Renovando..." : "Confirmar renovação"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {promptParcelasContract && !printableAdendum && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+            <div className={`w-full max-w-lg rounded-[2rem] border border-emerald-100 bg-white p-8 shadow-2xl ${contractsThemeClass}`}>
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-50 text-emerald-600">
+                <CheckCircle className="h-8 w-8" />
+              </div>
+
+              <div className="mt-5 text-center">
+                <h3 className="text-2xl font-black text-slate-950">
+                  Renovação concluída!
+                </h3>
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
+                  O contrato foi renovado com sucesso. Deseja gerar o faturamento (parcelas) do novo período agora?
+                </p>
+              </div>
+
+              <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => setPromptParcelasContract(null)}
+                  className="w-full rounded-2xl bg-slate-100 px-6 py-3.5 text-center text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                >
+                  Não, talvez depois
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPromptParcelasContract(null);
+                    openReceivableChargeFromContract(promptParcelasContract);
+                  }}
+                  className="w-full rounded-2xl bg-emerald-600 px-6 py-3.5 text-center text-sm font-black text-white shadow-md shadow-emerald-100 transition hover:bg-emerald-700"
+                >
+                  Sim, gerar parcelas
                 </button>
               </div>
             </div>
@@ -2731,8 +2933,8 @@ export default function ContractsPage() {
         )}
 
         {printableContract && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
-            <div className={`flex max-h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl ${contractsThemeClass}`}>
+          <div className="fixed inset-0 z-[75] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+            <div className={`flex h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl ${contractsThemeClass}`}>
               <div className="flex flex-col gap-4 border-b border-slate-100 bg-white px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-500">
@@ -2773,12 +2975,62 @@ export default function ContractsPage() {
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 bg-slate-100 p-4">
+              <div className="flex-1 bg-slate-50 p-4 lg:p-6 overflow-hidden">
                 <iframe
                   ref={printableContractFrameRef}
                   title={getPrintableContractTitle(printableContract)}
                   srcDoc={buildPrintableContractHtml(printableContract, false)}
-                  className="h-[72vh] w-full rounded-2xl border border-slate-200 bg-white shadow-sm"
+                  className="h-full w-full rounded-2xl border border-slate-200 bg-white shadow-inner"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {printableAdendum && (
+          <div className="fixed inset-0 z-[75] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+            <div className={`flex h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] border border-emerald-100 bg-white shadow-2xl ${contractsThemeClass}`}>
+              <div className="flex flex-col gap-4 border-b border-slate-100 bg-white px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-600">
+                    Aditivo de Contrato
+                  </p>
+                  <h2 className="mt-1 text-2xl font-black text-slate-950">
+                    Visualização do aditivo
+                  </h2>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                    Confira o documento antes de gerar PDF ou imprimir.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleClosePrintableAdendum}
+                    className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                  >
+                    Fechar
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      printableAdendumFrameRef.current?.contentWindow?.focus();
+                      printableAdendumFrameRef.current?.contentWindow?.print();
+                    }}
+                    className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-md shadow-slate-100 transition hover:bg-slate-800"
+                  >
+                    Imprimir / Gerar PDF
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 bg-slate-50 p-4 lg:p-6 overflow-hidden">
+                <iframe
+                  ref={printableAdendumFrameRef}
+                  title="Aditivo de Contrato"
+                  srcDoc={buildAdendumHtml(printableAdendum.contract, printableAdendum.renewal, false)}
+                  className="h-full w-full rounded-2xl border border-slate-200 bg-white shadow-inner"
                 />
               </div>
             </div>
@@ -3301,8 +3553,6 @@ type ContractActionMenuProps = {
   onFinish: () => void;
   onCancel: () => void;
   onPrint: () => void;
-  onWhatsApp: () => void;
-  onEdit: () => void;
   onDelete: () => void;
 };
 
@@ -3317,8 +3567,6 @@ function ContractActionMenu({
   onFinish,
   onCancel,
   onPrint,
-  onWhatsApp,
-  onEdit,
   onDelete,
 }: ContractActionMenuProps) {
   return (
@@ -3369,17 +3617,7 @@ function ContractActionMenu({
         Gerar contrato
       </ActionMenuButton>
 
-      <ActionMenuButton
-        onClick={onWhatsApp}
-        icon={<MessageCircle className="h-4 w-4 shrink-0" />}
-        className="text-emerald-700 hover:bg-emerald-50"
-      >
-        Enviar WhatsApp
-      </ActionMenuButton>
 
-      <ActionMenuButton onClick={onEdit} icon={<Pencil className="h-4 w-4 shrink-0" />}>
-        Editar
-      </ActionMenuButton>
 
       {canDelete && (
         <ActionMenuButton
@@ -4223,6 +4461,7 @@ function buildConfiguredContractHtml(
     .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
     .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
     .print-button { background: #f97316; color: #ffffff; }
+    .edit-button { background: #3b82f6; color: #ffffff; }
     .close-button { background: #f1f5f9; color: #334155; }
     .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }
     .page-inner { padding: 18mm; }
@@ -4238,12 +4477,13 @@ function buildConfiguredContractHtml(
 <body>
   ${showToolbar ? `<div class="toolbar">
     <button class="close-button" onclick="window.close()">Fechar</button>
+    <button class="edit-button" onclick="document.querySelector('.content').focus()">Editar texto</button>
     <button class="print-button" onclick="window.print()">Imprimir contrato</button>
   </div>` : ""}
 
   <main class="page">
     <div class="page-inner">
-      <div class="content">${escapeHtml(renderedTemplateContent)}</div>
+      <div class="content" contenteditable="true" spellcheck="false">${escapeHtml(renderedTemplateContent)}</div>
     </div>
   </main>
 </body>
@@ -4270,6 +4510,7 @@ function buildConfiguredTemporaryContractHtml(
     .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
     .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
     .print-button { background: #f97316; color: #ffffff; }
+    .edit-button { background: #3b82f6; color: #ffffff; }
     .close-button { background: #f1f5f9; color: #334155; }
     .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }
     .page-inner { padding: 18mm; }
@@ -4285,12 +4526,90 @@ function buildConfiguredTemporaryContractHtml(
 <body>
   ${showToolbar ? `<div class="toolbar">
     <button class="close-button" onclick="window.close()">Fechar</button>
+    <button class="edit-button" onclick="document.querySelector('.content').focus()">Editar texto</button>
     <button class="print-button" onclick="window.print()">Imprimir contrato</button>
   </div>` : ""}
 
   <main class="page">
     <div class="page-inner">
-      <div class="content">${escapeHtml(renderedTemplateContent)}</div>
+      <div class="content" contenteditable="true" spellcheck="false">${escapeHtml(renderedTemplateContent)}</div>
+    </div>
+  </main>
+</body>
+</html>`;
+}
+
+function buildAdendumHtml(contract: Contract, renewal: ContractRenewalRecord, showToolbar: boolean) {
+  const companySettings = getCompanySettingsForContractPrint();
+  const landlordName = companySettings.legalName || companySettings.name || "LOCADOR NÃO INFORMADO";
+  const landlordDocument = formatDocumentForPrint(companySettings.document || "");
+  const tenantName = contract.tenantName || "LOCATÁRIO NÃO INFORMADO";
+  const propertyName = contract.propertyName || "BEM/ATIVO NÃO INFORMADO";
+  
+  const content = `ADITIVO DE RENOVAÇÃO DE CONTRATO DE LOCAÇÃO
+
+LOCADOR: ${landlordName}, Documento: ${landlordDocument || "não informado"}
+LOCATÁRIO: ${tenantName}
+IMÓVEL / BEM: ${propertyName}
+
+As partes acima qualificadas têm entre si, justo e contratado, o presente Termo Aditivo de Renovação de Contrato de Locação, que se regerá pelas seguintes cláusulas e condições:
+
+CLÁUSULA PRIMEIRA - DA RENOVAÇÃO
+Fica renovado o prazo de locação do imóvel/bem acima descrito, cujo término anterior era em ${formatDate(renewal.previousEndDate)}, passando o novo término para ${formatDate(renewal.newEndDate)}.
+
+CLÁUSULA SEGUNDA - DO VALOR DO ALUGUEL
+O valor do aluguel mensal que era de ${formatCurrency(renewal.previousRentValue)} passa a ser de ${formatCurrency(renewal.newRentValue)}, mantendo-se inalteradas as demais condições e datas de vencimento estabelecidas no contrato original.
+
+CLÁUSULA TERCEIRA - DA RATIFICAÇÃO
+Permanecem em pleno vigor e ratificam-se todas as demais cláusulas e condições do Contrato de Locação original que não tenham sido expressamente modificadas por este Aditivo.
+
+E, por estarem assim justas e contratadas, as partes assinam o presente aditivo em 02 (duas) vias de igual teor e forma.
+
+${companySettings.contractCity || "__________________"}, ${formatLongDateForPrint(new Date(renewal.renewedAt))}.
+
+_________________________________________________________
+LOCADOR: ${landlordName}
+
+_________________________________________________________
+LOCATÁRIO: ${tenantName}
+`;
+
+  return `<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Aditivo de Renovação</title>
+  <style>
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; }
+    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
+    .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
+    .print-button { background: #10b981; color: #ffffff; }
+    .edit-button { background: #3b82f6; color: #ffffff; }
+    .close-button { background: #f1f5f9; color: #334155; }
+    .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }
+    .page-inner { padding: 18mm; }
+    .content { white-space: pre-wrap; font-size: 13.5px; line-height: 1.8; font-weight: 500; color: #333; }
+    h1 { text-align: center; font-size: 16px; margin-bottom: 30px; font-weight: 800; }
+    @media print {
+      body { background: #ffffff; }
+      .toolbar { display: none; }
+      .page { width: 210mm; min-height: 297mm; margin: 0; box-shadow: none; }
+      .page-inner { padding: 18mm; }
+    }
+  </style>
+</head>
+<body>
+  \${showToolbar ? \`<div class="toolbar">
+    <button class="close-button" onclick="window.close()">Fechar</button>
+    <button class="print-button" onclick="window.print()">Imprimir Aditivo</button>
+  </div>\` : ""}
+
+  <main class="page">
+    <div class="page-inner">
+      <div class="content" contenteditable="true" spellcheck="false">${escapeHtml(content)}</div>
     </div>
   </main>
 </body>

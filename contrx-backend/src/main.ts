@@ -5,6 +5,7 @@ import { config } from 'dotenv';
 
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { json, NextFunction, Request, Response, urlencoded } from 'express';
 
 import { AppModule } from './app.module';
@@ -56,8 +57,14 @@ function getAllowedOrigins() {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bodyParser: false,
+  });
   const httpAdapter = app.getHttpAdapter().getInstance() as ExpressAppLike;
+
+  app.useStaticAssets(resolve(process.cwd(), 'uploads'), {
+    prefix: '/uploads/',
+  });
 
   if (typeof httpAdapter.disable === 'function') {
     httpAdapter.disable('x-powered-by');
