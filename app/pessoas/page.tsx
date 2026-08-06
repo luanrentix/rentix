@@ -985,7 +985,7 @@ export default function PeoplePage() {
 
   return (
     <>
-      <div className="contrx-module-page contrx-properties-page space-y-5">
+      <div className="contrx-module-page contrx-properties-page space-y-5 print:hidden">
         <section className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
@@ -1329,9 +1329,9 @@ export default function PeoplePage() {
       </div>
 
       {historyPerson && (
-        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
-          <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-orange-100 bg-white px-8 py-6 print:hidden">
+        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-950/60 px-4 py-8 backdrop-blur-sm print:block print:static print:inset-auto print:h-auto print:w-full print:bg-white print:p-0">
+          <div className="max-h-[94vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 bg-white shadow-2xl print:max-h-none print:max-w-none print:overflow-visible print:border-none print:shadow-none">
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-orange-100 bg-white px-8 py-6 print:static print:border-none print:p-0 print:pb-4">
               <div>
                 <h2 className="text-2xl font-black tracking-tight text-slate-950">
                   Histórico da pessoa
@@ -1341,7 +1341,7 @@ export default function PeoplePage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 print:hidden">
                 <button
                   type="button"
                   onClick={handleExportPersonHistoryReport}

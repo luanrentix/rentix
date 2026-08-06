@@ -616,12 +616,10 @@ export default function PropertiesPage() {
     if (historyProperty) {
       const companyId = getCurrentCompanyId();
       if (!companyId) return;
-      import("@/services/api").then(({ api }) => {
-        api.get(`/files/entity/PROPERTY/${historyProperty.id}`).then((res) => {
-          setHistoryPhotos(Array.isArray(res.data) ? res.data : []);
-        }).catch(() => {
-          setHistoryPhotos([]);
-        });
+      api.get(`/files/entity/PROPERTY/${historyProperty.id}`).then((res) => {
+        setHistoryPhotos(Array.isArray(res.data) ? res.data : []);
+      }).catch(() => {
+        setHistoryPhotos([]);
       });
     } else {
       setHistoryPhotos([]);
