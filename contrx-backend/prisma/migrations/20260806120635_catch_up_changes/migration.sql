@@ -11,7 +11,7 @@ CREATE TYPE "SystemFileType" AS ENUM ('IMAGE', 'PDF', 'DOCUMENT', 'OTHER');
 CREATE TYPE "SystemFileEntity" AS ENUM ('PROPERTY', 'PERSON', 'CONTRACT', 'COMPANY', 'OTHER');
 
 -- DropForeignKey
-ALTER TABLE "extratos_compartilhados" DROP CONSTRAINT "extratos_compartilhados_empresa_id_fkey";
+ALTER TABLE IF EXISTS "extratos_compartilhados" DROP CONSTRAINT IF EXISTS "extratos_compartilhados_empresa_id_fkey";
 
 -- AlterTable
 ALTER TABLE "contratos" ADD COLUMN     "contrato_assinado_pdf" TEXT;
@@ -26,7 +26,7 @@ ALTER TABLE "pessoas" ADD COLUMN     "foto" TEXT;
 ALTER TABLE "usuarios" ADD COLUMN     "ultimo_login_em" TIMESTAMP(3);
 
 -- DropTable
-DROP TABLE "extratos_compartilhados";
+DROP TABLE IF EXISTS "extratos_compartilhados";
 
 -- CreateTable
 CREATE TABLE "chamados_suporte" (
