@@ -339,7 +339,7 @@ export default function PropertiesPage() {
   const [companySettings, setCompanySettings] = useState<CompanySettings>(
     getEmptyCompanySettings()
   );
-  const [reportMode, setReportMode] = useState<"General" | "Rental" | "Photos">("General");
+  const [reportMode, setReportMode] = useState<"Overview" | "Rental" | "General" | "Photos">("Overview");
 
   const [code, setCode] = useState("");
   const [assetCategory, setAssetCategory] = useState<AssetCategory>("PROPERTY");
@@ -1174,12 +1174,12 @@ export default function PropertiesPage() {
 
   function handleOpenPropertyHistory(property: Property) {
     setHistoryProperty(property);
-    setReportMode("General");
-      }
+    setReportMode("Overview");
+  }
 
   function handleClosePropertyHistory() {
     setHistoryProperty(null);
-      }
+  }
 
   function handleExportPropertyHistoryReport() {
     if (!historyProperty) return;
@@ -1187,6 +1187,10 @@ export default function PropertiesPage() {
     document.title =
       reportMode === "Rental"
         ? `RELATORIO_ALUGUEL_BEM_ATIVO_${sanitizeFileName(historyProperty.name)}`
+        : reportMode === "Photos"
+        ? `RELATORIO_FOTOS_BEM_ATIVO_${sanitizeFileName(historyProperty.name)}`
+        : reportMode === "Overview"
+        ? `FICHA_TECNICA_BEM_ATIVO_${sanitizeFileName(historyProperty.name)}`
         : `RELATORIO_HISTORICO_GERAL_BEM_ATIVO_${sanitizeFileName(historyProperty.name)}`;
 
     setTimeout(() => {
@@ -2093,75 +2097,147 @@ export default function PropertiesPage() {
         </div>
 
         {historyProperty && (
-          <div className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
-            <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
-              <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-100 bg-white px-8 py-6 print:hidden">
-                <div>
-                  <h2 className="text-2xl font-black text-slate-950">
-                    Relatórios do bem/ativo
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Consulte o histórico geral ou apenas o histórico de aluguéis.
-                  </p>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
+            <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[2.5rem] border border-orange-100 bg-white shadow-2xl">
+              {/* Header (First child = Drag Handle) */}
+              <div className="sticky top-0 z-20 flex flex-col gap-4 border-b border-slate-100 bg-white/95 px-8 py-5 backdrop-blur-md print:hidden">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-orange-600 shadow-inner">
+                      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h4m-4 0V11m0 0l-3 3m3-3l3 3" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-xl font-black text-slate-950">
+                          {historyProperty.name}
+                        </h2>
+                        {historyProperty.code && (
+                          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-black text-slate-600">
+                            #{historyProperty.code}
+                          </span>
+                        )}
+                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-black ${
+                          historyProperty.status === "Rented" 
+                            ? "bg-emerald-100 text-emerald-800" 
+                            : "bg-blue-100 text-blue-800"
+                        }`}>
+                          {historyProperty.status === "Rented" ? "Alugado" : "Disponível"}
+                        </span>
+                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-black ${
+                          historyProperty.isActive 
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200" 
+                            : "bg-slate-100 text-slate-500"
+                        }`}>
+                          {historyProperty.isActive ? "Ativo" : "Inativo"}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs font-semibold text-slate-500 flex items-center gap-1">
+                        <svg className="h-3.5 w-3.5 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span>
+                          {historyProperty.address 
+                            ? `${historyProperty.address}${historyProperty.neighborhood ? `, ${historyProperty.neighborhood}` : ""}${historyProperty.city ? ` • ${historyProperty.city}/${historyProperty.state || ""}` : ""}` 
+                            : "Endereço não informado"}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleExportPropertyHistoryReport}
+                      className="flex items-center gap-2 rounded-2xl bg-orange-500 px-4 py-2.5 text-xs font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 active:scale-95"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Exportar PDF
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleClosePropertyHistory}
+                      className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-lg font-black text-slate-500 transition hover:bg-orange-50 hover:text-orange-600 active:scale-95"
+                      title="Fechar modal"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap justify-end gap-2">
+                {/* Remodeled Tab Buttons */}
+                <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
                   <button
                     type="button"
-                    onClick={() => setReportMode("General")}
-                    className={`rounded-2xl px-5 py-3 text-sm font-black transition ${
-                      reportMode === "General"
-                        ? "bg-slate-900 text-white"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    onClick={() => setReportMode("Overview")}
+                    className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition ${
+                      reportMode === "Overview"
+                        ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     }`}
                   >
-                    Histórico geral
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Visão Geral & Ficha
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setReportMode("Rental")}
-                    className={`rounded-2xl px-5 py-3 text-sm font-black transition ${
+                    className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition ${
                       reportMode === "Rental"
-                        ? "bg-slate-900 text-white"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     }`}
                   >
-                    Histórico de aluguel
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Histórico de Aluguel ({rentalHistoryRecords.length})
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setReportMode("General")}
+                    className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition ${
+                      reportMode === "General"
+                        ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Histórico Geral ({visibleTimelineMovements.length})
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setReportMode("Photos")}
-                    className={`rounded-2xl px-5 py-3 text-sm font-black transition ${
+                    className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition ${
                       reportMode === "Photos"
-                        ? "bg-slate-900 text-white"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     }`}
                   >
-                    Fotos
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleExportPropertyHistoryReport}
-                    className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
-                  >
-                    Exportar PDF
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleClosePropertyHistory}
-                    className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-600 transition hover:bg-orange-50 hover:text-orange-600"
-                  >
-                    ×
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Fotos ({historyPhotos.length})
                   </button>
                 </div>
               </div>
 
+              {/* Printable & Scrollable Report Content */}
               <div id="property-history-report" className="bg-white p-8 print:p-0">
                 <div className="report-page">
+                  {/* Standard Printed Header */}
                   <div className="report-header">
                     <div className="flex items-start gap-4">
                       {companySettings.logo ? (
@@ -2179,11 +2255,15 @@ export default function PropertiesPage() {
 
                       <div>
                         <p className="report-subtitle font-black uppercase tracking-[0.18em] text-orange-600">
-                          Contrx • Relatório
+                          Contrx • Relatório do Imóvel
                         </p>
                         <h1 className="report-title">
-                          {reportMode === "Rental"
+                          {reportMode === "Overview"
+                            ? "Ficha Técnica e Detalhes do Bem/Ativo"
+                            : reportMode === "Rental"
                             ? "Histórico de Aluguel do Bem/Ativo"
+                            : reportMode === "Photos"
+                            ? "Galeria de Fotos do Bem/Ativo"
                             : "Histórico Geral do Bem/Ativo"}
                         </h1>
                         <p className="report-small font-black">
@@ -2208,159 +2288,241 @@ export default function PropertiesPage() {
                     </div>
                   </div>
 
-                  <div className="report-section">
-                    <h2 className="report-section-title">Dados do bem/ativo</h2>
-                    <div className="report-grid">
-                      <ReportInfo label="Bem/Ativo" value={historyProperty.name} wide />
-                      <ReportInfo label="Código" value={historyProperty.code || "Não informado"} />
-                      <ReportInfo label="Valor mensal" value={formatCurrency(historyProperty.rentValue)} />
-                      <ReportInfo label="Cadastro" value={historyProperty.isActive ? "Ativo" : "Inativo"} />
-                      <ReportInfo label="Locação" value={historyProperty.status === "Rented" ? "Alugado" : "Disponível"} />
-                      <ReportInfo
-                        label="Características"
-                        value={`${historyProperty.bedrooms || 0} quarto(s), ${historyProperty.bathrooms || 0} banheiro(s), ${historyProperty.garages || 0} vaga(s)`}
-                      />
-                      <ReportInfo label="CEP" value={historyProperty.zipCode || "Não informado"} />
-                      <ReportInfo label="Cidade/UF" value={`${historyProperty.city || "-"} / ${historyProperty.state || "-"}`} />
-                      <ReportInfo label="Bairro" value={historyProperty.neighborhood || "Não informado"} />
-                      <ReportInfo label="Endereço" value={historyProperty.address || "Não informado"} wide />
-                      <ReportInfo label="Descrição" value={historyProperty.description || "Não informado"} wide />
-                    </div>
-                  </div>
+                  {/* Tab 1: Visão Geral / Overview */}
+                  {reportMode === "Overview" && (
+                    <div data-report-section="overview" className="space-y-6">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:hidden">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Valor do Aluguel</p>
+                          <p className="mt-1 text-xl font-black text-slate-900">{formatCurrency(historyProperty.rentValue)}</p>
+                          <span className="text-[11px] text-slate-400 font-semibold">Valor mensal base</span>
+                        </div>
 
-                  <div className="report-section">
-                    <div className="flex items-center justify-between gap-4 print:block">
-                      <h2 className="report-section-title !mb-0 !border-b-0 !pb-0">
-                        {reportMode === "Rental" ? "Histórico de aluguel" : "Histórico geral"}
-                      </h2>
-                      <p className="report-small font-bold">
-                        {reportMode === "Rental"
-                          ? `${rentalHistoryRecords.length} registro(s) de aluguel`
-                          : `${visibleTimelineMovements.length} movimentação(ões)`}
-                      </p>
-                    </div>
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Situação Atual</p>
+                          <p className="mt-1 text-xl font-black text-slate-900">
+                            {historyProperty.status === "Rented" ? "Alugado" : "Disponível"}
+                          </p>
+                          <span className={`text-[11px] font-bold ${historyProperty.status === "Rented" ? "text-emerald-600" : "text-blue-600"}`}>
+                            {historyProperty.status === "Rented" ? "Contrato vigendo" : "Pronto para locação"}
+                          </span>
+                        </div>
 
-                    {reportMode === "General" ? (
-                      <div data-report-section="general">
-                        {visibleTimelineMovements.length === 0 ? (
-                          <div className="mt-4 rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm font-semibold text-slate-500">
-                            Nenhuma movimentação registrada para este bem/ativo.
-                          </div>
-                        ) : (
-                          <div className="mt-4 space-y-2">
-                            {visibleTimelineMovements.map((movement) => (
-                              <div
-                                key={movement.id}
-                                className="print:break-inside-avoid rounded-2xl border border-slate-200 bg-slate-50 p-4 print:rounded-lg print:p-3"
-                              >
-                                <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                                  <p className="text-sm font-black text-slate-900 print:text-[10px]">
-                                    {getMovementTypeLabel(movement.type)}
-                                  </p>
-                                  <p className="text-xs font-bold text-slate-500 print:text-[9px]">
-                                    {formatDateTime(movement.createdAt)}
-                                  </p>
-                                </div>
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total de Locações</p>
+                          <p className="mt-1 text-xl font-black text-slate-900">{rentalHistoryRecords.length}</p>
+                          <span className="text-[11px] text-slate-400 font-semibold">Contratos registrados</span>
+                        </div>
 
-                                <p className="mt-2 text-sm font-semibold leading-6 text-slate-600 print:mt-1 print:text-[10px] print:leading-4">
-                                  {movement.description}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Galeria</p>
+                          <p className="mt-1 text-xl font-black text-slate-900">{historyPhotos.length}</p>
+                          <span className="text-[11px] text-slate-400 font-semibold">Fotos cadastradas</span>
+                        </div>
                       </div>
-                    ) : (
-                      <div data-report-section="rental">
-                        {rentalHistoryRecords.length > 0 && (
-                          <div className="report-kpi-grid">
-                            <div className="report-kpi">
-                              <p className="report-kpi-label">Total de contratos</p>
-                              <p className="report-kpi-value">{rentalHistoryRecords.length}</p>
-                            </div>
-                            <div className="report-kpi">
-                              <p className="report-kpi-label">Receita registrada</p>
-                              <p className="report-kpi-value">
-                                {formatCurrency(
-                                  rentalHistoryRecords.reduce(
-                                    (total, record) => total + Number(record.rentValue || 0),
-                                    0
-                                  )
-                                )}
-                              </p>
-                            </div>
-                            <div className="report-kpi">
-                              <p className="report-kpi-label">Pagamentos pagos</p>
-                              <p className="report-kpi-value">
-                                {
-                                  rentalHistoryRecords.filter(
-                                    (record) => getRentalPaymentStatus(record, rentalCharges) === "Paid"
-                                  ).length
-                                }
-                              </p>
-                            </div>
-                          </div>
-                        )}
 
-                        {rentalHistoryRecords.length === 0 ? (
-                          <div className="mt-4 rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm font-semibold text-slate-500">
-                            Nenhum histórico de aluguel encontrado para este bem/ativo.
+                      <div className="report-section">
+                        <h2 className="report-section-title">Dados Principais do Bem/Ativo</h2>
+                        <div className="report-grid">
+                          <ReportInfo label="Nome / Identificação" value={historyProperty.name} wide />
+                          <ReportInfo label="Código" value={historyProperty.code || "Não informado"} />
+                          <ReportInfo label="Categoria" value={historyProperty.assetCategory === "PROPERTY" ? "Imóvel" : "Outro Bem"} />
+                          <ReportInfo label="Tipo de Imóvel" value={getPropertyTypeLabel(historyProperty.type)} />
+                          <ReportInfo label="Valor de Aluguel" value={formatCurrency(historyProperty.rentValue)} />
+                          <ReportInfo label="Status Cadastral" value={historyProperty.isActive ? "Ativo" : "Inativo"} />
+                          <ReportInfo label="Situação de Locação" value={historyProperty.status === "Rented" ? "Alugado" : "Disponível"} />
+                          <ReportInfo
+                            label="Características"
+                            value={`${historyProperty.bedrooms || 0} quarto(s), ${historyProperty.bathrooms || 0} banheiro(s), ${historyProperty.garages || 0} vaga(s)`}
+                            wide
+                          />
+                        </div>
+                      </div>
+
+                      <div className="report-section">
+                        <h2 className="report-section-title">Localização & Endereço</h2>
+                        <div className="report-grid">
+                          <ReportInfo label="CEP" value={historyProperty.zipCode || "Não informado"} />
+                          <ReportInfo label="Cidade / UF" value={`${historyProperty.city || "-"} / ${historyProperty.state || "-"}`} />
+                          <ReportInfo label="Bairro" value={historyProperty.neighborhood || "Não informado"} />
+                          <ReportInfo label="Logradouro / Endereço" value={historyProperty.address || "Não informado"} wide />
+                        </div>
+                      </div>
+
+                      {historyProperty.description && (
+                        <div className="report-section">
+                          <h2 className="report-section-title">Observações / Descrição</h2>
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4 text-sm leading-relaxed text-slate-700">
+                            {historyProperty.description}
                           </div>
-                        ) : (
-                          <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 print:overflow-visible print:rounded-none print:border-0">
-                            <table>
-                              <thead>
-                                <tr>
-                                  <th style={{ width: "12%" }}>Início</th>
-                                  <th style={{ width: "12%" }}>Fim</th>
-                                  <th style={{ width: "28%" }}>Quem alugou</th>
-                                  <th style={{ width: "14%" }}>Valor</th>
-                                  <th style={{ width: "16%" }}>Contrato</th>
-                                  <th style={{ width: "18%" }}>Pagamento</th>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Tab 2: Histórico de Aluguel / Rental */}
+                  {reportMode === "Rental" && (
+                    <div data-report-section="rental" className="space-y-6">
+                      {rentalHistoryRecords.length > 0 && (
+                        <div className="report-kpi-grid">
+                          <div className="report-kpi">
+                            <p className="report-kpi-label">Total de contratos</p>
+                            <p className="report-kpi-value">{rentalHistoryRecords.length}</p>
+                          </div>
+                          <div className="report-kpi">
+                            <p className="report-kpi-label">Receita registrada</p>
+                            <p className="report-kpi-value">
+                              {formatCurrency(
+                                rentalHistoryRecords.reduce(
+                                  (total, record) => total + Number(record.rentValue || 0),
+                                  0
+                                )
+                              )}
+                            </p>
+                          </div>
+                          <div className="report-kpi">
+                            <p className="report-kpi-label">Pagamentos pagos</p>
+                            <p className="report-kpi-value">
+                              {
+                                rentalHistoryRecords.filter(
+                                  (record) => getRentalPaymentStatus(record, rentalCharges) === "Paid"
+                                ).length
+                              }
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {rentalHistoryRecords.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-slate-300 p-12 text-center">
+                          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          </div>
+                          <h3 className="mt-3 text-base font-black text-slate-800">Nenhum contrato de aluguel</h3>
+                          <p className="mt-1 text-sm font-semibold text-slate-500">Este imóvel ainda não possui registros de aluguéis passados ou vigentes.</p>
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto rounded-2xl border border-slate-200 print:overflow-visible print:rounded-none print:border-0">
+                          <table>
+                            <thead>
+                              <tr>
+                                <th style={{ width: "12%" }}>Início</th>
+                                <th style={{ width: "12%" }}>Fim</th>
+                                <th style={{ width: "28%" }}>Quem alugou</th>
+                                <th style={{ width: "14%" }}>Valor</th>
+                                <th style={{ width: "16%" }}>Contrato</th>
+                                <th style={{ width: "18%" }}>Pagamento</th>
+                              </tr>
+                            </thead>
+
+                            <tbody>
+                              {rentalHistoryRecords.map((record) => (
+                                <tr key={record.id}>
+                                  <td>{formatDate(record.startDate || "")}</td>
+                                  <td>{formatDate(record.endDate || "")}</td>
+                                  <td className="font-black">{record.tenantName || "Não informado"}</td>
+                                  <td className="font-black">{formatCurrency(Number(record.rentValue || 0))}</td>
+                                  <td>{getRentalStatusLabel(String(record.status || ""))}</td>
+                                  <td>{getPaymentStatusLabel(getRentalPaymentStatus(record, rentalCharges))}</td>
                                 </tr>
-                              </thead>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                              <tbody>
-                                {rentalHistoryRecords.map((record) => (
-                                  <tr key={record.id}>
-                                    <td>{formatDate(record.startDate || "")}</td>
-                                    <td>{formatDate(record.endDate || "")}</td>
-                                    <td className="font-black">{record.tenantName || "Não informado"}</td>
-                                    <td className="font-black">{formatCurrency(Number(record.rentValue || 0))}</td>
-                                    <td>{getRentalStatusLabel(String(record.status || ""))}</td>
-                                    <td>{getPaymentStatusLabel(getRentalPaymentStatus(record, rentalCharges))}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                  {/* Tab 3: Histórico Geral / General Movements */}
+                  {reportMode === "General" && (
+                    <div data-report-section="general">
+                      {visibleTimelineMovements.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-slate-300 p-12 text-center">
+                          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
                           </div>
-                        )}
-                      </div>
-                    )}
-
-                    {reportMode === "Photos" && (
-                      <div data-report-section="photos" className="mt-4 print:hidden">
-                        {historyPhotos.length === 0 ? (
-                          <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm font-semibold text-slate-500">
-                            Nenhuma foto registrada para este bem/ativo.
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            {historyPhotos.map((photo) => (
-                              <div key={photo.id} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={process.env.NEXT_PUBLIC_API_URL + photo.url} alt="Foto" className="w-full h-full object-cover" />
+                          <h3 className="mt-3 text-base font-black text-slate-800">Nenhuma movimentação</h3>
+                          <p className="mt-1 text-sm font-semibold text-slate-500">Nenhuma atualização ou log foi registrado para este bem/ativo.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {visibleTimelineMovements.map((movement) => (
+                            <div
+                              key={movement.id}
+                              className="print:break-inside-avoid rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:bg-slate-100/70 print:rounded-lg print:p-3"
+                            >
+                              <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                                <span className="inline-flex items-center gap-2 text-sm font-black text-slate-900 print:text-[10px]">
+                                  <span className="h-2 w-2 rounded-full bg-orange-500" />
+                                  {getMovementTypeLabel(movement.type)}
+                                </span>
+                                <span className="text-xs font-bold text-slate-500 print:text-[9px]">
+                                  {formatDateTime(movement.createdAt)}
+                                </span>
                               </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
 
-                  <div className="report-footer">
+                              <p className="mt-2 text-sm font-semibold leading-6 text-slate-600 print:mt-1 print:text-[10px] print:leading-4">
+                                {movement.description}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Tab 4: Fotos / Galeria */}
+                  {reportMode === "Photos" && (
+                    <div data-report-section="photos" className="print:hidden">
+                      {historyPhotos.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-slate-300 p-12 text-center">
+                          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          </div>
+                          <h3 className="mt-3 text-base font-black text-slate-800">Nenhuma foto enviada</h3>
+                          <p className="mt-1 text-sm font-semibold text-slate-500">Você pode adicionar fotos através da tela de edição do imóvel.</p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          {historyPhotos.map((photo) => (
+                            <div key={photo.id} className="group relative aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm transition hover:shadow-md">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={process.env.NEXT_PUBLIC_API_URL + photo.url} alt="Foto do imóvel" className="w-full h-full object-cover transition duration-300 group-hover:scale-105" />
+                              <div className="absolute inset-0 bg-slate-900/20 opacity-0 transition group-hover:opacity-100 flex items-center justify-center">
+                                <a
+                                  href={process.env.NEXT_PUBLIC_API_URL + photo.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="rounded-xl bg-white/90 px-3 py-1.5 text-xs font-black text-slate-900 shadow backdrop-blur-sm"
+                                >
+                                  Ver em tamanho real
+                                </a>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Standard Printed Footer */}
+                  <div className="report-footer mt-8">
                     <span>
-                      {getCompanyDisplayName(companySettings)} • {reportMode === "Rental" ? "Histórico de aluguel do bem/ativo" : reportMode === "Photos" ? "Fotos do bem/ativo" : "Histórico geral do bem/ativo"}
+                      {getCompanyDisplayName(companySettings)} • {
+                        reportMode === "Overview"
+                          ? "Ficha técnica do bem/ativo"
+                          : reportMode === "Rental"
+                          ? "Histórico de aluguel do bem/ativo"
+                          : reportMode === "Photos"
+                          ? "Fotos do bem/ativo"
+                          : "Histórico geral do bem/ativo"
+                      }
                     </span>
                     <span>
                       Gerado em {formatDateTime(new Date().toISOString())}

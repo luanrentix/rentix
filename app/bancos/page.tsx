@@ -651,15 +651,12 @@ export default function BancosPage() {
     }
   };
 
-  // Consolidated balance calculation adjusted by period and transactions in filter
+  // Consolidated balance calculation (actual balance of active bank accounts)
   const consolidatedBalance = useMemo(() => {
-    const activeAccountsBalance = accounts
+    return accounts
       .filter((acc) => acc.active && (!filterAccount || acc.id === filterAccount))
       .reduce((sum, acc) => sum + Number(acc.currentBalance), 0);
-
-    // If filtering by dates, calculate balance resulting from filtered confirmed transactions
-    return statementTotals.balance !== 0 ? statementTotals.balance : activeAccountsBalance;
-  }, [accounts, filterAccount, statementTotals.balance]);
+  }, [accounts, filterAccount]);
 
   const totalCreditLimit = useMemo(() => {
     return accounts

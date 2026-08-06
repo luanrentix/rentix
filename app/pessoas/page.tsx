@@ -11,10 +11,15 @@ import {
 } from "react";
 import {
   Building2,
+  DollarSign,
+  FileText,
+  Image as ImageIcon,
   LoaderCircle,
   Maximize2,
   Minus,
+  Printer,
   Search,
+  User,
   UserCheck,
   UserRound,
   UserX,
@@ -367,6 +372,8 @@ export default function PeoplePage() {
   const [personToDelete, setPersonToDelete] = useState<Person | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [historyPerson, setHistoryPerson] = useState<Person | null>(null);
+  const [personHistoryTab, setPersonHistoryTab] = useState<"Overview" | "Properties" | "Contracts" | "Financial" | "Photos">("Overview");
+  const [historyPersonPhotos, setHistoryPersonPhotos] = useState<any[]>([]);
   const [properties, setProperties] = useState<ApiProperty[]>([]);
   const [contracts, setContracts] = useState<ApiContract[]>([]);
   const [receivableAccounts, setReceivableAccounts] = useState<ReceivableAccount[]>([]);
@@ -626,6 +633,17 @@ export default function PeoplePage() {
 
   function openPersonHistory(person: Person) {
     setHistoryPerson(person);
+    setPersonHistoryTab("Overview");
+    setHistoryPersonPhotos([]);
+    if (person) {
+      import("@/services/api").then(({ api }) => {
+        api.get(`/files/entity/PERSON/${person.id}`).then((res: any) => {
+          if (res.data && Array.isArray(res.data)) {
+            setHistoryPersonPhotos(res.data);
+          }
+        }).catch(console.error);
+      });
+    }
   }
 
   function closePersonHistory() {
@@ -1329,106 +1347,321 @@ export default function PeoplePage() {
       </div>
 
       {historyPerson && (
-        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-950/60 px-4 py-8 backdrop-blur-sm print:block print:static print:inset-auto print:h-auto print:w-full print:bg-white print:p-0">
-          <div className="max-h-[94vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 bg-white shadow-2xl print:max-h-none print:max-w-none print:overflow-visible print:border-none print:shadow-none">
-            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-orange-100 bg-white px-8 py-6 print:static print:border-none print:p-0 print:pb-4">
-              <div>
-                <h2 className="text-2xl font-black tracking-tight text-slate-950">
-                  Histórico da pessoa
-                </h2>
-                <p className="mt-1 text-sm font-semibold text-slate-500">
-                  {historyPerson.name}
-                </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-8 backdrop-blur-sm print:block print:static print:inset-auto print:h-auto print:w-full print:bg-white print:p-0">
+          <div className="max-h-[94vh] w-full max-w-6xl rounded-[2.5rem] border border-orange-100 bg-white shadow-2xl print:max-h-none print:max-w-none print:overflow-visible print:border-none print:shadow-none">
+            {/* First child = Drag handle */}
+            <div className="sticky top-0 z-20 flex flex-col gap-4 border-b border-slate-100 bg-white/95 px-8 py-5 backdrop-blur-md print:static print:border-none print:p-0 print:pb-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-orange-600 shadow-inner overflow-hidden">
+                    {historyPerson.photo ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={process.env.NEXT_PUBLIC_API_URL + historyPerson.photo}
+                        alt="Foto da pessoa"
+                        className="h-full w-full rounded-2xl object-cover"
+                      />
+                    ) : (
+                      <span className="text-lg font-black uppercase text-orange-600">
+                        {historyPerson.name.slice(0, 2)}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-xl font-black tracking-tight text-slate-950">
+                        {historyPerson.name}
+                      </h2>
+                      <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-black text-slate-700">
+                        {getPersonTypeLabel(historyPerson.type)}
+                      </span>
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-black ${
+                        historyPerson.status === "active"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : "bg-slate-100 text-slate-600"
+                      }`}>
+                        {historyPerson.status === "active" ? "Ativo" : "Inativo"}
+                      </span>
+                      {historyPerson.document && (
+                        <span className="rounded-full bg-orange-50 border border-orange-200 px-2.5 py-0.5 text-xs font-bold text-orange-800">
+                          {historyPerson.document}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs font-semibold text-slate-500 flex items-center gap-2">
+                      <span>{historyPerson.email || "Sem e-mail cadastrado"}</span>
+                      {historyPerson.phone && <span>• {historyPerson.phone}</span>}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 print:hidden">
+                  <button
+                    type="button"
+                    onClick={handleExportPersonHistoryReport}
+                    className="flex items-center gap-2 rounded-2xl bg-orange-500 px-4 py-2.5 text-xs font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 active:scale-95"
+                  >
+                    <Printer className="h-4 w-4" />
+                    Exportar PDF
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closePersonHistory}
+                    className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-orange-50 hover:text-orange-600 active:scale-95"
+                    title="Fechar histórico"
+                    aria-label="Fechar histórico"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2 print:hidden">
+              {/* Remodeled Navigation Tabs */}
+              <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 print:hidden">
                 <button
                   type="button"
-                  onClick={handleExportPersonHistoryReport}
-                  className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+                  onClick={() => setPersonHistoryTab("Overview")}
+                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-black transition ${
+                    personHistoryTab === "Overview"
+                      ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
                 >
-                  Exportar PDF
+                  <User className="h-4 w-4" />
+                  Visão Geral & Ficha
                 </button>
+
                 <button
                   type="button"
-                  onClick={closePersonHistory}
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-orange-50 hover:text-orange-600"
-                  title="Fechar histórico"
-                  aria-label="Fechar histórico"
+                  onClick={() => setPersonHistoryTab("Properties")}
+                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-black transition ${
+                    personHistoryTab === "Properties"
+                      ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
                 >
-                  <X className="h-5 w-5" />
+                  <Building2 className="h-4 w-4" />
+                  Bens/Ativos ({historyData.ownedProperties.length})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPersonHistoryTab("Contracts")}
+                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-black transition ${
+                    personHistoryTab === "Contracts"
+                      ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  <FileText className="h-4 w-4" />
+                  Contratos ({historyData.tenantContracts.length})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPersonHistoryTab("Financial")}
+                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-black transition ${
+                    personHistoryTab === "Financial"
+                      ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  <DollarSign className="h-4 w-4" />
+                  Financeiro ({historyData.receivables.length + historyData.payables.length})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPersonHistoryTab("Photos")}
+                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-black transition ${
+                    personHistoryTab === "Photos"
+                      ? "bg-slate-900 text-white shadow-md shadow-slate-900/10"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  <ImageIcon className="h-4 w-4" />
+                  Fotos & Anexos ({historyPersonPhotos.length + (historyPerson.photo ? 1 : 0)})
                 </button>
               </div>
             </div>
 
             <div className="space-y-6 p-8">
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <HistoryInfo label="Tipo" value={getPersonTypeLabel(historyPerson.type)} />
-                <HistoryInfo label="Documento" value={historyPerson.document} />
-                <HistoryInfo label="Status" value={historyPerson.status === "active" ? "Ativo" : "Inativo"} />
-                <HistoryInfo label="Movimentações" value={String(historyMovementCount)} />
-                <HistoryInfo label="Telefone" value={historyPerson.phone || "Não informado"} />
-                <HistoryInfo label="E-mail" value={historyPerson.email || "Não informado"} />
-                <HistoryInfo label="Cidade/UF" value={`${historyPerson.city || "-"} / ${historyPerson.state || "-"}`} />
-                <HistoryInfo label="CEP" value={historyPerson.zipCode || "Não informado"} />
-                <HistoryInfo label="Endereço" value={historyPerson.address || "Não informado"} wide />
-              </div>
+              {/* Tab 1: Visão Geral */}
+              {personHistoryTab === "Overview" && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:hidden">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Movimentações</p>
+                      <p className="mt-1 text-xl font-black text-slate-900">{historyMovementCount}</p>
+                      <span className="text-[11px] text-slate-400 font-semibold">Registros vinculados</span>
+                    </div>
 
-              <HistorySection
-                title="Bens/Ativos como proprietário"
-                emptyMessage="Nenhum bem/ativo vinculado como proprietário."
-              >
-                {historyData.ownedProperties.map((property) => (
-                  <HistoryRow
-                    key={property.id}
-                    title={property.title}
-                    detail={`${property.city || "-"} / ${property.state || "-"} · ${formatCurrency(Number(property.rentalValue || 0))}`}
-                    meta={property.isActive ? "Ativo" : "Inativo"}
-                  />
-                ))}
-              </HistorySection>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Bens/Ativos</p>
+                      <p className="mt-1 text-xl font-black text-slate-900">{historyData.ownedProperties.length}</p>
+                      <span className="text-[11px] text-slate-400 font-semibold">Como proprietário</span>
+                    </div>
 
-              <HistorySection
-                title="Contratos como inquilino"
-                emptyMessage="Nenhum contrato vinculado como inquilino."
-              >
-                {historyData.tenantContracts.map((contract) => (
-                  <HistoryRow
-                    key={contract.id}
-                    title={contract.propertyName || contract.property?.title || "Bem/ativo não informado"}
-                    detail={`${formatDate(contract.startDate)} até ${formatDate(contract.endDate)} · ${formatCurrency(Number(contract.rentValue || 0))}`}
-                    meta={getContractStatusLabel(contract.status)}
-                  />
-                ))}
-              </HistorySection>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Contratos</p>
+                      <p className="mt-1 text-xl font-black text-slate-900">{historyData.tenantContracts.length}</p>
+                      <span className="text-[11px] text-slate-400 font-semibold">Como inquilino</span>
+                    </div>
 
-              <HistorySection
-                title="Contas a receber"
-                emptyMessage="Nenhuma conta a receber vinculada."
-              >
-                {historyData.receivables.map((account) => (
-                  <HistoryRow
-                    key={account.id}
-                    title={account.propertyName || "Bem/ativo não informado"}
-                    detail={`${formatDate(account.dueDate)} · ${formatCurrency(Number(account.amount || 0))}`}
-                    meta={getFinancialStatusLabel(account.status)}
-                  />
-                ))}
-              </HistorySection>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Lançamentos</p>
+                      <p className="mt-1 text-xl font-black text-slate-900">{historyData.receivables.length + historyData.payables.length}</p>
+                      <span className="text-[11px] text-slate-400 font-semibold">Receber / Pagar</span>
+                    </div>
+                  </div>
 
-              <HistorySection
-                title="Contas a pagar"
-                emptyMessage="Nenhuma conta a pagar vinculada."
-              >
-                {historyData.payables.map((account) => (
-                  <HistoryRow
-                    key={account.id}
-                    title={account.description || account.category || "Conta sem descrição"}
-                    detail={`${formatDate(account.dueDate)} · ${formatCurrency(Number(account.amount || 0))}`}
-                    meta={getFinancialStatusLabel(account.status)}
-                  />
-                ))}
-              </HistorySection>
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-slate-400 mb-3">Ficha Cadastral</h3>
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                      <HistoryInfo label="Tipo de Pessoa" value={getPersonTypeLabel(historyPerson.type)} />
+                      <HistoryInfo label="CPF / CNPJ" value={historyPerson.document} />
+                      <HistoryInfo label="Status" value={historyPerson.status === "active" ? "Ativo" : "Inativo"} />
+                      <HistoryInfo label="RG / IE" value={historyPerson.identityNumber || historyPerson.stateRegistration || "Não informado"} />
+                      <HistoryInfo label="Telefone / Celular" value={historyPerson.phone || "Não informado"} />
+                      <HistoryInfo label="E-mail" value={historyPerson.email || "Não informado"} />
+                      <HistoryInfo label="Cidade / UF" value={`${historyPerson.city || "-"} / ${historyPerson.state || "-"}`} />
+                      <HistoryInfo label="CEP" value={historyPerson.zipCode || "Não informado"} />
+                      <HistoryInfo label="Endereço Completo" value={historyPerson.address || "Não informado"} wide />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 2: Bens/Ativos */}
+              {personHistoryTab === "Properties" && (
+                <HistorySection
+                  title="Bens/Ativos como proprietário"
+                  emptyMessage="Nenhum bem/ativo vinculado como proprietário."
+                >
+                  {historyData.ownedProperties.map((property) => (
+                    <HistoryRow
+                      key={property.id}
+                      title={property.title}
+                      detail={`${property.city || "-"} / ${property.state || "-"} · ${formatCurrency(Number(property.rentalValue || 0))}`}
+                      meta={property.isActive ? "Ativo" : "Inativo"}
+                    />
+                  ))}
+                </HistorySection>
+              )}
+
+              {/* Tab 3: Contratos */}
+              {personHistoryTab === "Contracts" && (
+                <HistorySection
+                  title="Contratos como inquilino"
+                  emptyMessage="Nenhum contrato vinculado como inquilino."
+                >
+                  {historyData.tenantContracts.map((contract) => (
+                    <HistoryRow
+                      key={contract.id}
+                      title={contract.propertyName || contract.property?.title || "Bem/ativo não informado"}
+                      detail={`${formatDate(contract.startDate)} até ${formatDate(contract.endDate)} · ${formatCurrency(Number(contract.rentValue || 0))}`}
+                      meta={getContractStatusLabel(contract.status)}
+                    />
+                  ))}
+                </HistorySection>
+              )}
+
+              {/* Tab 4: Financeiro */}
+              {personHistoryTab === "Financial" && (
+                <div className="space-y-6">
+                  <HistorySection
+                    title="Contas a receber"
+                    emptyMessage="Nenhuma conta a receber vinculada."
+                  >
+                    {historyData.receivables.map((account) => (
+                      <HistoryRow
+                        key={account.id}
+                        title={account.propertyName || "Bem/ativo não informado"}
+                        detail={`${formatDate(account.dueDate)} · ${formatCurrency(Number(account.amount || 0))}`}
+                        meta={getFinancialStatusLabel(account.status)}
+                      />
+                    ))}
+                  </HistorySection>
+
+                  <HistorySection
+                    title="Contas a pagar"
+                    emptyMessage="Nenhuma conta a pagar vinculada."
+                  >
+                    {historyData.payables.map((account) => (
+                      <HistoryRow
+                        key={account.id}
+                        title={account.description || account.category || "Conta sem descrição"}
+                        detail={`${formatDate(account.dueDate)} · ${formatCurrency(Number(account.amount || 0))}`}
+                        meta={getFinancialStatusLabel(account.status)}
+                      />
+                    ))}
+                  </HistorySection>
+                </div>
+              )}
+
+              {/* Tab 5: Fotos & Anexos */}
+              {personHistoryTab === "Photos" && (
+                <div className="space-y-6 print:hidden">
+                  <h3 className="text-sm font-black uppercase tracking-wider text-slate-400">Galeria de Fotos & Documentos Anexados</h3>
+                  
+                  {historyPersonPhotos.length === 0 && !historyPerson.photo ? (
+                    <div className="rounded-2xl border border-dashed border-slate-300 p-12 text-center">
+                      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+                        <ImageIcon className="h-6 w-6" />
+                      </div>
+                      <h4 className="mt-3 text-base font-black text-slate-800">Nenhuma foto ou anexo</h4>
+                      <p className="mt-1 text-sm font-semibold text-slate-500">Você pode enviar fotos e documentos editando o cadastro da pessoa.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {historyPerson.photo && (
+                        <div className="group relative aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={process.env.NEXT_PUBLIC_API_URL + historyPerson.photo}
+                            alt="Foto de Perfil"
+                            className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                          />
+                          <div className="absolute top-2 left-2 rounded-lg bg-slate-900/80 px-2 py-0.5 text-[10px] font-black text-white backdrop-blur-sm">
+                            Foto de Perfil
+                          </div>
+                          <div className="absolute inset-0 bg-slate-900/20 opacity-0 transition group-hover:opacity-100 flex items-center justify-center">
+                            <a
+                              href={process.env.NEXT_PUBLIC_API_URL + historyPerson.photo}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="rounded-xl bg-white/90 px-3 py-1.5 text-xs font-black text-slate-900 shadow backdrop-blur-sm"
+                            >
+                              Ver em tamanho real
+                            </a>
+                          </div>
+                        </div>
+                      )}
+
+                      {historyPersonPhotos.map((file) => (
+                        <div key={file.id} className="group relative aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={process.env.NEXT_PUBLIC_API_URL + file.url}
+                            alt="Anexo"
+                            className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-slate-900/20 opacity-0 transition group-hover:opacity-100 flex items-center justify-center">
+                            <a
+                              href={process.env.NEXT_PUBLIC_API_URL + file.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="rounded-xl bg-white/90 px-3 py-1.5 text-xs font-black text-slate-900 shadow backdrop-blur-sm"
+                            >
+                              Ver documento
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1502,7 +1735,7 @@ export default function PeoplePage() {
 
       {isModalOpen && editingPersonId && !isModalMinimized && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6 backdrop-blur-sm">
-          <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
+          <div className="max-h-[92vh] w-full max-w-6xl rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
             <div className="flex items-start justify-between border-b border-orange-100 px-8 py-6">
               <div>
                 <h2 className="text-2xl font-black tracking-tight text-slate-950">

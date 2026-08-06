@@ -363,8 +363,8 @@ export function PersonCreateModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 px-4 py-6 backdrop-blur-sm">
-      <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6 backdrop-blur-sm">
+      <div className="max-h-[92vh] w-full max-w-6xl rounded-[2rem] border border-orange-100 bg-white shadow-2xl">
         <div className="flex items-start justify-between border-b border-orange-100 px-8 py-6">
               <div>
                 <h2 className="text-2xl font-black tracking-tight text-slate-950">

@@ -16,6 +16,8 @@ import {
   Minus,
   Pencil,
   RefreshCw,
+  RotateCcw,
+  Save,
   Trash2,
   X,
 } from "lucide-react";
@@ -1698,11 +1700,67 @@ export default function ContractsPage() {
     setFinishReasonError("");
   }
 
+  function getSavedContractCustomContent(contractId: string): string | null {
+    if (typeof window === "undefined" || !contractId) return null;
+    return localStorage.getItem(`contrx_custom_contract_content_${contractId}`);
+  }
+
+  function saveContractCustomContent(contractId: string, content: string) {
+    if (typeof window === "undefined" || !contractId) return;
+    localStorage.setItem(`contrx_custom_contract_content_${contractId}`, content);
+  }
+
+  function removeSavedContractCustomContent(contractId: string) {
+    if (typeof window === "undefined" || !contractId) return;
+    localStorage.removeItem(`contrx_custom_contract_content_${contractId}`);
+  }
+
   function handleOpenPrintableContract(contract: Contract) {
     setPrintableContract(contract);
   }
 
+  function handleSavePrintableContractEdits() {
+    if (!printableContract || !printableContractFrameRef.current) return;
+    try {
+      const doc = printableContractFrameRef.current.contentDocument;
+      const contentEl = doc?.querySelector(".content");
+      if (contentEl) {
+        const editedContent = contentEl.innerHTML || contentEl.textContent || "";
+        saveContractCustomContent(printableContract.id, editedContent);
+        alert("Edição salva com sucesso especificamente para este contrato!");
+      }
+    } catch (err) {
+      console.error("Erro ao salvar alterações do contrato:", err);
+    }
+  }
+
+  function handleResetPrintableContractEdits() {
+    if (!printableContract) return;
+    removeSavedContractCustomContent(printableContract.id);
+    if (printableContractFrameRef.current) {
+      printableContractFrameRef.current.setAttribute(
+        "srcdoc",
+        buildPrintableContractHtml(printableContract, false)
+      );
+    }
+    alert("Texto do contrato restaurado para o modelo padrão do sistema.");
+  }
+
   function handleClosePrintableContract() {
+    if (printableContract && printableContractFrameRef.current) {
+      try {
+        const doc = printableContractFrameRef.current.contentDocument;
+        const contentEl = doc?.querySelector(".content");
+        if (contentEl) {
+          const editedContent = contentEl.innerHTML || contentEl.textContent || "";
+          if (editedContent.trim()) {
+            saveContractCustomContent(printableContract.id, editedContent);
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao auto-salvar contrato ao fechar:", err);
+      }
+    }
     setPrintableContract(null);
   }
 
@@ -1760,9 +1818,27 @@ export default function ContractsPage() {
     return "Visualização do contrato padrão residencial";
   }
 
+  function getPrintableContractSubHeaderLabel(contract: Contract) {
+    const property = getPropertyForContract(contract);
+    if (property && property.assetCategory !== "PROPERTY") {
+      return `Contrato de locação de ${getAssetCategoryLabel(property.assetCategory).toLowerCase()}`;
+    }
+
+    if (contract.isTemporaryRental) {
+      return "Visualização do contrato temporário por temporada";
+    }
+
+    return "Visualização do contrato padrão residencial";
+  }
+
   function buildPrintableContractHtml(contract: Contract, showToolbar = false) {
     const contractProperty = getPropertyForContract(contract);
     const contractTenant = tenants.find((tenant) => String(tenant.id) === String(contract.tenantId));
+    const savedCustomText = getSavedContractCustomContent(contract.id);
+
+    if (savedCustomText) {
+      return buildCustomContentContractHtml(savedCustomText, showToolbar);
+    }
 
     if (contractProperty && contractProperty.assetCategory !== "PROPERTY") {
       return buildAssetContractHtml(contract, contractProperty, contractTenant, showToolbar);
@@ -2949,12 +3025,25 @@ export default function ContractsPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-3">
+                  {getSavedContractCustomContent(printableContract.id) && (
+                    <button
+                      type="button"
+                      onClick={handleResetPrintableContractEdits}
+                      className="flex items-center gap-2 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm font-black text-amber-800 transition hover:bg-amber-100"
+                      title="Restaurar o texto deste contrato para o padrão do sistema"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Restaurar Padrão
+                    </button>
+                  )}
+
                   <button
                     type="button"
-                    onClick={handleClosePrintableContract}
-                    className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                    onClick={handleSavePrintableContractEdits}
+                    className="flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow-md shadow-emerald-100 transition hover:bg-emerald-700"
                   >
-                    Fechar
+                    <Save className="h-4 w-4" />
+                    Salvar Alterações
                   </button>
 
                   <button
@@ -2971,6 +3060,14 @@ export default function ContractsPage() {
                     className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
                   >
                     Imprimir
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleClosePrintableContract}
+                    className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                  >
+                    Fechar
                   </button>
                 </div>
               </div>
@@ -4484,6 +4581,49 @@ function buildConfiguredContractHtml(
   <main class="page">
     <div class="page-inner">
       <div class="content" contenteditable="true" spellcheck="false">${escapeHtml(renderedTemplateContent)}</div>
+    </div>
+  </main>
+</body>
+</html>`;
+}
+
+function buildCustomContentContractHtml(customContent: string, showToolbar: boolean) {
+  return `<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title></title>
+  <style>
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; }
+    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
+    .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
+    .print-button { background: #f97316; color: #ffffff; }
+    .edit-button { background: #3b82f6; color: #ffffff; }
+    .close-button { background: #f1f5f9; color: #334155; }
+    .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }
+    .page-inner { padding: 18mm; }
+    .content { white-space: pre-wrap; font-size: 12.5px; line-height: 1.65; font-weight: 600; }
+    @media print {
+      body { background: #ffffff; }
+      .toolbar { display: none; }
+      .page { width: 210mm; min-height: 297mm; margin: 0; box-shadow: none; }
+      .page-inner { padding: 18mm; }
+    }
+  </style>
+</head>
+<body>
+  ${showToolbar ? `<div class="toolbar">
+    <button class="close-button" onclick="window.close()">Fechar</button>
+    <button class="edit-button" onclick="document.querySelector('.content').focus()">Editar texto</button>
+    <button class="print-button" onclick="window.print()">Imprimir contrato</button>
+  </div>` : ""}
+
+  <main class="page">
+    <div class="page-inner">
+      <div class="content" contenteditable="true" spellcheck="false">${customContent}</div>
     </div>
   </main>
 </body>

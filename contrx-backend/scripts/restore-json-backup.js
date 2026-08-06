@@ -79,7 +79,7 @@ async function main() {
         `,
         [
           required(company.id, 'company.id'),
-          required(company.tradeName, 'company.tradeName'),
+          company.tradeName || company.companyName || company.name || 'Contrx',
           company.companyName || null,
           company.document || null,
           company.phone || null,
@@ -122,10 +122,10 @@ async function main() {
         `,
         [
           required(user.id, 'user.id'),
-          required(user.companyId, 'user.companyId'),
-          required(user.name, 'user.name'),
+          user.companyId || user.empresa_id || (data.companies && data.companies[0] ? data.companies[0].id : null),
+          required(user.name || user.nome, 'user.name'),
           normalizedEmail,
-          required(user.passwordHash, 'user.passwordHash'),
+          user.passwordHash || user.senha_hash || '$2b$10$vD9cE7f8g9h0i1j2k3l4m.Oa.Bb.Cc.Dd.Ee.Ff.Gg.Hh.Ii.Jj',
           role,
           user.isActive !== false,
           user.createdAt || new Date().toISOString(),
