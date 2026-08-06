@@ -1,35 +1,41 @@
-/*
-  Warnings:
-
-  - You are about to drop the `extratos_compartilhados` table. If the table is not empty, all the data it contains will be lost.
-
-*/
 -- CreateEnum
-CREATE TYPE "SystemFileType" AS ENUM ('IMAGE', 'PDF', 'DOCUMENT', 'OTHER');
+DO $ $
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'SystemFileType') THEN
+    CREATE TYPE "SystemFileType" AS ENUM ('IMAGE', 'PDF', 'DOCUMENT', 'OTHER');
+  END IF;
+END
+$ $;
 
 -- CreateEnum
-CREATE TYPE "SystemFileEntity" AS ENUM ('PROPERTY', 'PERSON', 'CONTRACT', 'COMPANY', 'OTHER');
+DO $ $
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'SystemFileEntity') THEN
+    CREATE TYPE "SystemFileEntity" AS ENUM ('PROPERTY', 'PERSON', 'CONTRACT', 'COMPANY', 'OTHER');
+  END IF;
+END
+$ $;
 
 -- DropForeignKey
 ALTER TABLE IF EXISTS "extratos_compartilhados" DROP CONSTRAINT IF EXISTS "extratos_compartilhados_empresa_id_fkey";
 
 -- AlterTable
-ALTER TABLE "contratos" ADD COLUMN     "contrato_assinado_pdf" TEXT;
+ALTER TABLE "contratos" ADD COLUMN IF NOT EXISTS "contrato_assinado_pdf" TEXT;
 
 -- AlterTable
-ALTER TABLE "imoveis" ADD COLUMN     "fotos" TEXT;
+ALTER TABLE "imoveis" ADD COLUMN IF NOT EXISTS "fotos" TEXT;
 
 -- AlterTable
-ALTER TABLE "pessoas" ADD COLUMN     "foto" TEXT;
+ALTER TABLE "pessoas" ADD COLUMN IF NOT EXISTS "foto" TEXT;
 
 -- AlterTable
-ALTER TABLE "usuarios" ADD COLUMN     "ultimo_login_em" TIMESTAMP(3);
+ALTER TABLE "usuarios" ADD COLUMN IF NOT EXISTS "ultimo_login_em" TIMESTAMP(3);
 
 -- DropTable
 DROP TABLE IF EXISTS "extratos_compartilhados";
 
 -- CreateTable
-CREATE TABLE "chamados_suporte" (
+CREATE TABLE IF NOT EXISTS "chamados_suporte" (
     "id" TEXT NOT NULL,
     "usuario_id" TEXT NOT NULL,
     "empresa_id" TEXT NOT NULL,
@@ -44,7 +50,7 @@ CREATE TABLE "chamados_suporte" (
 );
 
 -- CreateTable
-CREATE TABLE "impressos_compartilhados" (
+CREATE TABLE IF NOT EXISTS "impressos_compartilhados" (
     "id" TEXT NOT NULL,
     "empresa_id" TEXT NOT NULL,
     "conta_bancaria_id" TEXT,
@@ -64,7 +70,7 @@ CREATE TABLE "impressos_compartilhados" (
 );
 
 -- CreateTable
-CREATE TABLE "arquivos_sistema" (
+CREATE TABLE IF NOT EXISTS "arquivos_sistema" (
     "id" TEXT NOT NULL,
     "empresa_id" TEXT NOT NULL,
     "tipo_entidade" "SystemFileEntity" NOT NULL,
@@ -80,28 +86,53 @@ CREATE TABLE "arquivos_sistema" (
 );
 
 -- CreateIndex
-CREATE INDEX "chamados_suporte_usuario_id_idx" ON "chamados_suporte"("usuario_id");
+CREATE INDEX IF NOT EXISTS "chamados_suporte_usuario_id_idx" ON "chamados_suporte"("usuario_id");
 
 -- CreateIndex
-CREATE INDEX "chamados_suporte_empresa_id_idx" ON "chamados_suporte"("empresa_id");
+CREATE INDEX IF NOT EXISTS "chamados_suporte_empresa_id_idx" ON "chamados_suporte"("empresa_id");
 
 -- CreateIndex
-CREATE INDEX "impressos_compartilhados_empresa_id_idx" ON "impressos_compartilhados"("empresa_id");
+CREATE INDEX IF NOT EXISTS "impressos_compartilhados_empresa_id_idx" ON "impressos_compartilhados"("empresa_id");
 
 -- CreateIndex
-CREATE INDEX "arquivos_sistema_empresa_id_idx" ON "arquivos_sistema"("empresa_id");
+CREATE INDEX IF NOT EXISTS "arquivos_sistema_empresa_id_idx" ON "arquivos_sistema"("empresa_id");
 
 -- CreateIndex
-CREATE INDEX "arquivos_sistema_tipo_entidade_entidade_id_idx" ON "arquivos_sistema"("tipo_entidade", "entidade_id");
+CREATE INDEX IF NOT EXISTS "arquivos_sistema_tipo_entidade_entidade_id_idx" ON "arquivos_sistema"("tipo_entidade", "entidade_id");
 
 -- AddForeignKey
-ALTER TABLE "chamados_suporte" ADD CONSTRAINT "chamados_suporte_usuario_id_fkey" FOREIGN KEY ("usuario_id") REFERENCES "usuarios"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $ $
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chamados_suporte_usuario_id_fkey') THEN
+    ALTER TABLE "chamados_suporte" ADD CONSTRAINT "chamados_suporte_usuario_id_fkey" FOREIGN KEY ("usuario_id") REFERENCES "usuarios"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END
+$ $;
 
 -- AddForeignKey
-ALTER TABLE "chamados_suporte" ADD CONSTRAINT "chamados_suporte_empresa_id_fkey" FOREIGN KEY ("empresa_id") REFERENCES "empresas"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $ $
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chamados_suporte_empresa_id_fkey') THEN
+    ALTER TABLE "chamados_suporte" ADD CONSTRAINT "chamados_suporte_empresa_id_fkey" FOREIGN KEY ("empresa_id") REFERENCES "empresas"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END
+$ $;
 
 -- AddForeignKey
-ALTER TABLE "impressos_compartilhados" ADD CONSTRAINT "impressos_compartilhados_empresa_id_fkey" FOREIGN KEY ("empresa_id") REFERENCES "empresas"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $ $
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'impressos_compartilhados_empresa_id_fkey') THEN
+    ALTER TABLE "impressos_compartilhados" ADD CONSTRAINT "impressos_compartilhados_empresa_id_fkey" FOREIGN KEY ("empresa_id") REFERENCES "empresas"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END
+$ $;
 
 -- AddForeignKey
-ALTER TABLE "arquivos_sistema" ADD CONSTRAINT "arquivos_sistema_empresa_id_fkey" FOREIGN KEY ("empresa_id") REFERENCES "empresas"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $ $
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'arquivos_sistema_empresa_id_fkey') THEN
+    ALTER TABLE "arquivos_sistema" ADD CONSTRAINT "arquivos_sistema_empresa_id_fkey" FOREIGN KEY ("empresa_id") REFERENCES "empresas"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END
+$ $;
+
