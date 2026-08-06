@@ -1,20 +1,20 @@
 -- CreateEnum
-DO $ $
+DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'SystemFileType') THEN
     CREATE TYPE "SystemFileType" AS ENUM ('IMAGE', 'PDF', 'DOCUMENT', 'OTHER');
   END IF;
 END
-$ $;
+$$;
 
 -- CreateEnum
-DO $ $
+DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'SystemFileEntity') THEN
     CREATE TYPE "SystemFileEntity" AS ENUM ('PROPERTY', 'PERSON', 'CONTRACT', 'COMPANY', 'OTHER');
   END IF;
 END
-$ $;
+$$;
 
 -- DropForeignKey
 ALTER TABLE IF EXISTS "extratos_compartilhados" DROP CONSTRAINT IF EXISTS "extratos_compartilhados_empresa_id_fkey";
@@ -101,38 +101,38 @@ CREATE INDEX IF NOT EXISTS "arquivos_sistema_empresa_id_idx" ON "arquivos_sistem
 CREATE INDEX IF NOT EXISTS "arquivos_sistema_tipo_entidade_entidade_id_idx" ON "arquivos_sistema"("tipo_entidade", "entidade_id");
 
 -- AddForeignKey
-DO $ $
+DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chamados_suporte_usuario_id_fkey') THEN
     ALTER TABLE "chamados_suporte" ADD CONSTRAINT "chamados_suporte_usuario_id_fkey" FOREIGN KEY ("usuario_id") REFERENCES "usuarios"("id") ON DELETE CASCADE ON UPDATE CASCADE;
   END IF;
 END
-$ $;
+$$;
 
 -- AddForeignKey
-DO $ $
+DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'chamados_suporte_empresa_id_fkey') THEN
     ALTER TABLE "chamados_suporte" ADD CONSTRAINT "chamados_suporte_empresa_id_fkey" FOREIGN KEY ("empresa_id") REFERENCES "empresas"("id") ON DELETE CASCADE ON UPDATE CASCADE;
   END IF;
 END
-$ $;
+$$;
 
 -- AddForeignKey
-DO $ $
+DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'impressos_compartilhados_empresa_id_fkey') THEN
     ALTER TABLE "impressos_compartilhados" ADD CONSTRAINT "impressos_compartilhados_empresa_id_fkey" FOREIGN KEY ("empresa_id") REFERENCES "empresas"("id") ON DELETE CASCADE ON UPDATE CASCADE;
   END IF;
 END
-$ $;
+$$;
 
 -- AddForeignKey
-DO $ $
+DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'arquivos_sistema_empresa_id_fkey') THEN
     ALTER TABLE "arquivos_sistema" ADD CONSTRAINT "arquivos_sistema_empresa_id_fkey" FOREIGN KEY ("empresa_id") REFERENCES "empresas"("id") ON DELETE CASCADE ON UPDATE CASCADE;
   END IF;
 END
-$ $;
+$$;
 
