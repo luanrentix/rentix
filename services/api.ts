@@ -222,14 +222,23 @@ export function getMediaUrl(urlInput: any): string {
 
   url = url.replace(/\\/g, '/');
 
+  if (url.includes('/uploads/')) {
+    const uploadsIndex = url.indexOf('/uploads/');
+    url = url.substring(uploadsIndex);
+  }
+
   if (
     url.startsWith('http://') ||
     url.startsWith('https://') ||
     url.startsWith('data:') ||
     url.startsWith('blob:')
   ) {
+    if (typeof window !== 'undefined' && window.location.protocol === 'https:' && url.startsWith('http://')) {
+      return url.replace('http://', 'https://');
+    }
     return url;
   }
+
   const baseUrl = getApiBaseUrl();
   const path = url.startsWith('/') ? url : `/${url}`;
   return `${baseUrl}${path}`;

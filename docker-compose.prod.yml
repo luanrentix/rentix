@@ -30,8 +30,13 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
+    volumes:
+      - uploads_data:/app/uploads
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
+
+volumes:
+  uploads_data:
