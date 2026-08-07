@@ -4,7 +4,7 @@ description: Protocolo padrão de validação local e pré-deploy para o projeto
 ---
 # Protocolo de Validação Pré-Deploy Contrx
 
-**Versão Atual Validada Localmente**: `v1.0.9` (Anterior em Produção: `v1.0.3`)
+**Versão Atual Validada Localmente**: `v1.0.10` (Anterior em Produção: `v1.0.9`)
 
 Quando o usuário disser "iniciar", "iniciar verificações", "rodar protocolo" ou similar, execute AUTOMATICAMENTE os seguintes passos em segundo plano ou sequencialmente:
 
@@ -34,8 +34,9 @@ Quando o usuário disser "iniciar", "iniciar verificações", "rodar protocolo" 
    - Incrementar/verificar a versão nos arquivos de configuração/package.json.
    - Apontar o script `C:\Users\MacOS\Documents\Contrx\ATUALIZA-VERSÃO.BAT` para atualização de versão/envio, **respeitando estritamente a regra de não enviar nada automaticamente para produção** (apenas realizar os ajustes e preparar o ambiente/script para quando você autorizar a execução manual).
 
-7. **Alerta de Atualização do Supabase**:
-   - Foram identificadas alterações recentes no `schema.prisma`. Recomenda-se rodar a Opção `[2] Atualizar Estrutura do Supabase` do script `ATUALIZA-VERSÃO.BAT` caso haja novas migrations a serem sincronizadas no banco remoto.
+7. **Verificação Obrigatória do Supabase (Banco Remoto)**:
+   - Inspecionar a pasta de migrations (`contrx-backend/prisma/migrations`) e o arquivo `schema.prisma`.
+   - Se houver novas tabelas, enums, colunas ou migrations pendentes em relação ao ambiente de produção, **destacar obrigatoriamente no relatório final com alerta visual (SIM/NÃO)** se o usuário precisará rodar a Opção `[2] Atualizar Estrutura do Supabase` do script `ATUALIZA-VERSÃO.BAT`.
 
 8. **Não Enviar Nada Automaticamente**:
    - Garantir que nada seja enviado para produção (Oracle, GitHub, Supabase) sem autorização prévia.
