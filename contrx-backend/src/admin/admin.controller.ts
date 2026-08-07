@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -14,6 +15,7 @@ import { AdminService } from './admin.service';
 import { ResetTestDataDto } from './dto/reset-test-data.dto';
 import { UpdateAdminCompanyDto } from './dto/update-admin-company.dto';
 import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
+import { CreateErrorLogDto } from './dto/create-error-log.dto';
 import { SystemOwnerGuard } from './system-owner.guard';
 
 @Controller('admin')
@@ -83,5 +85,28 @@ export class AdminController {
       data.modules,
       data.targetCompanyId,
     );
+  }
+
+  @Post('errors')
+  createErrorLog(
+    @CurrentUser() user: UsuarioAutenticado | undefined,
+    @Body() data: CreateErrorLogDto,
+  ) {
+    return this.adminService.createErrorLog(data, user?.companyId);
+  }
+
+  @Get('errors')
+  @UseGuards(SystemOwnerGuard)
+  findErrorLogs() {
+    return this.adminService.findErrorLogs();
+  }
+
+  @Delete('errors/:id')
+  @UseGuards(SystemOwnerGuard)
+  deleteErrorLog(@Param('id') id: string) {
+    if (id === 'purge' || id === 'all') {
+      return this.adminService.purgeErrorLogs();
+    }
+    return this.adminService.deleteErrorLog(id);
   }
 }

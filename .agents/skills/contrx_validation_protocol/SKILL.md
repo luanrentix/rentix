@@ -35,8 +35,9 @@ Quando o usuário disser "iniciar", "iniciar verificações", "rodar protocolo" 
    - Apontar o script `C:\Users\MacOS\Documents\Contrx\ATUALIZA-VERSÃO.BAT` para atualização de versão/envio, **respeitando estritamente a regra de não enviar nada automaticamente para produção** (apenas realizar os ajustes e preparar o ambiente/script para quando você autorizar a execução manual).
 
 7. **Verificação Obrigatória do Supabase (Banco Remoto)**:
-   - Inspecionar a pasta de migrations (`contrx-backend/prisma/migrations`) e o arquivo `schema.prisma`.
-   - Se houver novas tabelas, enums, colunas ou migrations pendentes em relação ao ambiente de produção, **destacar obrigatoriamente no relatório final com alerta visual (SIM/NÃO)** se o usuário precisará rodar a Opção `[2] Atualizar Estrutura do Supabase` do script `ATUALIZA-VERSÃO.BAT`.
+   - Inspecionar a pasta de migrations (`contrx-backend/prisma/migrations`) e verificar o status em relação ao Supabase.
+   - O backend na VPS já aplica automaticamente as migrations pendentes no Supabase ao iniciar (`node scripts/apply-pending-migrations.js`).
+   - Indicar no relatório se o banco do Supabase já está **Atualizado** ou se há novas migrations criadas no repositório.
 
 8. **Não Enviar Nada Automaticamente**:
    - Garantir que nada seja enviado para produção (Oracle, GitHub, Supabase) sem autorização prévia.

@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { ResetTestDataModule } from './dto/reset-test-data.dto';
 import type { UpdateAdminCompanyDto } from './dto/update-admin-company.dto';
 import type { UpdateAdminUserDto } from './dto/update-admin-user.dto';
+import type { CreateErrorLogDto } from './dto/create-error-log.dto';
 
 function addDays(date: Date, days: number) {
   const nextDate = new Date(date);
@@ -647,5 +648,40 @@ export class AdminService {
       modules,
       deletedRecords,
     };
+  }
+
+  async createErrorLog(data: CreateErrorLogDto, companyId?: string) {
+    return this.prisma.systemErrorLog.create({
+      data: {
+        companyId: companyId || data.userEmail || null,
+        level: data.level || 'ERROR',
+        message: data.message || 'Erro não especificado',
+        stack: data.stack || null,
+        route: data.route || null,
+        method: data.method || null,
+        statusCode: data.statusCode || 500,
+        userEmail: data.userEmail || null,
+        requestPayload: data.requestPayload || null,
+        userAgent: data.userAgent || null,
+        ipAddress: data.ipAddress || null,
+      },
+    });
+  }
+
+  async findErrorLogs() {
+    return this.prisma.systemErrorLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+  }
+
+  async deleteErrorLog(id: string) {
+    await this.prisma.systemErrorLog.delete({ where: { id } });
+    return { success: true };
+  }
+
+  async purgeErrorLogs() {
+    await this.prisma.systemErrorLog.deleteMany({});
+    return { success: true };
   }
 }

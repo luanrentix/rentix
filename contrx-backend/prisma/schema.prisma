@@ -71,6 +71,7 @@ model Company {
   supportTickets     SupportTicket[]
   sharedBankStatements SharedBankStatement[]
   systemFiles        SystemFile[]
+  errorLogs          SystemErrorLog[]
 
   @@map("empresas")
 }
@@ -652,4 +653,26 @@ model SystemFile {
   @@index([companyId])
   @@index([entityType, entityId])
   @@map("arquivos_sistema")
+}
+
+model SystemErrorLog {
+  id             String   @id @default(uuid())
+  companyId      String?  @map("empresa_id")
+  level          String   @default("ERROR") @map("nivel")
+  message        String   @map("mensagem")
+  stack          String?  @map("stack_trace")
+  route          String?  @map("rota")
+  method         String?  @map("metodo")
+  statusCode     Int?     @map("status_code")
+  userEmail      String?  @map("email_usuario")
+  requestPayload String?  @map("payload_requisicao")
+  userAgent      String?  @map("user_agent")
+  ipAddress      String?  @map("ip")
+  createdAt      DateTime @default(now()) @map("criado_em")
+
+  company        Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([createdAt])
+  @@map("error")
 }
