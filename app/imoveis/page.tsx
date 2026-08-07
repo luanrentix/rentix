@@ -2264,7 +2264,7 @@ export default function PropertiesPage() {
                       {companySettings.logo ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={companySettings.logo}
+                          src={getMediaUrl(companySettings.logo)}
                           alt="Logo da empresa"
                           className="h-16 w-16 rounded-2xl object-contain print:h-12 print:w-12 print:rounded-lg"
                         />
@@ -2512,8 +2512,7 @@ export default function PropertiesPage() {
                       ) : (
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                           {allPropertyPhotos.map((photo, index) => {
-                            const rawUrl = typeof photo === "string" ? photo : photo?.url || photo?.filePath || photo?.path || photo?.fileUrl || "";
-                            const resolvedUrl = getMediaUrl(rawUrl || photo);
+                            const resolvedUrl = getMediaUrl(photo);
                             return (
                               <div key={photo.id || index} className="group relative aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm transition hover:shadow-md">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}

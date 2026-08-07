@@ -1,30 +1,43 @@
+function isLocalApiUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+  } catch {
+    return value.includes('localhost') || value.includes('127.0.0.1');
+  }
+}
+
 function getApiBaseUrl() {
   const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
   const isBrowser = typeof window !== 'undefined';
   const productionApiUrl = 'https://api.contrx.com.br';
-  const isLocalhost =
-    isBrowser &&
-    (window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1');
 
-  function isLocalApiUrl(value: string) {
-    try {
-      const url = new URL(value);
+  if (isBrowser) {
+    const currentHost = window.location.hostname;
+    const currentProtocol = window.location.protocol;
+    const isLocalhost = currentHost === 'localhost' || currentHost === '127.0.0.1';
 
-      return url.hostname === 'localhost' || url.hostname === '127.0.0.1';
-    } catch {
-      return value.includes('localhost') || value.includes('127.0.0.1');
+    if (configuredApiUrl) {
+      const cleanConfig = configuredApiUrl.replace(/\/$/, '');
+      if (isLocalApiUrl(cleanConfig)) {
+        try {
+          const parsed = new URL(cleanConfig);
+          const port = parsed.port ? `:${parsed.port}` : ':3001';
+          return `${currentProtocol}//${currentHost}${port}`;
+        } catch {
+          return `${currentProtocol}//${currentHost}:3001`;
+        }
+      }
+      return cleanConfig;
+    }
+
+    if (isLocalhost || currentHost.startsWith('192.168.') || currentHost.startsWith('10.')) {
+      return `${currentProtocol}//${currentHost}:3001`;
     }
   }
 
   if (configuredApiUrl) {
-    if (isLocalhost || !isLocalApiUrl(configuredApiUrl)) {
-      return configuredApiUrl.replace(/\/$/, '');
-    }
-  }
-
-  if (isLocalhost) {
-    return 'http://localhost:3001';
+    return configuredApiUrl.replace(/\/$/, '');
   }
 
   return productionApiUrl;
@@ -200,12 +213,15 @@ export async function apiFetch<TResponse>(
 
 export function getMediaUrl(urlInput: any): string {
   if (!urlInput) return '';
-  const url =
+  let url =
     typeof urlInput === 'string'
       ? urlInput
-      : urlInput.url || urlInput.filePath || urlInput.path || urlInput.fileUrl || '';
+      : urlInput.url || urlInput.filePath || urlInput.path || urlInput.fileUrl || urlInput.photo || urlInput.src || '';
 
   if (!url || typeof url !== 'string') return '';
+
+  url = url.replace(/\\/g, '/');
+
   if (
     url.startsWith('http://') ||
     url.startsWith('https://') ||
