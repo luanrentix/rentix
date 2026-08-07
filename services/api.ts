@@ -180,10 +180,37 @@ export async function apiFetch<TResponse>(
       throw new SessionReplacedError(sessionMessage);
     }
 
+    if (response.status >= 500 && !endpoint.includes('/admin/errors')) {
+      import('./system-logs.service').then(({ reportSystemErrorLog }) => {
+        reportSystemErrorLog({
+          level: 'CRITICAL',
+          module: endpoint.split('/')[1]?.toUpperCase() || 'API',
+          message: String(errorMessage),
+          httpMethod: options.method || 'GET',
+          endpoint,
+        }).catch(() => null);
+      }).catch(() => null);
+    }
+
     throw new Error(errorMessage);
   }
 
   return response.json() as Promise<TResponse>;
+}
+
+export function getMediaUrl(url: any): string {
+  if (!url || typeof url !== 'string') return '';
+  if (
+    url.startsWith('http://') ||
+    url.startsWith('https://') ||
+    url.startsWith('data:') ||
+    url.startsWith('blob:')
+  ) {
+    return url;
+  }
+  const baseUrl = getApiBaseUrl();
+  const path = url.startsWith('/') ? url : `/${url}`;
+  return `${baseUrl}${path}`;
 }
 
 export async function checkApiHealth(): Promise<boolean> {

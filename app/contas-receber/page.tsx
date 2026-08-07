@@ -3751,18 +3751,17 @@ export default function AccountsReceivablePage() {
     await handleAfterContractCarnetGenerated(contractId);
   }
 
-  function redirectToContractsPage() {
+  function redirectToContractsPage(targetContractId?: string | null) {
     window.location.href = "/contratos";
   }
 
   function closeContractPrintQuestion() {
     setPendingContractPrintRequest(null);
-    redirectToContractsPage();
   }
 
   function closeContractScheduleNotice() {
     setPendingContractScheduleNotice(null);
-    redirectToContractsPage();
+    redirectToContractsPage(focusedContractId);
   }
 
   function closeContractCarnetQuestion() {
@@ -4024,8 +4023,25 @@ export default function AccountsReceivablePage() {
     }, templateContent);
   }
 
-  function buildConfiguredContractPrintHtml(templateContent: string, templateData: Record<string, string>) {
-    const renderedTemplateContent = renderContractPrintTemplate(templateContent, templateData);
+  function buildConfiguredContractPrintHtml(
+    templateContent: string,
+    templateData: Record<string, string>,
+    contractId = ""
+  ) {
+    const cid = String(contractId || "");
+    const key = `contrx_custom_contract_content_${cid}`;
+
+    let initialContent = "";
+    if (cid) {
+      const saved = getCompanyStorageItem(companyId, key, key) || localStorage.getItem(key);
+      if (saved) {
+        initialContent = saved;
+      }
+    }
+
+    if (!initialContent) {
+      initialContent = renderContractPrintTemplate(templateContent, templateData);
+    }
 
     return `<!doctype html>
 <html lang="pt-BR">
@@ -4040,32 +4056,90 @@ export default function AccountsReceivablePage() {
     @page { size: A4; margin: 0; }
     * { box-sizing: border-box; }
     body { margin: 0; background: #eef2f7; color: #111827; font-family: 'Outfit', Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
-    .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
+    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s ease; }
     .print-button { background: #f97316; color: #ffffff; }
+    .print-button:hover { background: #ea580c; }
+    .save-button { background: #10b981; color: #ffffff; }
+    .save-button:hover { background: #059669; }
+    .edit-button { background: #2563eb; color: #ffffff; }
+    .edit-button:hover { background: #1d4ed8; }
     .close-button { background: #f1f5f9; color: #334155; }
-    .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }
+    .close-button:hover { background: #e2e8f0; }
+    .toast-msg { position: fixed; bottom: 24px; right: 24px; z-index: 9999; background: #10b981; color: #ffffff; padding: 14px 20px; border-radius: 14px; font-weight: 800; font-size: 14px; box-shadow: 0 10px 25px rgba(16,185,129,0.3); display: none; }
+    .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); border-radius: 8px; }
     .page-inner { padding: 18mm; }
-    .content { white-space: pre-wrap; font-size: 12.5px; line-height: 1.65; font-weight: 600; }
+    .content { white-space: pre-wrap; font-size: 12.5px; line-height: 1.65; font-weight: 600; outline: none; border: 2px transparent dashed; padding: 4px; border-radius: 6px; }
+    .content:focus { border-color: #3b82f6; background-color: #faf5ff; }
     @media print {
       body { background: #ffffff; }
-      .toolbar { display: none; }
-      .page { width: 210mm; min-height: 297mm; margin: 0; box-shadow: none; }
+      .toolbar, .toast-msg { display: none !important; }
+      .page { width: 210mm; min-height: 297mm; margin: 0; box-shadow: none; border-radius: 0; }
       .page-inner { padding: 18mm; }
+      .content { border: none !important; background: transparent !important; }
     }
   </style>
 </head>
 <body>
   <div class="toolbar">
     <button class="close-button" type="button" onclick="window.close()">Fechar</button>
+    <button id="toggleEditSaveBtn" class="edit-button" type="button" onclick="handleToggleEditSave()">Editar Minuta</button>
     <button class="print-button" type="button" onclick="window.print()">Imprimir contrato</button>
   </div>
 
+  <div id="toast" class="toast-msg">✅ Edição salva com sucesso especificamente para este contrato!</div>
+
   <main class="page">
     <div class="page-inner">
-      <div class="content">${escapeHtml(renderedTemplateContent)}</div>
+      <div class="content" contenteditable="false" spellcheck="false">${escapeHtml(initialContent)}</div>
     </div>
   </main>
+
+  <script>
+    function showToast(msg) {
+      var toast = document.getElementById('toast');
+      if (toast) {
+        toast.textContent = msg;
+        toast.style.display = 'block';
+        setTimeout(function() { toast.style.display = 'none'; }, 3500);
+      }
+    }
+
+    function handleToggleEditSave() {
+      var btn = document.getElementById('toggleEditSaveBtn');
+      var contentEl = document.querySelector('.content');
+      if (!btn || !contentEl) return;
+
+      var isEditing = btn.getAttribute('data-editing') === 'true';
+
+      if (!isEditing) {
+        btn.setAttribute('data-editing', 'true');
+        btn.textContent = 'Salvar Edição';
+        btn.className = 'save-button';
+        contentEl.setAttribute('contenteditable', 'true');
+        contentEl.focus();
+      } else {
+        var editedContent = contentEl.innerHTML || contentEl.textContent || '';
+        var cid = '${cid}';
+        if (cid) {
+          var key = 'contrx_custom_contract_content_' + cid;
+          try {
+            localStorage.setItem(key, editedContent);
+          } catch(e) {}
+          if (window.opener) {
+            try {
+              window.opener.postMessage({ type: 'SAVE_CONTRACT_CUSTOM_CONTENT', contractId: cid, content: editedContent }, '*');
+            } catch(e) {}
+          }
+        }
+        btn.setAttribute('data-editing', 'false');
+        btn.textContent = 'Editar Minuta';
+        btn.className = 'edit-button';
+        contentEl.setAttribute('contenteditable', 'false');
+        showToast('✅ Edição salva com sucesso especificamente para este contrato!');
+      }
+    }
+  </script>
 </body>
 </html>`;
   }
@@ -4215,7 +4289,7 @@ export default function AccountsReceivablePage() {
         ? getConfiguredTemporaryContractTemplateContentForReceivable() || DEFAULT_SETTINGS_TEMPORARY_CONTRACT_CONTENT
         : getConfiguredStandardContractTemplateContentForReceivable() || ORIGINAL_STANDARD_RESIDENTIAL_CONTRACT_TEMPLATE;
 
-    return buildConfiguredContractPrintHtml(templateContent, templateData);
+    return buildConfiguredContractPrintHtml(templateContent, templateData, contract.id);
   }
 
   function openContractPrintWindow(contract: Contract) {

@@ -209,7 +209,7 @@ export class ContratosService {
         include: this.defaultInclude,
       });
 
-      await this.cancelContractDueScheduleItem(tx, contract);
+      await this.deleteContractScheduleItems(tx, contract);
 
       return contract;
     });
@@ -519,7 +519,7 @@ export class ContratosService {
         contract.id,
         contract.companyId,
       );
-      await this.cancelContractDueScheduleItem(tx, contract);
+      await this.deleteContractScheduleItems(tx, contract);
       return;
     }
 
@@ -606,6 +606,42 @@ export class ContratosService {
       data: {
         companyId: contract.companyId,
         ...data,
+      },
+    });
+  }
+
+  private async deleteContractScheduleItems(
+    tx: Prisma.TransactionClient,
+    contract: Contract,
+  ) {
+    const scheduleMarker = this.getContractDueScheduleMarker(contract.id);
+
+    const conditions: Prisma.ScheduleItemWhereInput[] = [
+      { notes: { contains: scheduleMarker } },
+      { notes: { contains: `Contrato: ${contract.id}` } },
+      { notes: { contains: contract.id } },
+    ];
+
+    if (contract.tenantName && contract.propertyName) {
+      conditions.push({
+        type: 'Contrato',
+        customerName: contract.tenantName,
+        propertyName: contract.propertyName,
+      });
+    }
+
+    if (contract.tenantId && contract.propertyId) {
+      conditions.push({
+        type: 'Contrato',
+        personId: contract.tenantId,
+        propertyId: contract.propertyId,
+      });
+    }
+
+    await tx.scheduleItem.deleteMany({
+      where: {
+        companyId: contract.companyId,
+        OR: conditions,
       },
     });
   }

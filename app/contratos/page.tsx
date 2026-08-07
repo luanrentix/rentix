@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   Ban,
   ChevronDown,
+  Check,
   CheckCircle,
   Clock,
   DollarSign,
@@ -22,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { getMediaUrl } from "@/services/api";
 import Link from "next/link";
 import {
   createContract,
@@ -54,6 +56,7 @@ import {
 import {
   getCompanyStorageItem,
   setCompanyStorageItem,
+  removeCompanyStorageItem,
 } from "@/services/company-storage";
 import {
   clearMinimizedModalState,
@@ -308,6 +311,16 @@ export default function ContractsPage() {
   const [contractSignedPdfFile, setContractSignedPdfFile] = useState<File | null>(null);
   const [uploadedContractSignedPdf, setUploadedContractSignedPdf] = useState<any>(null);
   const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+  const [completionModal, setCompletionModal] = useState<{
+    icon?: string;
+    title: string;
+    description: string;
+    itemTitle?: string;
+    itemDetail?: string;
+  } | null>(null);
+  const [draftCustomContent, setDraftCustomContent] = useState<string | null>(null);
+  const [isPreviewingNewContract, setIsPreviewingNewContract] = useState(false);
+  const [isEditingPrintableMinuta, setIsEditingPrintableMinuta] = useState(false);
 
   const isEditing = editingContractId !== null;
   const companyId = user?.companyId;
@@ -335,6 +348,40 @@ export default function ContractsPage() {
       setUploadedContractSignedPdf(null);
     }
   }, [selectedContractDetails]);
+
+  useEffect(() => {
+    function handleWindowMessage(event: MessageEvent) {
+      if (event.data && event.data.type === "SAVE_CONTRACT_CUSTOM_CONTENT") {
+        const { contractId, content } = event.data;
+        if (contractId && contractId !== "draft_new_contract") {
+          saveContractCustomContent(contractId, content);
+        } else {
+          setDraftCustomContent(content);
+        }
+        setCompletionModal({
+          icon: "📝",
+          title: "Edição salva com sucesso!",
+          description: "As alterações do texto foram salvas especificamente para este contrato.",
+        });
+      }
+    }
+    window.addEventListener("message", handleWindowMessage);
+    return () => window.removeEventListener("message", handleWindowMessage);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !isLoaded || contracts.length === 0) return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetId = urlParams.get("openContractId");
+    if (targetId) {
+      const targetContract = contracts.find((c) => String(c.id) === String(targetId));
+      if (targetContract) {
+        setPrintableContract(targetContract);
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, "", newUrl);
+      }
+    }
+  }, [isLoaded, contracts]);
 
   useEffect(() => {
     const active = true;
@@ -597,19 +644,13 @@ export default function ContractsPage() {
   }
 
   function resetForm() {
-    clearMinimizedModalState("contracts");
+    setEditingContractId(null);
     setPropertyId("");
     setTenantId("");
     setStartDate("");
     setEndDate("");
     setRentValue("");
     setIsTemporaryRental(false);
-    setCheckInTime("");
-    setCheckOutTime("");
-    setIsDefaultTimeModalOpen(false);
-    setFormError("");
-    setEditingContractId(null);
-    setPendingStatusChange(null);
     setStatusReason("");
     setStatusReasonError("");
     setRenewalContract(null);
@@ -625,6 +666,9 @@ export default function ContractsPage() {
     setSelectedContractDetails(null);
     setContractDetailsActiveTab("Data");
     setIsSavingContract(false);
+    setDraftCustomContent(null);
+    setIsPreviewingNewContract(false);
+    removeSavedContractCustomContent("draft_new_contract");
     setIsFormMinimized(false);
     setIsFormOpen(false);
   }
@@ -679,6 +723,8 @@ export default function ContractsPage() {
 
   function handleOpenCreateForm() {
     resetForm();
+    removeSavedContractCustomContent("draft_new_contract");
+    setDraftCustomContent(null);
     setIsFormOpen(true);
   }
 
@@ -924,12 +970,14 @@ export default function ContractsPage() {
       return;
     }
 
+    const isDeleted = pendingStatusChange.nextStatus === "Deleted";
+    const targetContract = pendingStatusChange.contract;
+
     try {
       setIsApplyingStatusChange(true);
-      const savedContract =
-        pendingStatusChange.nextStatus === "Deleted"
-          ? await softDeleteContract(pendingStatusChange.contract.id, cleanReason)
-          : await cancelContract(pendingStatusChange.contract.id, cleanReason);
+      const savedContract = isDeleted
+        ? await softDeleteContract(targetContract.id, cleanReason)
+        : await cancelContract(targetContract.id, cleanReason);
       const nextContract = mapApiContractToContract(savedContract);
 
       setContracts((currentContracts) =>
@@ -947,25 +995,33 @@ export default function ContractsPage() {
 
       registerPropertyMovementFromContract(
         nextContract,
-        pendingStatusChange.nextStatus === "Deleted" ? "ContractDeleted" : "ContractCanceled",
-        pendingStatusChange.nextStatus === "Deleted"
+        isDeleted ? "ContractDeleted" : "ContractCanceled",
+        isDeleted
           ? "Contrato marcado como excluído e parcelas em aberto removidas."
           : "Contrato cancelado e parcelas em aberto removidas.",
       );
+
+      setIsApplyingStatusChange(false);
+      setPendingStatusChange(null);
+      setStatusReason("");
+      setStatusReasonError("");
+
+      setCompletionModal({
+        icon: "✅",
+        title: isDeleted ? "Contrato excluído com sucesso" : "Contrato cancelado com sucesso",
+        description: isDeleted
+          ? "O contrato foi excluído com sucesso e as contas e agendamentos vinculados a ele também foram excluídos do sistema."
+          : "O contrato foi cancelado com sucesso e as contas em aberto vinculadas a ele foram removidas do sistema.",
+        itemTitle: targetContract.propertyName || "Contrato de locação",
+        itemDetail: targetContract.tenantName ? `Inquilino: ${targetContract.tenantName}` : undefined,
+      });
     } catch (error) {
       setStatusReasonError(
         error instanceof Error
-           ? error.message
+          ? error.message
           : "Não foi possível atualizar o status do contrato.",
       );
-      setIsApplyingStatusChange(false);
-      return;
     }
-
-    setIsApplyingStatusChange(false);
-    setPendingStatusChange(null);
-    setStatusReason("");
-    setStatusReasonError("");
   }
 
   function handleCancelStatusReason() {
@@ -1199,6 +1255,16 @@ export default function ContractsPage() {
         error instanceof Error ? error.message : "Não foi possível criar o contrato."
       );
       return;
+    }
+
+    const createdId = String(newContract.id || "");
+    if (draftCustomContent) {
+      if (createdId) {
+        saveContractCustomContent(createdId, draftCustomContent);
+      }
+      if (newContract.propertyId) {
+        saveContractCustomContent(`prop_${newContract.propertyId}`, draftCustomContent);
+      }
     }
 
     const updatedContracts = [newContract, ...contracts];
@@ -1702,66 +1768,132 @@ export default function ContractsPage() {
 
   function getSavedContractCustomContent(contractId: string): string | null {
     if (typeof window === "undefined" || !contractId) return null;
-    return localStorage.getItem(`contrx_custom_contract_content_${contractId}`);
+    const cid = String(contractId);
+    const key = `contrx_custom_contract_content_${cid}`;
+
+    const scopedVal = getCompanyStorageItem(companyId, key, key);
+    if (scopedVal) return scopedVal;
+
+    const directVal = localStorage.getItem(key);
+    if (directVal) return directVal;
+
+    return null;
   }
 
   function saveContractCustomContent(contractId: string, content: string) {
     if (typeof window === "undefined" || !contractId) return;
-    localStorage.setItem(`contrx_custom_contract_content_${contractId}`, content);
+    const cid = String(contractId);
+    const key = `contrx_custom_contract_content_${cid}`;
+
+    setCompanyStorageItem(companyId, key, content);
+    localStorage.setItem(key, content);
   }
 
   function removeSavedContractCustomContent(contractId: string) {
     if (typeof window === "undefined" || !contractId) return;
-    localStorage.removeItem(`contrx_custom_contract_content_${contractId}`);
+    const cid = String(contractId);
+    const key = `contrx_custom_contract_content_${cid}`;
+
+    removeCompanyStorageItem(companyId, key);
+    localStorage.removeItem(key);
   }
 
   function handleOpenPrintableContract(contract: Contract) {
     setPrintableContract(contract);
   }
 
-  function handleSavePrintableContractEdits() {
+  function handleOpenNewContractPreview() {
+    if (!propertyId || !tenantId || !startDate || !endDate || !rentValue) {
+      setFormError("Preencha o Bem/Ativo, Inquilino/Pessoa, Valor e Período antes de visualizar ou editar a minuta.");
+      return;
+    }
+
+    const selectedProperty = availableProperties.find((p) => String(p.id) === String(propertyId));
+    const selectedTenant = tenants.find((t) => String(t.id) === String(tenantId));
+
+    const draftContract: Contract = {
+      id: editingContractId ? editingContractId : "draft_new_contract",
+      propertyId,
+      tenantId,
+      propertyName: selectedProperty?.name || "Bem/Ativo",
+      tenantName: selectedTenant?.name || "Pessoa",
+      startDate,
+      endDate,
+      rentValue: parseCurrencyInput(rentValue),
+      status: "Active",
+      isTemporaryRental: Boolean(isTemporaryRental),
+      checkInTime: isTemporaryRental ? checkInTime : undefined,
+      checkOutTime: isTemporaryRental ? checkOutTime : undefined,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setPrintableContract(draftContract);
+    setIsPreviewingNewContract(true);
+  }
+
+  function syncPrintableContractEditsFromIframe() {
     if (!printableContract || !printableContractFrameRef.current) return;
     try {
       const doc = printableContractFrameRef.current.contentDocument;
       const contentEl = doc?.querySelector(".content");
       if (contentEl) {
         const editedContent = contentEl.innerHTML || contentEl.textContent || "";
-        saveContractCustomContent(printableContract.id, editedContent);
-        alert("Edição salva com sucesso especificamente para este contrato!");
+        if (editedContent.trim()) {
+          setDraftCustomContent(editedContent);
+          saveContractCustomContent(printableContract.id, editedContent);
+          if (printableContract.propertyId) {
+            saveContractCustomContent(`prop_${printableContract.propertyId}`, editedContent);
+          }
+          if (printableContract.id === "draft_new_contract" || isPreviewingNewContract) {
+            saveContractCustomContent("draft_new_contract", editedContent);
+          }
+        }
       }
     } catch (err) {
-      console.error("Erro ao salvar alterações do contrato:", err);
+      console.error("Erro ao sincronizar edições da minuta do contrato:", err);
     }
+  }
+
+  function handleSavePrintableContractEdits() {
+    if (!printableContract) return;
+    syncPrintableContractEditsFromIframe();
+    setCompletionModal({
+      icon: "📝",
+      title: "Edição salva com sucesso!",
+      description: "As alterações do texto foram salvas especificamente para este contrato.",
+      itemTitle: printableContract.propertyName || "Contrato de locação",
+      itemDetail: printableContract.tenantName || undefined,
+    });
   }
 
   function handleResetPrintableContractEdits() {
     if (!printableContract) return;
+    setDraftCustomContent(null);
     removeSavedContractCustomContent(printableContract.id);
+    if (printableContract.propertyId) {
+      removeSavedContractCustomContent(`prop_${printableContract.propertyId}`);
+    }
+    removeSavedContractCustomContent("draft_new_contract");
     if (printableContractFrameRef.current) {
       printableContractFrameRef.current.setAttribute(
         "srcdoc",
         buildPrintableContractHtml(printableContract, false)
       );
     }
-    alert("Texto do contrato restaurado para o modelo padrão do sistema.");
+    setCompletionModal({
+      icon: "🔄",
+      title: "Texto restaurado!",
+      description: "O texto do contrato foi restaurado para o modelo padrão do sistema.",
+      itemTitle: printableContract.propertyName || "Contrato de locação",
+    });
   }
 
   function handleClosePrintableContract() {
-    if (printableContract && printableContractFrameRef.current) {
-      try {
-        const doc = printableContractFrameRef.current.contentDocument;
-        const contentEl = doc?.querySelector(".content");
-        if (contentEl) {
-          const editedContent = contentEl.innerHTML || contentEl.textContent || "";
-          if (editedContent.trim()) {
-            saveContractCustomContent(printableContract.id, editedContent);
-          }
-        }
-      } catch (err) {
-        console.error("Erro ao auto-salvar contrato ao fechar:", err);
-      }
-    }
+    syncPrintableContractEditsFromIframe();
     setPrintableContract(null);
+    setIsPreviewingNewContract(false);
+    setIsEditingPrintableMinuta(false);
   }
 
   function handleOpenPrintableAdendum(contract: Contract, renewal: ContractRenewalRecord) {
@@ -1773,27 +1905,31 @@ export default function ContractsPage() {
   }
 
   function handlePrintPrintableContract() {
-    const printableFrameWindow = printableContractFrameRef.current?.contentWindow;
+    if (!printableContract) return;
+    syncPrintableContractEditsFromIframe();
 
-    if (!printableFrameWindow) {
-      alert("Não foi possível carregar a visualização do contrato para impressão.");
-      return;
+    const htmlContent = buildPrintableContractHtml(printableContract, true);
+    const printWin = window.open("", "_blank", "width=1000,height=900");
+    if (printWin) {
+      printWin.document.open();
+      printWin.document.write(htmlContent);
+      printWin.document.close();
+      printWin.focus();
     }
-
-    printableFrameWindow.focus();
-    printableFrameWindow.print();
   }
 
   function handleGeneratePrintableContractPdf() {
-    const printableFrameWindow = printableContractFrameRef.current?.contentWindow;
+    if (!printableContract) return;
+    syncPrintableContractEditsFromIframe();
 
-    if (!printableFrameWindow) {
-      alert("Não foi possível carregar a visualização do contrato para gerar o PDF.");
-      return;
+    const htmlContent = buildPrintableContractHtml(printableContract, true);
+    const printWin = window.open("", "_blank", "width=1000,height=900");
+    if (printWin) {
+      printWin.document.open();
+      printWin.document.write(htmlContent);
+      printWin.document.close();
+      printWin.focus();
     }
-
-    printableFrameWindow.focus();
-    printableFrameWindow.print();
   }
 
   function getPropertyForContract(contract: Contract) {
@@ -1834,10 +1970,16 @@ export default function ContractsPage() {
   function buildPrintableContractHtml(contract: Contract, showToolbar = false) {
     const contractProperty = getPropertyForContract(contract);
     const contractTenant = tenants.find((tenant) => String(tenant.id) === String(contract.tenantId));
-    const savedCustomText = getSavedContractCustomContent(contract.id);
+
+    const savedCustomText =
+      getSavedContractCustomContent(contract.id) ||
+      (contract.propertyId ? getSavedContractCustomContent(`prop_${contract.propertyId}`) : null) ||
+      (contract.id === "draft_new_contract" || (isPreviewingNewContract && contract.id === editingContractId)
+        ? draftCustomContent
+        : null);
 
     if (savedCustomText) {
-      return buildCustomContentContractHtml(savedCustomText, showToolbar);
+      return buildCustomContentContractHtml(savedCustomText, showToolbar, contract.id);
     }
 
     if (contractProperty && contractProperty.assetCategory !== "PROPERTY") {
@@ -2668,7 +2810,7 @@ export default function ContractsPage() {
                                   <p className="text-sm font-bold text-slate-700 truncate">{uploadedContractSignedPdf.filename}</p>
                                 </div>
                                 <a
-                                  href={process.env.NEXT_PUBLIC_API_URL + uploadedContractSignedPdf.url}
+                                  href={getMediaUrl(uploadedContractSignedPdf.url)}
                                   target="_blank"
                                   rel="noreferrer"
                                   className="text-sm font-black text-blue-600 hover:underline"
@@ -3025,26 +3167,39 @@ export default function ContractsPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  {getSavedContractCustomContent(printableContract.id) && (
+                  {!isEditingPrintableMinuta ? (
                     <button
                       type="button"
-                      onClick={handleResetPrintableContractEdits}
-                      className="flex items-center gap-2 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm font-black text-amber-800 transition hover:bg-amber-100"
-                      title="Restaurar o texto deste contrato para o padrão do sistema"
+                      onClick={() => {
+                        setIsEditingPrintableMinuta(true);
+                        if (printableContractFrameRef.current) {
+                          try {
+                            const doc = printableContractFrameRef.current.contentDocument;
+                            const contentEl = doc?.querySelector(".content") as HTMLElement;
+                            if (contentEl) {
+                              contentEl.focus();
+                            }
+                          } catch {}
+                        }
+                      }}
+                      className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-md shadow-blue-100 transition hover:bg-blue-700"
                     >
-                      <RotateCcw className="h-4 w-4" />
-                      Restaurar Padrão
+                      <Pencil className="h-4 w-4" />
+                      Editar Minuta
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSavePrintableContractEdits();
+                        setIsEditingPrintableMinuta(false);
+                      }}
+                      className="flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow-md shadow-emerald-100 transition hover:bg-emerald-700"
+                    >
+                      <Save className="h-4 w-4" />
+                      Salvar Edição
                     </button>
                   )}
-
-                  <button
-                    type="button"
-                    onClick={handleSavePrintableContractEdits}
-                    className="flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow-md shadow-emerald-100 transition hover:bg-emerald-700"
-                  >
-                    <Save className="h-4 w-4" />
-                    Salvar Alterações
-                  </button>
 
                   <button
                     type="button"
@@ -3260,6 +3415,17 @@ export default function ContractsPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {completionModal && (
+          <AlertModal
+            icon={completionModal.icon || "✅"}
+            title={completionModal.title}
+            description={completionModal.description}
+            itemTitle={completionModal.itemTitle}
+            itemDetail={completionModal.itemDetail}
+            onClose={() => setCompletionModal(null)}
+          />
         )}
 
 
@@ -4232,7 +4398,8 @@ function buildStandardResidentialContractHtml(
   return buildConfiguredContractHtml(
     configuredTemplateContent || ORIGINAL_STANDARD_RESIDENTIAL_CONTRACT_TEMPLATE,
     templateData,
-    showToolbar
+    showToolbar,
+    contract.id
   );
 }
 
@@ -4321,7 +4488,8 @@ function buildAssetContractHtml(
   return buildConfiguredContractHtml(
     configuredTemplateContent || DEFAULT_ASSET_CONTRACT_TEMPLATE,
     templateData,
-    showToolbar
+    showToolbar,
+    contract.id
   );
 }
 
@@ -4414,7 +4582,8 @@ function buildTemporaryRentalContractHtml(
   return buildConfiguredTemporaryContractHtml(
     configuredTemplateContent || DEFAULT_SETTINGS_TEMPORARY_CONTRACT_CONTENT,
     templateData,
-    showToolbar
+    showToolbar,
+    contract.id
   );
 }
 
@@ -4541,7 +4710,8 @@ function getConfiguredAssetContractTemplateContent() {
 function buildConfiguredContractHtml(
   templateContent: string,
   templateData: TemplateData,
-  showToolbar: boolean
+  showToolbar: boolean,
+  contractId = ""
 ) {
   const renderedTemplateContent = renderTemporaryContractTemplate(templateContent, templateData);
 
@@ -4558,6 +4728,7 @@ function buildConfiguredContractHtml(
     .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
     .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
     .print-button { background: #f97316; color: #ffffff; }
+    .save-button { background: #10b981; color: #ffffff; }
     .edit-button { background: #3b82f6; color: #ffffff; }
     .close-button { background: #f1f5f9; color: #334155; }
     .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }
@@ -4575,6 +4746,7 @@ function buildConfiguredContractHtml(
   ${showToolbar ? `<div class="toolbar">
     <button class="close-button" onclick="window.close()">Fechar</button>
     <button class="edit-button" onclick="document.querySelector('.content').focus()">Editar texto</button>
+    <button class="save-button" onclick="saveCustomContractEdits()">Salvar alteração neste contrato</button>
     <button class="print-button" onclick="window.print()">Imprimir contrato</button>
   </div>` : ""}
 
@@ -4583,11 +4755,37 @@ function buildConfiguredContractHtml(
       <div class="content" contenteditable="true" spellcheck="false">${escapeHtml(renderedTemplateContent)}</div>
     </div>
   </main>
+  <script>
+    function saveCustomContractEdits() {
+      var contentEl = document.querySelector('.content');
+      if (!contentEl) return;
+      var editedContent = contentEl.innerHTML || contentEl.textContent || '';
+      if (window.opener) {
+        window.opener.postMessage({ type: 'SAVE_CONTRACT_CUSTOM_CONTENT', contractId: '${contractId}', content: editedContent }, '*');
+      }
+      showToast('Edição salva com sucesso especificamente para este contrato!');
+    }
+
+    function showToast(msg) {
+      var existing = document.getElementById('contrx-toast');
+      if (existing) existing.remove();
+      var toast = document.createElement('div');
+      toast.id = 'contrx-toast';
+      toast.innerHTML = '<span style="font-size:20px;">📝</span><span>' + msg + '</span>';
+      toast.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;background:#0f172a;color:#ffffff;padding:16px 24px;border-radius:18px;font-family:sans-serif;font-size:14px;font-weight:800;display:flex;align-items:center;gap:12px;box-shadow:0 20px 40px rgba(0,0,0,0.3);transition:all 0.3s ease;';
+      document.body.appendChild(toast);
+      setTimeout(function() {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(12px)';
+        setTimeout(function() { toast.remove(); }, 300);
+      }, 3200);
+    }
+  </script>
 </body>
 </html>`;
 }
 
-function buildCustomContentContractHtml(customContent: string, showToolbar: boolean) {
+function buildCustomContentContractHtml(customContent: string, showToolbar: boolean, contractId = "") {
   return `<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -4601,6 +4799,7 @@ function buildCustomContentContractHtml(customContent: string, showToolbar: bool
     .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
     .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
     .print-button { background: #f97316; color: #ffffff; }
+    .save-button { background: #10b981; color: #ffffff; }
     .edit-button { background: #3b82f6; color: #ffffff; }
     .close-button { background: #f1f5f9; color: #334155; }
     .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }
@@ -4618,6 +4817,7 @@ function buildCustomContentContractHtml(customContent: string, showToolbar: bool
   ${showToolbar ? `<div class="toolbar">
     <button class="close-button" onclick="window.close()">Fechar</button>
     <button class="edit-button" onclick="document.querySelector('.content').focus()">Editar texto</button>
+    <button class="save-button" onclick="saveCustomContractEdits()">Salvar alteração neste contrato</button>
     <button class="print-button" onclick="window.print()">Imprimir contrato</button>
   </div>` : ""}
 
@@ -4626,6 +4826,32 @@ function buildCustomContentContractHtml(customContent: string, showToolbar: bool
       <div class="content" contenteditable="true" spellcheck="false">${customContent}</div>
     </div>
   </main>
+  <script>
+    function saveCustomContractEdits() {
+      var contentEl = document.querySelector('.content');
+      if (!contentEl) return;
+      var editedContent = contentEl.innerHTML || contentEl.textContent || '';
+      if (window.opener) {
+        window.opener.postMessage({ type: 'SAVE_CONTRACT_CUSTOM_CONTENT', contractId: '${contractId}', content: editedContent }, '*');
+      }
+      showToast('Edição salva com sucesso especificamente para este contrato!');
+    }
+
+    function showToast(msg) {
+      var existing = document.getElementById('contrx-toast');
+      if (existing) existing.remove();
+      var toast = document.createElement('div');
+      toast.id = 'contrx-toast';
+      toast.innerHTML = '<span style="font-size:20px;">📝</span><span>' + msg + '</span>';
+      toast.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;background:#0f172a;color:#ffffff;padding:16px 24px;border-radius:18px;font-family:sans-serif;font-size:14px;font-weight:800;display:flex;align-items:center;gap:12px;box-shadow:0 20px 40px rgba(0,0,0,0.3);transition:all 0.3s ease;';
+      document.body.appendChild(toast);
+      setTimeout(function() {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(12px)';
+        setTimeout(function() { toast.remove(); }, 300);
+      }, 3200);
+    }
+  </script>
 </body>
 </html>`;
 }
@@ -4633,7 +4859,8 @@ function buildCustomContentContractHtml(customContent: string, showToolbar: bool
 function buildConfiguredTemporaryContractHtml(
   templateContent: string,
   templateData: TemplateData,
-  showToolbar: boolean
+  showToolbar: boolean,
+  contractId = ""
 ) {
   const renderedTemplateContent = renderTemporaryContractTemplate(templateContent, templateData);
 
@@ -4650,6 +4877,7 @@ function buildConfiguredTemporaryContractHtml(
     .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
     .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
     .print-button { background: #f97316; color: #ffffff; }
+    .save-button { background: #10b981; color: #ffffff; }
     .edit-button { background: #3b82f6; color: #ffffff; }
     .close-button { background: #f1f5f9; color: #334155; }
     .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }
@@ -4667,6 +4895,7 @@ function buildConfiguredTemporaryContractHtml(
   ${showToolbar ? `<div class="toolbar">
     <button class="close-button" onclick="window.close()">Fechar</button>
     <button class="edit-button" onclick="document.querySelector('.content').focus()">Editar texto</button>
+    <button class="save-button" onclick="saveCustomContractEdits()">Salvar alteração neste contrato</button>
     <button class="print-button" onclick="window.print()">Imprimir contrato</button>
   </div>` : ""}
 
@@ -4675,6 +4904,32 @@ function buildConfiguredTemporaryContractHtml(
       <div class="content" contenteditable="true" spellcheck="false">${escapeHtml(renderedTemplateContent)}</div>
     </div>
   </main>
+  <script>
+    function saveCustomContractEdits() {
+      var contentEl = document.querySelector('.content');
+      if (!contentEl) return;
+      var editedContent = contentEl.innerHTML || contentEl.textContent || '';
+      if (window.opener) {
+        window.opener.postMessage({ type: 'SAVE_CONTRACT_CUSTOM_CONTENT', contractId: '${contractId}', content: editedContent }, '*');
+      }
+      showToast('Edição salva com sucesso especificamente para este contrato!');
+    }
+
+    function showToast(msg) {
+      var existing = document.getElementById('contrx-toast');
+      if (existing) existing.remove();
+      var toast = document.createElement('div');
+      toast.id = 'contrx-toast';
+      toast.innerHTML = '<span style="font-size:20px;">📝</span><span>' + msg + '</span>';
+      toast.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;background:#0f172a;color:#ffffff;padding:16px 24px;border-radius:18px;font-family:sans-serif;font-size:14px;font-weight:800;display:flex;align-items:center;gap:12px;box-shadow:0 20px 40px rgba(0,0,0,0.3);transition:all 0.3s ease;';
+      document.body.appendChild(toast);
+      setTimeout(function() {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(12px)';
+        setTimeout(function() { toast.remove(); }, 300);
+      }, 3200);
+    }
+  </script>
 </body>
 </html>`;
 }
@@ -5022,4 +5277,47 @@ function normalizeDateInputValue(value?: string | null) {
   const day = String(parsedDate.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
+}
+
+type AlertModalProps = {
+  icon?: string;
+  title: string;
+  description: string;
+  itemTitle?: string;
+  itemDetail?: string;
+  onClose: () => void;
+};
+
+function AlertModal({ icon = "⚠️", title, description, itemTitle, itemDetail, onClose }: AlertModalProps) {
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-[2rem] border border-orange-100 bg-white p-8 shadow-2xl">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 text-3xl">
+          {icon}
+        </div>
+
+        <div className="mt-5 text-center">
+          <h3 className="text-2xl font-black text-slate-950">{title}</h3>
+          <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">{description}</p>
+
+          {itemTitle && (
+            <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
+              <p className="text-sm font-black text-slate-900">{itemTitle}</p>
+              {itemDetail && <p className="mt-1 text-xs font-semibold text-slate-500">{itemDetail}</p>}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-8">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 active:scale-95"
+          >
+            Entendi
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

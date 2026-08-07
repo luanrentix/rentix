@@ -1185,7 +1185,7 @@ export default function AppShell({ children }: AppShellProps) {
           onMouseLeave={() => {
             if (!isSidebarLocked) setIsSidebarExpanded(false);
           }}
-          className={`fixed left-0 top-0 z-50 hidden h-dvh max-w-[86vw] flex-col overflow-hidden border-r border-orange-100 bg-white transition-[width,transform] duration-300 ease-in-out lg:z-30 lg:flex lg:h-screen lg:max-w-none ${
+          className={`fixed left-0 top-0 z-50 hidden h-dvh max-w-[86vw] flex-col overflow-hidden border-r border-orange-100 bg-white transition-[width,transform] duration-300 ease-in-out print:hidden lg:z-30 lg:flex lg:h-screen lg:max-w-none ${
             isSidebarOpen ? "lg:w-72" : "lg:w-20"
           } ${
             isMobileSidebarOpen
@@ -1333,7 +1333,7 @@ export default function AppShell({ children }: AppShellProps) {
             isSidebarOpen ? "lg:ml-72" : "lg:ml-20"
           }`}
         >
-          <header className="sticky top-0 z-20 flex min-h-14 items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-3 py-2.5 backdrop-blur sm:px-4 lg:h-20 lg:px-6 lg:py-0">
+          <header className="sticky top-0 z-20 flex min-h-14 items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-3 py-2.5 backdrop-blur print:hidden sm:px-4 lg:h-20 lg:px-6 lg:py-0">
             <div className="flex min-w-0 items-center gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-orange-600 lg:text-sm">
@@ -1487,7 +1487,7 @@ export default function AppShell({ children }: AppShellProps) {
           </main>
 
           <nav
-            className={`contrx-mobile-bottom-nav fixed inset-x-0 bottom-0 z-30 border-t px-2 pb-[calc(env(safe-area-inset-bottom)+0.45rem)] pt-1.5 shadow-[0_-18px_45px_rgba(15,23,42,0.12)] backdrop-blur lg:hidden ${
+            className={`contrx-mobile-bottom-nav fixed inset-x-0 bottom-0 z-30 border-t px-2 pb-[calc(env(safe-area-inset-bottom)+0.45rem)] pt-1.5 shadow-[0_-18px_45px_rgba(15,23,42,0.12)] backdrop-blur print:hidden lg:hidden ${
               themeSettings.mode !== "light"
                 ? darkMobileNavClass
                 : "border-orange-100 bg-white/95"

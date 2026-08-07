@@ -1166,5 +1166,15 @@ div[class*="fixed"][class*="z-40"] > div[class*="rounded"] > div:first-child:act
   cursor: grabbing;
 }
 
+@media print {
+  header,
+  aside,
+  nav,
+  .contrx-mobile-bottom-nav,
+  .print\:hidden {
+    display: none !important;
+  }
+}
+
 
 

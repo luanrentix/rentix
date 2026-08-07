@@ -49,6 +49,8 @@ import {
   CLOSE_MINIMIZED_MODAL_EVENT,
   RESTORE_MINIMIZED_MODAL_EVENT,
 } from "@/services/minimized-modal.service";
+import { getMediaUrl } from "@/services/api";
+import { getCachedCompanySettings } from "@/services/settings-cache";
 
 type ApiPersonType = "INDIVIDUAL" | "COMPANY";
 type ApiPersonStatus = "ACTIVE" | "INACTIVE";
@@ -381,6 +383,28 @@ export default function PeoplePage() {
   const [toast, setToast] = useState<ToastState>(null);
 
   const companyId = user?.companyId;
+
+  const companySettings = useMemo<{
+    tradeName: string;
+    companyName: string;
+    document: string;
+    address: string;
+    logo: string;
+  }>(() => {
+    const cachedCompanySettings: any = getCachedCompanySettings();
+    return {
+      tradeName: String(cachedCompanySettings?.tradeName || ""),
+      companyName: String(cachedCompanySettings?.companyName || ""),
+      document: String(cachedCompanySettings?.document || ""),
+      address: String(cachedCompanySettings?.address || ""),
+      logo: String(
+        cachedCompanySettings?.logoUrl ||
+        cachedCompanySettings?.logoBase64 ||
+        cachedCompanySettings?.companyLogo ||
+        ""
+      ),
+    };
+  }, []);
 
   const closeModal = useCallback(() => {
     if (isSaving) return;
@@ -1347,7 +1371,8 @@ export default function PeoplePage() {
       </div>
 
       {historyPerson && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-8 backdrop-blur-sm print:block print:static print:inset-auto print:h-auto print:w-full print:bg-white print:p-0">
+        <>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-8 backdrop-blur-sm print:hidden">
           <div className="max-h-[94vh] w-full max-w-6xl rounded-[2.5rem] border border-orange-100 bg-white shadow-2xl print:max-h-none print:max-w-none print:overflow-visible print:border-none print:shadow-none">
             {/* First child = Drag handle */}
             <div className="sticky top-0 z-20 flex flex-col gap-4 border-b border-slate-100 bg-white/95 px-8 py-5 backdrop-blur-md print:static print:border-none print:p-0 print:pb-4">
@@ -1357,7 +1382,7 @@ export default function PeoplePage() {
                     {historyPerson.photo ? (
                       /* eslint-disable-next-line @next/next/no-img-element */
                       <img
-                        src={process.env.NEXT_PUBLIC_API_URL + historyPerson.photo}
+                        src={getMediaUrl(historyPerson.photo)}
                         alt="Foto da pessoa"
                         className="h-full w-full rounded-2xl object-cover"
                       />
@@ -1618,7 +1643,7 @@ export default function PeoplePage() {
                         <div className="group relative aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={process.env.NEXT_PUBLIC_API_URL + historyPerson.photo}
+                            src={getMediaUrl(historyPerson.photo)}
                             alt="Foto de Perfil"
                             className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
                           />
@@ -1627,7 +1652,7 @@ export default function PeoplePage() {
                           </div>
                           <div className="absolute inset-0 bg-slate-900/20 opacity-0 transition group-hover:opacity-100 flex items-center justify-center">
                             <a
-                              href={process.env.NEXT_PUBLIC_API_URL + historyPerson.photo}
+                              href={getMediaUrl(historyPerson.photo)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="rounded-xl bg-white/90 px-3 py-1.5 text-xs font-black text-slate-900 shadow backdrop-blur-sm"
@@ -1642,13 +1667,13 @@ export default function PeoplePage() {
                         <div key={file.id} className="group relative aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={process.env.NEXT_PUBLIC_API_URL + file.url}
+                            src={getMediaUrl(file.url)}
                             alt="Anexo"
                             className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
                           />
                           <div className="absolute inset-0 bg-slate-900/20 opacity-0 transition group-hover:opacity-100 flex items-center justify-center">
                             <a
-                              href={process.env.NEXT_PUBLIC_API_URL + file.url}
+                              href={getMediaUrl(file.url)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="rounded-xl bg-white/90 px-3 py-1.5 text-xs font-black text-slate-900 shadow backdrop-blur-sm"
@@ -1665,7 +1690,428 @@ export default function PeoplePage() {
             </div>
           </div>
         </div>
-      )}
+
+        {/* Dedicated Printable Report Section for PDF / Printing */}
+        <div id="person-history-report" className="hidden print:block">
+          <style jsx>{`
+            #person-history-report {
+              background: #ffffff;
+              font-family: inherit;
+            }
+
+            #person-history-report .report-header {
+              display: flex;
+              align-items: flex-start;
+              justify-content: space-between;
+              gap: 16px;
+              border: 1px solid #e2e8f0;
+              border-radius: 16px;
+              padding: 18px 20px;
+              margin-bottom: 18px;
+              background: linear-gradient(135deg, #fff7ed 0%, #ffffff 42%, #f8fafc 100%);
+            }
+
+            #person-history-report .report-title {
+              font-size: 22px;
+              line-height: 1.2;
+              font-weight: 900;
+              color: #0f172a;
+              margin: 4px 0 2px 0;
+            }
+
+            #person-history-report .report-subtitle {
+              font-size: 10px;
+              line-height: 1.35;
+              font-weight: 900;
+              text-transform: uppercase;
+              letter-spacing: 0.15em;
+              color: #ea580c;
+              margin: 0;
+            }
+
+            #person-history-report .report-small {
+              font-size: 12px;
+              line-height: 1.45;
+              color: #475569;
+              margin: 0;
+            }
+
+            #person-history-report .report-section {
+              border: 1px solid #e2e8f0;
+              border-radius: 16px;
+              padding: 18px;
+              margin-top: 16px;
+              background: #ffffff;
+              box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+              page-break-inside: avoid;
+              break-inside: avoid;
+            }
+
+            #person-history-report .report-section-title {
+              font-size: 15px;
+              font-weight: 900;
+              color: #0f172a;
+              margin: 0 0 12px 0;
+              padding-bottom: 8px;
+              border-bottom: 1px solid #e2e8f0;
+            }
+
+            #person-history-report .report-grid {
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 10px;
+            }
+
+            #person-history-report .report-field {
+              border: 1px solid #e2e8f0;
+              border-radius: 12px;
+              padding: 10px 12px;
+              background: #f8fafc;
+              min-height: 56px;
+              word-break: break-word;
+              overflow-wrap: break-word;
+            }
+
+            #person-history-report .report-field-wide {
+              grid-column: span 2;
+            }
+
+            #person-history-report .report-field-full {
+              grid-column: span 2;
+            }
+
+            #person-history-report .report-label {
+              font-size: 10px;
+              line-height: 1.2;
+              font-weight: 900;
+              letter-spacing: .06em;
+              text-transform: uppercase;
+              color: #64748b;
+              margin: 0 0 3px 0;
+            }
+
+            #person-history-report .report-value {
+              font-size: 13px;
+              line-height: 1.35;
+              font-weight: 900;
+              color: #0f172a;
+              margin: 0;
+              word-break: break-word;
+              overflow-wrap: break-word;
+            }
+
+            #person-history-report table {
+              width: 100%;
+              border-collapse: collapse;
+              table-layout: fixed;
+              font-size: 12px;
+              margin-top: 12px;
+              overflow: hidden;
+              border-radius: 12px;
+            }
+
+            #person-history-report th {
+              background: #0f172a;
+              border: 1px solid #0f172a;
+              color: #ffffff;
+              padding: 9px 12px;
+              text-align: left;
+              font-weight: 900;
+              line-height: 1.2;
+            }
+
+            #person-history-report td {
+              border: 1px solid #e2e8f0;
+              color: #334155;
+              padding: 9px 12px;
+              vertical-align: top;
+              line-height: 1.35;
+              word-break: break-word;
+              overflow-wrap: break-word;
+            }
+
+            #person-history-report .report-footer {
+              margin-top: 18px;
+              padding-top: 12px;
+              border-top: 1px solid #e2e8f0;
+              display: flex;
+              justify-content: space-between;
+              gap: 12px;
+              font-size: 11px;
+              font-weight: 700;
+              color: #64748b;
+            }
+
+            @media print {
+              @page {
+                size: A4 portrait;
+                margin: 8mm;
+              }
+
+              html,
+              body {
+                width: 210mm;
+                min-height: auto !important;
+                overflow: visible !important;
+                background: #ffffff !important;
+              }
+
+              body {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+
+              header,
+              aside,
+              nav,
+              .contrx-mobile-bottom-nav,
+              .contrx-module-page,
+              .print\:hidden {
+                display: none !important;
+              }
+
+              #person-history-report {
+                display: block !important;
+                position: absolute !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 194mm !important;
+                max-width: 194mm !important;
+                min-height: 0 !important;
+                height: auto !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                overflow: visible !important;
+                background: #ffffff !important;
+                color: #111827 !important;
+                box-shadow: none !important;
+                border: 0 !important;
+                font-family: Arial, Helvetica, sans-serif !important;
+              }
+
+              #person-history-report * {
+                visibility: visible !important;
+              }
+            }
+          `}</style>
+
+          <div className="report-page">
+            {/* Standard Printed Header */}
+            <div className="report-header">
+              <div className="flex items-start gap-4">
+                {companySettings.logo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={getMediaUrl(companySettings.logo)}
+                    alt="Logo da empresa"
+                    className="h-14 w-14 rounded-xl object-contain print:h-12 print:w-12 print:rounded-lg"
+                  />
+                ) : (
+                  <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-slate-300 text-lg font-black text-slate-700 print:h-12 print:w-12 print:rounded-lg print:text-base">
+                    {getCompanyDisplayName(companySettings).slice(0, 1)}
+                  </div>
+                )}
+
+                <div>
+                  <p className="report-subtitle font-black uppercase tracking-[0.18em] text-orange-600">
+                    Contrx • Ficha Cadastral da Pessoa
+                  </p>
+                  <h1 className="report-title">
+                    {historyPerson.name}
+                  </h1>
+                  <p className="report-small font-black">
+                    {getCompanyDisplayName(companySettings)}
+                  </p>
+                  {companySettings.document && (
+                    <p className="report-small">
+                      CNPJ/CPF: {companySettings.document}
+                    </p>
+                  )}
+                  {companySettings.address && (
+                    <p className="report-small">
+                      {companySettings.address}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-slate-50 px-3 py-2 text-right text-xs font-bold text-slate-600 print:rounded-lg print:border print:border-slate-300 print:bg-white print:px-3 print:py-2">
+                <p className="report-label">Gerado em</p>
+                <p className="report-value">{formatDateTime(new Date().toISOString())}</p>
+              </div>
+            </div>
+
+            {/* Ficha Cadastral Principal */}
+            <div className="report-section">
+              <h2 className="report-section-title">Dados da Pessoa</h2>
+              <div className="report-grid">
+                <ReportInfo label="Nome / Razão Social" value={historyPerson.name} wide />
+                <ReportInfo label="Tipo de Pessoa" value={getPersonTypeLabel(historyPerson.type)} />
+                <ReportInfo label="CPF / CNPJ" value={historyPerson.document || "Não informado"} />
+                <ReportInfo label="Status Cadastral" value={historyPerson.status === "active" ? "Ativo" : "Inativo"} />
+                <ReportInfo label="RG / Inscrição Estadual" value={historyPerson.identityNumber || historyPerson.stateRegistration || "Não informado"} />
+                <ReportInfo label="Telefone / Celular" value={historyPerson.phone || "Não informado"} />
+                <ReportInfo label="E-mail" value={historyPerson.email || "Não informado"} />
+                <ReportInfo label="Cidade / UF" value={`${historyPerson.city || "-"} / ${historyPerson.state || "-"}`} />
+                <ReportInfo label="CEP" value={historyPerson.zipCode || "Não informado"} />
+                <ReportInfo label="Endereço Completo" value={historyPerson.address || "Não informado"} full />
+              </div>
+            </div>
+
+            {/* Seção: Bens/Ativos (Exibe na aba Overview ou Properties) */}
+            {(personHistoryTab === "Overview" || personHistoryTab === "Properties") && (
+              <div className="report-section">
+                <h2 className="report-section-title">
+                  Bens e Ativos Vinculados ({historyData.ownedProperties.length})
+                </h2>
+                {historyData.ownedProperties.length === 0 ? (
+                  <p className="report-small italic">Nenhum bem ou ativo vinculado como proprietário.</p>
+                ) : (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Código</th>
+                        <th>Nome / Descrição</th>
+                        <th>Categoria</th>
+                        <th>Tipo</th>
+                        <th>Valor Aluguel</th>
+                        <th>Situação</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historyData.ownedProperties.map((prop) => (
+                        <tr key={prop.id}>
+                          <td>{prop.code || "-"}</td>
+                          <td>{prop.title || (prop as any).name || "Sem título"}</td>
+                          <td>{prop.assetCategory === "PROPERTY" ? "Imóvel" : "Outro Bem"}</td>
+                          <td>{getPropertyTypeLabel(prop.type)}</td>
+                          <td>{formatCurrency(Number(prop.rentalValue || 0))}</td>
+                          <td>{(prop as any).status === "Rented" ? "Alugado" : prop.isActive ? "Ativo" : "Inativo"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+
+            {/* Seção: Contratos (Exibe na aba Overview ou Contracts) */}
+            {(personHistoryTab === "Overview" || personHistoryTab === "Contracts") && (
+              <div className="report-section">
+                <h2 className="report-section-title">
+                  Contratos de Locação ({historyData.tenantContracts.length})
+                </h2>
+                {historyData.tenantContracts.length === 0 ? (
+                  <p className="report-small italic">Nenhum contrato de locação vinculado como inquilino.</p>
+                ) : (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Código</th>
+                        <th>Imóvel / Bem</th>
+                        <th>Período Contratual</th>
+                        <th>Valor Mensal</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historyData.tenantContracts.map((contract) => (
+                        <tr key={contract.id}>
+                          <td>{(contract as any).code || contract.id.slice(0, 8)}</td>
+                          <td>{contract.propertyName || (contract as any).propertyTitle || "Imóvel N/A"}</td>
+                          <td>{formatDate(contract.startDate)} até {formatDate(contract.endDate)}</td>
+                          <td>{formatCurrency(Number(contract.rentValue || 0))}</td>
+                          <td>{getContractStatusLabel(contract.status)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+
+            {/* Seção: Histórico Financeiro (Exibe na aba Overview ou Financial) */}
+            {(personHistoryTab === "Overview" || personHistoryTab === "Financial") && (
+              <div className="report-section">
+                <h2 className="report-section-title">
+                  Lançamentos Financeiros ({historyData.receivables.length + historyData.payables.length})
+                </h2>
+                {historyData.receivables.length === 0 && historyData.payables.length === 0 ? (
+                  <p className="report-small italic">Nenhum lançamento financeiro registrado para esta pessoa.</p>
+                ) : (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Tipo</th>
+                        <th>Descrição / Referência</th>
+                        <th>Vencimento</th>
+                        <th>Valor</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historyData.receivables.map((acc) => (
+                        <tr key={`rec-${acc.id}`}>
+                          <td className="font-bold text-emerald-700">A Receber</td>
+                          <td>{(acc as any).description || (acc as any).title || acc.propertyName || "Cobrança de aluguel"}</td>
+                          <td>{formatDate(acc.dueDate)}</td>
+                          <td>{formatCurrency(Number(acc.amount || 0))}</td>
+                          <td>{acc.status === "PAID" ? "Pago" : "Pendente"}</td>
+                        </tr>
+                      ))}
+                      {historyData.payables.map((acc) => (
+                        <tr key={`pay-${acc.id}`}>
+                          <td className="font-bold text-rose-700">A Pagar</td>
+                          <td>{(acc as any).description || (acc as any).title || "Repasse / Pagamento"}</td>
+                          <td>{formatDate(acc.dueDate)}</td>
+                          <td>{formatCurrency(Number(acc.amount || 0))}</td>
+                          <td>{acc.status === "PAID" ? "Pago" : "Pendente"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+
+            {/* Seção: Fotos e Anexos (Exibe na aba Photos ou Overview se houver) */}
+            {(personHistoryTab === "Photos" || (personHistoryTab === "Overview" && (historyPerson.photo || historyPersonPhotos.length > 0))) && (
+              (historyPerson.photo || historyPersonPhotos.length > 0) && (
+                <div className="report-section">
+                  <h2 className="report-section-title">Fotos e Anexos</h2>
+                  <div className="grid grid-cols-3 gap-4">
+                    {historyPerson.photo && (
+                      <div className="border border-slate-200 rounded-xl overflow-hidden p-2 text-center">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={getMediaUrl(historyPerson.photo)} alt="Foto de Perfil" className="h-40 w-full object-cover rounded-lg mx-auto mb-2" />
+                        <span className="text-xs font-bold text-slate-700">Foto de Perfil</span>
+                      </div>
+                    )}
+                    {historyPersonPhotos.map((file) => (
+                      <div key={file.id} className="border border-slate-200 rounded-xl overflow-hidden p-2 text-center">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={getMediaUrl(file.url)} alt="Anexo" className="h-40 w-full object-cover rounded-lg mx-auto mb-2" />
+                        <span className="text-xs font-bold text-slate-700">Documento / Anexo</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            )}
+
+            {/* Standard Printed Footer */}
+            <div className="report-footer mt-8">
+              <span>
+                {getCompanyDisplayName(companySettings)} • Ficha Cadastral e Relatório da Pessoa
+              </span>
+              <span>
+                Gerado em {formatDateTime(new Date().toISOString())}
+              </span>
+            </div>
+          </div>
+        </div>
+      </>
+    )}
 
       {isModalOpen && isModalMinimized && (
         <div className="contrx-minimized-modal fixed bottom-6 right-6 z-50 w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border-2 border-orange-300 bg-white shadow-2xl">
@@ -2039,7 +2485,7 @@ export default function PeoplePage() {
                       {uploadedPersonPhoto && !selectedPersonFile && (
                         <div className="relative w-32 h-32 rounded-full overflow-hidden border border-slate-200">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={process.env.NEXT_PUBLIC_API_URL + uploadedPersonPhoto.url} alt="Foto de perfil" className="w-full h-full object-cover" />
+                          <img src={getMediaUrl(uploadedPersonPhoto.url)} alt="Foto de perfil" className="w-full h-full object-cover" />
                         </div>
                       )}
                       {selectedPersonFile && (
@@ -2360,6 +2806,65 @@ function getContractStatusLabel(status: ApiContract["status"]) {
   };
 
   return labels[status] || String(status || "Não informado");
+}
+
+function getCompanyDisplayName(companySettings: { tradeName?: string; companyName?: string }) {
+  return companySettings.tradeName || companySettings.companyName || "Contrx";
+}
+
+function formatDateTime(value: string) {
+  try {
+    const date = new Date(value);
+    return date.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  } catch {
+    return value;
+  }
+}
+
+function getPropertyTypeLabel(type?: string | null) {
+  switch (type) {
+    case "Apartment":
+      return "Apartamento";
+    case "House":
+      return "Casa";
+    case "Cabin":
+      return "Chácara / Sítio";
+    case "Farm":
+      return "Fazenda";
+    case "Commercial":
+      return "Comercial";
+    case "Land":
+      return "Terreno";
+    default:
+      return type || "Outro";
+  }
+}
+
+
+function ReportInfo({
+  label,
+  value,
+  wide = false,
+  full = false,
+}: {
+  label: string;
+  value: string;
+  wide?: boolean;
+  full?: boolean;
+}) {
+  return (
+    <div className={`report-field ${full ? "report-field-full" : wide ? "report-field-wide" : ""}`}>
+      <p className="report-label">{label}</p>
+      <p className="report-value">{value}</p>
+    </div>
+  );
 }
 
 function getFinancialStatusLabel(status: ReceivableAccount["status"] | PayableAccount["status"]) {

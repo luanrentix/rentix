@@ -17,7 +17,7 @@ import {
   getPropertyMovements,
   type PropertyMovement as ApiPropertyMovement,
 } from "@/services/property-movements.service";
-import { api, isSessionReplacedError } from "@/services/api";
+import { api, getMediaUrl, isSessionReplacedError } from "@/services/api";
 import { getCompanyStorageItem } from "@/services/company-storage";
 import { getCachedCompanySettings } from "@/services/settings-cache";
 import {
@@ -2493,10 +2493,10 @@ export default function PropertiesPage() {
                           {historyPhotos.map((photo) => (
                             <div key={photo.id} className="group relative aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm transition hover:shadow-md">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={process.env.NEXT_PUBLIC_API_URL + photo.url} alt="Foto do imóvel" className="w-full h-full object-cover transition duration-300 group-hover:scale-105" />
+                              <img src={getMediaUrl(photo.url)} alt="Foto do imóvel" className="w-full h-full object-cover transition duration-300 group-hover:scale-105" />
                               <div className="absolute inset-0 bg-slate-900/20 opacity-0 transition group-hover:opacity-100 flex items-center justify-center">
                                 <a
-                                  href={process.env.NEXT_PUBLIC_API_URL + photo.url}
+                                  href={getMediaUrl(photo.url)}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="rounded-xl bg-white/90 px-3 py-1.5 text-xs font-black text-slate-900 shadow backdrop-blur-sm"
@@ -3104,7 +3104,7 @@ export default function PropertiesPage() {
                         {uploadedPhotos.map((photo) => (
                           <div key={photo.id} className="relative aspect-square rounded-2xl overflow-hidden border border-slate-200">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={process.env.NEXT_PUBLIC_API_URL + photo.url} alt="Foto" className="w-full h-full object-cover" />
+                            <img src={getMediaUrl(photo.url)} alt="Foto" className="w-full h-full object-cover" />
                           </div>
                         ))}
                         {selectedFiles.map((file, idx) => (

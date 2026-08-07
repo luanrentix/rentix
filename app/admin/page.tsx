@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -10,7 +10,13 @@ import {
   CheckCircle2,
   CircleOff,
   Clock3,
+  Copy,
+  Check,
   Database,
+  FileText,
+  Filter,
+  Eye,
+  Bug,
   Mail,
   Phone,
   RefreshCw,
@@ -18,11 +24,19 @@ import {
   Settings2,
   ShieldCheck,
   SlidersHorizontal,
+  Terminal,
+  Trash2,
   UsersRound,
   X,
   XCircle,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import {
+  getAdminSystemErrorLogs,
+  purgeAdminSystemErrorLogs,
+  type SystemErrorLog,
+  type SystemErrorLogSummary,
+} from "@/services/system-logs.service";
 import {
   getAdminCompanies,
   getAdminCompanyCommercialHistory,
@@ -285,8 +299,93 @@ export default function AdminPage() {
     null,
   );
 
+  // States para o Módulo de Logs de Erros do Sistema
+  const [logs, setLogs] = useState<SystemErrorLog[]>([]);
+  const [logSummary, setLogSummary] = useState<SystemErrorLogSummary>({
+    total24h: 0,
+    totalCritical: 0,
+    affectedModulesCount: 0,
+    topAffectedModule: null,
+  });
+  const [logTotal, setLogTotal] = useState(0);
+  const [logPages, setLogPages] = useState(1);
+  const [logPage, setLogPage] = useState(1);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [logLevelFilter, setLogLevelFilter] = useState("all");
+  const [logModuleFilter, setLogModuleFilter] = useState("all");
+  const [logPeriodFilter, setLogPeriodFilter] = useState<"24h" | "7d" | "30d" | "all">("7d");
+  const [logSearch, setLogSearch] = useState("");
+  const [selectedLog, setSelectedLog] = useState<SystemErrorLog | null>(null);
+  const [copiedStackTrace, setCopiedStackTrace] = useState(false);
+  const [isPurgingLogs, setIsPurgingLogs] = useState(false);
+
   const isSystemOwner = isSystemOwnerRole(user?.role);
   const normalizedSearchTerm = normalizeText(searchTerm);
+
+  const loadSystemLogs = useCallback(async () => {
+    setIsLoadingLogs(true);
+    try {
+      const res = await getAdminSystemErrorLogs({
+        level: logLevelFilter,
+        module: logModuleFilter,
+        period: logPeriodFilter,
+        search: logSearch,
+        page: logPage,
+        limit: 15,
+      });
+
+      setLogs(res.logs || []);
+      setLogTotal(res.total || 0);
+      setLogPages(res.pages || 1);
+      setLogSummary(
+        res.summary || {
+          total24h: 0,
+          totalCritical: 0,
+          affectedModulesCount: 0,
+          topAffectedModule: null,
+        },
+      );
+    } catch {
+      setLogs([]);
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  }, [logLevelFilter, logModuleFilter, logPeriodFilter, logSearch, logPage]);
+
+  useEffect(() => {
+    if (activeTab === "logs") {
+      loadSystemLogs();
+    }
+  }, [activeTab, loadSystemLogs]);
+
+  async function handlePurgeLogs() {
+    const confirmed = await requestConfirmation({
+      title: "Expurgar logs antigos",
+      message: "Deseja realmente excluir todos os logs de erro com mais de 30 dias do banco de dados?",
+      confirmLabel: "Expurgar",
+      tone: "danger",
+    });
+
+    if (!confirmed) return;
+
+    try {
+      setIsPurgingLogs(true);
+      await purgeAdminSystemErrorLogs(30);
+      setSuccessMessage("Logs antigos expurgados com sucesso.");
+      await loadSystemLogs();
+    } catch {
+      setErrorMessage("Não foi possível expurgar os logs.");
+    } finally {
+      setIsPurgingLogs(false);
+    }
+  }
+
+  function handleCopyStackTrace(text?: string | null) {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedStackTrace(true);
+    setTimeout(() => setCopiedStackTrace(false), 2000);
+  }
 
   useEffect(() => {
     if (isAuthLoading) {
@@ -966,6 +1065,7 @@ export default function AdminPage() {
               {[
                 { id: "empresas", label: "Empresas", icon: "🏢" },
                 { id: "usuarios", label: "Usuários", icon: "👥" },
+                { id: "logs", label: "Logs do Sistema", icon: "🛡️" },
                 { id: "avancado", label: "Avançado & Diagnóstico", icon: "⚙️" }
               ].map(tab => (
                 <button
@@ -1073,6 +1173,265 @@ export default function AdminPage() {
                   )}
                 </div>
               </section>
+            )}
+
+            {/* ABA DE LOGS DE ERROS DO SISTEMA */}
+            {activeTab === "logs" && (
+              <div className="space-y-6">
+                {/* KPIs de Logs do Sistema */}
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-wider text-slate-400">Erros (24 Horas)</span>
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
+                        <Bug className="h-5 w-5" />
+                      </div>
+                    </div>
+                    <p className="mt-3 text-3xl font-black text-slate-900">{logSummary.total24h}</p>
+                    <p className="mt-1 text-xs font-bold text-slate-500">Ocorrências registradas hoje</p>
+                  </div>
+
+                  <div className="rounded-2xl border border-red-100 bg-red-50/50 p-5 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-wider text-red-600">Erros Críticos (500)</span>
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100 text-red-600">
+                        <AlertTriangle className="h-5 w-5" />
+                      </div>
+                    </div>
+                    <p className="mt-3 text-3xl font-black text-red-700">{logSummary.totalCritical}</p>
+                    <p className="mt-1 text-xs font-bold text-red-600">Falhas graves do servidor</p>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-wider text-slate-400">Módulos Afetados</span>
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+                        <Database className="h-5 w-5" />
+                      </div>
+                    </div>
+                    <p className="mt-3 text-3xl font-black text-slate-900">{logSummary.affectedModulesCount}</p>
+                    <p className="mt-1 text-xs font-bold text-slate-500">Áreas do sistema notificando erros</p>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-wider text-slate-400">Principal Módulo</span>
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
+                        <Terminal className="h-5 w-5" />
+                      </div>
+                    </div>
+                    <p className="mt-3 truncate text-xl font-black text-slate-900">{logSummary.topAffectedModule || "Nenhum"}</p>
+                    <p className="mt-1 text-xs font-bold text-slate-500">Módulo com maior frequência</p>
+                  </div>
+                </div>
+
+                {/* Filtros e Ações de Logs */}
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+                    <div className="flex items-center gap-2 text-sm font-black text-slate-700 xl:w-36">
+                      <Filter className="h-4 w-4 text-orange-600" />
+                      Filtros Logs
+                    </div>
+
+                    <label className="relative block min-w-0 flex-1">
+                      <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        value={logSearch}
+                        onChange={(e) => {
+                          setLogSearch(e.target.value);
+                          setLogPage(1);
+                        }}
+                        placeholder="Buscar mensagem, endpoint, usuário ou empresa..."
+                        className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-11 text-sm font-bold text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:bg-white focus:ring-4 focus:ring-orange-100"
+                      />
+                    </label>
+
+                    <select
+                      value={logLevelFilter}
+                      onChange={(e) => {
+                        setLogLevelFilter(e.target.value);
+                        setLogPage(1);
+                      }}
+                      className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 xl:w-44"
+                    >
+                      <option value="all">Todos os Níveis</option>
+                      <option value="CRITICAL">CRITICAL</option>
+                      <option value="ERROR">ERROR</option>
+                      <option value="WARN">WARN</option>
+                      <option value="INFO">INFO</option>
+                    </select>
+
+                    <select
+                      value={logModuleFilter}
+                      onChange={(e) => {
+                        setLogModuleFilter(e.target.value);
+                        setLogPage(1);
+                      }}
+                      className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 xl:w-44"
+                    >
+                      <option value="all">Todos Módulos</option>
+                      <option value="FINANCIAL">Financeiro</option>
+                      <option value="PROPERTIES">Bens / Ativos</option>
+                      <option value="CONTRACTS">Contratos</option>
+                      <option value="PEOPLE">Pessoas</option>
+                      <option value="AUTH">Autenticação</option>
+                      <option value="FRONTEND">Frontend HTTP</option>
+                    </select>
+
+                    <select
+                      value={logPeriodFilter}
+                      onChange={(e) => {
+                        setLogPeriodFilter(e.target.value as any);
+                        setLogPage(1);
+                      }}
+                      className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100 xl:w-40"
+                    >
+                      <option value="24h">Últimas 24h</option>
+                      <option value="7d">Últimos 7 dias</option>
+                      <option value="30d">Últimos 30 dias</option>
+                      <option value="all">Todo o período</option>
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={handlePurgeLogs}
+                      disabled={isPurgingLogs}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-red-50 px-4 text-sm font-black text-red-600 transition hover:bg-red-100 disabled:opacity-50"
+                      title="Expurgar logs antigos do banco de dados"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Expurgar &gt;30d
+                    </button>
+                  </div>
+                </section>
+
+                {/* Tabela de Logs */}
+                <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                  <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                    <h3 className="text-base font-black text-slate-900">Registros de Erro ({logTotal})</h3>
+                    <button
+                      type="button"
+                      onClick={() => loadSystemLogs()}
+                      className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700 transition hover:bg-slate-200"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${isLoadingLogs ? "animate-spin" : ""}`} />
+                      Atualizar
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-50 text-xs font-black uppercase text-slate-400">
+                        <tr>
+                          <th className="px-6 py-3">Nível</th>
+                          <th className="px-6 py-3">Data / Hora</th>
+                          <th className="px-6 py-3">Empresa / Usuário</th>
+                          <th className="px-6 py-3">Módulo / Endpoint</th>
+                          <th className="px-6 py-3">Mensagem do Erro</th>
+                          <th className="px-6 py-3 text-right">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
+                        {isLoadingLogs ? (
+                          <tr>
+                            <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                              <RefreshCw className="mx-auto h-6 w-6 animate-spin" />
+                              <p className="mt-2 text-xs font-bold">Carregando logs do sistema...</p>
+                            </td>
+                          </tr>
+                        ) : logs.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                              <CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500" />
+                              <p className="mt-2 text-sm font-black text-slate-800">Nenhum log de erro encontrado</p>
+                              <p className="mt-1 text-xs">O sistema está operando sem registro de erros para o filtro selecionado.</p>
+                            </td>
+                          </tr>
+                        ) : (
+                          logs.map((log) => (
+                            <tr key={log.id} className="transition hover:bg-slate-50/80">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span
+                                  className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ring-1 ${
+                                    log.level === "CRITICAL"
+                                      ? "bg-red-50 text-red-700 ring-red-200"
+                                      : log.level === "ERROR"
+                                      ? "bg-orange-50 text-orange-700 ring-orange-200"
+                                      : log.level === "WARN"
+                                      ? "bg-amber-50 text-amber-700 ring-amber-200"
+                                      : "bg-blue-50 text-blue-700 ring-blue-200"
+                                  }`}
+                                >
+                                  {log.level}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500 font-bold">
+                                {formatDateTime(log.createdAt)}
+                              </td>
+                              <td className="px-6 py-4">
+                                <p className="font-bold text-slate-900">{log.companyName || "Sistema / Global"}</p>
+                                {log.userName && <p className="text-xs text-slate-500">{log.userName}</p>}
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-2">
+                                  <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-black text-slate-700">
+                                    {log.module}
+                                  </span>
+                                  {log.httpMethod && (
+                                    <span className="text-xs font-bold text-slate-400">[{log.httpMethod}]</span>
+                                  )}
+                                </div>
+                                {log.endpoint && <p className="mt-0.5 text-xs font-mono text-slate-500 truncate max-w-xs">{log.endpoint}</p>}
+                              </td>
+                              <td className="px-6 py-4 max-w-md">
+                                <p className="line-clamp-2 text-xs font-mono text-slate-800 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                  {log.message}
+                                </p>
+                              </td>
+                              <td className="px-6 py-4 text-right whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedLog(log)}
+                                  className="inline-flex items-center gap-1.5 rounded-xl bg-orange-50 px-3 py-2 text-xs font-black text-orange-600 transition hover:bg-orange-100"
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                  Inspecionar
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Paginação */}
+                  {logPages > 1 && (
+                    <div className="flex items-center justify-between border-t border-slate-100 px-6 py-4 text-xs font-bold text-slate-500">
+                      <span>Página {logPage} de {logPages}</span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setLogPage((p) => Math.max(1, p - 1))}
+                          disabled={logPage === 1}
+                          className="rounded-xl bg-slate-100 px-3 py-2 font-black text-slate-700 disabled:opacity-40"
+                        >
+                          Anterior
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLogPage((p) => Math.min(logPages, p + 1))}
+                          disabled={logPage === logPages}
+                          className="rounded-xl bg-slate-100 px-3 py-2 font-black text-slate-700 disabled:opacity-40"
+                        >
+                          Próxima
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              </div>
             )}
 
             {activeTab === "empresas" && (
@@ -1357,6 +1716,123 @@ export default function AdminPage() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Inspector de Log de Erro */}
+      {selectedLog && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-3xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-black ring-1 ${
+                    selectedLog.level === "CRITICAL"
+                      ? "bg-red-50 text-red-700 ring-red-200"
+                      : selectedLog.level === "ERROR"
+                      ? "bg-orange-50 text-orange-700 ring-orange-200"
+                      : "bg-blue-50 text-blue-700 ring-blue-200"
+                  }`}
+                >
+                  {selectedLog.level}
+                </span>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">Inspecionar Log de Erro</h3>
+                  <p className="text-xs text-slate-500 font-bold">{formatDateTime(selectedLog.createdAt)} • ID: {selectedLog.id}</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedLog(null)}
+                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-red-50 hover:text-red-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 flex-1 overflow-y-auto space-y-4 pr-1">
+              {/* Metadados da Ocorrência */}
+              <div className="grid gap-3 sm:grid-cols-2 rounded-2xl bg-slate-50 p-4 text-xs font-bold">
+                <div>
+                  <span className="text-slate-400 block uppercase font-black text-[10px]">Empresa / Tenant</span>
+                  <span className="text-slate-900">{selectedLog.companyName || "Sistema / Global"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block uppercase font-black text-[10px]">Usuário</span>
+                  <span className="text-slate-900">{selectedLog.userName ? `${selectedLog.userName} (${selectedLog.userEmail})` : "Não identificado / Visitante"}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block uppercase font-black text-[10px]">Módulo / Método</span>
+                  <span className="text-slate-900">{selectedLog.module} {selectedLog.httpMethod ? `[${selectedLog.httpMethod}]` : ""}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block uppercase font-black text-[10px]">Endpoint</span>
+                  <span className="text-slate-900 font-mono truncate block">{selectedLog.endpoint || "N/A"}</span>
+                </div>
+                {selectedLog.ipAddress && (
+                  <div className="sm:col-span-2">
+                    <span className="text-slate-400 block uppercase font-black text-[10px]">IP & User Agent</span>
+                    <span className="text-slate-700 font-mono text-[11px] block truncate">{selectedLog.ipAddress} • {selectedLog.userAgent}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Mensagem do Erro */}
+              <div>
+                <h4 className="text-xs font-black uppercase text-slate-500 mb-1.5 flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5 text-orange-600" />
+                  Mensagem de Erro
+                </h4>
+                <div className="rounded-2xl border border-red-100 bg-red-50/60 p-4 text-sm font-bold text-red-900 font-mono">
+                  {selectedLog.message}
+                </div>
+              </div>
+
+              {/* Stack Trace */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <h4 className="text-xs font-black uppercase text-slate-500 flex items-center gap-1.5">
+                    <Terminal className="h-3.5 w-3.5 text-orange-600" />
+                    Stack Trace (Pilha de Erros)
+                  </h4>
+                  {selectedLog.stackTrace && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyStackTrace(selectedLog.stackTrace)}
+                      className="inline-flex items-center gap-1 text-xs font-black text-orange-600 hover:text-orange-700 transition"
+                    >
+                      {copiedStackTrace ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                      {copiedStackTrace ? "Copiado!" : "Copiar Stack Trace"}
+                    </button>
+                  )}
+                </div>
+                <pre className="max-h-60 overflow-x-auto rounded-2xl bg-slate-950 p-4 text-xs font-mono text-emerald-400 shadow-inner leading-relaxed">
+                  {selectedLog.stackTrace || "Nenhum stack trace gravado para esta ocorrência."}
+                </pre>
+              </div>
+
+              {/* Request Payload JSON */}
+              {selectedLog.requestPayload && (
+                <div>
+                  <h4 className="text-xs font-black uppercase text-slate-500 mb-1.5">Payload da Requisição (JSON)</h4>
+                  <pre className="max-h-48 overflow-x-auto rounded-2xl bg-slate-900 p-4 text-xs font-mono text-slate-200 leading-relaxed">
+                    {JSON.stringify(selectedLog.requestPayload, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end border-t border-slate-100 pt-4">
+              <button
+                type="button"
+                onClick={() => setSelectedLog(null)}
+                className="rounded-2xl bg-slate-100 px-6 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+              >
+                Fechar
+              </button>
             </div>
           </div>
         </div>
@@ -1919,6 +2395,8 @@ function CompanyCard({
     </article>
   );
 }
+
+
 
 function SubscriptionBadge({ company }: { company: AdminCompany }) {
   const toneClassName =
