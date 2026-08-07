@@ -198,7 +198,13 @@ export async function apiFetch<TResponse>(
   return response.json() as Promise<TResponse>;
 }
 
-export function getMediaUrl(url: any): string {
+export function getMediaUrl(urlInput: any): string {
+  if (!urlInput) return '';
+  const url =
+    typeof urlInput === 'string'
+      ? urlInput
+      : urlInput.url || urlInput.filePath || urlInput.path || urlInput.fileUrl || '';
+
   if (!url || typeof url !== 'string') return '';
   if (
     url.startsWith('http://') ||

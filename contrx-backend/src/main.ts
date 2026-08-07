@@ -76,7 +76,7 @@ async function bootstrap() {
 
   app.use(json({ limit: '2mb' }));
   app.use(urlencoded({ extended: true, limit: '2mb' }));
-  app.use((_request: Request, response: Response, next: NextFunction) => {
+  app.use((request: Request, response: Response, next: NextFunction) => {
     response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('X-Frame-Options', 'DENY');
     response.setHeader('Referrer-Policy', 'no-referrer');
@@ -84,10 +84,17 @@ async function bootstrap() {
       'Permissions-Policy',
       'geolocation=(), microphone=(), camera=()',
     );
-    response.setHeader(
-      'Content-Security-Policy',
-      "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
-    );
+    if (request.path.startsWith('/uploads')) {
+      response.setHeader(
+        'Content-Security-Policy',
+        "default-src 'self'; img-src 'self' data: blob: *;",
+      );
+    } else {
+      response.setHeader(
+        'Content-Security-Policy',
+        "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+      );
+    }
     next();
   });
 
