@@ -2877,125 +2877,130 @@ export default function AccountsReceivablePage() {
   async function finishReceivePayment() {
     if (!chargePendingPaymentReceipt || processingConfirmation) return;
 
-    setProcessingConfirmation("payment");
+    try {
+      setProcessingConfirmation("payment");
 
-    if (paymentBatchCharges.length > 1) {
-      await finishBatchReceivePayment();
-      setProcessingConfirmation(null);
-      return;
-    }
-
-    const interest = normalizeAmount(paymentInterest);
-    const discount = normalizeAmount(paymentDiscount);
-    const amountPaid = normalizeAmount(paymentFinalAmount);
-    const paidAt = formPaymentDate
-      ? new Date(`${formPaymentDate}T00:00:00`).toISOString()
-      : new Date().toISOString();
-
-    const paymentRecord: ChargePayment = {
-      chargeId: chargePendingPaymentReceipt.id,
-      paidAt,
-      method: paymentEntries[0]?.method || paymentMethod,
-      paymentItems: paymentEntries.map((entry) => ({
-        id: entry.id,
-        method: entry.method,
-        amount: normalizeAmount(entry.amount),
-      })),
-      interest,
-      discount,
-      amountPaid,
-      note: paymentNote.trim(),
-    };
-
-    let receivedAccount: ReceivableAccount | null = null;
-
-    if (companyId) {
-      try {
-        receivedAccount = await receiveAccount(chargePendingPaymentReceipt.id, {
-          paidAt: paymentRecord.paidAt,
-          method: mapUiPaymentMethodToApi(paymentRecord.method),
-          paymentItems: mapUiPaymentItemsToApi(paymentRecord.paymentItems || []),
-          interest,
-          discount,
-          amountPaid,
-          note: paymentRecord.note,
-        });
-      } catch (error) {
-        setPaymentFormError(
-          error instanceof Error
-            ? error.message
-            : "Não foi possível registrar o recebimento no backend.",
-        );
-        setProcessingConfirmation(null);
+      if (paymentBatchCharges.length > 1) {
+        await finishBatchReceivePayment();
         return;
       }
+
+      const interest = normalizeAmount(paymentInterest);
+      const discount = normalizeAmount(paymentDiscount);
+      const amountPaid = normalizeAmount(paymentFinalAmount);
+      const paidAt = formPaymentDate
+        ? new Date(`${formPaymentDate}T00:00:00`).toISOString()
+        : new Date().toISOString();
+
+      const paymentRecord: ChargePayment = {
+        chargeId: chargePendingPaymentReceipt.id,
+        paidAt,
+        method: paymentEntries[0]?.method || paymentMethod,
+        paymentItems: paymentEntries.map((entry) => ({
+          id: entry.id,
+          method: entry.method,
+          amount: normalizeAmount(entry.amount),
+        })),
+        interest,
+        discount,
+        amountPaid,
+        note: paymentNote.trim(),
+      };
+
+      let receivedAccount: ReceivableAccount | null = null;
+
+      if (companyId) {
+        try {
+          receivedAccount = await receiveAccount(chargePendingPaymentReceipt.id, {
+            paidAt: paymentRecord.paidAt,
+            method: mapUiPaymentMethodToApi(paymentRecord.method),
+            paymentItems: mapUiPaymentItemsToApi(paymentRecord.paymentItems || []),
+            interest,
+            discount,
+            amountPaid,
+            note: paymentRecord.note,
+          });
+        } catch (error) {
+          setPaymentFormError(
+            error instanceof Error
+              ? error.message
+              : "Não foi possível registrar o recebimento no backend.",
+          );
+          return;
+        }
+      }
+
+      if (receivedAccount) {
+        const receivedCharge = mapApiReceivableToCharge(receivedAccount);
+        const receivedPaymentRecords = mapApiReceivableToPayments(receivedAccount);
+
+        setManualCharges((currentCharges) => {
+          const chargeExists = currentCharges.some(
+            (charge) => String(charge.id) === String(receivedCharge.id),
+          );
+
+          return chargeExists
+            ? currentCharges.map((charge) =>
+                String(charge.id) === String(receivedCharge.id)
+                  ? receivedCharge
+                  : charge,
+              )
+            : [...currentCharges, receivedCharge];
+        });
+        setPaid((currentPaid) => {
+          const nextPaid = currentPaid.filter(
+            (paidChargeId) =>
+              String(paidChargeId) !== String(receivedCharge.id),
+          );
+
+          return receivedCharge.status === "Paid"
+            ? [...nextPaid, receivedCharge.id]
+            : nextPaid;
+        });
+        setPaymentRecords((currentPaymentRecords) => [
+          ...currentPaymentRecords.filter(
+            (currentPaymentRecord) =>
+              String(currentPaymentRecord.chargeId) !== String(receivedCharge.id),
+          ),
+          ...receivedPaymentRecords,
+        ]);
+      } else {
+        const nextSettlementAmount =
+          getChargeSettlementAmount(chargePendingPaymentReceipt) +
+          amountPaid +
+          discount -
+          interest;
+        const shouldMarkAsPaid =
+          nextSettlementAmount >= chargePendingPaymentReceipt.amount;
+
+        setPaid((currentPaid) => {
+          const nextPaid = currentPaid.filter(
+            (paidChargeId) =>
+              String(paidChargeId) !== String(chargePendingPaymentReceipt.id),
+          );
+
+          return shouldMarkAsPaid
+            ? [...nextPaid, chargePendingPaymentReceipt.id]
+            : nextPaid;
+        });
+        setPaymentRecords((currentPaymentRecords) => [
+          ...currentPaymentRecords,
+          paymentRecord,
+        ]);
+      }
+
+      const receivedFlowCharge = chargePendingPaymentReceipt;
+
+      try {
+        generatePaymentReceipt(receivedFlowCharge, paymentRecord);
+      } catch {
+        // Ignora erros na janela de recibo para garantir o fechamento do modal
+      }
+      closeReceivePaymentModal();
+      await continueContractFlowAfterDownPayment(receivedFlowCharge);
+    } finally {
+      setProcessingConfirmation(null);
     }
-
-    if (receivedAccount) {
-      const receivedCharge = mapApiReceivableToCharge(receivedAccount);
-      const receivedPaymentRecords = mapApiReceivableToPayments(receivedAccount);
-
-      setManualCharges((currentCharges) => {
-        const chargeExists = currentCharges.some(
-          (charge) => String(charge.id) === String(receivedCharge.id),
-        );
-
-        return chargeExists
-          ? currentCharges.map((charge) =>
-              String(charge.id) === String(receivedCharge.id)
-                ? receivedCharge
-                : charge,
-            )
-          : [...currentCharges, receivedCharge];
-      });
-      setPaid((currentPaid) => {
-        const nextPaid = currentPaid.filter(
-          (paidChargeId) =>
-            String(paidChargeId) !== String(receivedCharge.id),
-        );
-
-        return receivedCharge.status === "Paid"
-          ? [...nextPaid, receivedCharge.id]
-          : nextPaid;
-      });
-      setPaymentRecords((currentPaymentRecords) => [
-        ...currentPaymentRecords.filter(
-          (currentPaymentRecord) =>
-            String(currentPaymentRecord.chargeId) !== String(receivedCharge.id),
-        ),
-        ...receivedPaymentRecords,
-      ]);
-    } else {
-      const nextSettlementAmount =
-        getChargeSettlementAmount(chargePendingPaymentReceipt) +
-        amountPaid +
-        discount -
-        interest;
-      const shouldMarkAsPaid =
-        nextSettlementAmount >= chargePendingPaymentReceipt.amount;
-
-      setPaid((currentPaid) => {
-        const nextPaid = currentPaid.filter(
-          (paidChargeId) =>
-            String(paidChargeId) !== String(chargePendingPaymentReceipt.id),
-        );
-
-        return shouldMarkAsPaid
-          ? [...nextPaid, chargePendingPaymentReceipt.id]
-          : nextPaid;
-      });
-      setPaymentRecords((currentPaymentRecords) => [
-        ...currentPaymentRecords,
-        paymentRecord,
-      ]);
-    }
-
-    const receivedFlowCharge = chargePendingPaymentReceipt;
-
-    generatePaymentReceipt(receivedFlowCharge, paymentRecord);
-    closeReceivePaymentModal();
-    await continueContractFlowAfterDownPayment(receivedFlowCharge);
-    setProcessingConfirmation(null);
   }
 
   function distributeBatchPaymentAmount(
@@ -3032,164 +3037,178 @@ export default function AccountsReceivablePage() {
   }
 
   async function finishBatchReceivePayment() {
-    const chargesToReceive = paymentBatchCharges.filter(
-      (charge) => charge.status !== "Paid",
-    );
+    try {
+      const chargesToReceive = paymentBatchCharges.filter(
+        (charge) => charge.status !== "Paid",
+      );
 
-    if (chargesToReceive.length === 0) return;
-
-    const amountPaid = normalizeAmount(paymentFinalAmount);
-    const interest = normalizeAmount(paymentInterest);
-    const discount = normalizeAmount(paymentDiscount);
-    const paidAt = formPaymentDate
-      ? new Date(`${formPaymentDate}T00:00:00`).toISOString()
-      : new Date().toISOString();
-    const amountDistribution = distributeBatchPaymentAmount(
-      chargesToReceive,
-      amountPaid,
-    );
-    const interestDistribution = distributeBatchPaymentAmount(
-      chargesToReceive,
-      interest,
-    );
-    const discountDistribution = distributeBatchPaymentAmount(
-      chargesToReceive,
-      discount,
-    );
-    const nextPaymentRecords: ChargePayment[] = [];
-    const nextReceivedCharges: Charge[] = [];
-
-    for (const [index, charge] of chargesToReceive.entries()) {
-      const distributedAmount = amountDistribution[index] || 0;
-      const distributedInterest = interestDistribution[index] || 0;
-      const distributedDiscount = discountDistribution[index] || 0;
-
-      if (distributedAmount <= 0) continue;
-
-      const paymentRecord: ChargePayment = {
-        id: createLocalId("payment"),
-        chargeId: charge.id,
-        paidAt,
-        method: paymentEntries[0]?.method || paymentMethod,
-        paymentItems: [
-          {
-            id: createLocalId("payment-entry"),
-            method: paymentEntries[0]?.method || paymentMethod,
-            amount: distributedAmount,
-          },
-        ],
-        interest: distributedInterest,
-        discount: distributedDiscount,
-        amountPaid: distributedAmount,
-        note: paymentNote.trim() || "Recebimento em lote",
-      };
-
-      nextPaymentRecords.push(paymentRecord);
-
-      if (!companyId) {
-        const nextSettlementAmount =
-          getChargeSettlementAmount(charge) +
-          distributedAmount +
-          distributedDiscount -
-          distributedInterest;
-        const shouldMarkAsPaid = nextSettlementAmount >= charge.amount;
-
-        nextReceivedCharges.push({
-          ...charge,
-          paidAmount: getChargePaidAmount(charge) + distributedAmount,
-          remainingAmount: Math.max(charge.amount - nextSettlementAmount, 0),
-          status: shouldMarkAsPaid ? "Paid" : "Pending",
-        });
-      }
-    }
-
-    if (nextPaymentRecords.length === 0) {
-      setPaymentFormError("Informe um valor válido para receber as contas selecionadas.");
-      return;
-    }
-
-    if (companyId) {
-      try {
-        const receivedAccounts = await receiveAccountsBatch(
-          nextPaymentRecords.map((paymentRecord) => ({
-            chargeId: paymentRecord.chargeId,
-            paidAt: paymentRecord.paidAt,
-            method: mapUiPaymentMethodToApi(paymentRecord.method),
-            paymentItems: mapUiPaymentItemsToApi(paymentRecord.paymentItems || []),
-            interest: paymentRecord.interest,
-            discount: paymentRecord.discount,
-            amountPaid: paymentRecord.amountPaid,
-            note: paymentRecord.note,
-          })),
-        );
-
-        nextReceivedCharges.push(...receivedAccounts.map(mapApiReceivableToCharge));
-        nextPaymentRecords.splice(
-          0,
-          nextPaymentRecords.length,
-          ...receivedAccounts.flatMap(mapApiReceivableToPayments),
-        );
-      } catch (error) {
-        setPaymentFormError(
-          error instanceof Error
-            ? error.message
-            : "Não foi possível registrar o recebimento em lote no backend.",
-        );
+      if (chargesToReceive.length === 0) {
+        setPaymentFormError("Selecione contas válidas para receber.");
         return;
       }
+
+      const amountPaid = normalizeAmount(paymentFinalAmount);
+      const interest = normalizeAmount(paymentInterest);
+      const discount = normalizeAmount(paymentDiscount);
+      const paidAt = formPaymentDate
+        ? new Date(`${formPaymentDate}T00:00:00`).toISOString()
+        : new Date().toISOString();
+      const amountDistribution = distributeBatchPaymentAmount(
+        chargesToReceive,
+        amountPaid,
+      );
+      const interestDistribution = distributeBatchPaymentAmount(
+        chargesToReceive,
+        interest,
+      );
+      const discountDistribution = distributeBatchPaymentAmount(
+        chargesToReceive,
+        discount,
+      );
+      const nextPaymentRecords: ChargePayment[] = [];
+      const nextReceivedCharges: Charge[] = [];
+
+      for (const [index, charge] of chargesToReceive.entries()) {
+        const distributedAmount = amountDistribution[index] || 0;
+        const distributedInterest = interestDistribution[index] || 0;
+        const distributedDiscount = discountDistribution[index] || 0;
+
+        if (distributedAmount <= 0) continue;
+
+        const paymentRecord: ChargePayment = {
+          id: createLocalId("payment"),
+          chargeId: charge.id,
+          paidAt,
+          method: paymentEntries[0]?.method || paymentMethod,
+          paymentItems: [
+            {
+              id: createLocalId("payment-entry"),
+              method: paymentEntries[0]?.method || paymentMethod,
+              amount: distributedAmount,
+            },
+          ],
+          interest: distributedInterest,
+          discount: distributedDiscount,
+          amountPaid: distributedAmount,
+          note: paymentNote.trim() || "Recebimento em lote",
+        };
+
+        nextPaymentRecords.push(paymentRecord);
+
+        if (!companyId) {
+          const nextSettlementAmount =
+            getChargeSettlementAmount(charge) +
+            distributedAmount +
+            distributedDiscount -
+            distributedInterest;
+          const shouldMarkAsPaid = nextSettlementAmount >= charge.amount;
+
+          nextReceivedCharges.push({
+            ...charge,
+            paidAmount: getChargePaidAmount(charge) + distributedAmount,
+            remainingAmount: Math.max(charge.amount - nextSettlementAmount, 0),
+            status: shouldMarkAsPaid ? "Paid" : "Pending",
+          });
+        }
+      }
+
+      if (nextPaymentRecords.length === 0) {
+        setPaymentFormError("Informe um valor válido para receber as contas selecionadas.");
+        return;
+      }
+
+      if (companyId) {
+        try {
+          const receivedAccounts = await receiveAccountsBatch(
+            nextPaymentRecords.map((paymentRecord) => ({
+              chargeId: paymentRecord.chargeId,
+              paidAt: paymentRecord.paidAt,
+              method: mapUiPaymentMethodToApi(paymentRecord.method),
+              paymentItems: mapUiPaymentItemsToApi(paymentRecord.paymentItems || []),
+              interest: paymentRecord.interest,
+              discount: paymentRecord.discount,
+              amountPaid: paymentRecord.amountPaid,
+              note: paymentRecord.note,
+            })),
+          );
+
+          nextReceivedCharges.push(...receivedAccounts.map(mapApiReceivableToCharge));
+          nextPaymentRecords.splice(
+            0,
+            nextPaymentRecords.length,
+            ...receivedAccounts.flatMap(mapApiReceivableToPayments),
+          );
+        } catch (error) {
+          setPaymentFormError(
+            error instanceof Error
+              ? error.message
+              : "Não foi possível registrar o recebimento em lote no backend.",
+          );
+          return;
+        }
+      }
+
+      setManualCharges((currentCharges) => {
+        const receivedById = new Map(
+          nextReceivedCharges.map((charge) => [String(charge.id), charge]),
+        );
+
+        const updatedCharges = currentCharges.map((charge) =>
+          receivedById.get(String(charge.id)) || charge,
+        );
+        const existingIds = new Set(updatedCharges.map((charge) => String(charge.id)));
+        const missingReceivedCharges = nextReceivedCharges.filter(
+          (charge) => !existingIds.has(String(charge.id)),
+        );
+
+        return [...updatedCharges, ...missingReceivedCharges];
+      });
+
+      setPaid((currentPaid) => {
+        const nextPaid = currentPaid.filter(
+          (paidChargeId) =>
+            !nextReceivedCharges.some(
+              (charge) => String(charge.id) === String(paidChargeId),
+            ),
+        );
+
+        return [
+          ...nextPaid,
+          ...nextReceivedCharges
+            .filter((charge) => charge.status === "Paid")
+            .map((charge) => charge.id),
+        ];
+      });
+
+      setPaymentRecords((currentPaymentRecords) => [
+        ...currentPaymentRecords,
+        ...nextPaymentRecords,
+      ]);
+
+      try {
+        generatePaymentReceiptBatch(
+          nextPaymentRecords.map((paymentRecord) => ({
+            charge:
+              nextReceivedCharges.find(
+                (charge) => String(charge.id) === String(paymentRecord.chargeId),
+              ) ||
+              chargesToReceive.find(
+                (charge) => String(charge.id) === String(paymentRecord.chargeId),
+              )!,
+            paymentRecord,
+          })),
+        );
+      } catch {
+        // Ignora erros ao abrir janela de recibo em lote
+      }
+
+      clearChargeSelection();
+      closeReceivePaymentModal();
+    } catch (error) {
+      setPaymentFormError(
+        error instanceof Error ? error.message : "Erro ao processar recebimento em lote.",
+      );
     }
-
-    setManualCharges((currentCharges) => {
-      const receivedById = new Map(
-        nextReceivedCharges.map((charge) => [String(charge.id), charge]),
-      );
-
-      const updatedCharges = currentCharges.map((charge) =>
-        receivedById.get(String(charge.id)) || charge,
-      );
-      const existingIds = new Set(updatedCharges.map((charge) => String(charge.id)));
-      const missingReceivedCharges = nextReceivedCharges.filter(
-        (charge) => !existingIds.has(String(charge.id)),
-      );
-
-      return [...updatedCharges, ...missingReceivedCharges];
-    });
-
-    setPaid((currentPaid) => {
-      const nextPaid = currentPaid.filter(
-        (paidChargeId) =>
-          !nextReceivedCharges.some(
-            (charge) => String(charge.id) === String(paidChargeId),
-          ),
-      );
-
-      return [
-        ...nextPaid,
-        ...nextReceivedCharges
-          .filter((charge) => charge.status === "Paid")
-          .map((charge) => charge.id),
-      ];
-    });
-
-    setPaymentRecords((currentPaymentRecords) => [
-      ...currentPaymentRecords,
-      ...nextPaymentRecords,
-    ]);
-
-    generatePaymentReceiptBatch(
-      nextPaymentRecords.map((paymentRecord) => ({
-        charge:
-          nextReceivedCharges.find(
-            (charge) => String(charge.id) === String(paymentRecord.chargeId),
-          ) ||
-          chargesToReceive.find(
-            (charge) => String(charge.id) === String(paymentRecord.chargeId),
-          )!,
-        paymentRecord,
-      })),
-    );
-    clearChargeSelection();
-    closeReceivePaymentModal();
   }
 
   function clearTenantFilter() {
@@ -7605,6 +7624,7 @@ export default function AccountsReceivablePage() {
               {paymentNote.trim() && <p>Observação: {paymentNote.trim()}</p>}
             </>
           }
+          error={paymentFormError}
           confirmLabel="Confirmar recebimento"
           cancelLabel="Conferir novamente"
           tone="emerald"
@@ -8114,6 +8134,7 @@ function ConfirmationModal({
   itemLabel,
   itemValue,
   details,
+  error,
   confirmLabel,
   cancelLabel = "Cancelar",
   danger,
@@ -8132,6 +8153,7 @@ function ConfirmationModal({
   itemLabel: string;
   itemValue: string;
   details?: ReactNode;
+  error?: string;
   confirmLabel: string;
   cancelLabel?: string;
   danger?: boolean;
@@ -8178,12 +8200,17 @@ function ConfirmationModal({
             <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">
               {itemLabel}
             </p>
-            <p className="mt-1 text-sm font-black text-slate-900 dark:text-slate-100">
+            <p className="mt-1 text-xs font-black text-slate-900 dark:text-slate-100">
               {itemValue}
             </p>
             {details && (
               <div className="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
                 {details}
+              </div>
+            )}
+            {error && (
+              <div className="mt-3 rounded-2xl border border-red-100 bg-red-50 p-3 text-xs font-bold text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300">
+                {error}
               </div>
             )}
           </div>
