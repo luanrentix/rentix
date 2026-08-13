@@ -101,11 +101,12 @@ export const UserSettingsTab: React.FC<UserSettingsTabProps> = ({
 }) => {
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-black text-slate-950">Dados do usuário</h2>
-          <p className="mt-1 text-sm font-medium text-slate-500">
-            Veja o usuário logado e edite os dados somente quando necessário.
+          <h2 className="text-xl font-bold tracking-tight text-slate-900">Usuários e equipe</h2>
+          <p className="mt-1 text-sm font-normal text-slate-500">
+            Gerencie seu perfil de acesso e os membros da sua equipe com permissões personalizadas.
           </p>
         </div>
 
@@ -118,39 +119,31 @@ export const UserSettingsTab: React.FC<UserSettingsTabProps> = ({
         </button>
       </div>
 
-      <div className="rounded-3xl border border-orange-100 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex min-w-0 items-center gap-4">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-br from-orange-400 to-orange-600 text-xl font-black text-white">
-              {companySettingsLogo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={companySettingsLogo}
-                  alt={`Logo ${companyDisplayName}`}
-                  className="h-full w-full bg-white object-contain p-2"
-                />
-              ) : (
-                companyLogoFallbackText
-              )}
+      {/* User Card */}
+      <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3.5">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 text-base font-bold text-white shadow-inner">
+              {companyLogoFallbackText}
             </div>
             <div className="min-w-0">
-              <p className="truncate text-lg font-black text-slate-950">
+              <p className="truncate text-base font-bold text-slate-900">
                 {userSettings.name || "Usuário sem nome"}
               </p>
-              <p className="mt-1 truncate text-sm font-semibold text-slate-500">
+              <p className="mt-0.5 truncate text-xs text-slate-500">
                 {lockedUserEmail || "E-mail não informado"}
               </p>
             </div>
           </div>
 
-          <span className="inline-flex w-fit rounded-full bg-orange-50 px-3 py-2 text-xs font-black text-orange-700 ring-1 ring-orange-100">
+          <span className="inline-flex items-center rounded-md bg-orange-50 px-2.5 py-1 text-xs font-semibold text-orange-700 ring-1 ring-inset ring-orange-600/20 self-start sm:self-auto">
             {currentUserRoleLabel}
           </span>
         </div>
       </div>
 
       {passwordError && !isUserSettingsEditing && (
-        <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-semibold text-red-700">
           {passwordError}
         </div>
       )}

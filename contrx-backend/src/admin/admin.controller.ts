@@ -17,6 +17,7 @@ import { UpdateAdminCompanyDto } from './dto/update-admin-company.dto';
 import { UpdateAdminUserDto } from './dto/update-admin-user.dto';
 import { CreateErrorLogDto } from './dto/create-error-log.dto';
 import { SystemOwnerGuard } from './system-owner.guard';
+import { RateLimitGuard } from '../autenticacao/guards/rate-limit.guard';
 
 @Controller('admin')
 @UseGuards(JwtGuardAutenticacao)
@@ -88,6 +89,7 @@ export class AdminController {
   }
 
   @Post('errors')
+  @UseGuards(RateLimitGuard)
   createErrorLog(
     @CurrentUser() user: UsuarioAutenticado | undefined,
     @Body() data: CreateErrorLogDto,

@@ -4,9 +4,15 @@ description: Protocolo padrão de validação local e pré-deploy para o projeto
 ---
 # Protocolo de Validação Pré-Deploy Contrx
 
-**Versão Atual Validada Localmente**: `v1.0.12` (Anterior em Produção: `v1.0.11`)
+**Versão Atual Validada Localmente**: `v1.0.13` (Anterior em Produção: `v1.0.12`)
 
-Quando o usuário disser "iniciar", "iniciar verificações", "rodar protocolo" ou similar, execute AUTOMATICAMENTE os seguintes passos em segundo plano ou sequencialmente:
+Quando o usuário disser "iniciar", "iniciar verificações", "rodar protocolo", "auditoria de segurança" ou similar, execute AUTOMATICAMENTE os seguintes passos em segundo plano ou sequencialmente:
+
+0. **Protocolo de Segurança DevSecOps & Supabase Hardening**:
+   - Verificar RLS e permissões de tabelas no Supabase (`contrx-backend/prisma/migrations`).
+   - Validar isolamento multiempresa (`companyId`) em consultas e rotas.
+   - Garantir proteção de Rate Limit (`RateLimitGuard`) nos endpoints de autenticação e ingestão de erros.
+   - Verificar se há segredos vazados no frontend.
 
 1. **Validação do Frontend (Lint e Build)**:
    - Rodar `npm run lint` na raiz.

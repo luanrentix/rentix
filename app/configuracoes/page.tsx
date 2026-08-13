@@ -81,6 +81,7 @@ import { ResetTestDataModal } from "./components/modals/ResetTestDataModal";
 import { PrintEditorModal } from "./components/modals/PrintEditorModal";
 import { ImportPrintModal } from "./components/modals/ImportPrintModal";
 import { RestorePrintModal } from "./components/modals/RestorePrintModal";
+import { SaveSuccessModal } from "./components/modals/SaveSuccessModal";
 
 function getInitialLetters(name: string) {
   const cleanName = name.trim();
@@ -342,6 +343,7 @@ export default function ConfiguracoesPage() {
   const [isSavingCompanySettings, setIsSavingCompanySettings] = useState(false);
   const [isSavingUserSettings, setIsSavingUserSettings] = useState(false);
   const [isSavingAppearanceSettings, setIsSavingAppearanceSettings] = useState(false);
+  const [isSaveSuccessModalOpen, setIsSaveSuccessModalOpen] = useState(false);
 
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [resetOptions, setResetOptions] = useState<ResetOptions>(defaultResetOptions);
@@ -655,7 +657,7 @@ export default function ConfiguracoesPage() {
         themeSettings,
       });
       setInitialCompanySettings(companySettings);
-      setSuccessMessage("Cadastro da empresa salvo com sucesso!");
+      setIsSaveSuccessModalOpen(true);
     } catch {
       setSuccessMessage("Erro ao salvar cadastro da empresa.");
     } finally {
@@ -702,7 +704,7 @@ export default function ConfiguracoesPage() {
       setInitialUserSettings(immutableUserSettings);
       setIsUserSettingsEditing(false);
       setPasswordSettings(defaultPasswordSettings);
-      setSuccessMessage("Dados do usuário atualizados!");
+      setIsSaveSuccessModalOpen(true);
     } catch (error) {
       setPasswordError(error instanceof Error ? error.message : "Erro ao atualizar usuário.");
     } finally {
@@ -896,7 +898,7 @@ export default function ConfiguracoesPage() {
         themeSettings,
       });
       setInitialThemeSettings(themeSettings);
-      setSuccessMessage("Preferencia de aparencia salva!");
+      setIsSaveSuccessModalOpen(true);
     } catch {
       setSuccessMessage("Erro ao salvar aparencia.");
     } finally {
@@ -988,7 +990,7 @@ export default function ConfiguracoesPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr]">
+          <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)]">
             <SettingsSidebar
               userSettings={userSettings}
               companySettings={companySettings}
@@ -1000,7 +1002,7 @@ export default function ConfiguracoesPage() {
               onOpenResetModal={handleOpenResetModal}
             />
 
-            <section className="p-4 sm:p-5 lg:p-8">
+            <section className="min-w-0 flex-1 p-4 sm:p-5 lg:p-8">
               {successMessage && (
                 <div className="mb-5 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
                   {successMessage}
@@ -1152,6 +1154,12 @@ export default function ConfiguracoesPage() {
         selectedRestorePrintTemplate={selectedRestorePrintTemplate}
         onClose={handleCloseRestorePrintModal}
         onConfirm={handleConfirmRestorePrintTemplate}
+      />
+
+      <SaveSuccessModal
+        isOpen={isSaveSuccessModalOpen}
+        onStay={() => setIsSaveSuccessModalOpen(false)}
+        onGoBack={() => router.push("/dashboard")}
       />
     </div>
   );

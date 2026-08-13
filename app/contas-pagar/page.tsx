@@ -114,6 +114,8 @@ type Expense = {
   installmentGroupId?: string;
 };
 
+type PaymentAdjustmentMode = "amount" | "percentage";
+
 type Tenant = {
   id: string;
   name: string;
@@ -362,11 +364,31 @@ export default function AccountsPayablePage() {
 
   const [paymentInterest, setPaymentInterest] = useState("");
   const [paymentDiscount, setPaymentDiscount] = useState("");
+  const [paymentInterestInput, setPaymentInterestInput] = useState("");
+  const [paymentDiscountInput, setPaymentDiscountInput] = useState("");
+  const [paymentInterestMode, setPaymentInterestMode] = useState<PaymentAdjustmentMode>("amount");
+  const [paymentDiscountMode, setPaymentDiscountMode] = useState<PaymentAdjustmentMode>("amount");
   const [paymentFinalAmount, setPaymentFinalAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("Cash");
   const [paymentEntries, setPaymentEntries] = useState<PaymentEntry[]>([]);
   const [paymentNote, setPaymentNote] = useState("");
   const [paymentFormError, setPaymentFormError] = useState("");
+
+  // Estado para mover e redimensionar o modal de Nova Conta a Pagar
+  const [createModalPos, setCreateModalPos] = useState<{ x: number; y: number } | null>(null);
+  const [createModalSize, setCreateModalSize] = useState<{ width: number; height: number } | null>(null);
+  const [isDraggingCreateModal, setIsDraggingCreateModal] = useState(false);
+  const [createDragStartPos, setCreateDragStartPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isResizingCreateModal, setIsResizingCreateModal] = useState(false);
+  const [createResizeStartPos, setCreateResizeStartPos] = useState<{ x: number; y: number; width: number; height: number }>({ x: 0, y: 0, width: 0, height: 0 });
+
+  // Estado para mover e redimensionar o modal de Pagamento de Contas
+  const [payModalPos, setPayModalPos] = useState<{ x: number; y: number } | null>(null);
+  const [payModalSize, setPayModalSize] = useState<{ width: number; height: number } | null>(null);
+  const [isDraggingPayModal, setIsDraggingPayModal] = useState(false);
+  const [payDragStartPos, setPayDragStartPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isResizingPayModal, setIsResizingPayModal] = useState(false);
+  const [payResizeStartPos, setPayResizeStartPos] = useState<{ x: number; y: number; width: number; height: number }>({ x: 0, y: 0, width: 0, height: 0 });
 
   const [reportCategory, setReportCategory] = useState("");
   const [reportStatusFilter, setReportStatusFilter] =
@@ -728,6 +750,68 @@ export default function AccountsPayablePage() {
     return Math.max(expense.amount + interest - discount, 0);
   }
 
+  function updatePaymentInterestInput(
+    expense: Expense,
+    nextRawValue: string,
+    nextMode?: PaymentAdjustmentMode,
+  ) {
+    const activeMode = nextMode || paymentInterestMode;
+    const formattedInput = formatCurrencyInput(nextRawValue);
+    const numericInput = normalizeAmount(formattedInput);
+
+    const baseAmount = getExpenseRemainingAmount(expense);
+    const calculatedInterest =
+      activeMode === "percentage"
+        ? (baseAmount * numericInput) / 100
+        : numericInput;
+
+    setPaymentInterestMode(activeMode);
+    setPaymentInterestInput(formattedInput);
+    setPaymentInterest(formatAmountInput(calculatedInterest));
+
+    const currentDiscount = normalizeAmount(paymentDiscount);
+    const finalAmount = calculatePaymentAmount(expense, calculatedInterest, currentDiscount);
+    const formattedFinalAmount = formatAmountInput(finalAmount);
+
+    setPaymentFinalAmount(formattedFinalAmount);
+    updatePaymentEntriesFromFinalAmount(formattedFinalAmount);
+  }
+
+  function updatePaymentDiscountInput(
+    expense: Expense,
+    nextRawValue: string,
+    nextMode?: PaymentAdjustmentMode,
+  ) {
+    const activeMode = nextMode || paymentDiscountMode;
+    const formattedInput = formatCurrencyInput(nextRawValue);
+    const numericInput = normalizeAmount(formattedInput);
+
+    const baseAmount = getExpenseRemainingAmount(expense);
+    const calculatedDiscount =
+      activeMode === "percentage"
+        ? (baseAmount * numericInput) / 100
+        : numericInput;
+
+    setPaymentDiscountMode(activeMode);
+    setPaymentDiscountInput(formattedInput);
+    setPaymentDiscount(formatAmountInput(calculatedDiscount));
+
+    const currentInterest = normalizeAmount(paymentInterest);
+    const finalAmount = calculatePaymentAmount(expense, currentInterest, calculatedDiscount);
+    const formattedFinalAmount = formatAmountInput(finalAmount);
+
+    setPaymentFinalAmount(formattedFinalAmount);
+    updatePaymentEntriesFromFinalAmount(formattedFinalAmount);
+  }
+
+  function changePaymentInterestMode(expense: Expense, mode: PaymentAdjustmentMode) {
+    updatePaymentInterestInput(expense, paymentInterestInput, mode);
+  }
+
+  function changePaymentDiscountMode(expense: Expense, mode: PaymentAdjustmentMode) {
+    updatePaymentDiscountInput(expense, paymentDiscountInput, mode);
+  }
+
   function updatePaymentEntriesFromFinalAmount(finalAmount: string) {
     setPaymentEntries((currentEntries) => {
       if (currentEntries.length !== 1) return currentEntries;
@@ -761,23 +845,43 @@ export default function AccountsPayablePage() {
     const difference = finalAmount - expense.amount;
 
     if (!Number.isFinite(finalAmount) || finalAmount <= 0) {
+      setPaymentInterestMode("amount");
+      setPaymentDiscountMode("amount");
+      setPaymentInterestInput("");
+      setPaymentDiscountInput("");
       setPaymentInterest("");
       setPaymentDiscount("");
       return;
     }
 
     if (difference > 0) {
-      setPaymentInterest(formatAmountInput(difference));
+      const formattedDifference = formatAmountInput(difference);
+
+      setPaymentInterestMode("amount");
+      setPaymentDiscountMode("amount");
+      setPaymentInterestInput(formattedDifference);
+      setPaymentDiscountInput("");
+      setPaymentInterest(formattedDifference);
       setPaymentDiscount("");
       return;
     }
 
     if (difference < 0) {
+      const formattedDiscount = formatAmountInput(Math.abs(difference));
+
+      setPaymentInterestMode("amount");
+      setPaymentDiscountMode("amount");
+      setPaymentInterestInput("");
+      setPaymentDiscountInput(formattedDiscount);
       setPaymentInterest("");
-      setPaymentDiscount(formatAmountInput(Math.abs(difference)));
+      setPaymentDiscount(formattedDiscount);
       return;
     }
 
+    setPaymentInterestMode("amount");
+    setPaymentDiscountMode("amount");
+    setPaymentInterestInput("");
+    setPaymentDiscountInput("");
     setPaymentInterest("");
     setPaymentDiscount("");
   }
@@ -957,8 +1061,10 @@ export default function AccountsPayablePage() {
 
   function closeCreateModal() {
     resetCreateForm();
-    setIsExpenseSaving(false);
+    setEditingExpenseId(null);
     setIsCreateOpen(false);
+    setCreateModalPos(null);
+    setCreateModalSize(null);
   }
 
   async function saveExpenseWithSavingState() {
@@ -1358,6 +1464,10 @@ export default function AccountsPayablePage() {
     const remainingAmount = getExpenseRemainingAmount(expense);
 
     setExpensePendingPaymentReceipt(expense);
+    setPaymentInterestMode("amount");
+    setPaymentDiscountMode("amount");
+    setPaymentInterestInput("");
+    setPaymentDiscountInput("");
     setPaymentInterest("");
     setPaymentDiscount("");
     setPaymentFinalAmount(formatAmountInput(remainingAmount));
@@ -1379,6 +1489,10 @@ export default function AccountsPayablePage() {
 
     setExpensePendingPaymentReceipt(null);
     setIsPaymentConfirmationOpen(false);
+    setPaymentInterestMode("amount");
+    setPaymentDiscountMode("amount");
+    setPaymentInterestInput("");
+    setPaymentDiscountInput("");
     setPaymentInterest("");
     setPaymentDiscount("");
     setPaymentFinalAmount("");
@@ -1387,6 +1501,8 @@ export default function AccountsPayablePage() {
     setPaymentEntries([]);
     setPaymentNote("");
     setPaymentFormError("");
+    setPayModalPos(null);
+    setPayModalSize(null);
   }
 
   function confirmPayExpense() {
@@ -2658,70 +2774,98 @@ GERADO EM: {currentDate}`;
       )}
 
       {isCreateOpen && (
-        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${accountsPayableThemeClass}`}>
-          <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
-            <div className="border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-orange-50 to-white dark:from-orange-950/40 dark:to-slate-900 p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-sm font-black text-white shadow-lg shadow-orange-500/20 dark:shadow-orange-950/30">
-                    R$
-                  </div>
-
-                  <div>
-                    <h2 className={`text-xl font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
-                      {editingExpenseId
-                        ? "Editar conta a pagar"
-                        : "Nova conta a pagar"}
-                    </h2>
-
-                    <p className={`mt-1 text-sm leading-6 ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
-                      {editingExpenseId
-                        ? "Ajuste os dados da conta a pagar selecionada."
-                        : "Cadastre uma conta a pagar avulsa, única ou parcelada."}
-                    </p>
-                  </div>
+        <div
+          className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-4 ${accountsPayableThemeClass}`}
+          onMouseMove={(e) => {
+            if (isDraggingCreateModal) {
+              setCreateModalPos({
+                x: e.clientX - createDragStartPos.x,
+                y: e.clientY - createDragStartPos.y,
+              });
+            } else if (isResizingCreateModal) {
+              const newWidth = Math.max(500, createResizeStartPos.width + (e.clientX - createResizeStartPos.x));
+              const newHeight = Math.max(400, createResizeStartPos.height + (e.clientY - createResizeStartPos.y));
+              setCreateModalSize({ width: newWidth, height: newHeight });
+            }
+          }}
+          onMouseUp={() => {
+            setIsDraggingCreateModal(false);
+            setIsResizingCreateModal(false);
+          }}
+        >
+          <div
+            style={{
+              transform: createModalPos ? `translate(${createModalPos.x}px, ${createModalPos.y}px)` : undefined,
+              width: createModalSize ? `${createModalSize.width}px` : undefined,
+              height: createModalSize ? `${createModalSize.height}px` : undefined,
+            }}
+            className="contrx-modal-panel relative flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+          >
+            {/* Header Arrastável */}
+            <div
+              onMouseDown={(e) => {
+                if ((e.target as HTMLElement).closest("button")) return;
+                setIsDraggingCreateModal(true);
+                setCreateDragStartPos({
+                  x: e.clientX - (createModalPos?.x || 0),
+                  y: e.clientY - (createModalPos?.y || 0),
+                });
+              }}
+              className="flex cursor-grab items-center justify-between border-b border-slate-100 bg-slate-50/80 px-6 py-4 dark:border-slate-800 dark:bg-slate-900/80 active:cursor-grabbing select-none"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-orange-500 text-base font-black text-white shadow-md shadow-orange-200 dark:shadow-none">
+                  💸
                 </div>
-
-                <button
-                  type="button"
-                  onClick={closeCreateModal}
-                  disabled={isExpenseSaving}
-                  className={`flex h-10 w-10 items-center justify-center rounded-xl shadow-sm ring-1 transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                    isBlackTheme
-                      ? "bg-[#1e293b] text-[#cbd5e1] ring-[#334155] hover:bg-[#334155] hover:text-[#ffffff]"
-                      : "bg-[#ffffff] text-[#64748b] ring-[#dbe4ef] hover:bg-[#f8fafc] hover:text-[#0f172a]"
-                  }`}
-                  aria-label="Fechar cadastro"
-                >
-                  ✕
-                </button>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                    {editingExpenseId ? "Editar conta a pagar" : "Nova conta a pagar"}
+                  </h2>
+                  <p className="text-xs font-normal text-slate-500 dark:text-slate-400">
+                    {editingExpenseId
+                      ? "Ajuste os dados da conta a pagar selecionada."
+                      : "Cadastre uma conta a pagar avulsa, única ou parcelada."}
+                  </p>
+                </div>
               </div>
+
+              <button
+                type="button"
+                onClick={closeCreateModal}
+                disabled={isExpenseSaving}
+                className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-200/60 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white disabled:opacity-60"
+                aria-label="Fechar cadastro"
+              >
+                ✕
+              </button>
             </div>
 
-            <div className="max-h-[calc(92vh-120px)] space-y-5 overflow-y-auto p-6">
+            {/* Conteúdo com rolagem interna */}
+            <div className="flex-1 space-y-5 overflow-y-auto p-6 text-slate-900 dark:text-slate-100">
+              
+              {/* Seleção do Tipo de Lançamento */}
               {!editingExpenseId && (
                 <div>
-                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
+                  <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-400">
                     Tipo de lançamento
                   </label>
-
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <button
                       type="button"
                       onClick={() => {
                         setExpenseFormError("");
                         setFormLaunchType("single");
                       }}
-                      className={`rounded-2xl border px-4 py-3 text-left transition ${
+                      className={`rounded-2xl border p-4 text-left transition ${
                         formLaunchType === "single"
-                          ? "border-orange-500 bg-orange-50 dark:bg-orange-950/30 ring-4 ring-orange-100 dark:ring-orange-900/50"
-                          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800"
+                          ? "border-orange-500 bg-orange-50/60 ring-2 ring-orange-200 dark:border-orange-500 dark:bg-orange-950/30 dark:ring-orange-900/60"
+                          : "border-slate-200/80 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/60"
                       }`}
                     >
-                      <p className={`text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">
                         Conta única
                       </p>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                         Lançamento avulso com apenas um vencimento.
                       </p>
                     </button>
@@ -2732,16 +2876,16 @@ GERADO EM: {currentDate}`;
                         setExpenseFormError("");
                         setFormLaunchType("installment");
                       }}
-                      className={`rounded-2xl border px-4 py-3 text-left transition ${
+                      className={`rounded-2xl border p-4 text-left transition ${
                         formLaunchType === "installment"
-                          ? "border-orange-500 bg-orange-50 dark:bg-orange-950/30 ring-4 ring-orange-100 dark:ring-orange-900/50"
-                          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800"
+                          ? "border-orange-500 bg-orange-50/60 ring-2 ring-orange-200 dark:border-orange-500 dark:bg-orange-950/30 dark:ring-orange-900/60"
+                          : "border-slate-200/80 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/60"
                       }`}
                     >
-                      <p className={`text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white">
                         Sequência de parcelas
                       </p>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                         Divide o valor total em parcelas editáveis.
                       </p>
                     </button>
@@ -2749,18 +2893,12 @@ GERADO EM: {currentDate}`;
                 </div>
               )}
 
-              <div
-                className={`rounded-2xl border p-4 ${
-                  isBlackTheme
-                    ? "border-[#334155] bg-[#111827]"
-                    : "border-[#dbe4ef] bg-[#f8fafc]"
-                }`}
-              >
-                <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
-                  <div>
-                    <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                      Pessoa/Fornecedor
-                      <span className="ml-1 text-red-500">*</span>
+              {/* Seção Pessoa / Fornecedor */}
+              <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                  <div className="flex-1 min-w-0">
+                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Pessoa / Fornecedor <span className="text-red-500">*</span>
                     </label>
 
                     <select
@@ -2770,10 +2908,8 @@ GERADO EM: {currentDate}`;
                         setExpenseFormError("");
                         setFormTenant(event.target.value);
                       }}
-                      className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
-                        isEditingPaidExpense
-                          ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
-                          : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                      className={`h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white ${
+                        isEditingPaidExpense ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400" : ""
                       }`}
                     >
                       <option value="">Selecione a pessoa/fornecedor</option>
@@ -2789,183 +2925,162 @@ GERADO EM: {currentDate}`;
                     <button
                       type="button"
                       onClick={openTenantCreateModal}
-                      className="h-12 rounded-xl bg-[#0f172a] px-5 text-sm font-bold text-[#ffffff] shadow-sm transition hover:bg-slate-800"
+                      className="h-10 shrink-0 rounded-xl bg-orange-500 px-4 text-xs font-bold text-white shadow-sm transition hover:bg-orange-600 dark:bg-orange-500 dark:hover:bg-orange-600"
                     >
-                      NOVO
+                      + Nova pessoa
                     </button>
                   )}
                 </div>
 
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                <p className="mt-2 text-[11px] font-normal text-slate-400">
                   {isEditingPaidExpense
                     ? "Conta paga não permite alteração de pessoa/fornecedor."
-                    : "Use o botão NOVO para abrir o cadastro completo de pessoa e selecionar automaticamente no lançamento."}
+                    : "Cadastre fornecedores/pessoas rapidamente ou selecione da lista."}
                 </p>
               </div>
 
-              <div>
-                <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                  Bem/Ativo
-                </label>
-
-                <select
-                  value={formProperty}
-                  disabled={isEditingPaidExpense}
-                  onChange={(event) => {
-                    setExpenseFormError("");
-                    setFormProperty(event.target.value);
-                  }}
-                  className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
-                    isEditingPaidExpense
-                      ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
-                      : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-                  }`}
-                >
-                  <option value="">Sem bem/ativo vinculado</option>
-                  {properties.map((property) => (
-                    <option key={property.id} value={property.id}>
-                      {property.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                    Descrição
-                    <span className="ml-1 text-red-500">*</span>
-                  </label>
-
-                  <input
-                    value={formDescription}
-                    disabled={isEditingPaidExpense}
-                    onChange={(event) => {
-                      setExpenseFormError("");
-                      setFormDescription(event.target.value);
-                    }}
-                    placeholder="Ex: Energia elétrica"
-                    className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
-                      isEditingPaidExpense
-                        ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
-                        : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-                    }`}
-                  />
-                </div>
-
-                <div>
-                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                    Categoria
-                  </label>
-
-                  <select
-                    value={formCategory}
-                    disabled={isEditingPaidExpense}
-                    onChange={(event) => {
-                      setExpenseFormError("");
-                      setFormCategory(event.target.value);
-                    }}
-                    className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
-                      isEditingPaidExpense
-                        ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
-                        : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-                    }`}
-                  >
-                    {expenseCategoryOptions.map((category) => (
-                      <option key={category} value={category}>
-                        {category}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-3">
-                <div>
-                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                    Valor total
-                    <span className="ml-1 text-red-500">*</span>
-                  </label>
-
-                  <div className="relative">
-                    <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-slate-500 dark:text-slate-400">
-                      R$
-                    </span>
-
-                    <input
-                      inputMode="decimal"
-                      value={formAmount}
+              {/* Seção Imóvel, Descrição e Categoria */}
+              <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Imóvel / Ativo <span className="text-slate-400 font-normal">(opcional)</span>
+                    </label>
+                    <select
+                      value={formProperty}
                       disabled={isEditingPaidExpense}
                       onChange={(event) => {
                         setExpenseFormError("");
-                        setFormAmount(formatCurrencyInput(event.target.value));
+                        setFormProperty(event.target.value);
                       }}
-                      onBlur={() => {
-                        const amount = normalizeAmount(formAmount);
+                      className={`h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white ${
+                        isEditingPaidExpense ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400" : ""
+                      }`}
+                    >
+                      <option value="">Sem bem/ativo vinculado</option>
+                      {properties.map((property) => (
+                        <option key={property.id} value={property.id}>
+                          {property.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                        setFormAmount(amount > 0 ? formatAmountInput(amount) : "");
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Descrição <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      value={formDescription}
+                      disabled={isEditingPaidExpense}
+                      onChange={(event) => {
+                        setExpenseFormError("");
+                        setFormDescription(event.target.value);
                       }}
-                      placeholder="0,00"
-                      className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 pl-11 text-sm font-black outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
-                        isEditingPaidExpense
-                          ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
-                          : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                      placeholder="Ex: Energia elétrica"
+                      className={`h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white ${
+                        isEditingPaidExpense ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400" : ""
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Categoria
+                    </label>
+                    <select
+                      value={formCategory}
+                      disabled={isEditingPaidExpense}
+                      onChange={(event) => {
+                        setExpenseFormError("");
+                        setFormCategory(event.target.value);
+                      }}
+                      className={`h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white ${
+                        isEditingPaidExpense ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400" : ""
+                      }`}
+                    >
+                      {expenseCategoryOptions.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Valor total <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                        R$
+                      </span>
+                      <input
+                        inputMode="decimal"
+                        value={formAmount}
+                        disabled={isEditingPaidExpense}
+                        onChange={(event) => {
+                          setExpenseFormError("");
+                          setFormAmount(formatCurrencyInput(event.target.value));
+                        }}
+                        onBlur={() => {
+                          const amount = normalizeAmount(formAmount);
+                          setFormAmount(amount > 0 ? formatAmountInput(amount) : "");
+                        }}
+                        placeholder="0,00"
+                        className={`h-10 w-full rounded-xl border border-slate-200 bg-white px-3 pl-9 text-xs font-bold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white ${
+                          isEditingPaidExpense ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400" : ""
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Data de lançamento <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={formIssueDate}
+                      disabled={isEditingPaidExpense}
+                      onChange={(event) => {
+                        setExpenseFormError("");
+                        setFormIssueDate(event.target.value);
+                      }}
+                      className={`h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white ${
+                        isEditingPaidExpense ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400" : ""
+                      }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Primeiro vencimento <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={formDueDate}
+                      disabled={isEditingPaidExpense}
+                      onChange={(event) => {
+                        setExpenseFormError("");
+                        setFormDueDate(event.target.value);
+                      }}
+                      className={`h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white ${
+                        isEditingPaidExpense ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400" : ""
                       }`}
                     />
                   </div>
                 </div>
-
-                <div>
-                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                    Data de lançamento
-                    <span className="ml-1 text-red-500">*</span>
-                  </label>
-
-                  <input
-                    type="date"
-                    value={formIssueDate}
-                    disabled={isEditingPaidExpense}
-                    onChange={(event) => {
-                      setExpenseFormError("");
-                      setFormIssueDate(event.target.value);
-                    }}
-                    className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
-                      isEditingPaidExpense
-                        ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
-                        : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-                    }`}
-                  />
-                </div>
-
-                <div>
-                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                    Primeiro vencimento
-                    <span className="ml-1 text-red-500">*</span>
-                  </label>
-
-                  <input
-                    type="date"
-                    value={formDueDate}
-                    disabled={isEditingPaidExpense}
-                    onChange={(event) => {
-                      setExpenseFormError("");
-                      setFormDueDate(event.target.value);
-                    }}
-                    className={`h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-4 text-sm outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
-                      isEditingPaidExpense
-                        ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
-                        : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
-                    }`}
-                  />
-                </div>
               </div>
 
+              {/* Se for conta já paga */}
               {isEditingPaidExpense && (
-                <div className="rounded-2xl border border-emerald-100 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 p-4">
-                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+                  <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                     Data de pagamento
                   </label>
-
                   <input
                     type="date"
                     value={formPaymentDate}
@@ -2973,43 +3088,38 @@ GERADO EM: {currentDate}`;
                       setExpenseFormError("");
                       setFormPaymentDate(event.target.value);
                     }}
-                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-100 dark:ring-emerald-900/50 md:max-w-xs"
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white sm:max-w-xs"
                   />
-
-                  <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                    Para conta paga, somente a data de pagamento pode ser
-                    ajustada antes de salvar.
+                  <p className="mt-1.5 text-[11px] font-normal text-slate-500">
+                    Para conta paga, somente a data de pagamento pode ser ajustada.
                   </p>
                 </div>
               )}
 
+              {/* Observação opcional */}
               <div>
-                <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                  Observação
+                <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Observação <span className="text-slate-400 font-normal">(opcional)</span>
                 </label>
-
                 <textarea
                   value={formNote}
                   disabled={isEditingPaidExpense}
                   onChange={(event) => setFormNote(event.target.value)}
                   placeholder="Informações adicionais sobre a conta..."
-                  className={`min-h-24 w-full resize-none rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50 ${
-                    isEditingPaidExpense
-                      ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
-                      : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  className={`min-h-20 w-full resize-none rounded-xl border border-slate-200 bg-white p-3 text-xs font-medium text-slate-900 outline-none transition dark:border-slate-700 dark:bg-slate-800 dark:text-white ${
+                    isEditingPaidExpense ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400" : ""
                   }`}
                 />
               </div>
 
+              {/* Configuração de Parcelamento se "installment" */}
               {formLaunchType === "installment" && !editingExpenseId && (
-                <div className="space-y-4 rounded-2xl border border-orange-100 dark:border-orange-900/50 bg-orange-50 dark:bg-orange-950/30 p-4">
-                  <div className="grid gap-4 md:grid-cols-[220px_1fr] md:items-start">
+                <div className="space-y-4 rounded-2xl border border-orange-100 bg-orange-50/40 p-5 dark:border-orange-900/40 dark:bg-orange-950/20">
+                  <div className="grid gap-4 sm:grid-cols-[200px_1fr] sm:items-start">
                     <div>
-                      <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                        Quantidade de parcelas
-                        <span className="ml-1 text-red-500">*</span>
+                      <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Quantidade de parcelas <span className="text-red-500">*</span>
                       </label>
-
                       <input
                         type="number"
                         min={2}
@@ -3018,12 +3128,10 @@ GERADO EM: {currentDate}`;
                         onChange={(event) => {
                           setExpenseFormError("");
                           const nextQuantity = Number(event.target.value);
-
                           if (!event.target.value || !Number.isFinite(nextQuantity)) {
                             setFormInstallmentQuantity(event.target.value);
                             return;
                           }
-
                           setFormInstallmentQuantity(
                             String(
                               Math.min(
@@ -3033,36 +3141,34 @@ GERADO EM: {currentDate}`;
                             ),
                           );
                         }}
-                        className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
+                        className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                       />
-                      <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      <p className="mt-1 text-[11px] font-normal text-slate-500">
                         Limite de {MAX_INSTALLMENT_QUANTITY} parcelas.
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-white dark:bg-slate-900 p-4 text-sm text-slate-600 dark:text-slate-400 ring-1 ring-orange-100 dark:ring-orange-900/50">
-                      As parcelas são geradas a cada 30 dias e podem ser
-                      ajustadas antes de salvar.
+                    <div className="rounded-xl border border-orange-100 bg-white p-4 text-xs font-medium text-slate-600 dark:border-orange-900/40 dark:bg-slate-900 dark:text-slate-300">
+                      As parcelas são geradas a cada 30 dias e podem ser ajustadas antes de salvar.
                     </div>
                   </div>
 
                   {installmentPreview.length > 0 && (
-                    <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                      <div className="hidden grid-cols-[90px_1fr_1fr] bg-slate-50 dark:bg-slate-800 px-4 py-3 text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400 md:grid">
+                    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+                      <div className="hidden grid-cols-[80px_1fr_1fr] bg-slate-50 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:bg-slate-800 md:grid">
                         <span>Parcela</span>
                         <span>Valor</span>
                         <span>Vencimento</span>
                       </div>
 
-                      <div className="divide-y divide-slate-100 dark:divide-slate-700">
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800">
                         {installmentPreview.map((installment) => (
                           <div
                             key={installment.id}
-                            className="grid gap-3 px-4 py-3 md:grid-cols-[90px_1fr_1fr]"
+                            className="grid gap-2 p-3 text-xs md:grid-cols-[80px_1fr_1fr] md:items-center"
                           >
-                            <div className="flex items-center text-sm font-black text-slate-900 dark:text-slate-100">
-                              {installment.installmentNumber}/
-                              {installmentPreview.length}
+                            <div className="font-bold text-slate-900 dark:text-white">
+                              {installment.installmentNumber}/{installmentPreview.length}
                             </div>
 
                             <input
@@ -3073,8 +3179,7 @@ GERADO EM: {currentDate}`;
                                   event.target.value,
                                 )
                               }
-                              aria-label={`Valor da parcela ${installment.installmentNumber}`}
-                              className="h-11 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
+                              className="h-9 w-full rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                             />
 
                             <input
@@ -3086,8 +3191,7 @@ GERADO EM: {currentDate}`;
                                   event.target.value,
                                 )
                               }
-                              aria-label={`Vencimento da parcela ${installment.installmentNumber}`}
-                              className="h-11 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
+                              className="h-9 w-full rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                             />
                           </div>
                         ))}
@@ -3098,68 +3202,83 @@ GERADO EM: {currentDate}`;
               )}
 
               {expenseFormError && (
-                <div className={`rounded-2xl border px-4 py-3 text-sm font-bold ${isBlackTheme ? "border-red-900/60 bg-red-950/30 text-red-300" : "border-red-200 bg-red-50 text-red-700"}`}>
+                <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
                   {expenseFormError}
                 </div>
               )}
+            </div>
 
-              <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-700 pt-5 md:flex-row md:items-center md:justify-between">
-                {editingExpenseId && (
-                  <div className="flex flex-col-reverse gap-3 md:flex-row">
-                    {!isEditingPaidExpense && (
-                      <button
-                        type="button"
-                        disabled={isExpenseSaving}
-                        onClick={openDeleteExpenseConfirmation}
-                        className="rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Excluir conta
-                      </button>
-                    )}
-
-                    {isEditingPaidExpense && (
-                      <button
-                        type="button"
-                        disabled={isExpenseSaving}
-                        onClick={() => openPaymentReversalConfirmation()}
-                        className="rounded-xl bg-amber-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Voltar para pendente
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex flex-col-reverse gap-3 md:ml-auto md:flex-row md:justify-end">
-                  {!isEditingPaidExpense && (
-                    <button
-                      type="button"
-                      disabled={isExpenseSaving}
-                      onClick={closeCreateModal}
-                      className={`rounded-xl px-5 py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                        isBlackTheme
-                          ? "bg-[#1e293b] text-[#cbd5e1] hover:bg-[#334155]"
-                          : "bg-[#f1f5f9] text-[#475569] hover:bg-[#e2e8f0]"
-                      }`}
-                    >
-                      Cancelar
-                    </button>
-                  )}
-
+            {/* Rodapé com botões de ação */}
+            <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/80 px-6 py-4 dark:border-slate-800 dark:bg-slate-900/80">
+              <div>
+                {editingExpenseId && !isEditingPaidExpense && (
                   <button
                     type="button"
                     disabled={isExpenseSaving}
-                    onClick={saveExpenseWithSavingState}
-                    className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={openDeleteExpenseConfirmation}
+                    className="rounded-xl bg-red-50 px-4 py-2 text-xs font-bold text-red-600 transition hover:bg-red-100 dark:bg-red-950/40 dark:text-red-300 disabled:opacity-60"
                   >
-                    {isExpenseSaving
-                      ? "Salvando..."
-                      : editingExpenseId
-                        ? "Salvar ajustes"
-                        : "Salvar conta"}
+                    Excluir conta
                   </button>
-                </div>
+                )}
+                {editingExpenseId && isEditingPaidExpense && (
+                  <button
+                    type="button"
+                    disabled={isExpenseSaving}
+                    onClick={() => openPaymentReversalConfirmation()}
+                    className="rounded-xl bg-amber-50 px-4 py-2 text-xs font-bold text-amber-700 transition hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 disabled:opacity-60"
+                  >
+                    Voltar para pendente
+                  </button>
+                )}
               </div>
+
+              <div className="flex items-center gap-2">
+                {!isEditingPaidExpense && (
+                  <button
+                    type="button"
+                    disabled={isExpenseSaving}
+                    onClick={closeCreateModal}
+                    className="rounded-xl bg-slate-200/80 px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 disabled:opacity-60"
+                  >
+                    Cancelar
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  disabled={isExpenseSaving}
+                  onClick={saveExpenseWithSavingState}
+                  className="rounded-xl bg-orange-500 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-orange-200 transition hover:bg-orange-600 dark:shadow-none disabled:opacity-60"
+                >
+                  {isExpenseSaving
+                    ? "Salvando..."
+                    : editingExpenseId
+                      ? "Salvar ajustes"
+                      : "Salvar conta"}
+                </button>
+              </div>
+            </div>
+
+            {/* Handle visual de redimensionamento */}
+            <div
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                setIsResizingCreateModal(true);
+                const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+                setCreateResizeStartPos({
+                  x: e.clientX,
+                  y: e.clientY,
+                  width: rect.width,
+                  height: rect.height,
+                });
+              }}
+              className="absolute bottom-0 right-0 h-4 w-4 cursor-se-resize select-none"
+              title="Arraste para redimensionar o modal"
+            >
+              <svg className="h-4 w-4 text-slate-300 dark:text-slate-600" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M14 14H10V12H14V14ZM14 10H12V8H14V10ZM10 14H8V12H10V14Z" />
+              </svg>
             </div>
           </div>
         </div>
@@ -3176,140 +3295,228 @@ GERADO EM: {currentDate}`;
         onCreated={handleTenantCreated}
       />
       {expensePendingPaymentReceipt && (
-        <div className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${accountsPayableThemeClass}`}>
-          <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
-            <div className="border-b border-slate-100 dark:border-slate-800 dark:border-slate-800 bg-gradient-to-r from-orange-50 to-white dark:from-orange-950/30 dark:to-slate-900 p-6">
-              <div className="flex items-start justify-between gap-4">
+        <div
+          className={`fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-4 ${accountsPayableThemeClass}`}
+          onMouseMove={(e) => {
+            if (isDraggingPayModal) {
+              setPayModalPos({
+                x: e.clientX - payDragStartPos.x,
+                y: e.clientY - payDragStartPos.y,
+              });
+            } else if (isResizingPayModal) {
+              const newWidth = Math.max(500, payResizeStartPos.width + (e.clientX - payResizeStartPos.x));
+              const newHeight = Math.max(400, payResizeStartPos.height + (e.clientY - payResizeStartPos.y));
+              setPayModalSize({ width: newWidth, height: newHeight });
+            }
+          }}
+          onMouseUp={() => {
+            setIsDraggingPayModal(false);
+            setIsResizingPayModal(false);
+          }}
+        >
+          <div
+            style={{
+              transform: payModalPos ? `translate(${payModalPos.x}px, ${payModalPos.y}px)` : undefined,
+              width: payModalSize ? `${payModalSize.width}px` : undefined,
+              height: payModalSize ? `${payModalSize.height}px` : undefined,
+            }}
+            className="contrx-modal-panel relative flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+          >
+            {/* Header Arrastável */}
+            <div
+              onMouseDown={(e) => {
+                if ((e.target as HTMLElement).closest("button")) return;
+                setIsDraggingPayModal(true);
+                setPayDragStartPos({
+                  x: e.clientX - (payModalPos?.x || 0),
+                  y: e.clientY - (payModalPos?.y || 0),
+                });
+              }}
+              className="flex cursor-grab items-center justify-between border-b border-slate-100 bg-slate-50/80 px-6 py-4 dark:border-slate-800 dark:bg-slate-900/80 active:cursor-grabbing select-none"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-500 text-base font-black text-white shadow-md shadow-emerald-200 dark:shadow-none">
+                  💰
+                </div>
                 <div>
-                  <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">
+                  <h2 className="text-base font-bold text-slate-900 dark:text-white">
                     Pagar conta
                   </h2>
-
-                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
+                  <p className="text-xs font-normal text-slate-500 dark:text-slate-400">
                     Ajuste juros, desconto, valor final e formas de pagamento.
                   </p>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={closePayExpenseModal}
-                  className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-600 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 hover:text-slate-950 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700 dark:hover:bg-slate-700"
-                  aria-label="Fechar pagamento"
-                >
-                  ✕
-                </button>
               </div>
+
+              <button
+                type="button"
+                onClick={closePayExpenseModal}
+                className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-200/60 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white"
+                aria-label="Fechar pagamento"
+              >
+                ✕
+              </button>
             </div>
 
-            <div className="flex-1 space-y-5 overflow-y-auto p-6">
-              <div className="rounded-2xl border border-red-200 bg-red-50/60 p-5 dark:border-red-900/50 dark:bg-red-950/30">
-                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between border-b border-red-200/60 pb-3 dark:border-red-900/40">
+            {/* Conteúdo com rolagem interna */}
+            <div className="flex-1 space-y-5 overflow-y-auto p-6 text-slate-900 dark:text-slate-100">
+              
+              {/* Card Resumo do Conta a Pagar */}
+              <div className="rounded-2xl border border-red-100 bg-red-50/40 p-4 dark:border-red-900/30 dark:bg-red-950/20">
+                <div className="flex items-center justify-between border-b border-red-100/80 pb-3 dark:border-red-900/40">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-wider text-red-700 dark:text-red-400">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-red-500">
                       Detalhamento da Conta a Pagar
-                    </p>
-                    <h3 className="text-base font-black text-slate-900 dark:text-white mt-0.5">
+                    </span>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                       {expensePendingPaymentReceipt.description}
                     </h3>
                   </div>
-
-                  <span className="inline-flex w-fit rounded-xl border border-red-200 bg-white px-3.5 py-1.5 text-xs font-black uppercase tracking-wide text-red-700 shadow-sm dark:border-red-900 dark:bg-slate-900 dark:text-red-300">
+                  <span className="rounded-full bg-red-100 px-3 py-1 text-[11px] font-bold text-red-700 dark:bg-red-900/50 dark:text-red-300">
                     A Pagar
                   </span>
                 </div>
 
-                <div className="mt-4 grid gap-4 text-xs font-bold text-slate-700 dark:text-slate-300 md:grid-cols-3">
-                  <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-xl border border-red-100 dark:border-red-900/30">
-                    <span className="block text-[10px] font-black uppercase text-slate-400">Fornecedor / Favorecido</span>
-                    <span className="text-sm font-black text-slate-950 dark:text-white truncate block mt-0.5">
+                <div className="mt-3 grid gap-3 text-xs sm:grid-cols-3">
+                  <div>
+                    <span className="block text-[10px] font-medium text-slate-400">Fornecedor / Favorecido</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200">
                       {expensePendingPaymentReceipt.personName || "Não informado"}
                     </span>
                   </div>
-
-                  <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-xl border border-red-100 dark:border-red-900/30">
-                    <span className="block text-[10px] font-black uppercase text-slate-400">Bem / Ativo</span>
-                    <span className="text-sm font-black text-slate-950 dark:text-white truncate block mt-0.5">
+                  <div>
+                    <span className="block text-[10px] font-medium text-slate-400">Bem / Ativo</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200">
                       {expensePendingPaymentReceipt.propertyName || "Não informado"}
                     </span>
                   </div>
-
-                  <div className="bg-white/80 dark:bg-slate-900/60 p-3 rounded-xl border border-red-100 dark:border-red-900/30">
-                    <span className="block text-[10px] font-black uppercase text-slate-400">Valor Original</span>
-                    <span className="text-sm font-black text-slate-950 dark:text-white truncate block mt-0.5">
+                  <div>
+                    <span className="block text-[10px] font-medium text-slate-400">Valor Original</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200">
                       {formatCurrency(expensePendingPaymentReceipt.amount)}
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-4">
+              {/* Indicadores de Ajustes Financeiros */}
+              <div className="grid gap-3 sm:grid-cols-4">
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                  <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                     Data de pagamento
                   </label>
-
                   <input
                     type="date"
                     value={formPaymentDate}
                     onChange={(event) => setFormPaymentDate(event.target.value)}
-                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
-                    Juros
-                  </label>
-
-                  <input
-                    value={paymentInterest}
-                    onChange={(event) => {
-                      const value = event.target.value;
-
-                      setPaymentInterest(value);
-                      updatePaymentFinalAmountFromAdjustments(
-                        expensePendingPaymentReceipt,
-                        value,
-                        paymentDiscount,
-                      );
-                    }}
-                    placeholder="0,00"
-                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
-                  />
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Juros (+)
+                    </label>
+                    <div className="flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => changePaymentInterestMode(expensePendingPaymentReceipt, "amount")}
+                        className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold transition ${
+                          paymentInterestMode === "amount"
+                            ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white"
+                            : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                        }`}
+                      >
+                        R$
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => changePaymentInterestMode(expensePendingPaymentReceipt, "percentage")}
+                        className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold transition ${
+                          paymentInterestMode === "percentage"
+                            ? "bg-orange-500 text-white shadow-sm"
+                            : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                        }`}
+                      >
+                        %
+                      </button>
+                    </div>
+                  </div>
+                  <div className="relative flex items-center">
+                    <span className="pointer-events-none absolute left-3 text-xs font-bold text-slate-400">
+                      {paymentInterestMode === "percentage" ? "%" : "R$"}
+                    </span>
+                    <input
+                      value={paymentInterestInput}
+                      onChange={(event) =>
+                        updatePaymentInterestInput(
+                          expensePendingPaymentReceipt,
+                          event.target.value,
+                        )
+                      }
+                      placeholder="0,00"
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-8 pr-3 text-xs font-bold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white placeholder:text-slate-400"
+                    />
+                  </div>
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
-                    Desconto
-                  </label>
-
-                  <input
-                    value={paymentDiscount}
-                    onChange={(event) => {
-                      const value = event.target.value;
-
-                      setPaymentDiscount(value);
-                      updatePaymentFinalAmountFromAdjustments(
-                        expensePendingPaymentReceipt,
-                        paymentInterest,
-                        value,
-                      );
-                    }}
-                    placeholder="0,00"
-                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
-                  />
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Desconto (-)
+                    </label>
+                    <div className="flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => changePaymentDiscountMode(expensePendingPaymentReceipt, "amount")}
+                        className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold transition ${
+                          paymentDiscountMode === "amount"
+                            ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white"
+                            : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                        }`}
+                      >
+                        R$
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => changePaymentDiscountMode(expensePendingPaymentReceipt, "percentage")}
+                        className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold transition ${
+                          paymentDiscountMode === "percentage"
+                            ? "bg-orange-500 text-white shadow-sm"
+                            : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                        }`}
+                      >
+                        %
+                      </button>
+                    </div>
+                  </div>
+                  <div className="relative flex items-center">
+                    <span className="pointer-events-none absolute left-3 text-xs font-bold text-slate-400">
+                      {paymentDiscountMode === "percentage" ? "%" : "R$"}
+                    </span>
+                    <input
+                      value={paymentDiscountInput}
+                      onChange={(event) =>
+                        updatePaymentDiscountInput(
+                          expensePendingPaymentReceipt,
+                          event.target.value,
+                        )
+                      }
+                      placeholder="0,00"
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-8 pr-3 text-xs font-bold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white placeholder:text-slate-400"
+                    />
+                  </div>
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
+                  <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
                     Valor final pago
                   </label>
-
                   <input
                     value={paymentFinalAmount}
                     onChange={(event) => {
                       const value = event.target.value;
-
                       setPaymentFinalAmount(value);
                       updatePaymentAdjustmentsFromFinalAmount(
                         expensePendingPaymentReceipt,
@@ -3318,31 +3525,31 @@ GERADO EM: {currentDate}`;
                       updatePaymentEntriesFromFinalAmount(value);
                     }}
                     placeholder="0,00"
-                    className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm font-bold text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                   />
                 </div>
               </div>
 
-              <div>
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300">
+              {/* Formas de Pagamento */}
+              <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div className="mb-3 flex items-center justify-between">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-400">
                     Formas de pagamento
                   </label>
-
                   <button
                     type="button"
                     onClick={addPaymentEntry}
-                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-800"
+                    className="rounded-xl bg-orange-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-orange-600"
                   >
-                    Adicionar forma
+                    + Adicionar forma
                   </button>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {paymentEntries.map((entry) => (
                     <div
                       key={entry.id}
-                      className="grid gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3 md:grid-cols-[1fr_180px_auto]"
+                      className="grid gap-2 rounded-xl border border-slate-100 bg-slate-50 p-2.5 dark:border-slate-800 dark:bg-slate-800/60 sm:grid-cols-[1fr_160px_auto] sm:items-center"
                     >
                       <select
                         value={entry.method}
@@ -3352,7 +3559,7 @@ GERADO EM: {currentDate}`;
                             event.target.value as PaymentMethod,
                           )
                         }
-                        className="h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
+                        className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                       >
                         {paymentMethodOptions.map((option) => (
                           <option key={option.value} value={option.value}>
@@ -3367,13 +3574,13 @@ GERADO EM: {currentDate}`;
                           updatePaymentEntryAmount(entry.id, event.target.value)
                         }
                         placeholder="0,00"
-                        className="h-11 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
+                        className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                       />
 
                       <button
                         type="button"
                         onClick={() => removePaymentEntry(entry.id)}
-                        className="rounded-xl bg-white dark:bg-slate-900 px-4 py-2 text-sm font-bold text-red-600 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-red-50 dark:bg-red-950/30 dark:hover:bg-red-950/40"
+                        className="h-9 rounded-lg bg-red-50 px-3 text-xs font-bold text-red-600 transition hover:bg-red-100 dark:bg-red-950/40 dark:text-red-300"
                       >
                         Remover
                       </button>
@@ -3381,43 +3588,43 @@ GERADO EM: {currentDate}`;
                   ))}
                 </div>
 
-                <p className="mt-2 text-sm font-bold text-slate-600 dark:text-slate-400 dark:text-slate-500">
-                  Total informado: {formatCurrency(getPaymentEntriesTotal())}
-                </p>
-
-                <div
-                  className={`mt-3 rounded-2xl border px-4 py-3 text-sm font-bold ${getPaymentEntriesBalanceClassName()}`}
-                >
-                  {getPaymentEntriesBalanceLabel()}
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
+                  <span className="text-slate-500">
+                    Total informado: {formatCurrency(getPaymentEntriesTotal())}
+                  </span>
+                  <span className={`rounded-lg px-2.5 py-1 ${getPaymentEntriesBalanceClassName()}`}>
+                    {getPaymentEntriesBalanceLabel()}
+                  </span>
                 </div>
               </div>
 
+              {/* Observação do pagamento */}
               <div>
-                <label className="mb-2 block text-sm font-bold text-slate-700 dark:text-slate-300">
-                  Observação do pagamento
+                <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Observação do pagamento <span className="text-slate-400 font-normal">(opcional)</span>
                 </label>
-
                 <textarea
                   value={paymentNote}
                   onChange={(event) => setPaymentNote(event.target.value)}
                   placeholder="Ex: pago com desconto negociado..."
-                  className="min-h-20 w-full resize-none rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:text-slate-500 dark:placeholder:text-slate-500 dark:text-slate-400 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/40"
+                  className="min-h-16 w-full resize-none rounded-xl border border-slate-200 bg-white p-3 text-xs font-medium text-slate-900 outline-none transition dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                 />
               </div>
 
               {paymentFormError && (
-                <div className="rounded-2xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm font-bold text-red-700">
+                <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
                   {paymentFormError}
                 </div>
               )}
             </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white p-5 dark:border-slate-800 dark:bg-slate-900 md:flex-row md:justify-end">
+            {/* Rodapé com botões de ação */}
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/80 px-6 py-4 dark:border-slate-800 dark:bg-slate-900/80">
               <button
                 type="button"
                 onClick={closePayExpenseModal}
                 disabled={Boolean(processingConfirmation)}
-                className="rounded-xl bg-slate-100 dark:bg-slate-800 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-slate-700"
+                className="rounded-xl bg-slate-200/80 px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 disabled:opacity-60"
               >
                 Cancelar
               </button>
@@ -3426,10 +3633,31 @@ GERADO EM: {currentDate}`;
                 type="button"
                 onClick={confirmPayExpense}
                 disabled={Boolean(processingConfirmation)}
-                className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
+                className="rounded-xl bg-orange-500 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-orange-200 transition hover:bg-orange-600 dark:shadow-none disabled:opacity-70"
               >
                 Confirmar pagamento
               </button>
+            </div>
+
+            {/* Handle visual de redimensionamento */}
+            <div
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                setIsResizingPayModal(true);
+                const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+                setPayResizeStartPos({
+                  x: e.clientX,
+                  y: e.clientY,
+                  width: rect.width,
+                  height: rect.height,
+                });
+              }}
+              className="absolute bottom-0 right-0 h-4 w-4 cursor-se-resize select-none"
+              title="Arraste para redimensionar o modal"
+            >
+              <svg className="h-4 w-4 text-slate-300 dark:text-slate-600" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M14 14H10V12H14V14ZM14 10H12V8H14V10ZM10 14H8V12H10V14Z" />
+              </svg>
             </div>
           </div>
         </div>

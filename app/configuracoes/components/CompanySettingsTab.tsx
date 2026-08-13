@@ -171,7 +171,7 @@ export const CompanySettingsTab: React.FC<CompanySettingsTabProps> = ({
           <span className="text-xs font-black uppercase tracking-wide text-slate-500">
             CPF/CNPJ <span className="text-red-500">*</span>
           </span>
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex gap-2">
             <input
               type="text"
               value={companySettings.document}
@@ -196,7 +196,7 @@ export const CompanySettingsTab: React.FC<CompanySettingsTabProps> = ({
                 type="button"
                 onClick={handleSearchCompanyDocument}
                 disabled={isDocumentLookupLoading}
-                className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 shrink-0"
               >
                 {isDocumentLookupLoading ? "Buscando..." : "Buscar CNPJ"}
               </button>
@@ -298,20 +298,19 @@ export const CompanySettingsTab: React.FC<CompanySettingsTabProps> = ({
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
-          <label className="space-y-2">
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <label className="space-y-2 lg:col-span-1">
             <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-              Tipo da chave Pix
+              Tipo de chave
             </span>
             <select
               value={companySettings.pixKeyType}
               onChange={(event) => {
-                const pixKeyType = event.target.value as PixKeyType;
-
+                const nextPixKeyType = event.target.value as PixKeyType;
                 setCompanySettings({
                   ...companySettings,
-                  pixKeyType,
-                  pixKey: formatPixKey(companySettings.pixKey, pixKeyType),
+                  pixKeyType: nextPixKeyType,
+                  pixKey: formatPixKey(companySettings.pixKey, nextPixKeyType),
                 });
               }}
               className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
@@ -324,12 +323,12 @@ export const CompanySettingsTab: React.FC<CompanySettingsTabProps> = ({
             </select>
           </label>
 
-          <label className="space-y-2 md:col-span-2">
+          <label className="space-y-2 lg:col-span-2">
             <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-              Chave Pix opcional
+              Chave Pix
             </span>
             <input
-              type={companySettings.pixKeyType === "email" ? "email" : "text"}
+              type="text"
               value={companySettings.pixKey}
               onChange={(event) =>
                 setCompanySettings({
@@ -349,10 +348,10 @@ export const CompanySettingsTab: React.FC<CompanySettingsTabProps> = ({
           Endereço da empresa
         </h3>
 
-        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-4">
-          <div className="space-y-2">
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-4">
+          <div className="space-y-2 lg:col-span-1">
             <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-              CEP opcional
+              CEP
             </span>
             <div className="flex gap-2">
               <input
@@ -371,17 +370,16 @@ export const CompanySettingsTab: React.FC<CompanySettingsTabProps> = ({
                   }
                 }}
                 placeholder="00000-000"
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
               />
-
               {onlyDigits(companySettings.zipCode).length === 8 && (
                 <button
                   type="button"
                   onClick={handleSearchCompanyZipCode}
                   disabled={isZipCodeLookupLoading}
-                  className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 shrink-0"
                 >
-                  {isZipCodeLookupLoading ? "..." : "Buscar CEP"}
+                  {isZipCodeLookupLoading ? "..." : "CEP"}
                 </button>
               )}
             </div>
@@ -390,9 +388,9 @@ export const CompanySettingsTab: React.FC<CompanySettingsTabProps> = ({
             )}
           </div>
 
-          <label className="space-y-2 md:col-span-2">
+          <label className="space-y-2 lg:col-span-3">
             <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-              Endereço / Logradouro
+              Endereço
             </span>
             <input
               type="text"
@@ -403,12 +401,12 @@ export const CompanySettingsTab: React.FC<CompanySettingsTabProps> = ({
                   address: event.target.value,
                 })
               }
-              placeholder="Rua, Avenida, Alameda"
+              placeholder="Rua, Avenida, etc."
               className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
             />
           </label>
 
-          <label className="space-y-2 md:col-span-1">
+          <label className="space-y-2 lg:col-span-1">
             <span className="text-xs font-black uppercase tracking-wide text-slate-500">
               Número
             </span>
@@ -421,12 +419,12 @@ export const CompanySettingsTab: React.FC<CompanySettingsTabProps> = ({
                   number: event.target.value,
                 })
               }
-              placeholder="123 ou S/N"
+              placeholder="123"
               className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
             />
           </label>
 
-          <label className="space-y-2 md:col-span-2">
+          <label className="space-y-2 lg:col-span-1">
             <span className="text-xs font-black uppercase tracking-wide text-slate-500">
               Bairro
             </span>
@@ -444,7 +442,7 @@ export const CompanySettingsTab: React.FC<CompanySettingsTabProps> = ({
             />
           </label>
 
-          <label className="space-y-2 md:col-span-1">
+          <label className="space-y-2 lg:col-span-1">
             <span className="text-xs font-black uppercase tracking-wide text-slate-500">
               Cidade
             </span>
@@ -462,52 +460,25 @@ export const CompanySettingsTab: React.FC<CompanySettingsTabProps> = ({
             />
           </label>
 
-          <label className="space-y-2 md:col-span-1">
+          <label className="space-y-2 lg:col-span-1">
             <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-              Estado (UF)
+              UF
             </span>
             <input
               type="text"
-              maxLength={2}
               value={companySettings.state}
               onChange={(event) =>
                 setCompanySettings({
                   ...companySettings,
-                  state: event.target.value.toUpperCase(),
+                  state: event.target.value.toUpperCase().slice(0, 2),
                 })
               }
               placeholder="UF"
               className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
             />
           </label>
-        </div>
-      </div>
 
-      <div className="rounded-3xl border border-slate-100 bg-slate-50 p-5">
-        <h3 className="text-sm font-black uppercase tracking-wide text-slate-600">
-          Configurações de contratos
-        </h3>
-
-        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <label className="space-y-2">
-            <span className="text-xs font-black uppercase tracking-wide text-slate-500">
-              Cidade padrão de assinatura nos contratos
-            </span>
-            <input
-              type="text"
-              value={companySettings.contractCity}
-              onChange={(event) =>
-                setCompanySettings({
-                  ...companySettings,
-                  contractCity: event.target.value,
-                })
-              }
-              placeholder="Ex: São Paulo"
-              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-            />
-          </label>
-
-          <label className="space-y-2 md:col-span-2">
+          <label className="space-y-2 lg:col-span-4">
             <span className="text-xs font-black uppercase tracking-wide text-slate-500">
               Observações padrão dos contratos
             </span>
