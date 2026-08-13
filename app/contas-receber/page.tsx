@@ -3093,14 +3093,27 @@ export default function AccountsReceivablePage() {
         const distributedInterest = interestDistribution[index] || 0;
         const distributedDiscount = discountDistribution[index] || 0;
 
-        if (distributedAmount <= 0) continue;
+        const chargePaymentItems = paymentEntries
+          .map((entry) => {
+            const entryAmount = normalizeAmount(entry.amount);
+            if (entryAmount <= 0 || amountPaid <= 0) return null;
+            const itemRatio = distributedAmount / amountPaid;
+            const itemDistributedAmount = Math.round(entryAmount * itemRatio * 100) / 100;
+            if (itemDistributedAmount <= 0) return null;
+            return {
+              id: createLocalId("payment-entry"),
+              method: entry.method,
+              amount: itemDistributedAmount,
+            };
+          })
+          .filter((item): item is { id: string; method: PaymentMethod; amount: number } => item !== null);
 
         const paymentRecord: ChargePayment = {
           id: createLocalId("payment"),
           chargeId: charge.id,
           paidAt,
           method: paymentEntries[0]?.method || paymentMethod,
-          paymentItems: [
+          paymentItems: chargePaymentItems.length > 0 ? chargePaymentItems : [
             {
               id: createLocalId("payment-entry"),
               method: paymentEntries[0]?.method || paymentMethod,
