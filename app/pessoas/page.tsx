@@ -1646,6 +1646,14 @@ export default function PeoplePage() {
                             src={getMediaUrl(historyPerson.photo)}
                             alt="Foto de Perfil"
                             className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                            onError={(e) => {
+                              const img = e.currentTarget;
+                              const raw = typeof historyPerson.photo === "string" ? historyPerson.photo : "";
+                              if (raw && !img.dataset.fallbackTried) {
+                                img.dataset.fallbackTried = "true";
+                                img.src = getMediaUrl(raw);
+                              }
+                            }}
                           />
                           <div className="absolute top-2 left-2 rounded-lg bg-slate-900/80 px-2 py-0.5 text-[10px] font-black text-white backdrop-blur-sm">
                             Foto de Perfil
@@ -1663,26 +1671,46 @@ export default function PeoplePage() {
                         </div>
                       )}
 
-                      {historyPersonPhotos.map((file) => (
-                        <div key={file.id} className="group relative aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={getMediaUrl(file.url)}
-                            alt="Anexo"
-                            className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
-                          />
-                          <div className="absolute inset-0 bg-slate-900/20 opacity-0 transition group-hover:opacity-100 flex items-center justify-center">
-                            <a
-                              href={getMediaUrl(file.url)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="rounded-xl bg-white/90 px-3 py-1.5 text-xs font-black text-slate-900 shadow backdrop-blur-sm"
-                            >
-                              Ver documento
-                            </a>
+                      {historyPersonPhotos.map((file) => {
+                        const fileUrl = getMediaUrl(file.url || file);
+                        const rawUrl = typeof file === "string" ? file : file?.url || file?.filePath || file?.path || "";
+                        const isPdf = file?.type === "PDF" || rawUrl.toLowerCase().endsWith(".pdf") || file?.originalName?.toLowerCase().endsWith(".pdf");
+
+                        return (
+                          <div key={file.id || fileUrl} className="group relative aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm flex items-center justify-center p-2 text-center">
+                            {isPdf ? (
+                              <div className="flex flex-col items-center justify-center gap-2 p-4 text-slate-600">
+                                <FileText className="w-10 h-10 text-red-500" />
+                                <span className="text-xs font-bold line-clamp-2">{file.originalName || "Documento PDF"}</span>
+                              </div>
+                            ) : (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img
+                                src={fileUrl}
+                                alt={file.originalName || "Anexo"}
+                                className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                                onError={(e) => {
+                                  const img = e.currentTarget;
+                                  if (rawUrl && rawUrl !== fileUrl && !img.dataset.fallbackTried) {
+                                    img.dataset.fallbackTried = "true";
+                                    img.src = getMediaUrl(rawUrl);
+                                  }
+                                }}
+                              />
+                            )}
+                            <div className="absolute inset-0 bg-slate-900/20 opacity-0 transition group-hover:opacity-100 flex items-center justify-center">
+                              <a
+                                href={fileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="rounded-xl bg-white/90 px-3 py-1.5 text-xs font-black text-slate-900 shadow backdrop-blur-sm"
+                              >
+                                Ver documento
+                              </a>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -2087,13 +2115,37 @@ export default function PeoplePage() {
                         <span className="text-xs font-bold text-slate-700">Foto de Perfil</span>
                       </div>
                     )}
-                    {historyPersonPhotos.map((file) => (
-                      <div key={file.id} className="border border-slate-200 rounded-xl overflow-hidden p-2 text-center">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={getMediaUrl(file.url)} alt="Anexo" className="h-40 w-full object-cover rounded-lg mx-auto mb-2" />
-                        <span className="text-xs font-bold text-slate-700">Documento / Anexo</span>
-                      </div>
-                    ))}
+                    {historyPersonPhotos.map((file) => {
+                      const fileUrl = getMediaUrl(file.url || file);
+                      const rawUrl = typeof file === "string" ? file : file?.url || file?.filePath || file?.path || "";
+                      const isPdf = file?.type === "PDF" || rawUrl.toLowerCase().endsWith(".pdf") || file?.originalName?.toLowerCase().endsWith(".pdf");
+
+                      return (
+                        <div key={file.id || fileUrl} className="border border-slate-200 rounded-xl overflow-hidden p-2 text-center flex flex-col items-center justify-center">
+                          {isPdf ? (
+                            <div className="h-40 w-full flex flex-col items-center justify-center bg-slate-50 rounded-lg p-2 mb-2 text-slate-600">
+                              <FileText className="w-10 h-10 text-red-500 mb-1" />
+                              <span className="text-xs font-bold line-clamp-2">{file.originalName || "Documento PDF"}</span>
+                            </div>
+                          ) : (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img
+                              src={fileUrl}
+                              alt="Anexo"
+                              className="h-40 w-full object-cover rounded-lg mx-auto mb-2"
+                              onError={(e) => {
+                                const img = e.currentTarget;
+                                if (rawUrl && rawUrl !== fileUrl && !img.dataset.fallbackTried) {
+                                  img.dataset.fallbackTried = "true";
+                                  img.src = getMediaUrl(rawUrl);
+                                }
+                              }}
+                            />
+                          )}
+                          <span className="text-xs font-bold text-slate-700">{file.originalName || "Documento / Anexo"}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )

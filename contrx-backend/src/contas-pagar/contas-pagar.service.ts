@@ -145,9 +145,9 @@ export class ContasPagarService {
           paidAt: this.parseDate(data.paidAt, 'Data de pagamento invalida.'),
           method: data.method,
           paymentItems:
-            data.paymentItems === undefined
+            data.paymentItems === undefined || data.paymentItems === null
               ? Prisma.JsonNull
-              : data.paymentItems,
+              : (data.paymentItems as any),
           interest: new Prisma.Decimal(data.interest || 0),
           discount: new Prisma.Decimal(data.discount || 0),
           amountPaid: new Prisma.Decimal(data.amountPaid),
@@ -203,9 +203,9 @@ export class ContasPagarService {
           paidAt: this.parseDate(data.paidAt, 'Data de pagamento invalida.'),
           method: data.method,
           paymentItems:
-            data.paymentItems === undefined
+            data.paymentItems === undefined || data.paymentItems === null
               ? Prisma.JsonNull
-              : data.paymentItems,
+              : (data.paymentItems as any),
           interest: new Prisma.Decimal(data.interest || 0),
           discount: new Prisma.Decimal(data.discount || 0),
           amountPaid: new Prisma.Decimal(data.amountPaid),
@@ -420,6 +420,10 @@ export class ContasPagarService {
   }
 
   private parseDate(value: string, errorMessage: string) {
+    if (!value || typeof value !== 'string') {
+      throw new BadRequestException(errorMessage);
+    }
+
     const parsedDate = value.includes('T')
       ? new Date(value)
       : new Date(`${value}T00:00:00`);

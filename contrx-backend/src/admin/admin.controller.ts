@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtGuardAutenticacao } from '../autenticacao/guards/jwt-autenticacao.guard';
@@ -97,10 +98,38 @@ export class AdminController {
     return this.adminService.createErrorLog(data, user?.companyId);
   }
 
+  @Post('errors/purge')
+  @UseGuards(SystemOwnerGuard)
+  purgeErrorLogsPost(@Body('daysOld') daysOld?: number) {
+    return this.adminService.purgeErrorLogs(daysOld || 30);
+  }
+
   @Get('errors')
   @UseGuards(SystemOwnerGuard)
-  findErrorLogs() {
-    return this.adminService.findErrorLogs();
+  findErrorLogs(
+    @Query('level') level?: string,
+    @Query('module') module?: string,
+    @Query('period') period?: string,
+    @Query('search') search?: string,
+    @Query('companyId') companyId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.adminService.findErrorLogs({
+      level,
+      module,
+      period,
+      search,
+      companyId,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
+  }
+
+  @Get('errors/:id')
+  @UseGuards(SystemOwnerGuard)
+  findErrorLogById(@Param('id') id: string) {
+    return this.adminService.findErrorLogs({ search: id });
   }
 
   @Delete('errors/:id')

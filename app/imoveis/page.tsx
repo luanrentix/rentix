@@ -634,8 +634,14 @@ export default function PropertiesPage() {
         const parsed = JSON.parse(historyProperty.photos);
         if (Array.isArray(parsed)) {
           legacyPhotos = parsed.filter(Boolean);
+        } else if (typeof parsed === "string" && parsed) {
+          legacyPhotos = [parsed];
         }
-      } catch {}
+      } catch {
+        if (typeof historyProperty.photos === "string" && historyProperty.photos) {
+          legacyPhotos = [historyProperty.photos];
+        }
+      }
     }
     const combined = [...apiPhotos];
     for (const leg of legacyPhotos) {
@@ -2513,10 +2519,22 @@ export default function PropertiesPage() {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                           {allPropertyPhotos.map((photo, index) => {
                             const resolvedUrl = getMediaUrl(photo);
+                            const rawUrl = typeof photo === "string" ? photo : photo?.url || photo?.filePath || photo?.path || "";
                             return (
                               <div key={photo.id || index} className="group relative aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm transition hover:shadow-md">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={resolvedUrl} alt="Foto do imóvel" className="w-full h-full object-cover transition duration-300 group-hover:scale-105" />
+                                <img
+                                  src={resolvedUrl}
+                                  alt="Foto do imóvel"
+                                  className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                                  onError={(e) => {
+                                    const img = e.currentTarget;
+                                    if (rawUrl && rawUrl !== resolvedUrl && !img.dataset.fallbackTried) {
+                                      img.dataset.fallbackTried = "true";
+                                      img.src = getMediaUrl(rawUrl);
+                                    }
+                                  }}
+                                />
                                 <div className="absolute inset-0 bg-slate-900/20 opacity-0 transition group-hover:opacity-100 flex items-center justify-center">
                                   <a
                                     href={resolvedUrl}

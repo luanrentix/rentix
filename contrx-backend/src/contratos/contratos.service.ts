@@ -980,7 +980,13 @@ export class ContratosService {
   }
 
   private parseDate(value: string, errorMessage: string) {
-    const parsedDate = new Date(`${value}T00:00:00`);
+    if (!value || typeof value !== 'string') {
+      throw new BadRequestException(errorMessage);
+    }
+
+    const parsedDate = value.includes('T')
+      ? new Date(value)
+      : new Date(`${value}T00:00:00`);
 
     if (Number.isNaN(parsedDate.getTime())) {
       throw new BadRequestException(errorMessage);

@@ -1,4 +1,8 @@
-export function toUpperText(value: string) {
+export function toUpperText(value?: string | null) {
+  if (!value || typeof value !== 'string') {
+    return '';
+  }
+
   return value.toLocaleUpperCase('pt-BR').trim();
 }
 

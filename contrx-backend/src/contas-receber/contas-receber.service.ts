@@ -178,9 +178,9 @@ export class ContasReceberService {
           paidAt: this.parseDate(data.paidAt, 'Data de pagamento invalida.'),
           method: data.method,
           paymentItems:
-            data.paymentItems === undefined
+            data.paymentItems === undefined || data.paymentItems === null
               ? Prisma.JsonNull
-              : data.paymentItems,
+              : (data.paymentItems as any),
           interest: new Prisma.Decimal(data.interest || 0),
           discount: new Prisma.Decimal(data.discount || 0),
           amountPaid: new Prisma.Decimal(data.amountPaid),
@@ -236,9 +236,9 @@ export class ContasReceberService {
           paidAt: this.parseDate(data.paidAt, 'Data de pagamento invalida.'),
           method: data.method,
           paymentItems:
-            data.paymentItems === undefined
+            data.paymentItems === undefined || data.paymentItems === null
               ? Prisma.JsonNull
-              : data.paymentItems,
+              : (data.paymentItems as any),
           interest: new Prisma.Decimal(data.interest || 0),
           discount: new Prisma.Decimal(data.discount || 0),
           amountPaid: new Prisma.Decimal(data.amountPaid),
@@ -273,94 +273,98 @@ export class ContasReceberService {
       ),
     );
 
-    return this.prisma.$transaction(async (tx) => {
-      const updatedAccounts: Array<
-        Prisma.ContaReceberGetPayload<{
-          include: { payments: true; contract: true; tenant: true };
-        }>
-      > = [];
+    return this.prisma.$transaction(
+      async (tx) => {
+        const updatedAccounts: Array<
+          Prisma.ContaReceberGetPayload<{
+            include: { payments: true; contract: true; tenant: true };
+          }>
+        > = [];
 
-      for (const payment of data.payments) {
-        const account = await tx.contaReceber.findFirst({
-          where: { id: payment.chargeId, companyId },
-          select: { id: true, amount: true },
-        });
+        for (const payment of data.payments) {
+          const account = await tx.contaReceber.findFirst({
+            where: { id: payment.chargeId, companyId },
+            select: { id: true, amount: true },
+          });
 
-        if (!account) {
-          throw new NotFoundException('Conta a receber nao encontrada.');
-        }
+          if (!account) {
+            throw new NotFoundException('Conta a receber nao encontrada.');
+          }
 
-        const currentPaymentSummary = await tx.pagamentoRecebido.aggregate({
-          where: { chargeId: payment.chargeId },
-          _sum: { amountPaid: true, discount: true, interest: true },
-        });
-        const currentSettlementAmount = getFinancialSettlementAmount(
-          currentPaymentSummary._sum.amountPaid,
-          currentPaymentSummary._sum.discount,
-          currentPaymentSummary._sum.interest,
-        );
-
-        if (currentSettlementAmount >= Number(account.amount)) {
-          throw new BadRequestException(
-            'Uma das contas selecionadas ja esta quitada.',
-          );
-        }
-
-        const nextSettlementAmount =
-          currentSettlementAmount +
-          getFinancialSettlementAmount(
-            payment.amountPaid,
-            payment.discount || 0,
-            payment.interest || 0,
+          const currentPaymentSummary = await tx.pagamentoRecebido.aggregate({
+            where: { chargeId: payment.chargeId },
+            _sum: { amountPaid: true, discount: true, interest: true },
+          });
+          const currentSettlementAmount = getFinancialSettlementAmount(
+            currentPaymentSummary._sum.amountPaid,
+            currentPaymentSummary._sum.discount,
+            currentPaymentSummary._sum.interest,
           );
 
-        this.validateSettlementLimit(
-          Number(account.amount),
-          nextSettlementAmount,
-          'Um dos recebimentos excede o saldo em aberto da conta.',
-        );
+          if (currentSettlementAmount >= Number(account.amount)) {
+            throw new BadRequestException(
+              'Uma das contas selecionadas ja esta quitada.',
+            );
+          }
 
-        await tx.pagamentoRecebido.create({
-          data: {
-            charge: { connect: { id: payment.chargeId } },
-            paidAt: this.parseDate(
-              payment.paidAt,
-              'Data de pagamento invalida.',
-            ),
-            method: payment.method,
-            paymentItems:
-              payment.paymentItems === undefined
-                ? Prisma.JsonNull
-                : payment.paymentItems,
-            interest: new Prisma.Decimal(payment.interest || 0),
-            discount: new Prisma.Decimal(payment.discount || 0),
-            amountPaid: new Prisma.Decimal(payment.amountPaid),
-            note: payment.note ? toUpperText(payment.note) : null,
-          },
-        });
+          const nextSettlementAmount =
+            currentSettlementAmount +
+            getFinancialSettlementAmount(
+              payment.amountPaid,
+              payment.discount || 0,
+              payment.interest || 0,
+            );
 
-        const updatedAccount = await tx.contaReceber.update({
-          where: { id: payment.chargeId },
-          data: {
-            status: this.getStatusAfterPayment(
-              Number(account.amount),
-              nextSettlementAmount,
-            ),
-          },
-          include: this.defaultInclude,
-        });
+          this.validateSettlementLimit(
+            Number(account.amount),
+            nextSettlementAmount,
+            'Um dos recebimentos excede o saldo em aberto da conta.',
+          );
 
-        await this.syncOwnerPayoutFromReceivable(
-          tx,
-          payment.chargeId,
-          companyId,
-        );
+          await tx.pagamentoRecebido.create({
+            data: {
+              charge: { connect: { id: payment.chargeId } },
+              paidAt: this.parseDate(
+                payment.paidAt,
+                'Data de pagamento invalida.',
+              ),
+              method: payment.method,
+              paymentItems:
+                payment.paymentItems === undefined ||
+                payment.paymentItems === null
+                  ? Prisma.JsonNull
+                  : (payment.paymentItems as any),
+              interest: new Prisma.Decimal(payment.interest || 0),
+              discount: new Prisma.Decimal(payment.discount || 0),
+              amountPaid: new Prisma.Decimal(payment.amountPaid),
+              note: payment.note ? toUpperText(payment.note) : null,
+            },
+          });
 
-        updatedAccounts.push(updatedAccount);
-      }
+          const updatedAccount = await tx.contaReceber.update({
+            where: { id: payment.chargeId },
+            data: {
+              status: this.getStatusAfterPayment(
+                Number(account.amount),
+                nextSettlementAmount,
+              ),
+            },
+            include: this.defaultInclude,
+          });
 
-      return updatedAccounts;
-    });
+          await this.syncOwnerPayoutFromReceivable(
+            tx,
+            payment.chargeId,
+            companyId,
+          );
+
+          updatedAccounts.push(updatedAccount);
+        }
+
+        return updatedAccounts;
+      },
+      { maxWait: 10000, timeout: 20000 },
+    );
   }
 
   async reversePayment(id: string, companyId: string) {
@@ -544,6 +548,10 @@ export class ContasReceberService {
   }
 
   private parseDate(value: string, errorMessage: string) {
+    if (!value || typeof value !== 'string') {
+      throw new BadRequestException(errorMessage);
+    }
+
     const parsedDate = value.includes('T')
       ? new Date(value)
       : new Date(`${value}T00:00:00`);
@@ -569,7 +577,11 @@ export class ContasReceberService {
     data: ReceberPagamentoDto,
     amountMessage: string,
   ) {
-    if (data.amountPaid <= 0) {
+    if (
+      !data.amountPaid ||
+      Number.isNaN(Number(data.amountPaid)) ||
+      Number(data.amountPaid) <= 0
+    ) {
       throw new BadRequestException(amountMessage);
     }
 

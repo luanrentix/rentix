@@ -3,6 +3,10 @@ import { IsInt, IsOptional, IsString } from 'class-validator';
 export class CreateErrorLogDto {
   @IsOptional()
   @IsString()
+  companyId?: string;
+
+  @IsOptional()
+  @IsString()
   level?: string;
 
   @IsString()

@@ -216,16 +216,17 @@ export function getMediaUrl(urlInput: any): string {
   let url =
     typeof urlInput === 'string'
       ? urlInput
-      : urlInput.url || urlInput.filePath || urlInput.path || urlInput.fileUrl || urlInput.photo || urlInput.src || '';
+      : urlInput.url || urlInput.filePath || urlInput.path || urlInput.fileUrl || urlInput.photo || urlInput.src || urlInput.file || '';
 
   if (!url || typeof url !== 'string') return '';
 
-  url = url.replace(/\\/g, '/');
+  url = url.trim().replace(/\\/g, '/');
 
-  if (url.includes('/uploads/')) {
-    const uploadsIndex = url.indexOf('/uploads/');
-    url = url.substring(uploadsIndex);
+  if (url.startsWith('"') && url.endsWith('"')) {
+    url = url.slice(1, -1);
   }
+
+  let finalUrl = '';
 
   if (
     url.startsWith('http://') ||
@@ -233,15 +234,26 @@ export function getMediaUrl(urlInput: any): string {
     url.startsWith('data:') ||
     url.startsWith('blob:')
   ) {
-    if (typeof window !== 'undefined' && window.location.protocol === 'https:' && url.startsWith('http://')) {
-      return url.replace('http://', 'https://');
+    finalUrl = url;
+  } else {
+    if (url.includes('/uploads/')) {
+      const uploadsIndex = url.indexOf('/uploads/');
+      url = url.substring(uploadsIndex);
     }
-    return url;
+    const baseUrl = getApiBaseUrl();
+    const path = url.startsWith('/') ? url : `/${url}`;
+    finalUrl = `${baseUrl}${path}`;
   }
 
-  const baseUrl = getApiBaseUrl();
-  const path = url.startsWith('/') ? url : `/${url}`;
-  return `${baseUrl}${path}`;
+  if (
+    typeof window !== 'undefined' &&
+    window.location.protocol === 'https:' &&
+    finalUrl.startsWith('http://')
+  ) {
+    finalUrl = finalUrl.replace('http://', 'https://');
+  }
+
+  return finalUrl;
 }
 
 export async function checkApiHealth(): Promise<boolean> {

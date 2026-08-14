@@ -651,28 +651,181 @@ export class AdminService {
   }
 
   async createErrorLog(data: CreateErrorLogDto, companyId?: string) {
+    const rawRoute = data.route || (data as any).endpoint || null;
+    const rawMethod = data.method || (data as any).httpMethod || null;
+    const rawStack = data.stack || (data as any).stackTrace || null;
+    const rawPayload =
+      typeof data.requestPayload === 'object'
+        ? JSON.stringify(data.requestPayload).slice(0, 4000)
+        : data.requestPayload || null;
+
     return this.prisma.systemErrorLog.create({
       data: {
-        companyId: companyId || data.userEmail || null,
+        companyId: companyId || data.companyId || null,
         level: data.level || 'ERROR',
         message: data.message || 'Erro não especificado',
-        stack: data.stack || null,
-        route: data.route || null,
-        method: data.method || null,
+        stack: rawStack,
+        route: rawRoute,
+        method: rawMethod,
         statusCode: data.statusCode || 500,
         userEmail: data.userEmail || null,
-        requestPayload: data.requestPayload || null,
+        requestPayload: rawPayload,
         userAgent: data.userAgent || null,
         ipAddress: data.ipAddress || null,
       },
     });
   }
 
-  async findErrorLogs() {
-    return this.prisma.systemErrorLog.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 200,
-    });
+  async findErrorLogs(
+    query: {
+      level?: string;
+      module?: string;
+      period?: string;
+      search?: string;
+      companyId?: string;
+      page?: number;
+      limit?: number;
+    } = {},
+  ) {
+    const page = Math.max(Number(query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(query.limit) || 15, 1), 100);
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.SystemErrorLogWhereInput = {};
+
+    if (query.companyId && query.companyId !== 'all') {
+      where.companyId = query.companyId;
+    }
+
+    if (query.level && query.level !== 'all') {
+      where.level = query.level.toUpperCase();
+    }
+
+    if (query.period && query.period !== 'all') {
+      const now = new Date();
+      if (query.period === '24h') {
+        where.createdAt = {
+          gte: new Date(now.getTime() - 24 * 60 * 60 * 1000),
+        };
+      } else if (query.period === '7d') {
+        where.createdAt = {
+          gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+        };
+      } else if (query.period === '30d') {
+        where.createdAt = {
+          gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
+        };
+      }
+    }
+
+    if (query.search?.trim()) {
+      const search = query.search.trim();
+      where.OR = [
+        { message: { contains: search, mode: 'insensitive' } },
+        { route: { contains: search, mode: 'insensitive' } },
+        { userEmail: { contains: search, mode: 'insensitive' } },
+        { stack: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [rawLogs, total, total24h, totalCritical, allLogsForSummary] =
+      await Promise.all([
+        this.prisma.systemErrorLog.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limit,
+          include: {
+            company: { select: { tradeName: true, companyName: true } },
+          },
+        }),
+        this.prisma.systemErrorLog.count({ where }),
+        this.prisma.systemErrorLog.count({
+          where: {
+            createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+          },
+        }),
+        this.prisma.systemErrorLog.count({
+          where: {
+            OR: [{ statusCode: { gte: 500 } }, { level: 'CRITICAL' }],
+          },
+        }),
+        this.prisma.systemErrorLog.findMany({
+          select: { route: true },
+          take: 500,
+          orderBy: { createdAt: 'desc' },
+        }),
+      ]);
+
+    const moduleCounts: Record<string, number> = {};
+    for (const log of allLogsForSummary) {
+      const mod = this.deriveModuleName(log.route);
+      moduleCounts[mod] = (moduleCounts[mod] || 0) + 1;
+    }
+
+    const affectedModulesCount = Object.keys(moduleCounts).length;
+    let topAffectedModule: string | null = null;
+    let maxCount = 0;
+
+    for (const [modName, count] of Object.entries(moduleCounts)) {
+      if (count > maxCount) {
+        maxCount = count;
+        topAffectedModule = modName;
+      }
+    }
+
+    const pages = Math.ceil(total / limit) || 1;
+
+    const logs = rawLogs.map((log) => ({
+      id: log.id,
+      companyId: log.companyId,
+      companyName: log.company?.tradeName || log.company?.companyName || null,
+      userId: null,
+      userName: null,
+      userEmail: log.userEmail,
+      level: log.level as any,
+      module: this.deriveModuleName(log.route),
+      message: log.message,
+      stackTrace: log.stack,
+      httpMethod: log.method,
+      endpoint: log.route,
+      requestPayload: log.requestPayload,
+      userAgent: log.userAgent,
+      ipAddress: log.ipAddress,
+      createdAt: log.createdAt.toISOString(),
+      statusCode: log.statusCode,
+    }));
+
+    return {
+      logs,
+      total,
+      pages,
+      summary: {
+        total24h,
+        totalCritical,
+        affectedModulesCount,
+        topAffectedModule,
+      },
+    };
+  }
+
+  private deriveModuleName(route?: string | null): string {
+    if (!route) return 'Sistema';
+    const cleanRoute = route.toLowerCase();
+    if (cleanRoute.includes('/contas-receber')) return 'Contas a Receber';
+    if (cleanRoute.includes('/contas-pagar')) return 'Contas a Pagar';
+    if (cleanRoute.includes('/imoveis')) return 'Bens e Ativos';
+    if (cleanRoute.includes('/contratos')) return 'Contratos';
+    if (cleanRoute.includes('/pessoas')) return 'Pessoas';
+    if (cleanRoute.includes('/autenticacao') || cleanRoute.includes('/login'))
+      return 'Autenticação';
+    if (cleanRoute.includes('/financeiro')) return 'Financeiro';
+    if (cleanRoute.includes('/files')) return 'Arquivos';
+    if (cleanRoute.includes('/admin')) return 'Painel Admin';
+    if (cleanRoute.includes('/bancos')) return 'Bancos';
+    if (cleanRoute.includes('/agenda')) return 'Agenda';
+    if (cleanRoute.includes('/chamados')) return 'Chamados';
+    return 'Geral';
   }
 
   async deleteErrorLog(id: string) {
@@ -680,8 +833,17 @@ export class AdminService {
     return { success: true };
   }
 
-  async purgeErrorLogs() {
-    await this.prisma.systemErrorLog.deleteMany({});
+  async purgeErrorLogs(daysOld = 30) {
+    if (daysOld <= 0) {
+      await this.prisma.systemErrorLog.deleteMany({});
+    } else {
+      const cutoff = new Date(Date.now() - daysOld * 24 * 60 * 60 * 1000);
+      await this.prisma.systemErrorLog.deleteMany({
+        where: {
+          createdAt: { lt: cutoff },
+        },
+      });
+    }
     return { success: true };
   }
 }

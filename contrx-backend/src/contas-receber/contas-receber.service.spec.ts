@@ -233,4 +233,41 @@ describe('ContasReceberService', () => {
       }),
     );
   });
+
+  it('processa recebimento em lote para varias contas com sucesso', async () => {
+    const { service, tx } = createService();
+
+    const results = await service.receiveBatch(
+      {
+        payments: [
+          {
+            chargeId: 'receivable-1',
+            paidAt: '2026-08-14',
+            method: 'PIX',
+            amountPaid: 500,
+            paymentItems: null,
+          },
+          {
+            chargeId: 'receivable-2',
+            paidAt: '2026-08-14',
+            method: 'CASH',
+            amountPaid: 1000,
+            paymentItems: [{ id: 'item-1', method: 'CASH', amount: 1000 }],
+          },
+        ],
+      },
+      'company-1',
+    );
+
+    expect(results).toHaveLength(2);
+    expect(tx.pagamentoRecebido.create).toHaveBeenCalledTimes(2);
+    expect(tx.pagamentoRecebido.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          paymentItems: Prisma.JsonNull,
+        }),
+      }),
+    );
+  });
 });
