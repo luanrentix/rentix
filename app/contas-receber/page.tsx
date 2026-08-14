@@ -7271,11 +7271,13 @@ export default function AccountsReceivablePage() {
                   Valores do Recebimento
                 </h3>
 
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 items-end">
                   <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      Data do recebimento
-                    </label>
+                    <div className="mb-1.5 flex h-6 items-center">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Data do recebimento
+                      </label>
+                    </div>
                     <input
                       type="date"
                       value={formPaymentDate}
@@ -7288,7 +7290,7 @@ export default function AccountsReceivablePage() {
                   </div>
 
                   <div>
-                    <div className="mb-1.5 flex items-center justify-between">
+                    <div className="mb-1.5 flex h-6 items-center justify-between">
                       <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                         Juros / Multa
                       </label>
@@ -7323,7 +7325,7 @@ export default function AccountsReceivablePage() {
                         {paymentInterestMode === "percentage" ? "%" : "R$"}
                       </span>
                       <input
-                        placeholder={paymentInterestMode === "percentage" ? "0,00" : "0,00"}
+                        placeholder="0,00"
                         value={paymentInterestInput}
                         onChange={(event) =>
                           updatePaymentInterestInput(
@@ -7337,7 +7339,7 @@ export default function AccountsReceivablePage() {
                   </div>
 
                   <div>
-                    <div className="mb-1.5 flex items-center justify-between">
+                    <div className="mb-1.5 flex h-6 items-center justify-between">
                       <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                         Desconto
                       </label>
@@ -7372,7 +7374,7 @@ export default function AccountsReceivablePage() {
                         {paymentDiscountMode === "percentage" ? "%" : "R$"}
                       </span>
                       <input
-                        placeholder={paymentDiscountMode === "percentage" ? "0,00" : "0,00"}
+                        placeholder="0,00"
                         value={paymentDiscountInput}
                         onChange={(event) =>
                           updatePaymentDiscountInput(
@@ -7386,34 +7388,41 @@ export default function AccountsReceivablePage() {
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      Valor Final Recebido
-                    </label>
-                    <input
-                      placeholder="Ex: 1000,00"
-                      value={paymentFinalAmount}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        setPaymentFormError("");
-                        const formattedValue = formatCurrencyInput(value);
-                        setPaymentFinalAmount(formattedValue);
-                        updatePaymentEntriesFromFinalAmount(formattedValue);
+                    <div className="mb-1.5 flex h-6 items-center">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        Valor Final Recebido
+                      </label>
+                    </div>
+                    <div className="relative flex items-center">
+                      <span className="pointer-events-none absolute left-3 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                        R$
+                      </span>
+                      <input
+                        placeholder="0,00"
+                        value={paymentFinalAmount}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setPaymentFormError("");
+                          const formattedValue = formatCurrencyInput(value);
+                          setPaymentFinalAmount(formattedValue);
+                          updatePaymentEntriesFromFinalAmount(formattedValue);
 
-                        if (paymentModalReferenceCharge) {
-                          updatePaymentAdjustmentsFromFinalAmount(
-                            paymentModalReferenceCharge,
-                            formattedValue,
-                          );
-                        }
-                      }}
-                      onBlur={() => {
-                        const amount = normalizeAmount(paymentFinalAmount);
-                        const formattedAmount = amount > 0 ? formatAmountInput(amount) : "";
-                        setPaymentFinalAmount(formattedAmount);
-                        updatePaymentEntriesFromFinalAmount(formattedAmount);
-                      }}
-                      className="h-10 w-full rounded-xl border border-emerald-300 bg-emerald-50/40 px-3 text-xs font-bold text-emerald-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 dark:border-emerald-800 dark:bg-slate-800 dark:text-emerald-300"
-                    />
+                          if (paymentModalReferenceCharge) {
+                            updatePaymentAdjustmentsFromFinalAmount(
+                              paymentModalReferenceCharge,
+                              formattedValue,
+                            );
+                          }
+                        }}
+                        onBlur={() => {
+                          const amount = normalizeAmount(paymentFinalAmount);
+                          const formattedAmount = amount > 0 ? formatAmountInput(amount) : "";
+                          setPaymentFinalAmount(formattedAmount);
+                          updatePaymentEntriesFromFinalAmount(formattedAmount);
+                        }}
+                        className="h-10 w-full rounded-xl border border-emerald-300 bg-emerald-50/40 pl-8 pr-3 text-xs font-bold text-emerald-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 dark:border-emerald-800 dark:bg-slate-800 dark:text-emerald-300 placeholder:text-emerald-400"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
