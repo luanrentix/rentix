@@ -8,6 +8,10 @@ import QRCode from "qrcode";
 import { useAuth } from "@/context/AuthContext";
 import { PersonCreateModal } from "@/components/people/person-create-modal";
 import {
+  BankTransactionModal,
+  type BankTransactionInitialData,
+} from "@/components/bancos/bank-transaction-modal";
+import {
   createReceivableAccount,
   deleteReceivableAccount,
   getReceivableAccounts,
@@ -47,7 +51,7 @@ import {
   generatePaymentReceipt as printPaymentReceipt,
 } from "./printing";
 import { useReceivableSelection } from "./hooks/useReceivableSelection";
-import { useReceivableFilters } from "./hooks/useReceivableFilters";
+import { useReceivableFilters, type PeriodShortcut } from "./hooks/useReceivableFilters";
 import { useReceivableCalculations } from "./hooks/useReceivableCalculations";
 
 type ThemeMode = "light" | "black" | "graphite";
@@ -780,6 +784,13 @@ export default function AccountsReceivablePage() {
     setFocusedContractId,
     search,
     setSearch,
+    filterStartDate,
+    setFilterStartDate,
+    filterEndDate,
+    setFilterEndDate,
+    periodShortcut,
+    setPeriodShortcut,
+    updatePeriodShortcut,
     filteredTenants,
     filteredCharges,
     totalReceivable,
@@ -790,6 +801,7 @@ export default function AccountsReceivablePage() {
     tenants,
     getChargeRemainingAmount,
     getChargePaidAmount,
+    getChargePayment,
     initialStatusFilter: DEFAULT_RECEIVABLE_STATUS_FILTER,
   });
 
@@ -860,6 +872,10 @@ export default function AccountsReceivablePage() {
   const [paymentEntries, setPaymentEntries] = useState<PaymentEntry[]>([]);
   const [paymentNote, setPaymentNote] = useState("");
   const [paymentFormError, setPaymentFormError] = useState("");
+
+  // Estado para Lançamento Bancário automático ao receber via Pix / Transferência Bancária
+  const [isBankTransactionModalOpen, setIsBankTransactionModalOpen] = useState(false);
+  const [bankTransactionQueue, setBankTransactionQueue] = useState<BankTransactionInitialData[]>([]);
 
   // Estado para mover e redimensionar o modal de recebimento
   const [receiveModalPos, setReceiveModalPos] = useState<{ x: number; y: number } | null>(null);
@@ -3011,6 +3027,23 @@ export default function AccountsReceivablePage() {
 
       const receivedFlowCharge = chargePendingPaymentReceipt;
 
+      // Identifica pagamentos bancários (Pix ou Transferência Bancária)
+      const validBankEntries = paymentEntries.filter(
+        (entry) =>
+          (entry.method === "Pix" || entry.method === "BankTransfer") &&
+          normalizeAmount(entry.amount) > 0
+      );
+      const isSingleBankMethod =
+        paymentEntries.length === 0 &&
+        (paymentMethod === "Pix" || paymentMethod === "BankTransfer");
+
+      const receiptDate = formPaymentDate || new Date().toISOString().slice(0, 10);
+      const tenantName = receivedFlowCharge.tenant || "CLIENTE";
+      const propertyName = receivedFlowCharge.property || "";
+      const docNum = receivedFlowCharge.installmentNumber
+        ? `PARC ${receivedFlowCharge.installmentNumber}/${receivedFlowCharge.installmentTotal || ""}`
+        : (receivedFlowCharge.contractId ? `CONTRATO #${receivedFlowCharge.contractId}` : "");
+
       try {
         generatePaymentReceipt(receivedFlowCharge, paymentRecord);
       } catch {
@@ -3018,6 +3051,51 @@ export default function AccountsReceivablePage() {
       }
       closeReceivePaymentModal();
       await continueContractFlowAfterDownPayment(receivedFlowCharge);
+
+      let queue: BankTransactionInitialData[] = [];
+
+      if (validBankEntries.length > 0) {
+        queue = validBankEntries.map((entry, index) => {
+          const entryMethodLabel = entry.method === "Pix" ? "PIX" : "DEPÓSITO";
+          const partSuffix = validBankEntries.length > 1 ? ` (${index + 1}/${validBankEntries.length})` : "";
+          const entryAmount = normalizeAmount(entry.amount);
+          return {
+            type: "RECEITA" as const,
+            amount: entryAmount,
+            amountStr: formatCurrencyInput((entryAmount * 100).toFixed(0)),
+            date: receiptDate,
+            description: `RECEBIMENTO ${entryMethodLabel} - ${tenantName}${propertyName ? ` - ${propertyName}` : ""}${partSuffix}`.toUpperCase(),
+            documentNumber: docNum,
+            category: "RECEITAS",
+            reconciled: true,
+            referenceType: "RECEIVABLE",
+            referenceId: receivedFlowCharge.id,
+            queueIndex: index + 1,
+            queueTotal: validBankEntries.length,
+          };
+        });
+      } else if (isSingleBankMethod && amountPaid > 0) {
+        const methodLabel = paymentMethod === "Pix" ? "PIX" : "DEPÓSITO";
+        queue = [{
+          type: "RECEITA" as const,
+          amount: amountPaid,
+          amountStr: formatCurrencyInput((amountPaid * 100).toFixed(0)),
+          date: receiptDate,
+          description: `RECEBIMENTO ${methodLabel} - ${tenantName}${propertyName ? ` - ${propertyName}` : ""}`.toUpperCase(),
+          documentNumber: docNum,
+          category: "RECEITAS",
+          reconciled: true,
+          referenceType: "RECEIVABLE",
+          referenceId: receivedFlowCharge.id,
+          queueIndex: 1,
+          queueTotal: 1,
+        }];
+      }
+
+      if (queue.length > 0) {
+        setBankTransactionQueue(queue);
+        setIsBankTransactionModalOpen(true);
+      }
     } finally {
       setProcessingConfirmation(null);
     }
@@ -3235,8 +3313,68 @@ export default function AccountsReceivablePage() {
         // Ignora erros ao abrir janela de recibo em lote
       }
 
+      // Identifica pagamentos bancários (Pix ou Transferência Bancária)
+      const validBankEntries = paymentEntries.filter(
+        (entry) =>
+          (entry.method === "Pix" || entry.method === "BankTransfer") &&
+          normalizeAmount(entry.amount) > 0
+      );
+      const isSingleBankMethod =
+        paymentEntries.length === 0 &&
+        (paymentMethod === "Pix" || paymentMethod === "BankTransfer");
+
+      const receiptDate = formPaymentDate || new Date().toISOString().slice(0, 10);
+      const batchCount = chargesToReceive.length;
+      const batchRefIds = chargesToReceive.map((c) => String(c.id)).join(",");
+
       clearChargeSelection();
       closeReceivePaymentModal();
+
+      let queue: BankTransactionInitialData[] = [];
+
+      if (validBankEntries.length > 0) {
+        queue = validBankEntries.map((entry, index) => {
+          const entryMethodLabel = entry.method === "Pix" ? "PIX" : "DEPÓSITO";
+          const partSuffix = validBankEntries.length > 1 ? ` (${index + 1}/${validBankEntries.length})` : "";
+          const entryAmount = normalizeAmount(entry.amount);
+          return {
+            type: "RECEITA" as const,
+            amount: entryAmount,
+            amountStr: formatCurrencyInput((entryAmount * 100).toFixed(0)),
+            date: receiptDate,
+            description: `RECEBIMENTO ${entryMethodLabel} EM LOTE - ${batchCount} CONTA(S)${partSuffix}`.toUpperCase(),
+            documentNumber: "",
+            category: "RECEITAS",
+            reconciled: true,
+            referenceType: "RECEIVABLE",
+            referenceId: batchRefIds,
+            queueIndex: index + 1,
+            queueTotal: validBankEntries.length,
+          };
+        });
+      } else if (isSingleBankMethod && normalizeAmount(paymentFinalAmount) > 0) {
+        const methodLabel = paymentMethod === "Pix" ? "PIX" : "DEPÓSITO";
+        const finalAmt = normalizeAmount(paymentFinalAmount);
+        queue = [{
+          type: "RECEITA" as const,
+          amount: finalAmt,
+          amountStr: formatCurrencyInput((finalAmt * 100).toFixed(0)),
+          date: receiptDate,
+          description: `RECEBIMENTO ${methodLabel} EM LOTE - ${batchCount} CONTA(S)`.toUpperCase(),
+          documentNumber: "",
+          category: "RECEITAS",
+          reconciled: true,
+          referenceType: "RECEIVABLE",
+          referenceId: batchRefIds,
+          queueIndex: 1,
+          queueTotal: 1,
+        }];
+      }
+
+      if (queue.length > 0) {
+        setBankTransactionQueue(queue);
+        setIsBankTransactionModalOpen(true);
+      }
     } catch (error) {
       setPaymentFormError(
         error instanceof Error ? error.message : "Erro ao processar recebimento em lote.",
@@ -3254,6 +3392,9 @@ export default function AccountsReceivablePage() {
     setSelectedTenant(null);
     setSearch("");
     setStatusFilter(DEFAULT_RECEIVABLE_STATUS_FILTER);
+    setFilterStartDate("");
+    setFilterEndDate("");
+    setPeriodShortcut("All");
   }
 
   function resetCreateForm() {
@@ -5728,7 +5869,7 @@ export default function AccountsReceivablePage() {
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-          <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+          <div className="flex flex-col justify-between gap-3 xl:flex-row xl:items-center">
             <div>
               <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">
                 Filtros Financeiros
@@ -5737,6 +5878,47 @@ export default function AccountsReceivablePage() {
               <p className={`mt-1 text-sm leading-6 ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
                 Refine a visualização sem alterar os dados originais.
               </p>
+            </div>
+
+            {/* Filtro de Datas por Vencimento */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-slate-50 dark:bg-slate-800/90 p-1.5 border border-slate-200 dark:border-slate-700">
+                <select
+                  value={periodShortcut}
+                  onChange={(e) => updatePeriodShortcut(e.target.value as PeriodShortcut)}
+                  className="h-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-orange-500 cursor-pointer shadow-sm"
+                >
+                  <option value="All">Todo o Período</option>
+                  <option value="CurrentMonth">Mês Atual</option>
+                  <option value="NextMonth">Próximo Mês</option>
+                  <option value="CurrentQuarter">Trimestre Atual</option>
+                  <option value="CurrentYear">Ano Atual</option>
+                </select>
+
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="date"
+                    value={filterStartDate}
+                    onChange={(e) => {
+                      setFilterStartDate(e.target.value);
+                      setPeriodShortcut("Custom");
+                    }}
+                    className="h-10 w-36 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-orange-500 shadow-sm"
+                    title={statusFilter === "Paid" ? "Data inicial de pagamento" : "Data inicial de vencimento"}
+                  />
+                  <span className="text-xs font-bold text-slate-400">até</span>
+                  <input
+                    type="date"
+                    value={filterEndDate}
+                    onChange={(e) => {
+                      setFilterEndDate(e.target.value);
+                      setPeriodShortcut("Custom");
+                    }}
+                    className="h-10 w-36 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-orange-500 shadow-sm"
+                    title={statusFilter === "Paid" ? "Data final de pagamento" : "Data final de vencimento"}
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -5766,7 +5948,7 @@ export default function AccountsReceivablePage() {
           </div>
         </div>
 
-        {(selectedTenant || statusFilter !== DEFAULT_RECEIVABLE_STATUS_FILTER) && (
+        {(selectedTenant || statusFilter !== DEFAULT_RECEIVABLE_STATUS_FILTER || filterStartDate || filterEndDate) && (
           <div className="flex flex-col justify-between gap-3 rounded-2xl border border-orange-200 dark:border-orange-900/60 bg-orange-50 dark:bg-orange-950/30 p-4 md:flex-row md:items-center">
             <div>
               <p className="text-sm font-bold text-orange-700">
@@ -5781,7 +5963,13 @@ export default function AccountsReceivablePage() {
                 ) : (
                   "Todos os inquilinos"
                 )}{" "}
-                · Status: <strong>{getStatusFilterLabel(statusFilter)}</strong>.
+                · Status: <strong>{getStatusFilterLabel(statusFilter)}</strong>
+                {(filterStartDate || filterEndDate) && (
+                  <>
+                    {" "}· {statusFilter === "Paid" ? "Pagamento" : "Vencimento"}: <strong>{filterStartDate ? new Date(`${filterStartDate}T00:00:00`).toLocaleDateString("pt-BR") : "Início"}</strong> até <strong>{filterEndDate ? new Date(`${filterEndDate}T00:00:00`).toLocaleDateString("pt-BR") : "Fim"}</strong>
+                  </>
+                )}
+                .
               </p>
             </div>
 
@@ -5906,6 +6094,12 @@ export default function AccountsReceivablePage() {
                     Vencimento
                   </th>
 
+                  {statusFilter === "Paid" && (
+                    <th className="px-5 py-4 text-center text-sm font-black text-emerald-700 dark:text-emerald-400">
+                      Data de Pagamento
+                    </th>
+                  )}
+
                   <th className="px-5 py-4 text-center text-sm font-black text-slate-900 dark:text-slate-100">
                     Valor
                   </th>
@@ -5924,7 +6118,7 @@ export default function AccountsReceivablePage() {
                 {filteredCharges.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={statusFilter === "Paid" ? 8 : 7}
                       className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500"
                     >
                       Nenhuma conta a receber encontrada.
@@ -5964,6 +6158,15 @@ export default function AccountsReceivablePage() {
                       <td className="px-5 py-4 text-center text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500">
                         {formatDate(charge.dueDate)}
                       </td>
+
+                      {statusFilter === "Paid" && (
+                        <td className="px-5 py-4 text-center text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                          {(() => {
+                            const p = getChargePayment(charge.id);
+                            return p?.paidAt ? formatDate(p.paidAt) : "-";
+                          })()}
+                        </td>
+                      )}
 
                       <td className="px-5 py-4 text-center text-sm font-bold text-slate-900 dark:text-slate-100">
                         <span className="block">
@@ -6064,6 +6267,17 @@ export default function AccountsReceivablePage() {
                         <p className="font-bold text-slate-700 dark:text-slate-300 mt-0.5">
                           {formatDate(charge.dueDate)}
                         </p>
+                        {statusFilter === "Paid" && (() => {
+                          const p = getChargePayment(charge.id);
+                          return p?.paidAt ? (
+                            <div className="mt-1.5">
+                              <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-black uppercase">Pagamento</p>
+                              <p className="font-bold text-emerald-600 dark:text-emerald-400">
+                                {formatDate(p.paidAt)}
+                              </p>
+                            </div>
+                          ) : null;
+                        })()}
                       </div>
                       <div>
                         <p className="text-[10px] text-slate-400 font-black uppercase text-right">Valor</p>
@@ -7882,6 +8096,25 @@ export default function AccountsReceivablePage() {
         }))}
         onClose={closeTenantCreateModal}
         onCreated={handleTenantCreated}
+      />
+
+      <BankTransactionModal
+        key={bankTransactionQueue[0] ? `${bankTransactionQueue[0].description}-${bankTransactionQueue.length}` : "bank-modal"}
+        isOpen={isBankTransactionModalOpen && bankTransactionQueue.length > 0}
+        onClose={() => {
+          setIsBankTransactionModalOpen(false);
+          setBankTransactionQueue([]);
+        }}
+        onSuccess={() => {
+          setBankTransactionQueue((prev) => {
+            const nextQueue = prev.slice(1);
+            if (nextQueue.length === 0) {
+              setIsBankTransactionModalOpen(false);
+            }
+            return nextQueue;
+          });
+        }}
+        initialData={bankTransactionQueue[0]}
       />
     </>
   );

@@ -208,7 +208,20 @@ export async function apiFetch<TResponse>(
     throw new Error(errorMessage);
   }
 
-  return response.json() as Promise<TResponse>;
+  if (response.status === 204) {
+    return undefined as unknown as TResponse;
+  }
+
+  const text = await response.text();
+  if (!text || !text.trim()) {
+    return undefined as unknown as TResponse;
+  }
+
+  try {
+    return JSON.parse(text) as TResponse;
+  } catch {
+    return text as unknown as TResponse;
+  }
 }
 
 export function getMediaUrl(urlInput: any): string {

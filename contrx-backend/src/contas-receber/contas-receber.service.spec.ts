@@ -49,6 +49,13 @@ describe('ContasReceberService', () => {
         create: jest.fn().mockResolvedValue({ id: 'payout-1' }),
         update: jest.fn().mockResolvedValue({ id: 'payout-1' }),
       },
+      bankTransaction: {
+        findMany: jest.fn().mockResolvedValue([]),
+        delete: jest.fn().mockResolvedValue({ id: 'bank-tx-1' }),
+      },
+      bankAccount: {
+        update: jest.fn().mockResolvedValue({ id: 'account-1' }),
+      },
     };
 
     const prisma = {

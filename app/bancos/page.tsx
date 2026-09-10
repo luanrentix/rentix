@@ -45,8 +45,10 @@ import { getCompanyStorageItem } from "@/services/company-storage";
 import { brazilianBanks, type BrazilianBank } from "@/lib/brazilian-banks";
 import { formatCurrencyInput, parseCurrencyToNumber } from "@/lib/currency";
 import { getPeople, type Person } from "@/services/people.service";
-
-type LaunchTab = "DESPESA" | "RECEITA" | "TRANSFERENCIA";
+import {
+  BankTransactionModal,
+  type LaunchTab,
+} from "@/components/bancos/bank-transaction-modal";
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -562,36 +564,18 @@ export default function BancosPage() {
   };
 
   const handleOpenNewTransactionModal = (tab: LaunchTab = "DESPESA") => {
-    resetLaunchForm();
+    setEditingTransaction(null);
     setActiveTab(tab);
     setIsTransactionModalOpen(true);
   };
 
   const handleCloseTransactionModal = () => {
     setIsTransactionModalOpen(false);
-    resetLaunchForm();
+    setEditingTransaction(null);
   };
 
   const handleOpenEditTransactionModal = (tx: BankTransaction) => {
     setEditingTransaction(tx);
-    const tabType = tx.type === "INFLOW" ? "RECEITA" : "DESPESA";
-    const isTransfer = tx.referenceType === "TRANSFER" || tx.transferGroupId;
-    const finalTab = isTransfer ? "TRANSFERENCIA" : tabType;
-
-    setLaunchForm({
-      bankAccountId: tx.bankAccountId || "",
-      originBankAccountId: tx.referenceType === "TRANSFER" && tx.type === "OUTFLOW" ? tx.bankAccountId : (tx.referenceId || ""),
-      destinationBankAccountId: tx.referenceType === "TRANSFER" && tx.type === "INFLOW" ? tx.bankAccountId : (tx.referenceId || ""),
-      amountStr: formatCurrencyInput((tx.amount * 100).toString()),
-      feeStr: formatCurrencyInput(((tx.fee || 0) * 100).toString()),
-      date: new Date(tx.competenceDate).toISOString().slice(0, 10),
-      reconciled: tx.status === "CONFIRMED",
-      description: tx.description || "",
-      documentNumber: "",
-      categories: [{ category: tx.category || "", amountStr: formatCurrencyInput((tx.amount * 100).toString()) }]
-    });
-
-    setActiveTab(finalTab as LaunchTab);
     setIsTransactionModalOpen(true);
   };
 
@@ -1338,22 +1322,18 @@ export default function BancosPage() {
                                     Liquidado
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 text-xs font-black text-orange-700 bg-orange-50 px-2.5 py-1 rounded-full">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleReconcileTransaction(tx.id)}
+                                    className="inline-flex items-center gap-1 text-xs font-black text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-2.5 py-1 rounded-full transition cursor-pointer active:scale-95 shadow-sm"
+                                    title="Clique para confirmar o recebimento / liquidar lançamento"
+                                  >
                                     Pendente
-                                  </span>
+                                  </button>
                                 )}
                               </td>
                               <td className="py-3 text-center whitespace-nowrap no-print">
                                 <div className="flex items-center justify-center gap-1">
-                                  {tx.status === "PENDING" && (
-                                    <button
-                                      onClick={() => handleReconcileTransaction(tx.id)}
-                                      className="p-1.5 hover:bg-emerald-50 rounded-lg text-emerald-600 hover:text-emerald-700 transition"
-                                      title="Liquidar / Conciliar Lançamento"
-                                    >
-                                      <CheckCircle2 className="h-4 w-4" />
-                                    </button>
-                                  )}
                                   <button
                                     onClick={() => handleOpenEditTransactionModal(tx)}
                                     className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-700 transition"
@@ -1423,9 +1403,14 @@ export default function BancosPage() {
                                 Liquidado
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-black text-orange-700 bg-orange-50 px-2.5 py-0.5 rounded-full">
+                              <button
+                                type="button"
+                                onClick={() => handleReconcileTransaction(tx.id)}
+                                className="inline-flex items-center gap-1 text-[11px] font-black text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-2.5 py-0.5 rounded-full transition cursor-pointer active:scale-95 shadow-sm"
+                                title="Clique para confirmar o recebimento / liquidar lançamento"
+                              >
                                 Pendente
-                              </span>
+                              </button>
                             )}
                           </div>
 
@@ -1457,15 +1442,6 @@ export default function BancosPage() {
                             </div>
 
                             <div className="flex items-center gap-1">
-                              {tx.status === "PENDING" && (
-                                <button
-                                  onClick={() => handleReconcileTransaction(tx.id)}
-                                  className="p-2 hover:bg-emerald-50 rounded-xl text-emerald-600 hover:text-emerald-700 transition border border-emerald-100"
-                                  title="Liquidar / Conciliar Lançamento"
-                                >
-                                  <CheckCircle2 className="h-4 w-4" />
-                                </button>
-                              )}
                               <button
                                 onClick={() => handleOpenEditTransactionModal(tx)}
                                 className="p-2 hover:bg-slate-150 rounded-xl text-slate-500 hover:text-slate-700 transition border border-slate-200 bg-slate-50"
@@ -1859,565 +1835,17 @@ export default function BancosPage() {
         </div>
       )}
 
-      {/* UNIFIED MODAL: NOVO LANÇAMENTO (MATCHES THE PRINT DESIGN EXACTLY) */}
-      {isTransactionModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/60 p-3 backdrop-blur-sm sm:items-center sm:p-4">
-          <div 
-            className="my-3 flex max-h-[calc(100dvh-1.5rem)] w-full max-w-lg flex-col space-y-4 overflow-hidden rounded-3xl border border-slate-100 bg-white p-4 shadow-2xl animate-fade-in sm:my-0 sm:max-h-[95vh] sm:p-6"
-            style={{ height: '750px' }}
-          >
-            {/* Centered title with Back/Arrow left */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-shrink-0">
-              <button
-                type="button"
-                onClick={handleCloseTransactionModal}
-                className="text-slate-400 hover:text-slate-600 transition"
-              >
-                <ArrowLeftRight className="h-5 w-5 rotate-185" />
-              </button>
-              <h3 className="text-lg font-black text-slate-900 tracking-tight">
-                {editingTransaction ? "Editar Lançamento" : "Novo Lançamento"}
-              </h3>
-              <button
-                type="button"
-                onClick={handleCloseTransactionModal}
-                className="text-slate-400 hover:text-slate-600 transition"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form 
-              id="launch-transaction-form"
-              onSubmit={handleConfirmLaunch} 
-              className="flex-1 overflow-y-auto space-y-4 pr-1 pb-2"
-            >
-              {/* Account selection dropdown */}
-              {activeTab === "TRANSFERENCIA" ? (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1">Origem (Débito) <span className="text-red-500">*</span></label>
-                    <select
-                      required
-                      value={launchForm.originBankAccountId}
-                      onChange={(e) => setLaunchForm({ ...launchForm, originBankAccountId: e.target.value })}
-                      className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 shadow-sm outline-none transition focus:border-orange-400"
-                    >
-                      <option value="">Selecione...</option>
-                      {accounts
-                        .filter((acc) => acc.active)
-                        .map((acc) => (
-                          <option key={acc.id} value={acc.id}>
-                            {acc.name} ({formatCurrency(Number(acc.currentBalance), acc.currency)})
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1">Destino (Crédito) <span className="text-red-500">*</span></label>
-                    <select
-                      required
-                      value={launchForm.destinationBankAccountId}
-                      onChange={(e) => setLaunchForm({ ...launchForm, destinationBankAccountId: e.target.value })}
-                      className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 shadow-sm outline-none transition focus:border-orange-400"
-                    >
-                      <option value="">Selecione...</option>
-                      {accounts
-                        .filter((acc) => acc.active && acc.id !== launchForm.originBankAccountId)
-                        .map((acc) => (
-                          <option key={acc.id} value={acc.id}>
-                            {acc.name} ({formatCurrency(Number(acc.currentBalance), acc.currency)})
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1">Conta Financeira <span className="text-red-500">*</span></label>
-                  <select
-                    required
-                    value={launchForm.bankAccountId}
-                    onChange={(e) => setLaunchForm({ ...launchForm, bankAccountId: e.target.value })}
-                    className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 shadow-sm outline-none transition focus:border-orange-400"
-                  >
-                    <option value="">Selecione...</option>
-                    {accounts
-                      .filter((acc) => acc.active)
-                      .map((acc) => (
-                        <option key={acc.id} value={acc.id}>
-                          {acc.name} ({formatCurrency(Number(acc.currentBalance), acc.currency)})
-                        </option>
-                      ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Tabs selector: Despesa, Receita, Transferência */}
-              <div className="flex p-1 bg-slate-100 rounded-2xl border border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("DESPESA")}
-                  className={`flex-1 py-2 text-xs font-black rounded-xl transition ${
-                    activeTab === "DESPESA" ? "bg-white text-red-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  Despesa
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("RECEITA")}
-                  className={`flex-1 py-2 text-xs font-black rounded-xl transition ${
-                    activeTab === "RECEITA" ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  Receita
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("TRANSFERENCIA")}
-                  className={`flex-1 py-2 text-xs font-black rounded-xl transition flex items-center justify-center gap-1.5 ${
-                    activeTab === "TRANSFERENCIA" ? "bg-white text-orange-500 shadow-sm" : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  <ArrowLeftRight className="h-3.5 w-3.5" />
-                  Transferência
-                </button>
-              </div>
-
-              {/* Value and Date Inputs side-by-side */}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1">Valor <span className="text-red-500">*</span></label>
-                  <input
-                    type="text"
-                    required
-                    value={launchForm.amountStr}
-                    onChange={(e) => {
-                      const formatted = formatCurrencyInput(e.target.value);
-                      const updatedCats = [...launchForm.categories];
-                      if (updatedCats.length <= 1) {
-                        updatedCats[0] = { ...updatedCats[0], amountStr: formatted };
-                      }
-                      setLaunchForm({
-                        ...launchForm,
-                        amountStr: formatted,
-                        categories: updatedCats
-                      });
-                    }}
-                    className="w-full h-12 rounded-2xl border border-slate-200 bg-white px-3 text-lg font-black text-slate-850 shadow-sm outline-none transition focus:border-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1">Data <span className="text-red-500">*</span></label>
-                  <input
-                    type="date"
-                    required
-                    value={launchForm.date}
-                    onChange={(e) => setLaunchForm({ ...launchForm, date: e.target.value })}
-                    className="w-full h-12 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 shadow-sm outline-none transition focus:border-blue-500"
-                  />
-                </div>
-              </div>
-
-              {/* Conciliado Toggle Bar */}
-              {activeTab !== "TRANSFERENCIA" && (
-                <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-100 border border-slate-200">
-                  <input
-                    type="checkbox"
-                    id="reconciled"
-                    checked={launchForm.reconciled}
-                    onChange={(e) => setLaunchForm({ ...launchForm, reconciled: e.target.checked })}
-                    className="h-5 w-5 rounded border-slate-350 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                  />
-                  <label htmlFor="reconciled" className="text-xs font-bold text-slate-600 select-none cursor-pointer flex flex-col">
-                    <span className="font-black text-slate-800">Conciliado</span>
-                    <span className="text-[10px] text-slate-400 mt-0.5">Desmarque para lançamentos previstos / não conciliados</span>
-                  </label>
-                </div>
-              )}
-
-              {/* Transfer Fee input (only visible in Transfer Mode) */}
-              {activeTab === "TRANSFERENCIA" && (
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1">Taxa (Tarifa bancária) (Opcional)</label>
-                  <input
-                    type="text"
-                    value={launchForm.feeStr}
-                    onChange={(e) => setLaunchForm({ ...launchForm, feeStr: formatCurrencyInput(e.target.value) })}
-                    className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 shadow-sm outline-none transition focus:border-blue-500"
-                  />
-                </div>
-              )}
-
-              {/* Description Input */}
-              <div>
-                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1">Descrição <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={launchForm.description}
-                  onChange={(e) => setLaunchForm({ ...launchForm, description: e.target.value.toUpperCase() })}
-                  placeholder="Ex: ALMOÇO, ALUGUEL..."
-                  className="w-full h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 shadow-sm outline-none transition focus:border-blue-500 uppercase"
-                />
-              </div>
-
-              {/* Document Number Input */}
-              <div>
-                <label className="block text-xs font-black uppercase tracking-wider text-slate-400 mb-1">Número do Documento (Opcional)</label>
-                <input
-                  type="text"
-                  value={launchForm.documentNumber}
-                  onChange={(e) => setLaunchForm({ ...launchForm, documentNumber: e.target.value.toUpperCase() })}
-                  placeholder="Ex: NF 12345, RECIBO..."
-                  className="w-full h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 shadow-sm outline-none transition focus:border-blue-500 uppercase"
-                />
-              </div>
-
-              {/* Split Categorization Section */}
-              {activeTab !== "TRANSFERENCIA" && (
-                <div className="space-y-3 pt-2">
-                  <label className="block text-xs font-black uppercase tracking-wider text-slate-400">Classificação do Lançamento <span className="text-red-500">*</span></label>
-                  
-                  {launchForm.categories.map((item, idx) => (
-                    <div key={idx} className="flex gap-2 items-center bg-slate-50 p-2.5 rounded-2xl border border-slate-200">
-                      <div className="flex-1 flex gap-1 items-center">
-                        <select
-                          required
-                          value={item.category}
-                          onChange={(e) => handleCategoryLineChange(idx, "category", e.target.value)}
-                          className="flex-1 h-10 rounded-xl border border-slate-250 bg-white px-2.5 text-xs font-bold text-slate-850 shadow-sm outline-none"
-                        >
-                          <option value="">Categoria...</option>
-                          {allCategories.map((cat) => (
-                            <option key={cat} value={cat}>{cat}</option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNewCategoryLineIndex(idx);
-                            setNewCategoryName("");
-                            setIsNewCategoryModalOpen(true);
-                          }}
-                          className="h-10 w-10 flex items-center justify-center rounded-xl border border-slate-250 bg-white text-slate-500 hover:text-slate-850 hover:border-slate-350 transition flex-shrink-0"
-                          title="Cadastrar Nova Categoria"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </button>
-                      </div>
-
-                      <input
-                        type="text"
-                        required
-                        value={item.amountStr}
-                        onChange={(e) => handleCategoryLineChange(idx, "amountStr", e.target.value)}
-                        className="w-28 h-10 rounded-xl border border-slate-250 bg-white px-2 text-xs font-bold text-slate-800 shadow-sm text-right"
-                      />
-
-                      {launchForm.categories.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveCategoryLine(idx)}
-                          className="text-red-400 hover:text-red-650 transition flex-shrink-0"
-                        >
-                          <MinusCircle className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-
-                  <div className="flex items-center justify-between pt-1">
-                    <button
-                      type="button"
-                      onClick={handleAddCategoryLine}
-                      className="flex h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 hover:bg-slate-50 transition shadow-sm"
-                    >
-                      <Plus className="h-3 w-3" />
-                      Adicionar linha
-                    </button>
-
-                    <span className="text-xs font-black text-slate-500">
-                      Soma: <span className={categoriesSum === parseCurrencyToNumber(launchForm.amountStr) ? "text-emerald-600" : "text-orange-500"}>{formatCurrency(categoriesSum)}</span> / {launchForm.amountStr}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Keep modal open checkbox (only for new transactions) */}
-              {!editingTransaction && (
-                <div className="flex items-center gap-3 p-3 rounded-2xl bg-orange-50/40 border border-orange-100/60 mt-2">
-                  <input
-                    type="checkbox"
-                    id="keepModalOpen"
-                    checked={keepModalOpen}
-                    onChange={(e) => setKeepModalOpen(e.target.checked)}
-                    className="h-5 w-5 rounded border-slate-350 text-orange-500 focus:ring-orange-400 cursor-pointer"
-                  />
-                  <label htmlFor="keepModalOpen" className="text-xs font-bold text-slate-600 select-none cursor-pointer flex flex-col">
-                    <span className="font-black text-slate-800">Manter janela aberta</span>
-                    <span className="text-[10px] text-slate-400 mt-0.5">Mantém a conta e data selecionadas para realizar múltiplos lançamentos em sequência</span>
-                  </label>
-                </div>
-              )}
-            </form>
-
-            {/* Action Button at the very bottom pinned as fixed footer */}
-            <div className="pt-3 border-t border-slate-100 flex-shrink-0 flex gap-2">
-              {editingTransaction && (
-                <button
-                  type="button"
-                  disabled={isSaving}
-                  onClick={() => {
-                    const isTransfer = !!editingTransaction.transferGroupId;
-                    const confirmMessage = isTransfer
-                      ? "Este lançamento faz parte de uma transferência. Excluir este lançamento excluirá automaticamente a entrada e a saída correspondente. Tem certeza?"
-                      : "Tem certeza que deseja excluir esta movimentação? O saldo da conta será revertido.";
-                    
-                    showConfirm(
-                      confirmMessage,
-                      async () => {
-                        try {
-                          if (isTransfer) {
-                            // Find and delete the related transaction in the other account
-                            const relatedTx = transactions.find(
-                              (tx) =>
-                                tx.transferGroupId === editingTransaction.transferGroupId &&
-                                tx.id !== editingTransaction.id
-                            );
-                            if (relatedTx) {
-                              await deleteBankTransaction(relatedTx.id);
-                            }
-                          }
-                          await deleteBankTransaction(editingTransaction.id);
-                          handleCloseTransactionModal();
-                          loadData();
-                        } catch (err) {
-                          showAlert(getErrorMessage(err, "Erro ao excluir movimentação."), "Erro", "error");
-                        }
-                      },
-                      "Excluir Lançamento?",
-                      true
-                    );
-                  }}
-                  className="flex-1 h-12 flex items-center justify-center gap-2 rounded-2xl bg-red-50 text-sm font-black text-red-600 hover:bg-red-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Excluir Lançamento
-                </button>
-              )}
-              <button
-                type="submit"
-                form="launch-transaction-form"
-                disabled={isSaving}
-                className="flex-1 h-12 flex items-center justify-center gap-2 rounded-2xl bg-orange-500 text-sm font-black text-white hover:bg-orange-600 shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Save className="h-4 w-4" />
-                {isSaving ? "Gravando..." : (editingTransaction ? "Salvar Lançamento" : "Confirmar Lançamento")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: GERENCIAMENTO DE CATEGORIAS */}
-      {isNewCategoryModalOpen && (
-        <div className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-slate-900/60 p-3 backdrop-blur-sm sm:items-center sm:p-4">
-          <div className="my-3 flex max-h-[calc(100dvh-1.5rem)] w-full max-w-md flex-col space-y-4 overflow-hidden rounded-3xl border border-slate-100 bg-white p-4 shadow-2xl animate-fade-in sm:my-0 sm:max-h-[90vh] sm:p-6">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-shrink-0">
-              <h3 className="text-base font-black text-slate-900">Gerenciar Classificações</h3>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsNewCategoryModalOpen(false);
-                  setEditingCategoryOldName(null);
-                  setNewCategoryName("");
-                }}
-                className="text-slate-400 hover:text-slate-600 transition"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            
-            {/* Form de adicionar / editar categoria */}
-            <div className="space-y-2 flex-shrink-0 bg-slate-50 p-3 rounded-2xl border border-slate-200">
-              <label className="block text-xs font-black uppercase tracking-wider text-slate-500">
-                {editingCategoryOldName ? `Editar: ${editingCategoryOldName}` : "Nova Classificação"}
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newCategoryName}
-                  onChange={(e) => setNewCategoryName(e.target.value.toUpperCase())}
-                  placeholder="EX: COMBUSTÍVEL, REFEIÇÃO..."
-                  className="flex-1 h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-sm outline-none transition focus:border-orange-500 uppercase"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!newCategoryName.trim()) return;
-                    const cleanName = newCategoryName.trim().toUpperCase();
-
-                    if (editingCategoryOldName) {
-                      // Editar
-                      if (editingCategoryOldName !== cleanName) {
-                        setCustomCategories((prev) =>
-                          prev.map((c) => (c === editingCategoryOldName ? cleanName : c))
-                        );
-                        // Atualiza seleções atuais no form se necessário
-                        if (newCategoryLineIndex !== null) {
-                          handleCategoryLineChange(newCategoryLineIndex, "category", cleanName);
-                        }
-                      }
-                      setEditingCategoryOldName(null);
-                    } else {
-                      // Criar nova
-                      if (!customCategories.includes(cleanName)) {
-                        setCustomCategories((prev) => [...prev, cleanName]);
-                      }
-                      // Se foi clicado pelo botão de uma linha específica, seleciona ela
-                      if (newCategoryLineIndex !== null) {
-                        handleCategoryLineChange(newCategoryLineIndex, "category", cleanName);
-                      }
-                    }
-                    setNewCategoryName("");
-                  }}
-                  className="h-10 px-4 rounded-xl bg-orange-500 text-xs font-black text-white hover:bg-orange-600 transition flex items-center gap-1 flex-shrink-0"
-                >
-                  <Save className="h-3.5 w-3.5" />
-                  {editingCategoryOldName ? "Salvar" : "Adicionar"}
-                </button>
-              </div>
-            </div>
-
-            {/* Lista de categorias cadastradas */}
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              <label className="block text-xs font-black uppercase tracking-wider text-slate-400">
-                Classificações Cadastradas ({allCategoriesWithStatus.length})
-              </label>
-
-              {allCategoriesWithStatus.length === 0 ? (
-                <div className="text-center py-6 text-xs text-slate-400 font-semibold">
-                  Nenhuma classificação cadastrada.
-                </div>
-              ) : (
-                allCategoriesWithStatus.map((cat) => (
-                  <div
-                    key={cat.name}
-                    className={`flex items-center justify-between p-2.5 rounded-xl border transition ${
-                      cat.active
-                        ? "bg-white border-slate-200 hover:border-slate-300"
-                        : "bg-slate-100 border-slate-200 opacity-60"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs font-black ${cat.active ? "text-slate-800" : "text-slate-400 line-through"}`}>
-                        {cat.name}
-                      </span>
-                      {!cat.active && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-500 uppercase">
-                          Inativa
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      {/* Selecionar esta categoria para o lançamento */}
-                      {newCategoryLineIndex !== null && cat.active && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            handleCategoryLineChange(newCategoryLineIndex, "category", cat.name);
-                            setIsNewCategoryModalOpen(false);
-                            setNewCategoryName("");
-                            setEditingCategoryOldName(null);
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 text-[11px] font-black transition"
-                        >
-                          Usar
-                        </button>
-                      )}
-
-                      {/* Editar */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingCategoryOldName(cat.name);
-                          setNewCategoryName(cat.name);
-                        }}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
-                        title="Editar Nome"
-                      >
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </button>
-
-                      {/* Inativar / Ativar */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (cat.active) {
-                            setInactiveCategories((prev) => [...prev, cat.name]);
-                          } else {
-                            setInactiveCategories((prev) => prev.filter((c) => c !== cat.name));
-                          }
-                        }}
-                        className={`p-1.5 rounded-lg transition ${
-                          cat.active
-                            ? "text-amber-500 hover:bg-amber-50"
-                            : "text-emerald-600 hover:bg-emerald-50"
-                        }`}
-                        title={cat.active ? "Inativar Classificação" : "Ativar Classificação"}
-                      >
-                        <Power className="h-3.5 w-3.5" />
-                      </button>
-
-                      {/* Excluir */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          showConfirm(
-                            `Deseja realmente excluir a classificação "${cat.name}"?`,
-                            () => {
-                              setCustomCategories((prev) => prev.filter((c) => c !== cat.name));
-                              setInactiveCategories((prev) => prev.filter((c) => c !== cat.name));
-                              if (editingCategoryOldName === cat.name) {
-                                setEditingCategoryOldName(null);
-                                setNewCategoryName("");
-                              }
-                            },
-                            "Excluir Classificação?",
-                            true
-                          );
-                        }}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
-                        title="Excluir Classificação"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div className="flex gap-2 pt-2 border-t border-slate-100 flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsNewCategoryModalOpen(false);
-                  setEditingCategoryOldName(null);
-                  setNewCategoryName("");
-                }}
-                className="w-full h-11 rounded-2xl border border-slate-200 text-xs font-black text-slate-700 hover:bg-slate-50 transition"
-              >
-                Concluir
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* UNIFIED MODAL: NOVO LANÇAMENTO */}
+      <BankTransactionModal
+        isOpen={isTransactionModalOpen}
+        onClose={handleCloseTransactionModal}
+        onSuccess={loadData}
+        initialData={{ type: activeTab }}
+        editingTransaction={editingTransaction}
+        accounts={accounts}
+        customCategories={customCategories}
+        onCategoriesChange={setCustomCategories}
+      />
 
       {customAlert && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm" style={{ zIndex: 9999 }}>

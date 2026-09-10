@@ -199,6 +199,24 @@ async function ensureSchema(client) {
   `);
 
   await client.query(`
+    CREATE TABLE IF NOT EXISTS "error" (
+      "id" TEXT PRIMARY KEY,
+      "empresa_id" TEXT,
+      "nivel" TEXT NOT NULL DEFAULT 'ERROR',
+      "mensagem" TEXT NOT NULL,
+      "stack_trace" TEXT,
+      "rota" TEXT,
+      "metodo" TEXT,
+      "status_code" INTEGER,
+      "email_usuario" TEXT,
+      "payload_requisicao" TEXT,
+      "user_agent" TEXT,
+      "ip" TEXT,
+      "criado_em" TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
+  await client.query(`
     DO $$
     DECLARE
       t text;

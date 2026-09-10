@@ -4767,8 +4767,6 @@ function buildConfiguredContractHtml(
     .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
     .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
     .print-button { background: #f97316; color: #ffffff; }
-    .save-button { background: #10b981; color: #ffffff; }
-    .edit-button { background: #3b82f6; color: #ffffff; }
     .close-button { background: #f1f5f9; color: #334155; }
     .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }
     .page-inner { padding: 18mm; }
@@ -4784,42 +4782,14 @@ function buildConfiguredContractHtml(
 <body>
   ${showToolbar ? `<div class="toolbar">
     <button class="close-button" onclick="window.close()">Fechar</button>
-    <button class="edit-button" onclick="document.querySelector('.content').focus()">Editar texto</button>
-    <button class="save-button" onclick="saveCustomContractEdits()">Salvar alteração neste contrato</button>
     <button class="print-button" onclick="window.print()">Imprimir contrato</button>
   </div>` : ""}
 
   <main class="page">
     <div class="page-inner">
-      <div class="content" contenteditable="true" spellcheck="false">${escapeHtml(renderedTemplateContent)}</div>
+      <div class="content" contenteditable="${!showToolbar}" spellcheck="false">${escapeHtml(renderedTemplateContent)}</div>
     </div>
   </main>
-  <script>
-    function saveCustomContractEdits() {
-      var contentEl = document.querySelector('.content');
-      if (!contentEl) return;
-      var editedContent = contentEl.innerHTML || contentEl.textContent || '';
-      if (window.opener) {
-        window.opener.postMessage({ type: 'SAVE_CONTRACT_CUSTOM_CONTENT', contractId: '${contractId}', content: editedContent }, '*');
-      }
-      showToast('Edição salva com sucesso especificamente para este contrato!');
-    }
-
-    function showToast(msg) {
-      var existing = document.getElementById('contrx-toast');
-      if (existing) existing.remove();
-      var toast = document.createElement('div');
-      toast.id = 'contrx-toast';
-      toast.innerHTML = '<span style="font-size:20px;">📝</span><span>' + msg + '</span>';
-      toast.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;background:#0f172a;color:#ffffff;padding:16px 24px;border-radius:18px;font-family:sans-serif;font-size:14px;font-weight:800;display:flex;align-items:center;gap:12px;box-shadow:0 20px 40px rgba(0,0,0,0.3);transition:all 0.3s ease;';
-      document.body.appendChild(toast);
-      setTimeout(function() {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateY(12px)';
-        setTimeout(function() { toast.remove(); }, 300);
-      }, 3200);
-    }
-  </script>
 </body>
 </html>`;
 }
@@ -4838,8 +4808,6 @@ function buildCustomContentContractHtml(customContent: string, showToolbar: bool
     .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
     .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
     .print-button { background: #f97316; color: #ffffff; }
-    .save-button { background: #10b981; color: #ffffff; }
-    .edit-button { background: #3b82f6; color: #ffffff; }
     .close-button { background: #f1f5f9; color: #334155; }
     .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }
     .page-inner { padding: 18mm; }
@@ -4855,42 +4823,14 @@ function buildCustomContentContractHtml(customContent: string, showToolbar: bool
 <body>
   ${showToolbar ? `<div class="toolbar">
     <button class="close-button" onclick="window.close()">Fechar</button>
-    <button class="edit-button" onclick="document.querySelector('.content').focus()">Editar texto</button>
-    <button class="save-button" onclick="saveCustomContractEdits()">Salvar alteração neste contrato</button>
     <button class="print-button" onclick="window.print()">Imprimir contrato</button>
   </div>` : ""}
 
   <main class="page">
     <div class="page-inner">
-      <div class="content" contenteditable="true" spellcheck="false">${customContent}</div>
+      <div class="content" contenteditable="${!showToolbar}" spellcheck="false">${customContent}</div>
     </div>
   </main>
-  <script>
-    function saveCustomContractEdits() {
-      var contentEl = document.querySelector('.content');
-      if (!contentEl) return;
-      var editedContent = contentEl.innerHTML || contentEl.textContent || '';
-      if (window.opener) {
-        window.opener.postMessage({ type: 'SAVE_CONTRACT_CUSTOM_CONTENT', contractId: '${contractId}', content: editedContent }, '*');
-      }
-      showToast('Edição salva com sucesso especificamente para este contrato!');
-    }
-
-    function showToast(msg) {
-      var existing = document.getElementById('contrx-toast');
-      if (existing) existing.remove();
-      var toast = document.createElement('div');
-      toast.id = 'contrx-toast';
-      toast.innerHTML = '<span style="font-size:20px;">📝</span><span>' + msg + '</span>';
-      toast.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;background:#0f172a;color:#ffffff;padding:16px 24px;border-radius:18px;font-family:sans-serif;font-size:14px;font-weight:800;display:flex;align-items:center;gap:12px;box-shadow:0 20px 40px rgba(0,0,0,0.3);transition:all 0.3s ease;';
-      document.body.appendChild(toast);
-      setTimeout(function() {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateY(12px)';
-        setTimeout(function() { toast.remove(); }, 300);
-      }, 3200);
-    }
-  </script>
 </body>
 </html>`;
 }
@@ -4916,8 +4856,6 @@ function buildConfiguredTemporaryContractHtml(
     .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
     .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
     .print-button { background: #f97316; color: #ffffff; }
-    .save-button { background: #10b981; color: #ffffff; }
-    .edit-button { background: #3b82f6; color: #ffffff; }
     .close-button { background: #f1f5f9; color: #334155; }
     .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }
     .page-inner { padding: 18mm; }
@@ -4933,42 +4871,14 @@ function buildConfiguredTemporaryContractHtml(
 <body>
   ${showToolbar ? `<div class="toolbar">
     <button class="close-button" onclick="window.close()">Fechar</button>
-    <button class="edit-button" onclick="document.querySelector('.content').focus()">Editar texto</button>
-    <button class="save-button" onclick="saveCustomContractEdits()">Salvar alteração neste contrato</button>
     <button class="print-button" onclick="window.print()">Imprimir contrato</button>
   </div>` : ""}
 
   <main class="page">
     <div class="page-inner">
-      <div class="content" contenteditable="true" spellcheck="false">${escapeHtml(renderedTemplateContent)}</div>
+      <div class="content" contenteditable="${!showToolbar}" spellcheck="false">${escapeHtml(renderedTemplateContent)}</div>
     </div>
   </main>
-  <script>
-    function saveCustomContractEdits() {
-      var contentEl = document.querySelector('.content');
-      if (!contentEl) return;
-      var editedContent = contentEl.innerHTML || contentEl.textContent || '';
-      if (window.opener) {
-        window.opener.postMessage({ type: 'SAVE_CONTRACT_CUSTOM_CONTENT', contractId: '${contractId}', content: editedContent }, '*');
-      }
-      showToast('Edição salva com sucesso especificamente para este contrato!');
-    }
-
-    function showToast(msg) {
-      var existing = document.getElementById('contrx-toast');
-      if (existing) existing.remove();
-      var toast = document.createElement('div');
-      toast.id = 'contrx-toast';
-      toast.innerHTML = '<span style="font-size:20px;">📝</span><span>' + msg + '</span>';
-      toast.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;background:#0f172a;color:#ffffff;padding:16px 24px;border-radius:18px;font-family:sans-serif;font-size:14px;font-weight:800;display:flex;align-items:center;gap:12px;box-shadow:0 20px 40px rgba(0,0,0,0.3);transition:all 0.3s ease;';
-      document.body.appendChild(toast);
-      setTimeout(function() {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateY(12px)';
-        setTimeout(function() { toast.remove(); }, 300);
-      }, 3200);
-    }
-  </script>
 </body>
 </html>`;
 }
@@ -5021,7 +4931,6 @@ LOCATÁRIO: ${tenantName}
     .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
     .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
     .print-button { background: #10b981; color: #ffffff; }
-    .edit-button { background: #3b82f6; color: #ffffff; }
     .close-button { background: #f1f5f9; color: #334155; }
     .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }
     .page-inner { padding: 18mm; }
@@ -5036,14 +4945,14 @@ LOCATÁRIO: ${tenantName}
   </style>
 </head>
 <body>
-  \${showToolbar ? \`<div class="toolbar">
+  ${showToolbar ? `<div class="toolbar">
     <button class="close-button" onclick="window.close()">Fechar</button>
     <button class="print-button" onclick="window.print()">Imprimir Aditivo</button>
-  </div>\` : ""}
+  </div>` : ""}
 
   <main class="page">
     <div class="page-inner">
-      <div class="content" contenteditable="true" spellcheck="false">${escapeHtml(content)}</div>
+      <div class="content" contenteditable="${!showToolbar}" spellcheck="false">${escapeHtml(content)}</div>
     </div>
   </main>
 </body>

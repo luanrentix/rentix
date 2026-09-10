@@ -66,6 +66,8 @@ export type CreateBankTransactionDto = {
   competenceDate: string;
   paymentDate?: string;
   category?: string;
+  referenceType?: string;
+  referenceId?: string;
 };
 
 export type TransferBalanceDto = {

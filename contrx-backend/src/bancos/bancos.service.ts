@@ -175,7 +175,8 @@ export class BancosService {
           competenceDate: new Date(dto.competenceDate),
           paymentDate: dto.paymentDate ? new Date(dto.paymentDate) : null,
           category: dto.category,
-          referenceType: 'MANUAL',
+          referenceType: dto.referenceType || 'MANUAL',
+          referenceId: dto.referenceId || null,
         },
       });
 

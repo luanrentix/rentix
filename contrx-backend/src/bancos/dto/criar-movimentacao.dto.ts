@@ -33,4 +33,12 @@ export class CriarMovimentacaoDto {
   @IsString()
   @IsOptional()
   category?: string;
+
+  @IsString()
+  @IsOptional()
+  referenceType?: string;
+
+  @IsString()
+  @IsOptional()
+  referenceId?: string;
 }

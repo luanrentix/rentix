@@ -26,8 +26,12 @@ import {
   setCompanyStorageItem,
 } from "@/services/company-storage";
 import { getCachedCompanySettings } from "@/services/settings-cache";
+import {
+  BankTransactionModal,
+  type BankTransactionInitialData,
+} from "@/components/bancos/bank-transaction-modal";
 import { useExpenseCalculations } from "./hooks/useExpenseCalculations";
-import { useExpenseFilters } from "./hooks/useExpenseFilters";
+import { useExpenseFilters, type PeriodShortcut } from "./hooks/useExpenseFilters";
 import { generateExpensePaymentReceipt } from "./printing";
 
 type ThemeMode = "light" | "black" | "graphite";
@@ -306,6 +310,13 @@ export default function AccountsPayablePage() {
     setStatusFilter,
     search,
     setSearch,
+    filterStartDate,
+    setFilterStartDate,
+    filterEndDate,
+    setFilterEndDate,
+    periodShortcut,
+    setPeriodShortcut,
+    updatePeriodShortcut,
     expensesWithStatus,
     filteredExpenses,
     totalPayable,
@@ -325,6 +336,10 @@ export default function AccountsPayablePage() {
   >(null);
   const [actionMenuPosition, setActionMenuPosition] =
     useState<ActionMenuPosition | null>(null);
+
+  // Estado para Lançamento Bancário automático ao pagar via Pix / Transferência Bancária
+  const [isBankTransactionModalOpen, setIsBankTransactionModalOpen] = useState(false);
+  const [bankTransactionQueue, setBankTransactionQueue] = useState<BankTransactionInitialData[]>([]);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isTenantCreateOpen, setIsTenantCreateOpen] = useState(false);
@@ -1646,6 +1661,68 @@ export default function AccountsPayablePage() {
       getPaymentMethodLabel,
       setPaymentFormError,
     });
+
+    // Identifica pagamentos bancários (Pix ou Transferência Bancária)
+    const validBankEntries = paymentEntries.filter(
+      (entry) =>
+        (entry.method === "Pix" || entry.method === "BankTransfer") &&
+        normalizeAmount(entry.amount) > 0,
+    );
+    const isSingleBankMethod =
+      paymentEntries.length === 0 &&
+      (paymentMethod === "Pix" || paymentMethod === "BankTransfer");
+
+    const receiptDate = formPaymentDate || new Date().toISOString().slice(0, 10);
+    const personName = targetExpense.personName || "FORNECEDOR";
+    const descriptionText = targetExpense.description || targetExpense.propertyName || "";
+    const docNum = targetExpense.installmentNumber
+      ? `PARC ${targetExpense.installmentNumber}/${targetExpense.installmentTotal || ""}`
+      : "";
+
+    let queue: BankTransactionInitialData[] = [];
+
+    if (validBankEntries.length > 0) {
+      queue = validBankEntries.map((entry, index) => {
+        const entryMethodLabel = entry.method === "Pix" ? "PIX" : "DEPÓSITO";
+        const partSuffix = validBankEntries.length > 1 ? ` (${index + 1}/${validBankEntries.length})` : "";
+        const entryAmount = normalizeAmount(entry.amount);
+        return {
+          type: "DESPESA" as const,
+          amount: entryAmount,
+          amountStr: formatCurrencyInput((entryAmount * 100).toFixed(0)),
+          date: receiptDate,
+          description: `PAGAMENTO ${entryMethodLabel} - ${personName}${descriptionText ? ` - ${descriptionText}` : ""}${partSuffix}`.toUpperCase(),
+          documentNumber: docNum,
+          category: targetExpense.category || "DESPESAS",
+          reconciled: true,
+          referenceType: "PAYABLE",
+          referenceId: targetExpense.id,
+          queueIndex: index + 1,
+          queueTotal: validBankEntries.length,
+        };
+      });
+    } else if (isSingleBankMethod && amountPaid > 0) {
+      const methodLabel = paymentMethod === "Pix" ? "PIX" : "DEPÓSITO";
+      queue = [{
+        type: "DESPESA" as const,
+        amount: amountPaid,
+        amountStr: formatCurrencyInput((amountPaid * 100).toFixed(0)),
+        date: receiptDate,
+        description: `PAGAMENTO ${methodLabel} - ${personName}${descriptionText ? ` - ${descriptionText}` : ""}`.toUpperCase(),
+        documentNumber: docNum,
+        category: targetExpense.category || "DESPESAS",
+        reconciled: true,
+        referenceType: "PAYABLE",
+        referenceId: targetExpense.id,
+        queueIndex: 1,
+        queueTotal: 1,
+      }];
+    }
+
+    if (queue.length > 0) {
+      setBankTransactionQueue(queue);
+      setIsBankTransactionModalOpen(true);
+    }
   }
 
   function openDeleteExpenseConfirmation() {
@@ -1763,6 +1840,9 @@ export default function AccountsPayablePage() {
   function clearAllFilters() {
     setSearch("");
     setStatusFilter("All");
+    setFilterStartDate("");
+    setFilterEndDate("");
+    setPeriodShortcut("All");
   }
 
   function openReportModal() {
@@ -2422,7 +2502,7 @@ GERADO EM: {currentDate}`;
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-          <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
+          <div className="flex flex-col justify-between gap-3 xl:flex-row xl:items-center">
             <div>
               <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">
                 Filtros Financeiros
@@ -2431,6 +2511,47 @@ GERADO EM: {currentDate}`;
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
                 Refine a visualização sem alterar os dados originais.
               </p>
+            </div>
+
+            {/* Filtro de Datas */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-slate-50 dark:bg-slate-800/90 p-1.5 border border-slate-200 dark:border-slate-700">
+                <select
+                  value={periodShortcut}
+                  onChange={(e) => updatePeriodShortcut(e.target.value as PeriodShortcut)}
+                  className="h-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-orange-500 cursor-pointer shadow-sm"
+                >
+                  <option value="All">Todo o Período</option>
+                  <option value="CurrentMonth">Mês Atual</option>
+                  <option value="NextMonth">Próximo Mês</option>
+                  <option value="CurrentQuarter">Trimestre Atual</option>
+                  <option value="CurrentYear">Ano Atual</option>
+                </select>
+
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="date"
+                    value={filterStartDate}
+                    onChange={(e) => {
+                      setFilterStartDate(e.target.value);
+                      setPeriodShortcut("Custom");
+                    }}
+                    className="h-10 w-36 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-orange-500 shadow-sm"
+                    title={statusFilter === "Paid" ? "Data inicial de pagamento" : "Data inicial de vencimento"}
+                  />
+                  <span className="text-xs font-bold text-slate-400">até</span>
+                  <input
+                    type="date"
+                    value={filterEndDate}
+                    onChange={(e) => {
+                      setFilterEndDate(e.target.value);
+                      setPeriodShortcut("Custom");
+                    }}
+                    className="h-10 w-36 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-orange-500 shadow-sm"
+                    title={statusFilter === "Paid" ? "Data final de pagamento" : "Data final de vencimento"}
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -2460,7 +2581,7 @@ GERADO EM: {currentDate}`;
           </div>
         </div>
 
-        {(search || statusFilter !== "All") && (
+        {(search || statusFilter !== "All" || filterStartDate || filterEndDate) && (
           <div className="flex flex-col justify-between gap-3 rounded-2xl border border-orange-200 dark:border-orange-800/60 bg-orange-50 dark:bg-orange-950/30 p-4 md:flex-row md:items-center">
             <div>
               <p className="text-sm font-bold text-orange-700">
@@ -2469,7 +2590,13 @@ GERADO EM: {currentDate}`;
 
               <p className="text-sm text-slate-700 dark:text-slate-300">
                 Busca: <strong>{search || "Todas"}</strong> · Status:{" "}
-                <strong>{getStatusFilterLabel(statusFilter)}</strong>.
+                <strong>{getStatusFilterLabel(statusFilter)}</strong>
+                {(filterStartDate || filterEndDate) && (
+                  <>
+                    {" "}· {statusFilter === "Paid" ? "Pagamento" : "Vencimento"}: <strong>{filterStartDate ? new Date(`${filterStartDate}T00:00:00`).toLocaleDateString("pt-BR") : "Início"}</strong> até <strong>{filterEndDate ? new Date(`${filterEndDate}T00:00:00`).toLocaleDateString("pt-BR") : "Fim"}</strong>
+                  </>
+                )}
+                .
               </p>
             </div>
 
@@ -2546,6 +2673,12 @@ GERADO EM: {currentDate}`;
                     Vencimento
                   </th>
 
+                  {statusFilter === "Paid" && (
+                    <th className="px-5 py-4 text-center text-sm font-black text-emerald-700 dark:text-emerald-400">
+                      Data de Pagamento
+                    </th>
+                  )}
+
                   <th className="px-5 py-4 text-center text-sm font-black text-slate-900 dark:text-slate-100">
                     Valor
                   </th>
@@ -2564,7 +2697,7 @@ GERADO EM: {currentDate}`;
                 {filteredExpenses.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={statusFilter === "Paid" ? 9 : 8}
                       className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500"
                     >
                       Nenhuma conta a pagar encontrada.
@@ -2602,6 +2735,15 @@ GERADO EM: {currentDate}`;
                       <td className="px-5 py-4 text-center text-sm text-slate-600 dark:text-slate-400 dark:text-slate-505">
                         {formatDate(expense.dueDate || expense.date || "")}
                       </td>
+
+                      {statusFilter === "Paid" && (
+                        <td className="px-5 py-4 text-center text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                          {(() => {
+                            const p = getExpensePayment(expense.id);
+                            return p?.paidAt ? formatDate(p.paidAt) : "-";
+                          })()}
+                        </td>
+                      )}
 
                       <td className="px-5 py-4 text-center text-sm font-bold text-slate-900 dark:text-slate-100">
                         {formatCurrency(expense.amount)}
@@ -2687,6 +2829,17 @@ GERADO EM: {currentDate}`;
                         <p className="font-bold text-slate-700 dark:text-slate-300 mt-0.5">
                           {formatDate(expense.dueDate || expense.date || "")}
                         </p>
+                        {statusFilter === "Paid" && (() => {
+                          const p = getExpensePayment(expense.id);
+                          return p?.paidAt ? (
+                            <div className="mt-1.5">
+                              <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-black uppercase">Pagamento</p>
+                              <p className="font-bold text-emerald-600 dark:text-emerald-400">
+                                {formatDate(p.paidAt)}
+                              </p>
+                            </div>
+                          ) : null;
+                        })()}
                       </div>
                       <div>
                         <p className="text-[10px] text-slate-400 font-black uppercase text-right">Valor</p>
@@ -3951,6 +4104,25 @@ GERADO EM: {currentDate}`;
           </div>
         </div>
       )}
+
+      <BankTransactionModal
+        key={bankTransactionQueue[0] ? `${bankTransactionQueue[0].description}-${bankTransactionQueue.length}` : "bank-modal"}
+        isOpen={isBankTransactionModalOpen && bankTransactionQueue.length > 0}
+        onClose={() => {
+          setIsBankTransactionModalOpen(false);
+          setBankTransactionQueue([]);
+        }}
+        onSuccess={() => {
+          setBankTransactionQueue((prev) => {
+            const nextQueue = prev.slice(1);
+            if (nextQueue.length === 0) {
+              setIsBankTransactionModalOpen(false);
+            }
+            return nextQueue;
+          });
+        }}
+        initialData={bankTransactionQueue[0]}
+      />
     </>
   );
 }

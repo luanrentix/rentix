@@ -3,7 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { FinancialAccountStatus, Prisma } from '@prisma/client';
+import {
+  BankTransactionStatus,
+  BankTransactionType,
+  FinancialAccountStatus,
+  Prisma,
+} from '@prisma/client';
 import {
   exceedsFinancialSettlementLimit,
   getFinancialSettlementAmount,
@@ -372,6 +377,42 @@ export class ContasReceberService {
 
     return this.prisma.$transaction(async (tx) => {
       await this.deleteOwnerPayoutForReceivable(tx, id, companyId);
+
+      // Reverter/estornar lançamentos bancários vinculados a este recebimento
+      const bankTransactions = (tx as any).bankTransaction
+        ? await (tx as any).bankTransaction.findMany({
+            where: {
+              referenceType: 'RECEIVABLE',
+              OR: [{ referenceId: id }, { referenceId: { contains: id } }],
+              bankAccount: { companyId },
+            },
+          })
+        : [];
+
+      for (const bankTx of bankTransactions) {
+        if (bankTx.status === BankTransactionStatus.CONFIRMED) {
+          const amount = Number(bankTx.amount);
+          const balanceDiff =
+            bankTx.type === BankTransactionType.INFLOW ? -amount : amount;
+
+          if ((tx as any).bankAccount) {
+            await (tx as any).bankAccount.update({
+              where: { id: bankTx.bankAccountId },
+              data: {
+                currentBalance: {
+                  increment: balanceDiff,
+                },
+              },
+            });
+          }
+        }
+
+        if ((tx as any).bankTransaction) {
+          await (tx as any).bankTransaction.delete({
+            where: { id: bankTx.id },
+          });
+        }
+      }
 
       await tx.pagamentoRecebido.deleteMany({
         where: { chargeId: id },

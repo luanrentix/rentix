@@ -34,6 +34,13 @@ describe('ContasPagarService', () => {
           }),
         ),
       },
+      bankTransaction: {
+        findMany: jest.fn().mockResolvedValue([]),
+        delete: jest.fn().mockResolvedValue({ id: 'bank-tx-1' }),
+      },
+      bankAccount: {
+        update: jest.fn().mockResolvedValue({ id: 'account-1' }),
+      },
     };
 
     const prisma = {
