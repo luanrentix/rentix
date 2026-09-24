@@ -40,9 +40,32 @@ export default function SuportePage() {
   const [view, setView] = useState<"list" | "new">("list");
 
   useEffect(() => {
-    if (!companyId) return;
-    const mode = getCompanyStorageItem(companyId, "contrx_theme_mode") || "light";
-    setThemeMode(mode);
+    function syncTheme() {
+      const storedSettings = getCompanyStorageItem(companyId, "contrx_theme_settings", "contrx_theme_settings");
+      if (storedSettings) {
+        try {
+          const parsed = JSON.parse(storedSettings);
+          if (parsed.mode) {
+            setThemeMode(parsed.mode === "dark" ? "black" : parsed.mode);
+            return;
+          }
+        } catch {}
+      }
+      const legacyMode = getCompanyStorageItem(companyId, "contrx_theme", "contrx_theme");
+      if (legacyMode) {
+        setThemeMode(legacyMode === "dark" ? "black" : legacyMode);
+        return;
+      }
+      setThemeMode("light");
+    }
+
+    syncTheme();
+    window.addEventListener("storage", syncTheme);
+    window.addEventListener("contrx-theme-change", syncTheme);
+    return () => {
+      window.removeEventListener("storage", syncTheme);
+      window.removeEventListener("contrx-theme-change", syncTheme);
+    };
   }, [companyId]);
 
   const isSystemOwner = user?.role === "SYSTEM_OWNER" || user?.role === "DONO_SISTEMA";

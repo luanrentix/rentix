@@ -41,12 +41,14 @@ import {
 } from "@/services/bancos.service";
 import { openWhatsAppMessage } from "@/services/whatsapp.service";
 import { useAuth } from "@/context/AuthContext";
-import { getCompanyStorageItem } from "@/services/company-storage";
+import { getCompanyStorageItem, setCompanyStorageItem } from "@/services/company-storage";
 import { brazilianBanks, type BrazilianBank } from "@/lib/brazilian-banks";
 import { formatCurrencyInput, parseCurrencyToNumber } from "@/lib/currency";
 import { getPeople, type Person } from "@/services/people.service";
+import { getPayableAccounts } from "@/services/financial.service";
 import {
   BankTransactionModal,
+  DEFAULT_CATEGORIES,
   type LaunchTab,
 } from "@/components/bancos/bank-transaction-modal";
 
@@ -85,18 +87,52 @@ export default function BancosPage() {
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<BankAccount | null>(null);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
-  const [isNewCategoryModalOpen, setIsNewCategoryModalOpen] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState("");
-  const [newCategoryLineIndex, setNewCategoryLineIndex] = useState<number | null>(null);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
-  const [editingCategoryOldName, setEditingCategoryOldName] = useState<string | null>(null);
   const [inactiveCategories, setInactiveCategories] = useState<string[]>([]);
+  const [payableCategories, setPayableCategories] = useState<string[]>([]);
   const [editingTransaction, setEditingTransaction] = useState<BankTransaction | null>(null);
   const [keepModalOpen, setKeepModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [sharePhone, setSharePhone] = useState("");
   const [peopleList, setPeopleList] = useState<Person[]>([]);
   const [selectedPersonId, setSelectedPersonId] = useState("");
+
+  // Load custom and inactive categories from company-storage
+  useEffect(() => {
+    if (!companyId) return;
+    try {
+      const storedCats = getCompanyStorageItem(companyId, "contrx_bank_custom_categories");
+      if (storedCats) {
+        const parsed = JSON.parse(storedCats);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setCustomCategories(parsed.map((c: string) => String(c).trim().toUpperCase()));
+        }
+      }
+      const storedInactive = getCompanyStorageItem(companyId, "contrx_bank_inactive_categories");
+      if (storedInactive) {
+        const parsedInactive = JSON.parse(storedInactive);
+        if (Array.isArray(parsedInactive)) {
+          setInactiveCategories(parsedInactive.map((c: string) => String(c).trim().toUpperCase()));
+        }
+      }
+    } catch (err) {
+      console.error("Erro ao carregar categorias bancárias:", err);
+    }
+  }, [companyId]);
+
+  const handleCustomCategoriesChange = (newCats: string[]) => {
+    setCustomCategories(newCats);
+    if (companyId) {
+      setCompanyStorageItem(companyId, "contrx_bank_custom_categories", JSON.stringify(newCats));
+    }
+  };
+
+  const handleInactiveCategoriesChange = (newInactive: string[]) => {
+    setInactiveCategories(newInactive);
+    if (companyId) {
+      setCompanyStorageItem(companyId, "contrx_bank_inactive_categories", JSON.stringify(newInactive));
+    }
+  };
   
   // Institution search state
   const [isBankSearchOpen, setIsBankSearchOpen] = useState(false);
@@ -123,24 +159,17 @@ export default function BancosPage() {
     };
   }, [transactions]);
 
-  const defaultCategories = useMemo(() => [
-    "ALUGUEL",
-    "SALÁRIO",
-    "SERVIÇOS",
-    "MANUTENÇÃO",
-    "FORNECEDORES",
-    "IMPOSTOS",
-    "VENDAS",
-    "RENDIMENTOS",
-    "TRANSFERÊNCIA",
-    "OUTROS"
-  ], []);
+  const defaultCategories = useMemo(() => DEFAULT_CATEGORIES, []);
 
   const allCategories = useMemo(() => {
     const categoriesSet = new Set<string>(defaultCategories);
 
     customCategories.forEach((cat) => {
-      if (cat.trim()) categoriesSet.add(cat.trim().toUpperCase());
+      if (cat?.trim()) categoriesSet.add(cat.trim().toUpperCase());
+    });
+
+    payableCategories.forEach((cat) => {
+      if (cat?.trim()) categoriesSet.add(cat.trim().toUpperCase());
     });
 
     transactions.forEach((tx) => {
@@ -151,29 +180,8 @@ export default function BancosPage() {
 
     return Array.from(categoriesSet)
       .filter((cat) => !inactiveCategories.includes(cat))
-      .sort();
-  }, [customCategories, transactions, defaultCategories, inactiveCategories]);
-
-  const allCategoriesWithStatus = useMemo(() => {
-    const categoriesSet = new Set<string>(defaultCategories);
-
-    customCategories.forEach((cat) => {
-      if (cat.trim()) categoriesSet.add(cat.trim().toUpperCase());
-    });
-
-    transactions.forEach((tx) => {
-      if (tx.category && tx.category.trim()) {
-        categoriesSet.add(tx.category.trim().toUpperCase());
-      }
-    });
-
-    return Array.from(categoriesSet)
-      .map((cat) => ({
-        name: cat,
-        active: !inactiveCategories.includes(cat)
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [customCategories, transactions, defaultCategories, inactiveCategories]);
+      .sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [customCategories, payableCategories, transactions, defaultCategories, inactiveCategories]);
 
   const showAlert = (message: string, title: string = "Aviso", type: 'error' | 'success' | 'warning' = "warning") => {
     setCustomAlert({ title, message, type });
@@ -218,7 +226,7 @@ export default function BancosPage() {
     setIsLoading(true);
     setError("");
     try {
-      const [apiAccounts, apiTransactions, apiPeople] = await Promise.all([
+      const [apiAccounts, apiTransactions, apiPeople, apiPayables] = await Promise.all([
         getBankAccounts(),
         getBankTransactions({
           bankAccountId: filterAccount || undefined,
@@ -229,11 +237,21 @@ export default function BancosPage() {
           category: filterCategory || undefined,
           take: limit
         }),
-        getPeople(companyId)
+        getPeople(companyId),
+        getPayableAccounts(companyId).catch(() => [])
       ]);
       setAccounts(apiAccounts);
       setTransactions(apiTransactions);
       setPeopleList(apiPeople);
+      if (Array.isArray(apiPayables)) {
+        const pCats = new Set<string>();
+        apiPayables.forEach((p) => {
+          if (p.category && typeof p.category === "string" && p.category.trim()) {
+            pCats.add(p.category.trim().toUpperCase());
+          }
+        });
+        setPayableCategories(Array.from(pCats));
+      }
     } catch {
       setError("Não foi possível carregar os dados financeiros bancários.");
     } finally {
@@ -670,9 +688,32 @@ export default function BancosPage() {
   // Theme support
   const [themeMode, setThemeMode] = useState("light");
   useEffect(() => {
-    if (!companyId) return;
-    const mode = getCompanyStorageItem(companyId, "contrx_theme_mode") || "light";
-    setThemeMode(mode);
+    function syncTheme() {
+      const storedSettings = getCompanyStorageItem(companyId, "contrx_theme_settings", "contrx_theme_settings");
+      if (storedSettings) {
+        try {
+          const parsed = JSON.parse(storedSettings);
+          if (parsed.mode) {
+            setThemeMode(parsed.mode === "dark" ? "black" : parsed.mode);
+            return;
+          }
+        } catch {}
+      }
+      const legacyMode = getCompanyStorageItem(companyId, "contrx_theme", "contrx_theme");
+      if (legacyMode) {
+        setThemeMode(legacyMode === "dark" ? "black" : legacyMode);
+        return;
+      }
+      setThemeMode("light");
+    }
+
+    syncTheme();
+    window.addEventListener("storage", syncTheme);
+    window.addEventListener("contrx-theme-change", syncTheme);
+    return () => {
+      window.removeEventListener("storage", syncTheme);
+      window.removeEventListener("contrx-theme-change", syncTheme);
+    };
   }, [companyId]);
 
   // Calculando saldos progressivos para o extrato de impressão
@@ -1844,7 +1885,10 @@ export default function BancosPage() {
         editingTransaction={editingTransaction}
         accounts={accounts}
         customCategories={customCategories}
-        onCategoriesChange={setCustomCategories}
+        externalCategories={allCategories}
+        inactiveCategories={inactiveCategories}
+        onCategoriesChange={handleCustomCategoriesChange}
+        onInactiveCategoriesChange={handleInactiveCategoriesChange}
       />
 
       {customAlert && (

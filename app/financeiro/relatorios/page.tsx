@@ -143,7 +143,7 @@ const financialReportThemeStyle = `
   .contrx-financial-report-page-light .text-slate-600 { color: #475569 !important; }
   .contrx-financial-report-page-light .text-slate-500 { color: #64748b !important; }
   .contrx-financial-report-page-light .text-orange-600,
-  .contrx-financial-report-page-light .text-orange-700 { color: #ea580c !important; }
+  .contrx-financial-report-page-light .text-orange-700 { color: var(--primary-hover, #ea580c) !important; }
   .contrx-financial-report-page-light .text-red-600,
   .contrx-financial-report-page-light .text-red-700 { color: #dc2626 !important; }
   .contrx-financial-report-page-light .text-emerald-600,

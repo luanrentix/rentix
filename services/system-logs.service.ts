@@ -137,3 +137,18 @@ export async function purgeAdminSystemErrorLogs(daysOld = 30): Promise<boolean> 
     return false;
   }
 }
+
+// Expurga logs de ruído/scanners/404 do sistema
+export async function purgeAdminNoiseErrorLogs(): Promise<boolean> {
+  try {
+    await apiFetch(`/admin/errors/purge`, {
+      method: 'POST',
+      body: JSON.stringify({ onlyNoise: true }),
+    });
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+

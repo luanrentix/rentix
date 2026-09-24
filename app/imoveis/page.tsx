@@ -1327,7 +1327,7 @@ export default function PropertiesPage() {
         .dark .contrx-properties-page .bg-orange-50\/50,
         .dark .contrx-properties-page .bg-orange-50\/60,
         .dark .contrx-properties-page .bg-orange-50\/40 {
-          background-color: rgba(249, 115, 22, 0.13) !important;
+          background-color: color-mix(in srgb, var(--primary-color) 14%, transparent) !important;
         }
 
         .dark .contrx-properties-page .bg-red-50,
@@ -1369,7 +1369,7 @@ export default function PropertiesPage() {
         .dark .contrx-properties-page .text-orange-600,
         .dark .contrx-properties-page .text-orange-700,
         .dark .contrx-properties-page .text-orange-800 {
-          color: #fb923c !important;
+          color: var(--primary-color) !important;
         }
 
         .dark .contrx-properties-page .text-red-600,

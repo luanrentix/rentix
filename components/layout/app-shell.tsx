@@ -326,9 +326,13 @@ function normalizeThemeMode(value: unknown): ThemeMode {
 }
 
 function normalizeThemeSettings(settings?: Partial<ThemeSettings> | null): ThemeSettings {
-  const allowedAccents = ["orange", "cobalt", "emerald", "violet", "amber", "rose"];
-  const accent = settings?.accent && allowedAccents.includes(settings.accent) 
-    ? settings.accent 
+  const allowedAccents = ["orange", "cobalt", "emerald", "violet", "gray", "rose"];
+  let rawAccent = settings?.accent;
+  if (rawAccent === "amber") {
+    rawAccent = "gray";
+  }
+  const accent = rawAccent && allowedAccents.includes(rawAccent) 
+    ? rawAccent 
     : "orange";
   return {
     ...defaultThemeSettings,
@@ -889,7 +893,7 @@ export default function AppShell({ children }: AppShellProps) {
     document.documentElement.dataset.contrxTheme = themeSettings.mode;
     document.body.dataset.contrxTheme = themeSettings.mode;
 
-    const activeAccent = themeSettings.accent || "violet";
+    const activeAccent = themeSettings.accent || "orange";
     document.documentElement.dataset.contrxAccent = activeAccent;
     document.body.dataset.contrxAccent = activeAccent;
   }, [themeSettings.mode, themeSettings.accent]);

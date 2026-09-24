@@ -332,7 +332,7 @@ export const accentColors = [
   { key: "cobalt", label: "Cobalto", desc: "Azul B2B-SaaS limpo — calmo e corporativo.", color: "#2563eb" },
   { key: "emerald", label: "Esmeralda", desc: "Focado em crescimento, amigável e moderno.", color: "#10b981" },
   { key: "violet", label: "Violeta", desc: "Elegante e moderno — tom roxo vibrante.", color: "#8b5cf6" },
-  { key: "amber", label: "Âmbar", desc: "Quente e amigável — tom dourado.", color: "#f59e0b" },
+  { key: "gray", label: "Cinza", desc: "Sóbrio e minimalista — sofisticação neutra.", color: "#475569" },
   { key: "rose", label: "Rosa", desc: "Ousado e moderno — tom rosa marcante.", color: "#f43f5e" },
 ];
 
@@ -406,9 +406,13 @@ export function normalizeThemeMode(value: unknown): ThemeMode {
 }
 
 export function normalizeThemeSettings(settings?: Partial<ThemeSettings> | null): ThemeSettings {
-  const allowedAccents = ["orange", "cobalt", "emerald", "violet", "amber", "rose"];
-  const accent = settings?.accent && allowedAccents.includes(settings.accent) 
-    ? settings.accent 
+  const allowedAccents = ["orange", "cobalt", "emerald", "violet", "gray", "rose"];
+  let rawAccent = settings?.accent;
+  if (rawAccent === "amber") {
+    rawAccent = "gray";
+  }
+  const accent = rawAccent && allowedAccents.includes(rawAccent) 
+    ? rawAccent 
     : "orange";
   return {
     ...defaultThemeSettings,

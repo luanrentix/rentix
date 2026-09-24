@@ -33,6 +33,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import {
   getAdminSystemErrorLogs,
+  purgeAdminNoiseErrorLogs,
   purgeAdminSystemErrorLogs,
   type SystemErrorLog,
   type SystemErrorLogSummary,
@@ -375,6 +376,50 @@ export default function AdminPage() {
       await loadSystemLogs();
     } catch {
       setErrorMessage("Não foi possível expurgar os logs.");
+    } finally {
+      setIsPurgingLogs(false);
+    }
+  }
+
+  async function handlePurgeNoiseLogs() {
+    const confirmed = await requestConfirmation({
+      title: "Limpar ruídos e varreduras (404/Bots)",
+      message: "Deseja remover todos os registros de 404, favicon e sondagens de bots (.env, .git, etc.)?",
+      confirmLabel: "Limpar Ruídos",
+      tone: "danger",
+    });
+
+    if (!confirmed) return;
+
+    try {
+      setIsPurgingLogs(true);
+      await purgeAdminNoiseErrorLogs();
+      setSuccessMessage("Ruídos e registros 404/bots limpos com sucesso.");
+      await loadSystemLogs();
+    } catch {
+      setErrorMessage("Não foi possível limpar os registros de ruído.");
+    } finally {
+      setIsPurgingLogs(false);
+    }
+  }
+
+  async function handlePurgeAllLogs() {
+    const confirmed = await requestConfirmation({
+      title: "Limpar todos os logs de erro",
+      message: "Deseja realmente excluir TODOS os registros de erro (zerar histórico completo)?",
+      confirmLabel: "Zerar Todos",
+      tone: "danger",
+    });
+
+    if (!confirmed) return;
+
+    try {
+      setIsPurgingLogs(true);
+      await purgeAdminSystemErrorLogs(0);
+      setSuccessMessage("Todos os logs foram excluídos com sucesso.");
+      await loadSystemLogs();
+    } catch {
+      setErrorMessage("Não foi possível excluir todos os logs.");
     } finally {
       setIsPurgingLogs(false);
     }
@@ -1295,9 +1340,31 @@ export default function AdminPage() {
 
                     <button
                       type="button"
+                      onClick={handlePurgeNoiseLogs}
+                      disabled={isPurgingLogs}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-amber-50 px-4 text-sm font-black text-amber-700 transition hover:bg-amber-100 disabled:opacity-50"
+                      title="Remover registros de 404, favicon e robôs/scanners"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Limpar 404/Bots
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handlePurgeAllLogs}
+                      disabled={isPurgingLogs}
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-rose-50 px-4 text-sm font-black text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
+                      title="Limpar todos os registros de erro (zerar histórico)"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Zerar Tudo
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={handlePurgeLogs}
                       disabled={isPurgingLogs}
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-red-50 px-4 text-sm font-black text-red-600 transition hover:bg-red-100 disabled:opacity-50"
+                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 text-sm font-black text-slate-600 transition hover:bg-slate-200 disabled:opacity-50"
                       title="Expurgar logs antigos do banco de dados"
                     >
                       <Trash2 className="h-4 w-4" />

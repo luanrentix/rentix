@@ -833,6 +833,35 @@ export class AdminService {
     return { success: true };
   }
 
+  async purgeNoiseErrorLogs() {
+    const result = await this.prisma.systemErrorLog.deleteMany({
+      where: {
+        OR: [
+          { statusCode: 404 },
+          { statusCode: 401 },
+          { statusCode: 403 },
+          { route: { contains: 'favicon.ico', mode: 'insensitive' } },
+          { route: { contains: '.env', mode: 'insensitive' } },
+          { route: { contains: '.git', mode: 'insensitive' } },
+          { route: { contains: 'wp-', mode: 'insensitive' } },
+          { route: { contains: 'phpmyadmin', mode: 'insensitive' } },
+          { route: { contains: 'xmlrpc', mode: 'insensitive' } },
+          { route: { contains: 'robots.txt', mode: 'insensitive' } },
+          { route: { contains: 'sitemap', mode: 'insensitive' } },
+          {
+            message: {
+              contains: 'Cannot GET /favicon.ico',
+              mode: 'insensitive',
+            },
+          },
+          { message: { contains: 'Cannot GET /.env', mode: 'insensitive' } },
+          { message: { contains: 'NotFoundException', mode: 'insensitive' } },
+        ],
+      },
+    });
+    return { success: true, count: result.count };
+  }
+
   async purgeErrorLogs(daysOld = 30) {
     if (daysOld <= 0) {
       await this.prisma.systemErrorLog.deleteMany({});

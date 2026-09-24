@@ -5360,7 +5360,7 @@ export default function AccountsReceivablePage() {
 
         .contrx-accounts-receivable-page-light .bg-orange-50,
         .contrx-accounts-receivable-page-light .bg-orange-100 {
-          background-color: #fff7ed !important;
+          background-color: var(--primary-bg-light, #fff7ed) !important;
         }
 
         .contrx-accounts-receivable-page-light .bg-red-50,
@@ -5398,7 +5398,7 @@ export default function AccountsReceivablePage() {
 
         .contrx-accounts-receivable-page-light .text-orange-600,
         .contrx-accounts-receivable-page-light .text-orange-700 {
-          color: #ea580c !important;
+          color: var(--primary-hover, #ea580c) !important;
         }
 
         .contrx-accounts-receivable-page-light .text-red-600,
@@ -5421,7 +5421,7 @@ export default function AccountsReceivablePage() {
         .contrx-accounts-receivable-page-light .border-orange-100,
         .contrx-accounts-receivable-page-light .border-orange-200,
         .contrx-accounts-receivable-page-light [class*="dark:border-orange"] {
-          border-color: #fed7aa !important;
+          border-color: var(--primary-border-light, #fed7aa) !important;
         }
 
         .contrx-accounts-receivable-page-light input,
@@ -5445,7 +5445,7 @@ export default function AccountsReceivablePage() {
         }
 
         .contrx-accounts-receivable-page-light thead {
-          background-color: #fff7ed !important;
+          background-color: var(--primary-bg-light, #fff7ed) !important;
         }
 
         .contrx-accounts-receivable-page-light tbody tr:hover {
@@ -5473,7 +5473,7 @@ export default function AccountsReceivablePage() {
 
         .dark .contrx-accounts-receivable-page-black .bg-orange-50,
         .dark .contrx-accounts-receivable-page-black .bg-orange-100 {
-          background-color: rgba(249, 115, 22, 0.13) !important;
+          background-color: color-mix(in srgb, var(--primary-color) 14%, transparent) !important;
         }
 
         .dark .contrx-accounts-receivable-page-black .bg-red-50,
@@ -5536,7 +5536,7 @@ export default function AccountsReceivablePage() {
         }
 
         .dark .contrx-accounts-receivable-page-black thead {
-          background-color: rgba(249, 115, 22, 0.15) !important;
+          background-color: color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
         }
 
         .dark .contrx-accounts-receivable-page-black tbody tr:hover {
@@ -5583,7 +5583,7 @@ export default function AccountsReceivablePage() {
         .contrx-accounts-receivable-page-light .bg-orange-50,
         .contrx-accounts-receivable-page-light .dark\:bg-orange-950\/30,
         .contrx-accounts-receivable-page-light .dark\:bg-orange-900\/40 {
-          background-color: #fff7ed !important;
+          background-color: var(--primary-bg-light, #fff7ed) !important;
         }
 
         .contrx-accounts-receivable-page-light .bg-emerald-50,
@@ -5630,7 +5630,7 @@ export default function AccountsReceivablePage() {
         .contrx-accounts-receivable-page-light .text-orange-700,
         .contrx-accounts-receivable-page-light .dark\:text-orange-300,
         .contrx-accounts-receivable-page-light .dark\:text-orange-400 {
-          color: #ea580c !important;
+          color: var(--primary-hover, #ea580c) !important;
         }
 
         .contrx-accounts-receivable-page-light .text-emerald-700,
@@ -5682,7 +5682,7 @@ export default function AccountsReceivablePage() {
 
         .contrx-accounts-receivable-page-light thead,
         .contrx-accounts-receivable-page-light .bg-orange-50 {
-          background-color: #fff7ed !important;
+          background-color: var(--primary-bg-light, #fff7ed) !important;
         }
 
         .contrx-accounts-receivable-page-light tbody tr:hover,

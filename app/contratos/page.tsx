@@ -2792,9 +2792,9 @@ export default function ContractsPage() {
                           </button>
                         </div>
 
-                        <div className="rounded-3xl border border-blue-100 bg-blue-50 p-6 flex flex-col justify-between">
+                        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 flex flex-col justify-between">
                           <div>
-                            <p className="text-sm font-black uppercase tracking-wide text-blue-600">Contrato Assinado (PDF)</p>
+                            <p className="text-sm font-black uppercase tracking-wide text-orange-600">Contrato Assinado (PDF)</p>
                             <h3 className="mt-3 text-2xl font-black text-slate-950">
                               Upload de Documento
                             </h3>
@@ -2805,8 +2805,8 @@ export default function ContractsPage() {
                           
                           <div className="mt-5 space-y-4">
                             {uploadedContractSignedPdf && !contractSignedPdfFile && (
-                              <div className="flex items-center gap-3 bg-white p-3 rounded-2xl border border-blue-200">
-                                <FileText className="h-6 w-6 text-blue-600 shrink-0" />
+                              <div className="flex items-center gap-3 bg-white p-3 rounded-2xl border border-slate-200">
+                                <FileText className="h-6 w-6 text-orange-600 shrink-0" />
                                 <div className="flex-1 truncate">
                                   <p className="text-sm font-bold text-slate-700 truncate">{uploadedContractSignedPdf.filename}</p>
                                 </div>
@@ -2814,7 +2814,7 @@ export default function ContractsPage() {
                                   href={getMediaUrl(uploadedContractSignedPdf.url)}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="text-sm font-black text-blue-600 hover:underline"
+                                  className="text-sm font-black text-orange-600 hover:underline"
                                 >
                                   Visualizar
                                 </a>
@@ -2858,7 +2858,7 @@ export default function ContractsPage() {
                                   }
                                 }
                               }}
-                              className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-2xl file:border-0 file:text-sm file:font-black file:bg-blue-600 file:text-white hover:file:bg-blue-700 disabled:opacity-50"
+                              className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-2xl file:border-0 file:text-sm file:font-black file:bg-orange-500 file:text-white hover:file:bg-orange-600 disabled:opacity-50"
                               disabled={isUploadingPdf}
                             />
                           </div>
@@ -3221,7 +3221,7 @@ export default function ContractsPage() {
                           } catch {}
                         }
                       }}
-                      className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-md shadow-blue-100 transition hover:bg-blue-700"
+                      className="flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
                     >
                       <Pencil className="h-4 w-4" />
                       Editar Minuta
@@ -3233,7 +3233,7 @@ export default function ContractsPage() {
                         handleSavePrintableContractEdits();
                         setIsEditingPrintableMinuta(false);
                       }}
-                      className="flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow-md shadow-emerald-100 transition hover:bg-emerald-700"
+                      className="flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
                     >
                       <Save className="h-4 w-4" />
                       Salvar Edição

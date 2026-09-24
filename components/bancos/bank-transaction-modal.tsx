@@ -22,6 +22,11 @@ import {
   type BankTransactionStatus,
 } from "@/services/bancos.service";
 import { formatCurrencyInput, parseCurrencyToNumber } from "@/lib/currency";
+import { useAuth } from "@/context/AuthContext";
+import {
+  getCompanyStorageItem,
+  setCompanyStorageItem,
+} from "@/services/company-storage";
 
 export type LaunchTab = "DESPESA" | "RECEITA" | "TRANSFERENCIA";
 
@@ -49,21 +54,48 @@ interface BankTransactionModalProps {
   editingTransaction?: BankTransaction | null;
   accounts?: BankAccount[];
   customCategories?: string[];
+  externalCategories?: string[];
+  inactiveCategories?: string[];
   onCategoriesChange?: (categories: string[]) => void;
+  onInactiveCategoriesChange?: (categories: string[]) => void;
 }
 
-const DEFAULT_CATEGORIES = [
+export const DEFAULT_CATEGORIES = [
+  "ALIMENTAÇÃO",
   "ALUGUEL",
-  "RECEITAS",
-  "SALÁRIO",
-  "SERVIÇOS",
-  "MANUTENÇÃO",
+  "ÁGUA",
+  "ÁGUA E SANEAMENTO",
+  "COMBUSTÍVEL",
+  "CONDOMÍNIO",
+  "ENERGIA",
+  "ENERGIA ELÉTRICA",
+  "FORNECEDOR",
   "FORNECEDORES",
+  "GÁS",
+  "GÁS ENCANADO",
+  "HONORÁRIOS",
+  "HONORÁRIOS ADVOCATÍCIOS",
+  "HONORÁRIOS CONTÁBEIS",
   "IMPOSTOS",
-  "VENDAS",
-  "RENDIMENTOS",
-  "TRANSFERÊNCIA",
+  "IMPOSTOS E TRIBUTOS",
+  "INTERNET",
+  "INTERNET E TELEFONIA",
+  "MANUTENÇÃO",
+  "MANUTENÇÃO E REPAROS",
+  "MATERIAL DE ESCRITÓRIO E LIMPEZA",
   "OUTROS",
+  "PRÓ-LABORE",
+  "RECEITAS",
+  "REFORMAS E BENFEITORIAS",
+  "RENDIMENTOS",
+  "SALÁRIO",
+  "SEGUROS",
+  "SERVIÇOS",
+  "TARIFAS BANCÁRIAS",
+  "TAXA DE ADMINISTRAÇÃO",
+  "TELEFONIA",
+  "TRANSFERÊNCIA",
+  "VENDAS",
 ];
 
 function formatCurrency(val: number, currency = "BRL") {
@@ -85,8 +117,14 @@ export function BankTransactionModal({
   editingTransaction,
   accounts: externalAccounts,
   customCategories: externalCustomCategories,
+  externalCategories,
+  inactiveCategories: externalInactiveCategories,
   onCategoriesChange,
+  onInactiveCategoriesChange,
 }: BankTransactionModalProps) {
+  const { user } = useAuth();
+  const companyId = user?.companyId;
+
   const [internalAccounts, setInternalAccounts] = useState<BankAccount[]>([]);
   const [activeTab, setActiveTab] = useState<LaunchTab>("RECEITA");
   const [isSaving, setIsSaving] = useState(false);
@@ -94,11 +132,37 @@ export function BankTransactionModal({
 
   // Categories management
   const [internalCustomCategories, setInternalCustomCategories] = useState<string[]>([]);
-  const [inactiveCategories, setInactiveCategories] = useState<string[]>([]);
+  const [internalInactiveCategories, setInternalInactiveCategories] = useState<string[]>([]);
   const [isNewCategoryModalOpen, setIsNewCategoryModalOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryLineIndex, setNewCategoryLineIndex] = useState<number | null>(null);
   const [editingCategoryOldName, setEditingCategoryOldName] = useState<string | null>(null);
+
+  // Load custom and inactive categories from company-storage on mount/open
+  useEffect(() => {
+    if (!isOpen || !companyId) return;
+    try {
+      const storedCats = getCompanyStorageItem(companyId, "contrx_bank_custom_categories");
+      if (storedCats) {
+        const parsed = JSON.parse(storedCats);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setInternalCustomCategories((prev) => {
+            const set = new Set([...prev, ...parsed.map((c: string) => String(c).trim().toUpperCase())]);
+            return Array.from(set);
+          });
+        }
+      }
+      const storedInactive = getCompanyStorageItem(companyId, "contrx_bank_inactive_categories");
+      if (storedInactive) {
+        const parsedInactive = JSON.parse(storedInactive);
+        if (Array.isArray(parsedInactive)) {
+          setInternalInactiveCategories(parsedInactive.map((c: string) => String(c).trim().toUpperCase()));
+        }
+      }
+    } catch {
+      // Ignora erro de parse
+    }
+  }, [isOpen, companyId]);
 
   // Alerts & Confirmations
   const [customAlert, setCustomAlert] = useState<{
@@ -145,7 +209,18 @@ export function BankTransactionModal({
   });
 
   const accounts = externalAccounts ?? internalAccounts;
-  const customCategories = externalCustomCategories ?? internalCustomCategories;
+  const customCategories = useMemo(() => {
+    const set = new Set<string>();
+    internalCustomCategories.forEach((c) => {
+      if (c?.trim()) set.add(c.trim().toUpperCase());
+    });
+    externalCustomCategories?.forEach((c) => {
+      if (c?.trim()) set.add(c.trim().toUpperCase());
+    });
+    return Array.from(set);
+  }, [internalCustomCategories, externalCustomCategories]);
+
+  const inactiveCategories = externalInactiveCategories ?? internalInactiveCategories;
 
   // Load bank accounts if not supplied
   const loadAccounts = useCallback(async () => {
@@ -163,29 +238,74 @@ export function BankTransactionModal({
     }
   }, [isOpen, externalAccounts, loadAccounts]);
 
-  // Merge categories
+  // Merge all categories: defaults + custom + external (transactions / payables) + form selected
   const allCategories = useMemo(() => {
     const categoriesSet = new Set<string>(DEFAULT_CATEGORIES);
+
     customCategories.forEach((cat) => {
-      if (cat.trim()) categoriesSet.add(cat.trim().toUpperCase());
+      if (cat && typeof cat === "string" && cat.trim()) {
+        categoriesSet.add(cat.trim().toUpperCase());
+      }
     });
+
+    externalCategories?.forEach((cat) => {
+      if (cat && typeof cat === "string" && cat.trim()) {
+        categoriesSet.add(cat.trim().toUpperCase());
+      }
+    });
+
+    launchForm.categories.forEach((item) => {
+      if (item.category && item.category.trim()) {
+        categoriesSet.add(item.category.trim().toUpperCase());
+      }
+    });
+
+    if (editingTransaction?.category?.trim()) {
+      categoriesSet.add(editingTransaction.category.trim().toUpperCase());
+    }
+
+    if (initialData?.category?.trim()) {
+      categoriesSet.add(initialData.category.trim().toUpperCase());
+    }
+
+    const currentlySelected = new Set(
+      launchForm.categories.map((c) => c.category?.trim().toUpperCase()).filter(Boolean)
+    );
+
     return Array.from(categoriesSet)
-      .filter((cat) => !inactiveCategories.includes(cat))
-      .sort();
-  }, [customCategories, inactiveCategories]);
+      .filter((cat) => !inactiveCategories.includes(cat) || currentlySelected.has(cat))
+      .sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [
+    customCategories,
+    externalCategories,
+    launchForm.categories,
+    editingTransaction,
+    initialData,
+    inactiveCategories,
+  ]);
 
   const allCategoriesWithStatus = useMemo(() => {
     const categoriesSet = new Set<string>(DEFAULT_CATEGORIES);
+
     customCategories.forEach((cat) => {
-      if (cat.trim()) categoriesSet.add(cat.trim().toUpperCase());
+      if (cat && typeof cat === "string" && cat.trim()) {
+        categoriesSet.add(cat.trim().toUpperCase());
+      }
     });
+
+    externalCategories?.forEach((cat) => {
+      if (cat && typeof cat === "string" && cat.trim()) {
+        categoriesSet.add(cat.trim().toUpperCase());
+      }
+    });
+
     return Array.from(categoriesSet)
       .map((cat) => ({
         name: cat,
         active: !inactiveCategories.includes(cat),
       }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [customCategories, inactiveCategories]);
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  }, [customCategories, externalCategories, inactiveCategories]);
 
   // Populate form when modal opens
   useEffect(() => {
@@ -215,7 +335,7 @@ export function BankTransactionModal({
         documentNumber: "",
         categories: [
           {
-            category: editingTransaction.category || "",
+            category: (editingTransaction.category || "").trim().toUpperCase(),
             amountStr: formatCurrencyInput((editingTransaction.amount * 100).toString()),
           },
         ],
@@ -224,7 +344,7 @@ export function BankTransactionModal({
     } else {
       // New transaction with optional initialData
       const tab = initialData?.type || "RECEITA";
-      const activeAccounts = accounts.filter((acc) => acc.active);
+      const activeAccounts = accounts.filter((acc) => acc.active !== false);
       const defaultAccountId =
         initialData?.bankAccountId || (activeAccounts.length > 0 ? activeAccounts[0].id : "");
 
@@ -235,7 +355,7 @@ export function BankTransactionModal({
         formattedAmount = formatCurrencyInput((initialData.amount * 100).toFixed(0));
       }
 
-      const initialCategory = initialData?.category || (tab === "RECEITA" ? "RECEITAS" : "");
+      const initialCategory = (initialData?.category || (tab === "RECEITA" ? "RECEITAS" : "")).trim().toUpperCase();
 
       setLaunchForm({
         bankAccountId: defaultAccountId,
@@ -422,11 +542,59 @@ export function BankTransactionModal({
   };
 
   const updateCustomCategoriesList = (updater: (prev: string[]) => string[]) => {
+    const next = updater(customCategories);
+    setInternalCustomCategories(next);
+    if (companyId) {
+      try {
+        setCompanyStorageItem(companyId, "contrx_bank_custom_categories", JSON.stringify(next));
+      } catch (err) {
+        console.error("Erro ao salvar categorias no storage:", err);
+      }
+    }
     if (onCategoriesChange) {
-      const next = updater(customCategories);
       onCategoriesChange(next);
-    } else {
-      setInternalCustomCategories(updater);
+    }
+  };
+
+  const handleToggleCategoryActive = (categoryName: string, currentlyActive: boolean) => {
+    const nextInactive = currentlyActive
+      ? Array.from(new Set([...inactiveCategories, categoryName]))
+      : inactiveCategories.filter((c) => c !== categoryName);
+
+    setInternalInactiveCategories(nextInactive);
+    if (companyId) {
+      try {
+        setCompanyStorageItem(
+          companyId,
+          "contrx_bank_inactive_categories",
+          JSON.stringify(nextInactive)
+        );
+      } catch (err) {
+        console.error("Erro ao salvar categorias inativas:", err);
+      }
+    }
+    if (onInactiveCategoriesChange) {
+      onInactiveCategoriesChange(nextInactive);
+    }
+  };
+
+  const handleDeleteCategory = (categoryName: string) => {
+    updateCustomCategoriesList((prev) => prev.filter((c) => c !== categoryName));
+    const nextInactive = inactiveCategories.filter((c) => c !== categoryName);
+    setInternalInactiveCategories(nextInactive);
+    if (companyId) {
+      try {
+        setCompanyStorageItem(
+          companyId,
+          "contrx_bank_inactive_categories",
+          JSON.stringify(nextInactive)
+        );
+      } catch (err) {
+        console.error("Erro ao remover categoria inativa:", err);
+      }
+    }
+    if (onInactiveCategoriesChange) {
+      onInactiveCategoriesChange(nextInactive);
     }
   };
 
@@ -484,11 +652,11 @@ export function BankTransactionModal({
                     onChange={(e) =>
                       setLaunchForm({ ...launchForm, originBankAccountId: e.target.value })
                     }
-                    className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 shadow-sm outline-none transition focus:border-orange-400"
+                    className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 shadow-sm outline-none transition focus:border-slate-400"
                   >
                     <option value="">Selecione...</option>
                     {accounts
-                      .filter((acc) => acc.active)
+                      .filter((acc) => acc.active !== false)
                       .map((acc) => (
                         <option key={acc.id} value={acc.id}>
                           {acc.name} ({formatCurrency(Number(acc.currentBalance), acc.currency)})
@@ -506,11 +674,11 @@ export function BankTransactionModal({
                     onChange={(e) =>
                       setLaunchForm({ ...launchForm, destinationBankAccountId: e.target.value })
                     }
-                    className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 shadow-sm outline-none transition focus:border-orange-400"
+                    className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 shadow-sm outline-none transition focus:border-slate-400"
                   >
                     <option value="">Selecione...</option>
                     {accounts
-                      .filter((acc) => acc.active && acc.id !== launchForm.originBankAccountId)
+                      .filter((acc) => acc.active !== false && acc.id !== launchForm.originBankAccountId)
                       .map((acc) => (
                         <option key={acc.id} value={acc.id}>
                           {acc.name} ({formatCurrency(Number(acc.currentBalance), acc.currency)})
@@ -530,11 +698,11 @@ export function BankTransactionModal({
                   onChange={(e) =>
                     setLaunchForm({ ...launchForm, bankAccountId: e.target.value })
                   }
-                  className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 shadow-sm outline-none transition focus:border-orange-400"
+                  className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 shadow-sm outline-none transition focus:border-slate-400"
                 >
                   <option value="">Selecione a conta...</option>
                   {accounts
-                    .filter((acc) => acc.active)
+                    .filter((acc) => acc.active !== false)
                     .map((acc) => (
                       <option key={acc.id} value={acc.id}>
                         {acc.name} ({formatCurrency(Number(acc.currentBalance), acc.currency)})
@@ -711,8 +879,8 @@ export function BankTransactionModal({
                     <div className="flex-1 flex gap-1 items-center">
                       <select
                         required
-                        value={item.category}
-                        onChange={(e) => handleCategoryLineChange(idx, "category", e.target.value)}
+                        value={item.category ? item.category.trim().toUpperCase() : ""}
+                        onChange={(e) => handleCategoryLineChange(idx, "category", e.target.value.toUpperCase())}
                         className="flex-1 h-10 rounded-xl border border-slate-250 bg-white px-2.5 text-xs font-bold text-slate-850 shadow-sm outline-none"
                       >
                         <option value="">Categoria...</option>
@@ -847,7 +1015,8 @@ export function BankTransactionModal({
               type="submit"
               form="launch-transaction-form"
               disabled={isSaving}
-              className="flex-1 h-12 flex items-center justify-center gap-2 rounded-2xl bg-orange-500 text-sm font-black text-white hover:bg-orange-600 shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ backgroundColor: "var(--primary-color, #f97316)" }}
+              className="flex-1 h-12 flex items-center justify-center gap-2 rounded-2xl text-sm font-black text-white hover:opacity-90 shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Save className="h-4 w-4" />
               {isSaving
@@ -892,7 +1061,7 @@ export function BankTransactionModal({
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value.toUpperCase())}
                   placeholder="EX: COMBUSTÍVEL, REFEIÇÃO..."
-                  className="flex-1 h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-sm outline-none transition focus:border-orange-500 uppercase"
+                  className="flex-1 h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-sm outline-none transition focus:border-slate-400 uppercase"
                 />
                 <button
                   type="button"
@@ -914,13 +1083,17 @@ export function BankTransactionModal({
                       if (!customCategories.includes(cleanName)) {
                         updateCustomCategoriesList((prev) => [...prev, cleanName]);
                       }
+                      if (inactiveCategories.includes(cleanName)) {
+                        handleToggleCategoryActive(cleanName, false);
+                      }
                       if (newCategoryLineIndex !== null) {
                         handleCategoryLineChange(newCategoryLineIndex, "category", cleanName);
                       }
                     }
                     setNewCategoryName("");
                   }}
-                  className="h-10 px-4 rounded-xl bg-orange-500 text-xs font-black text-white hover:bg-orange-600 transition flex items-center gap-1 flex-shrink-0"
+                  style={{ backgroundColor: "var(--primary-color, #f97316)" }}
+                  className="h-10 px-4 rounded-xl text-xs font-black text-white hover:opacity-90 transition flex items-center gap-1 flex-shrink-0 shadow-sm"
                 >
                   <Save className="h-3.5 w-3.5" />
                   {editingCategoryOldName ? "Salvar" : "Adicionar"}
@@ -973,7 +1146,7 @@ export function BankTransactionModal({
                             setNewCategoryName("");
                             setEditingCategoryOldName(null);
                           }}
-                          className="px-2.5 py-1 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 text-[11px] font-black transition"
+                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-black transition"
                         >
                           Usar
                         </button>
@@ -993,13 +1166,7 @@ export function BankTransactionModal({
 
                       <button
                         type="button"
-                        onClick={() => {
-                          if (cat.active) {
-                            setInactiveCategories((prev) => [...prev, cat.name]);
-                          } else {
-                            setInactiveCategories((prev) => prev.filter((c) => c !== cat.name));
-                          }
-                        }}
+                        onClick={() => handleToggleCategoryActive(cat.name, cat.active)}
                         className={`p-1.5 rounded-lg transition ${
                           cat.active
                             ? "text-amber-500 hover:bg-amber-50"
@@ -1016,10 +1183,7 @@ export function BankTransactionModal({
                           showConfirm(
                             `Deseja realmente excluir a classificação "${cat.name}"?`,
                             () => {
-                              updateCustomCategoriesList((prev) =>
-                                prev.filter((c) => c !== cat.name)
-                              );
-                              setInactiveCategories((prev) => prev.filter((c) => c !== cat.name));
+                              handleDeleteCategory(cat.name);
                               if (editingCategoryOldName === cat.name) {
                                 setEditingCategoryOldName(null);
                                 setNewCategoryName("");

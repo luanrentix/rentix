@@ -4,7 +4,7 @@ description: Protocolo padrão de validação local e pré-deploy para o projeto
 ---
 # Protocolo de Validação Pré-Deploy Contrx
 
-**Versão Atual Validada Localmente**: `v1.0.16` (Anterior em Produção: `v1.0.15`)
+**Versão Atual Validada Localmente**: `v1.0.17` (Anterior em Produção: `v1.0.16`)
 
 Quando o usuário disser "iniciar", "iniciar verificações", "rodar protocolo", "auditoria de segurança" ou similar, execute AUTOMATICAMENTE os seguintes passos em segundo plano ou sequencialmente:
 

@@ -2250,13 +2250,13 @@ GERADO EM: {currentDate}`;
         .contrx-accounts-payable-page-light .bg-orange-50,
         .contrx-accounts-payable-page-light .bg-orange-100,
         .contrx-accounts-payable-page-light [class*="dark:bg-orange"] {
-          background-color: #fff7ed !important;
+          background-color: var(--primary-bg-light, #fff7ed) !important;
         }
 
         .contrx-accounts-payable-page-light [class*="bg-orange-50"][class*="text-white"],
         .contrx-accounts-payable-page-light button[class*="bg-orange-50"],
         .contrx-accounts-payable-page-light button[class*="bg-orange-500"] {
-          background-color: #f97316 !important;
+          background-color: var(--primary-color, #f97316) !important;
           color: #ffffff !important;
         }
 
@@ -2301,7 +2301,7 @@ GERADO EM: {currentDate}`;
 
         .contrx-accounts-payable-page-light .text-orange-600,
         .contrx-accounts-payable-page-light .text-orange-700 {
-          color: #ea580c !important;
+          color: var(--primary-hover, #ea580c) !important;
         }
 
         .contrx-accounts-payable-page-light .text-red-600,
@@ -2352,7 +2352,7 @@ GERADO EM: {currentDate}`;
         }
 
         .contrx-accounts-payable-page-light thead {
-          background-color: #fff7ed !important;
+          background-color: var(--primary-bg-light, #fff7ed) !important;
         }
 
         .contrx-accounts-payable-page-light tbody tr:hover {
@@ -2414,7 +2414,7 @@ GERADO EM: {currentDate}`;
         }
 
         .contrx-accounts-payable-page-black thead {
-          background-color: rgba(249, 115, 22, 0.15) !important;
+          background-color: color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
         }
 
         .contrx-accounts-payable-page-black tbody tr:hover {
@@ -2462,7 +2462,7 @@ GERADO EM: {currentDate}`;
         }
 
         .contrx-accounts-payable-page-graphite thead {
-          background-color: rgba(249, 115, 22, 0.18) !important;
+          background-color: color-mix(in srgb, var(--primary-color) 18%, transparent) !important;
         }
 
         .contrx-accounts-payable-page-graphite tbody tr:hover {

@@ -74,6 +74,14 @@ async function bootstrap() {
     httpAdapter.set('trust proxy', 1);
   }
 
+  app.use((request: Request, response: Response, next: NextFunction) => {
+    if (request.path === '/favicon.ico' || request.url === '/favicon.ico') {
+      response.status(204).end();
+      return;
+    }
+    next();
+  });
+
   app.use(json({ limit: '10mb' }));
   app.use(urlencoded({ extended: true, limit: '10mb' }));
   app.use((request: Request, response: Response, next: NextFunction) => {

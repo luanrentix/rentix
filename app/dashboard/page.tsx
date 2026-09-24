@@ -101,8 +101,8 @@ type ThemeMode = "light" | "black" | "graphite";
 type DashboardFinancialPeriod = "CurrentMonth" | "CurrentYear" | "All" | "Custom";
 
 const chartColors = {
-  orange: "#f97316",
-  orangeSoft: "#fed7aa",
+  orange: "var(--primary-color, #f97316)",
+  orangeSoft: "var(--primary-border-light, #fed7aa)",
   slate: "#94a3b8",
   slateSoft: "#e2e8f0",
   green: "#16a34a",
@@ -127,7 +127,7 @@ const contrxDashboardThemeStyle = `
 
   .contrx-dashboard-page[data-contrx-theme="black"] .bg-orange-50,
   .contrx-dashboard-page[data-contrx-theme="black"] .bg-orange-100 {
-    background-color: rgba(249, 115, 22, 0.12) !important;
+    background-color: color-mix(in srgb, var(--primary-color) 14%, transparent) !important;
   }
 
   .contrx-dashboard-page[data-contrx-theme="black"] .bg-red-50 {
@@ -196,7 +196,7 @@ const contrxDashboardThemeStyle = `
   }
 
   .contrx-dashboard-page[data-contrx-theme="black"] .hover\\:bg-orange-50:hover {
-    background-color: rgba(249, 115, 22, 0.16) !important;
+    background-color: color-mix(in srgb, var(--primary-color) 20%, transparent) !important;
   }
 
   .contrx-dashboard-page[data-contrx-theme="black"] .hover\\:bg-slate-200:hover {

@@ -100,8 +100,16 @@ export class AdminController {
 
   @Post('errors/purge')
   @UseGuards(SystemOwnerGuard)
-  purgeErrorLogsPost(@Body('daysOld') daysOld?: number) {
-    return this.adminService.purgeErrorLogs(daysOld || 30);
+  purgeErrorLogsPost(
+    @Body('daysOld') daysOld?: number,
+    @Body('onlyNoise') onlyNoise?: boolean,
+  ) {
+    if (onlyNoise) {
+      return this.adminService.purgeNoiseErrorLogs();
+    }
+    return this.adminService.purgeErrorLogs(
+      daysOld !== undefined ? daysOld : 30,
+    );
   }
 
   @Get('errors')
