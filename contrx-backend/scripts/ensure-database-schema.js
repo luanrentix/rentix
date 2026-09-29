@@ -97,7 +97,7 @@ async function ensureSchema(client) {
     WHERE "id" IN (
       SELECT DISTINCT "imovel_id"
       FROM "contratos"
-      WHERE ("status" = 'ATIVO' OR "status" = 'ACTIVE') AND "excluido_em" IS NULL
+      WHERE ("status"::text IN ('ATIVO', 'ACTIVE')) AND "excluido_em" IS NULL
     )
     AND "status_operacional" = 'AVAILABLE'
   `);
@@ -109,7 +109,7 @@ async function ensureSchema(client) {
     AND "id" NOT IN (
       SELECT DISTINCT "imovel_id"
       FROM "contratos"
-      WHERE ("status" = 'ATIVO' OR "status" = 'ACTIVE') AND "excluido_em" IS NULL
+      WHERE ("status"::text IN ('ATIVO', 'ACTIVE')) AND "excluido_em" IS NULL
     )
   `);
 
