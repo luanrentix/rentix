@@ -160,6 +160,41 @@ export class ContasPagarService {
         },
       });
 
+      if (data.bankAccountId && (tx as any).bankTransaction) {
+        const bankAccount = await (tx as any).bankAccount.findFirst({
+          where: { id: data.bankAccountId, companyId, deletedAt: null },
+        });
+        if (bankAccount && bankAccount.active) {
+          const outflowAmount = Number(data.amountPaid);
+          await (tx as any).bankTransaction.create({
+            data: {
+              bankAccountId: data.bankAccountId,
+              type: BankTransactionType.OUTFLOW,
+              status: BankTransactionStatus.CONFIRMED,
+              amount: outflowAmount,
+              description:
+                `PAGAMENTO ${data.method} - ${account.personName || account.description}`.toUpperCase(),
+              competenceDate: new Date(),
+              paymentDate: this.parseDate(
+                data.paidAt,
+                'Data de pagamento invalida.',
+              ),
+              category: account.category || 'DESPESAS',
+              referenceType: 'PAYABLE',
+              referenceId: id,
+            },
+          });
+          await (tx as any).bankAccount.update({
+            where: { id: data.bankAccountId },
+            data: {
+              currentBalance: {
+                decrement: outflowAmount,
+              },
+            },
+          });
+        }
+      }
+
       return tx.contaPagar.update({
         where: { id },
         data: {
@@ -294,7 +329,13 @@ export class ContasPagarService {
   private async ensureExists(id: string, companyId: string) {
     const account = await this.prisma.contaPagar.findFirst({
       where: { id, companyId },
-      select: { id: true, amount: true },
+      select: {
+        id: true,
+        amount: true,
+        personName: true,
+        description: true,
+        category: true,
+      },
     });
 
     if (!account) {

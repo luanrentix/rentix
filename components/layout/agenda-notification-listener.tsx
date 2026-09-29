@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Bell, Check, Clock, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { getScheduleItems, updateScheduleItem, type ScheduleItem } from "@/services/schedule.service";
+import { getPendingScheduleReminders, updateScheduleItem, type ScheduleItem } from "@/services/schedule.service";
 
 export default function AgendaNotificationListener() {
   const { user } = useAuth();
@@ -33,7 +33,7 @@ export default function AgendaNotificationListener() {
     if (!companyId) return;
 
     try {
-      const items = await getScheduleItems();
+      const items = await getPendingScheduleReminders();
       const now = Date.now();
 
       // Encontra o primeiro lembrete ativo que deve ser notificado
@@ -98,7 +98,7 @@ export default function AgendaNotificationListener() {
     if (!companyId) return;
     
     checkReminders();
-    const interval = setInterval(checkReminders, 10000);
+    const interval = setInterval(checkReminders, 30000);
     return () => clearInterval(interval);
   }, [companyId, checkReminders]);
 

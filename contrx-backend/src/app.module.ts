@@ -18,6 +18,7 @@ import { AdminModule } from './admin/admin.module';
 import { BancosModule } from './bancos/bancos.module';
 import { ChamadosModule } from './chamados/chamados.module';
 import { FilesModule } from './files/files.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 @Module({
@@ -38,6 +39,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
     BancosModule,
     ChamadosModule,
     FilesModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [

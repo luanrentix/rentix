@@ -1197,5 +1197,57 @@ div[class*="fixed"][class*="z-40"] > div[class*="rounded"] > div:first-child:act
   }
 }
 
+/* DESTAQUE INTERATIVO NO NOME DO BEM/ATIVO (HOVER NEGRITO PESADO) */
+.asset-name-container,
+.person-name-container {
+  cursor: pointer;
+}
+
+.asset-name-btn,
+.person-name-btn {
+  font-family: inherit;
+  font-weight: 600;
+  color: #1e293b;
+  cursor: pointer;
+  text-decoration: none;
+  transition: font-weight 0.15s ease, color 0.15s ease, text-decoration 0.15s ease;
+}
+
+body.dark .asset-name-btn,
+body.dark .person-name-btn,
+[data-contrx-theme="black"] .asset-name-btn,
+[data-contrx-theme="black"] .person-name-btn {
+  color: #f1f5f9;
+}
+
+.asset-name-container:hover .asset-name-btn,
+.asset-name-btn:hover,
+button.asset-name-btn:hover,
+.group:hover .asset-name-btn,
+.group\/asset:hover .asset-name-btn,
+.person-name-container:hover .person-name-btn,
+.person-name-btn:hover,
+button.person-name-btn:hover,
+.group:hover .person-name-btn,
+.group\/person:hover .person-name-btn {
+  font-weight: 900 !important;
+  color: #ea580c !important;
+  text-decoration: underline !important;
+  text-underline-offset: 4px !important;
+}
+
+body.dark .asset-name-container:hover .asset-name-btn,
+body.dark .asset-name-btn:hover,
+[data-contrx-theme="black"] .asset-name-container:hover .asset-name-btn,
+[data-contrx-theme="black"] .asset-name-btn:hover,
+body.dark .person-name-container:hover .person-name-btn,
+body.dark .person-name-btn:hover,
+[data-contrx-theme="black"] .person-name-container:hover .person-name-btn,
+[data-contrx-theme="black"] .person-name-btn:hover {
+  font-weight: 900 !important;
+  color: #f97316 !important;
+  text-decoration: underline !important;
+}
+
 
 

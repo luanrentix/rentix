@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 
@@ -32,9 +33,18 @@ export class AgendaController {
     return this.agendaService.create(data, user.companyId);
   }
 
+  @Get('lembretes-pendentes')
+  findPendingReminders(@CurrentUser() user: UsuarioAutenticado) {
+    return this.agendaService.findPendingReminders(user.companyId);
+  }
+
   @Get()
-  findAll(@CurrentUser() user: UsuarioAutenticado) {
-    return this.agendaService.findAll(user.companyId);
+  findAll(
+    @CurrentUser() user: UsuarioAutenticado,
+    @Query('inicio') inicio?: string,
+    @Query('fim') fim?: string,
+  ) {
+    return this.agendaService.findAll(user.companyId, inicio, fim);
   }
 
   @Get(':id')

@@ -282,18 +282,18 @@ export async function checkApiHealth(): Promise<boolean> {
 export { getApiBaseUrl };
 
 export const api = {
-  get: async (endpoint: string) => {
-    const data = await apiFetch(endpoint, { method: 'GET' });
+  get: async <T = any>(endpoint: string) => {
+    const data = await apiFetch<T>(endpoint, { method: 'GET' });
     return { data };
   },
-  post: async (endpoint: string, data: any, options: any = {}) => {
+  post: async <T = any>(endpoint: string, data: any, options: any = {}) => {
     const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
     const reqOptions: any = { 
       method: 'POST', 
       headers: options.headers || {},
       body: isFormData ? data : JSON.stringify(data)
     };
-    const responseData = await apiFetch(endpoint, reqOptions);
+    const responseData = await apiFetch<T>(endpoint, reqOptions);
     return { data: responseData };
   }
 };

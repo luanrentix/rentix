@@ -40,6 +40,13 @@ export type ReceivableAccount = {
   installmentGroupId?: string | null;
   isDownPayment: boolean;
   payments?: PaymentRecord[];
+  tenant?: {
+    id: string;
+    name: string;
+    document?: string | null;
+    phone?: string | null;
+    email?: string | null;
+  } | null;
 };
 
 export type CreateReceivableAccountDto = {
@@ -111,6 +118,7 @@ export type RegisterPaymentDto = {
   discount?: number;
   amountPaid: number;
   note?: string;
+  bankAccountId?: string | null;
 };
 
 export async function getReceivableAccounts(companyId: string) {

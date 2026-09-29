@@ -15,6 +15,21 @@ import {
   type UserToolPermission,
 } from "../types/settings.types";
 import { toolPermissionOptions } from "@/services/tool-permissions";
+import { Edit3 } from "lucide-react";
+
+function getPasswordStrength(password: string) {
+  if (!password) return { score: 0, label: "", color: "bg-slate-200", textColor: "text-slate-400" };
+  let score = 0;
+  if (password.length >= 6) score++;
+  if (password.length >= 10) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+
+  if (score <= 1) return { score: 1, label: "Fraca", color: "bg-red-500", textColor: "text-red-600" };
+  if (score === 2) return { score: 2, label: "Razoável", color: "bg-amber-500", textColor: "text-amber-600" };
+  if (score === 3) return { score: 3, label: "Boa", color: "bg-blue-500", textColor: "text-blue-600" };
+  return { score: 4, label: "Forte e segura", color: "bg-emerald-500", textColor: "text-emerald-600" };
+}
 
 interface UserSettingsTabProps {
   userSettings: UserSettings;
@@ -253,6 +268,23 @@ export const UserSettingsTab: React.FC<UserSettingsTabProps> = ({
                       placeholder="Mínimo 6 caracteres"
                       className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                     />
+                    {passwordSettings.newPassword && (() => {
+                      const strength = getPasswordStrength(passwordSettings.newPassword);
+                      return (
+                        <div className="space-y-1 pt-1">
+                          <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                            <div
+                              className={`transition-all duration-300 ${strength.color}`}
+                              style={{ width: `${(strength.score / 4) * 100}%` }}
+                            />
+                          </div>
+                          <div className="flex justify-between text-[11px] font-bold">
+                            <span className="text-slate-400">Força da senha</span>
+                            <span className={strength.textColor}>{strength.label}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </label>
 
                   <label className="space-y-2">
@@ -345,42 +377,128 @@ export const UserSettingsTab: React.FC<UserSettingsTabProps> = ({
           {activeCompanyUsersTab === "list" && (
             <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
               {isLoadingCompanyUsers ? (
-                <div className="p-8 text-center text-sm font-semibold text-slate-500">
-                  Carregando usuários...
+                <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                  <div className="h-7 w-7 animate-spin rounded-full border-2 border-slate-200 border-t-orange-500" />
+                  <p className="mt-3 text-sm font-semibold">Carregando usuários da empresa...</p>
                 </div>
               ) : companyUsers.length === 0 ? (
-                <div className="p-8 text-center text-sm font-semibold text-slate-500">
+                <div className="py-12 text-center text-sm font-semibold text-slate-500">
                   Nenhum usuário cadastrado para esta empresa.
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-slate-50 border-b border-slate-200 text-xs font-black uppercase text-slate-500">
-                      <tr>
-                        <th className="px-6 py-4">Usuário</th>
-                        <th className="px-6 py-4">Função</th>
-                        <th className="px-6 py-4">Status</th>
-                        <th className="px-6 py-4 text-right">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 font-semibold">
-                      {companyUsers.map((u) => (
-                        <tr key={u.id} className="hover:bg-slate-50/80 transition">
-                          <td className="px-6 py-4">
-                            <p className="font-black text-slate-950">{u.name}</p>
-                            <p className="text-xs font-medium text-slate-500">{u.email}</p>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
+                <>
+                  {/* Visão Desktop - Tabela padrão Bens/Ativos */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-black uppercase tracking-wider text-slate-500">
+                        <tr>
+                          <th className="px-6 py-4">Membro</th>
+                          <th className="px-6 py-4">Função / Perfil</th>
+                          <th className="px-6 py-4">Status</th>
+                          <th className="px-6 py-4 text-right">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 font-semibold">
+                        {companyUsers.map((u) => {
+                          const userInitials = (u.name || u.email || "?")
+                            .split(" ")
+                            .map((p) => p[0])
+                            .slice(0, 2)
+                            .join("")
+                            .toUpperCase();
+
+                          return (
+                            <tr key={u.id} className="transition hover:bg-slate-50/80">
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-xs font-black text-orange-700">
+                                    {userInitials}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="truncate font-bold text-slate-900">{u.name}</p>
+                                    <p className="truncate text-xs font-normal text-slate-500">{u.email}</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className="inline-flex rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
+                                  {roleLabels[u.role] || u.role}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span
+                                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${
+                                    u.isActive
+                                      ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                                      : "bg-red-50 text-red-700 ring-1 ring-red-200"
+                                  }`}
+                                >
+                                  <span
+                                    className={`h-1.5 w-1.5 rounded-full ${
+                                      u.isActive ? "bg-emerald-500" : "bg-red-500"
+                                    }`}
+                                  />
+                                  {u.isActive ? "Ativo" : "Inativo"}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                <div className="flex items-center justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStartEditCompanyUser(u)}
+                                    title="Editar usuário"
+                                    className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition hover:bg-orange-50 hover:text-orange-600"
+                                  >
+                                    <Edit3 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Visão Mobile - Cards individuais padrão Bens/Ativos */}
+                  <div className="space-y-3 p-4 md:hidden divide-y divide-slate-100">
+                    {companyUsers.map((u) => {
+                      const userInitials = (u.name || u.email || "?")
+                        .split(" ")
+                        .map((p) => p[0])
+                        .slice(0, 2)
+                        .join("")
+                        .toUpperCase();
+
+                      return (
+                        <div key={u.id} className="pt-3 first:pt-0">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-xs font-black text-orange-700">
+                                {userInitials}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-bold text-slate-900">{u.name}</p>
+                                <p className="truncate text-xs text-slate-500">{u.email}</p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditCompanyUser(u)}
+                              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition hover:bg-orange-50 hover:text-orange-600"
+                            >
+                              <Edit3 className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <div className="mt-3 flex items-center justify-between">
+                            <span className="inline-flex rounded-lg bg-slate-100 px-2.5 py-0.5 text-[11px] font-bold text-slate-700">
                               {roleLabels[u.role] || u.role}
                             </span>
-                          </td>
-                          <td className="px-6 py-4">
                             <span
-                              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${
+                              className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-bold ${
                                 u.isActive
-                                  ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
-                                  : "bg-red-50 text-red-700 ring-1 ring-red-100"
+                                  ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                                  : "bg-red-50 text-red-700 ring-1 ring-red-200"
                               }`}
                             >
                               <span
@@ -390,21 +508,12 @@ export const UserSettingsTab: React.FC<UserSettingsTabProps> = ({
                               />
                               {u.isActive ? "Ativo" : "Inativo"}
                             </span>
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <button
-                              type="button"
-                              onClick={() => handleStartEditCompanyUser(u)}
-                              className="rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700 transition hover:bg-orange-50 hover:text-orange-600"
-                            >
-                              Editar
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -449,8 +558,26 @@ export const UserSettingsTab: React.FC<UserSettingsTabProps> = ({
                     onChange={(e) =>
                       setNewCompanyUserForm((f) => ({ ...f, password: e.target.value }))
                     }
+                    placeholder="Mínimo 6 caracteres"
                     className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                   />
+                  {newCompanyUserForm.password && (() => {
+                    const strength = getPasswordStrength(newCompanyUserForm.password);
+                    return (
+                      <div className="space-y-1 pt-1">
+                        <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className={`transition-all duration-300 ${strength.color}`}
+                            style={{ width: `${(strength.score / 4) * 100}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-[11px] font-bold">
+                          <span className="text-slate-400">Força da senha</span>
+                          <span className={strength.textColor}>{strength.label}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </label>
 
                 <label className="space-y-2">
@@ -580,6 +707,23 @@ export const UserSettingsTab: React.FC<UserSettingsTabProps> = ({
                     placeholder="Deixe em branco para manter"
                     className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                   />
+                  {editCompanyUserForm.password && (() => {
+                    const strength = getPasswordStrength(editCompanyUserForm.password);
+                    return (
+                      <div className="space-y-1 pt-1">
+                        <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className={`transition-all duration-300 ${strength.color}`}
+                            style={{ width: `${(strength.score / 4) * 100}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between text-[11px] font-bold">
+                          <span className="text-slate-400">Força da senha</span>
+                          <span className={strength.textColor}>{strength.label}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </label>
 
                 <label className="space-y-2">

@@ -12,6 +12,7 @@ import {
   Mail,
   Phone,
   Settings2,
+  ShieldCheck,
   User,
   UserPlus,
 } from "lucide-react";
@@ -219,6 +220,21 @@ export default function ExperimentSignupCard() {
         <p className="mt-4 text-center text-xs font-semibold leading-5 text-slate-500">
           Depois do cadastro, você será levado para configurar a empresa.
         </p>
+
+        <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-center gap-4 text-[11px] font-bold text-slate-400">
+          <span className="inline-flex items-center gap-1">
+            <LockKeyhole size={12} className="text-emerald-600" />
+            TLS 1.3 Seguro
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <CheckCircle2 size={12} className="text-emerald-600" />
+            LGPD
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <ShieldCheck size={12} className="text-emerald-600" />
+            Backup Nuvem
+          </span>
+        </div>
       </section>
 
       {showWelcomeModal && (

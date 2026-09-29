@@ -68,6 +68,10 @@ export class CriarImovelDto {
 
   @IsOptional()
   @IsString()
+  operationalStatus?: string;
+
+  @IsOptional()
+  @IsString()
   managementMode?: string;
 
   @IsOptional()
@@ -105,6 +109,14 @@ export class CriarImovelDto {
   @IsOptional()
   @IsString()
   district?: string;
+
+  @IsOptional()
+  @IsString()
+  street?: string;
+
+  @IsOptional()
+  @IsString()
+  neighborhood?: string;
 
   @IsOptional()
   @IsString()

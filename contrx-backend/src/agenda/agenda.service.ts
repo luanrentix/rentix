@@ -40,9 +40,64 @@ export class AgendaService {
     });
   }
 
-  findAll(companyId: string) {
+  findAll(companyId: string, startDate?: string, endDate?: string) {
+    const where: any = { companyId };
+
+    if (startDate || endDate) {
+      where.date = {};
+      if (startDate) {
+        where.date.gte = new Date(`${startDate}T00:00:00`);
+      }
+      if (endDate) {
+        where.date.lte = new Date(`${endDate}T23:59:59.999`);
+      }
+    }
+
     return this.prisma.scheduleItem.findMany({
-      where: { companyId },
+      where,
+      include: {
+        person: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+          },
+        },
+      },
+      orderBy: [{ date: 'asc' }, { time: 'asc' }],
+    });
+  }
+
+  findPendingReminders(companyId: string) {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 2);
+    yesterday.setHours(0, 0, 0, 0);
+
+    const nextDays = new Date();
+    nextDays.setDate(nextDays.getDate() + 3);
+    nextDays.setHours(23, 59, 59, 999);
+
+    return this.prisma.scheduleItem.findMany({
+      where: {
+        companyId,
+        status: 'scheduled',
+        reminder: {
+          not: 'Sem lembrete',
+        },
+        date: {
+          gte: yesterday,
+          lte: nextDays,
+        },
+      },
+      include: {
+        person: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+          },
+        },
+      },
       orderBy: [{ date: 'asc' }, { time: 'asc' }],
     });
   }

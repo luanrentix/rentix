@@ -90,6 +90,11 @@ export class ContratosController {
     return this.contractsService.renew(id, data, user.companyId);
   }
 
+  @Post(':id/compartilhar')
+  share(@Param('id') id: string, @CurrentUser() user: UsuarioAutenticado) {
+    return this.contractsService.shareContract(id, user.companyId);
+  }
+
   @Delete(':id')
   remove(@Param('id') id: string, @CurrentUser() user: UsuarioAutenticado) {
     return this.contractsService.remove(id, user.companyId);

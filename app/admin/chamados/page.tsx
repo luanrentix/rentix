@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   RefreshCw,
   Plus,
+  MessageSquare,
+  AlertCircle,
+  CheckCircle2,
   X,
-  Building,
-  User,
-  Clock,
+  Loader2,
+  Headphones,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -25,16 +27,12 @@ import {
   type AdminCompany,
   type AdminUser,
 } from "@/services/admin.service";
-
-function formatDateTime(value: string) {
-  return new Date(value).toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+import { ChamadosKpis } from "@/components/admin/chamados/chamados-kpis";
+import { ChamadosFilters } from "@/components/admin/chamados/chamados-filters";
+import { ChamadosCards } from "@/components/admin/chamados/chamados-cards";
+import { ChamadoDetailModal } from "@/components/admin/chamados/chamado-detail-modal";
+import { ChamadoCreateModal } from "@/components/admin/chamados/chamado-create-modal";
+import type { TicketStatusFilter, TicketSortOption } from "@/components/admin/chamados/chamados-types";
 
 function isSystemOwnerRole(role?: string | null) {
   return role === "SYSTEM_OWNER" || role === "DONO_SISTEMA";
@@ -43,42 +41,41 @@ function isSystemOwnerRole(role?: string | null) {
 export default function AdminChamadosPage() {
   const router = useRouter();
   const { user, isLoading: isAuthLoading } = useAuth();
-  const [tickets, setTickets] = useState<SupportTicket[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
-  const [respondingTicketId, setRespondingTicketId] = useState<string | null>(null);
-  const [ticketResponse, setTicketResponse] = useState("");
-  const [isReplying, setIsReplying] = useState(false);
 
-  // States for new ticket creation (Admin-initiated)
+  // Estados de Dados
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [companies, setCompanies] = useState<AdminCompany[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [isNewTicketModalOpen, setIsNewTicketModalOpen] = useState(false);
-  const [selectedCompanyId, setSelectedCompanyId] = useState("");
-  const [selectedUserId, setSelectedUserId] = useState("");
-  const [newTicketSubject, setNewTicketSubject] = useState("");
-  const [newTicketMessage, setNewTicketMessage] = useState("");
-  const [isSubmittingNewTicket, setIsSubmittingNewTicket] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+
+  // Estados de Filtros e Busca
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<TicketStatusFilter>("ALL");
+  const [companyFilter, setCompanyFilter] = useState("all");
+  const [sortOption, setSortOption] = useState<TicketSortOption>("recent");
+
+  // Modais
+  const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const isSystemOwner = isSystemOwnerRole(user?.role);
 
-  useEffect(() => {
-    if (isAuthLoading) return;
-    if (!isSystemOwner) {
-      router.replace("/dashboard");
-      return;
-    }
-    loadTickets();
-    loadCompaniesAndUsers();
-  }, [isAuthLoading, isSystemOwner, router]);
-
-  async function loadTickets() {
+  const loadData = useCallback(async () => {
     try {
-      setIsLoading(true);
       setErrorMessage("");
-      const nextTickets = await getChamados();
+      const [nextTickets, compList, userList] = await Promise.all([
+        getChamados(),
+        getAdminCompanies().catch(() => []),
+        getAdminUsers().catch(() => []),
+      ]);
+
       setTickets(Array.isArray(nextTickets) ? nextTickets : []);
+      setCompanies(compList || []);
+      setUsers(userList || []);
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Não foi possível carregar os chamados.";
       if (
@@ -89,7 +86,7 @@ export default function AdminChamadosPage() {
         msg.includes("Request failed")
       ) {
         setErrorMessage(
-          "O serviço de chamados está temporariamente indisponível no servidor. Verifique se o backend NestJS e o banco PostgreSQL na VPS estão ativos e conectados.",
+          "O serviço de chamados está temporariamente indisponível no servidor. Verifique a conexão com a VPS e PostgreSQL.",
         );
       } else {
         setErrorMessage(msg);
@@ -97,422 +94,298 @@ export default function AdminChamadosPage() {
       setTickets([]);
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
     }
-  }
+  }, []);
 
-  async function loadCompaniesAndUsers() {
-    try {
-      const [compList, userList] = await Promise.all([
-        getAdminCompanies(),
-        getAdminUsers(),
-      ]);
-      setCompanies(compList || []);
-      setUsers(userList || []);
-    } catch (err) {
-      console.error("Erro ao carregar dados auxiliares do admin:", err);
-    }
-  }
-
-  const filteredUsers = useMemo(() => {
-    if (!selectedCompanyId) return [];
-    return users.filter((u) => u.company.id === selectedCompanyId);
-  }, [selectedCompanyId, users]);
-
-  // When selectedCompanyId changes, auto-select first user if exists
   useEffect(() => {
-    if (filteredUsers.length > 0) {
-      setSelectedUserId(filteredUsers[0].id);
-    } else {
-      setSelectedUserId("");
-    }
-  }, [selectedCompanyId, filteredUsers]);
-
-  async function handleResponderChamado(ticketId: string) {
-    if (!ticketResponse.trim()) {
-      setErrorMessage("Por favor, digite uma resposta antes de enviar.");
+    if (isAuthLoading) return;
+    if (!isSystemOwner) {
+      router.replace("/dashboard");
       return;
     }
+    loadData();
+  }, [isAuthLoading, isSystemOwner, router, loadData]);
 
+  // Limpeza de filtros
+  function handleResetFilters() {
+    setSearch("");
+    setStatusFilter("ALL");
+    setCompanyFilter("all");
+    setSortOption("recent");
+  }
+
+  const hasActiveFilters =
+    Boolean(search) ||
+    statusFilter !== "ALL" ||
+    companyFilter !== "all" ||
+    sortOption !== "recent";
+
+  // Filtragem e Ordenação em Memória
+  const filteredTickets = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    const result = tickets.filter((ticket) => {
+      // Filtro de Status
+      if (statusFilter !== "ALL" && ticket.status !== statusFilter) {
+        return false;
+      }
+
+      // Filtro de Empresa
+      if (companyFilter !== "all" && ticket.companyId !== companyFilter) {
+        return false;
+      }
+
+      // Busca Textual
+      if (query) {
+        const subject = (ticket.subject || "").toLowerCase();
+        const message = (ticket.message || "").toLowerCase();
+        const userName = (ticket.user?.name || "").toLowerCase();
+        const userEmail = (ticket.user?.email || "").toLowerCase();
+        const companyName = (ticket.company?.tradeName || "").toLowerCase();
+
+        const matches =
+          subject.includes(query) ||
+          message.includes(query) ||
+          userName.includes(query) ||
+          userEmail.includes(query) ||
+          companyName.includes(query);
+
+        if (!matches) return false;
+      }
+
+      return true;
+    });
+
+    // Ordenação
+    result.sort((a, b) => {
+      if (sortOption === "waiting_first") {
+        if (a.status === "ABERTO" && b.status !== "ABERTO") return -1;
+        if (a.status !== "ABERTO" && b.status === "ABERTO") return 1;
+      }
+
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+
+      if (sortOption === "oldest") {
+        return dateA - dateB;
+      }
+
+      // Default: recent
+      return dateB - dateA;
+    });
+
+    return result;
+  }, [tickets, search, statusFilter, companyFilter, sortOption]);
+
+  // Ações de Chamado
+  async function handleOpenTicketDetail(ticket: SupportTicket) {
+    setSelectedTicket(ticket);
+    setIsDetailModalOpen(true);
+  }
+
+  async function handleSendResponse(ticketId: string, responseText: string, closeAfter: boolean = false) {
     try {
-      setIsReplying(true);
-      setErrorMessage("");
-      setSuccessMessage("");
-      await responderChamado(ticketId, ticketResponse);
-      setSuccessMessage("Chamado respondido com sucesso.");
-      setRespondingTicketId(null);
-      setTicketResponse("");
-      const nextTickets = await getChamados();
-      setTickets(nextTickets || []);
-    } catch (error) {
-      console.error("Erro ao responder chamado:", error);
-      setErrorMessage(
-        error instanceof Error ? error.message : "Não foi possível responder ao chamado.",
+      await responderChamado(ticketId, responseText);
+      if (closeAfter) {
+        await clienteAcaoChamado(ticketId, "close");
+      }
+      setSuccessMessage(
+        closeAfter
+          ? "Chamado respondido e concluído com sucesso!"
+          : "Resposta enviada com sucesso ao cliente!",
       );
-    } finally {
-      setIsReplying(false);
+      await loadData();
+    } catch (err) {
+      console.error("Erro ao responder chamado:", err);
+      throw err;
     }
   }
 
   async function handleCloseTicket(ticketId: string) {
-    if (!confirm("Deseja realmente encerrar este chamado?")) return;
+    if (!confirm("Deseja realmente encerrar este chamado de suporte?")) return;
     try {
-      setIsReplying(true);
-      setErrorMessage("");
-      setSuccessMessage("");
       await clienteAcaoChamado(ticketId, "close");
       setSuccessMessage("Chamado encerrado com sucesso.");
-      const nextTickets = await getChamados();
-      setTickets(nextTickets || []);
-    } catch (error) {
-      console.error("Erro ao encerrar chamado:", error);
+      await loadData();
+    } catch (err) {
+      console.error("Erro ao encerrar chamado:", err);
       setErrorMessage(
-        error instanceof Error ? error.message : "Não foi possível encerrar o chamado.",
+        err instanceof Error ? err.message : "Não foi possível encerrar o chamado.",
       );
-    } finally {
-      setIsReplying(false);
     }
   }
 
-  async function handleCreateNewTicket(e: React.FormEvent) {
-    e.preventDefault();
-    if (!selectedCompanyId || !selectedUserId || !newTicketSubject.trim() || !newTicketMessage.trim()) {
-      setErrorMessage("Por favor, preencha todos os campos obrigatórios.");
-      return;
-    }
-
+  async function handleCreateTicket(payload: {
+    targetCompanyId: string;
+    targetUserId: string;
+    subject: string;
+    message: string;
+  }) {
     try {
-      setIsSubmittingNewTicket(true);
-      setErrorMessage("");
-      setSuccessMessage("");
-      await criarChamado({
-        subject: newTicketSubject,
-        message: newTicketMessage,
-        targetUserId: selectedUserId,
-        targetCompanyId: selectedCompanyId,
-      });
-      setSuccessMessage("Novo chamado criado e iniciado com sucesso!");
-      setIsNewTicketModalOpen(false);
-      setNewTicketSubject("");
-      setNewTicketMessage("");
-      setSelectedCompanyId("");
-      setSelectedUserId("");
-      const nextTickets = await getChamados();
-      setTickets(nextTickets || []);
-    } catch (error) {
-      console.error("Erro ao criar novo chamado:", error);
-      setErrorMessage(
-        error instanceof Error ? error.message : "Não foi possível iniciar a conversa/chamado.",
-      );
-    } finally {
-      setIsSubmittingNewTicket(false);
+      await criarChamado(payload);
+      setSuccessMessage("Novo chamado criado e enviado com sucesso!");
+      await loadData();
+    } catch (err) {
+      console.error("Erro ao criar chamado:", err);
+      throw err;
     }
   }
 
   if (isAuthLoading || isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <RefreshCw className="mx-auto h-8 w-8 animate-spin text-orange-500" />
-          <p className="mt-2 text-sm font-semibold text-slate-500">Carregando chamados...</p>
-        </div>
+      <div className="flex h-96 flex-col items-center justify-center gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+        <p className="text-sm font-bold text-slate-500">
+          Carregando central de chamados...
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
-      {/* Header */}
-      <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
+    <div className="mx-auto max-w-7xl px-4 py-8 space-y-6">
+      {/* Cabeçalho da Página */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3.5">
           <button
+            type="button"
             onClick={() => router.push("/admin")}
-            className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white border border-slate-200 text-slate-600 transition hover:bg-slate-50"
-            title="Voltar ao Painel Admin"
+            className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 hover:text-slate-900 active:scale-95 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+            title="Voltar ao Painel Geral de Administração"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
+
           <div>
-            <h1 className="text-2xl font-black text-slate-950 lg:text-3xl">
-              Gerenciar Chamados
-            </h1>
-            <p className="mt-1 text-sm font-semibold text-slate-500">
-              Visualize e responda os chamados de suporte técnico enviados pelos usuários
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-black tracking-tight text-slate-950 dark:text-white sm:text-3xl">
+                Gerenciar Chamados
+              </h1>
+              <span className="inline-flex items-center gap-1 rounded-xl bg-indigo-50 px-2.5 py-0.5 text-xs font-black text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-900/40">
+                <Headphones className="h-3.5 w-3.5" />
+                Helpdesk Admin
+              </span>
+            </div>
+            <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+              Visualize, responda e acompanhe todas as solicitações de suporte dos clientes do sistema.
             </p>
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2.5">
           <button
-            onClick={() => setIsNewTicketModalOpen(true)}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 text-sm font-black text-white shadow-sm transition hover:bg-orange-650"
+            type="button"
+            onClick={() => {
+              setIsRefreshing(true);
+              loadData();
+            }}
+            disabled={isRefreshing}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            title="Sincronizar chamados"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${isRefreshing ? "animate-spin text-indigo-600" : "text-slate-400"}`}
+            />
+            <span>Atualizar</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsCreateModalOpen(true)}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-5 text-xs font-black text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-700 active:scale-95"
           >
             <Plus className="h-4 w-4" />
-            Iniciar Conversa
-          </button>
-          <button
-            onClick={loadTickets}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white border border-slate-200 px-4 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Atualizar
+            <span>Iniciar Conversa</span>
           </button>
         </div>
-      </header>
+      </div>
 
+      {/* Alertas de Erro ou Sucesso */}
       {errorMessage && (
-        <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">
-          {errorMessage}
+        <div className="flex items-center justify-between rounded-2xl border border-red-200 bg-red-50 p-4 text-xs font-bold text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300 shadow-sm">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
+            <span>{errorMessage}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setErrorMessage("")}
+            className="rounded-lg p-1 text-red-400 hover:bg-red-100 dark:hover:bg-red-900"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
       {successMessage && (
-        <div className="mb-6 rounded-2xl border border-emerald-250 bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
-          {successMessage}
+        <div className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-bold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300 shadow-sm">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+            <span>{successMessage}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSuccessMessage("")}
+            className="rounded-lg p-1 text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-4">
-        {/* Metric Cards */}
-        <div className="lg:col-span-1 space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">Total de Chamados</h3>
-            <p className="mt-2 text-3xl font-black text-slate-900">{tickets.length}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="text-xs font-black uppercase tracking-wider text-orange-500">Em Aberto</h3>
-            <p className="mt-2 text-3xl font-black text-orange-650">
-              {tickets.filter((t) => t.status === "ABERTO").length}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="text-xs font-black uppercase tracking-wider text-blue-500">Respondidos</h3>
-            <p className="mt-2 text-3xl font-black text-blue-600">
-              {tickets.filter((t) => t.status === "RESPONDIDO").length}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="text-xs font-black uppercase tracking-wider text-emerald-500">Fechados</h3>
-            <p className="mt-2 text-3xl font-black text-emerald-600">
-              {tickets.filter((t) => t.status === "FECHADO").length}
-            </p>
-          </div>
-        </div>
+      {/* KPIs Horizontais no Topo (Padrão Contrx Bens/Ativos) */}
+      <ChamadosKpis
+        tickets={tickets}
+        statusFilter={statusFilter}
+        onSelectStatus={(status) => setStatusFilter(status)}
+      />
 
-        {/* Tickets List */}
-        <div className="lg:col-span-3 space-y-4">
-          {tickets.length === 0 ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm font-semibold text-slate-500">
-              Nenhum chamado de suporte encontrado.
-            </div>
-          ) : (
-            tickets.map((ticket) => (
-              <div
-                key={ticket.id}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-orange-200"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                  <span
-                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase ${
-                      ticket.status === "ABERTO"
-                        ? "bg-orange-50 text-orange-700"
-                        : ticket.status === "RESPONDIDO"
-                        ? "bg-blue-50 text-blue-700"
-                        : "bg-slate-100 text-slate-500"
-                    }`}
-                  >
-                    {ticket.status === "ABERTO" ? "Aberto" : ticket.status === "RESPONDIDO" ? "Respondido" : "Fechado"}
-                  </span>
-                  <span className="text-xs font-bold text-slate-400 flex items-center gap-1">
-                    <Clock className="h-3.5 w-3.5" />
-                    {formatDateTime(ticket.createdAt)}
-                  </span>
-                </div>
+      {/* Barra de Filtros e Busca Rápida */}
+      <ChamadosFilters
+        search={search}
+        onSearchChange={setSearch}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        selectedCompanyId={companyFilter}
+        onCompanyChange={setCompanyFilter}
+        sortOption={sortOption}
+        onSortOptionChange={setSortOption}
+        companies={companies}
+        totalFiltered={filteredTickets.length}
+        totalAll={tickets.length}
+        onResetFilters={handleResetFilters}
+        hasActiveFilters={hasActiveFilters}
+      />
 
-                <div className="mt-4">
-                  <h4 className="text-base font-black text-slate-900 uppercase">
-                    {ticket.subject}
-                  </h4>
-                  <p className="mt-2.5 text-sm font-medium leading-relaxed text-slate-650 bg-slate-50 p-4 rounded-xl border border-slate-100 whitespace-pre-wrap">
-                    {ticket.message}
-                  </p>
-                </div>
+      {/* Lista de Chamados em Cards Ricos */}
+      <ChamadosCards
+        tickets={filteredTickets}
+        onOpenTicket={handleOpenTicketDetail}
+        onCloseTicket={handleCloseTicket}
+        onResetFilters={handleResetFilters}
+      />
 
-                {ticket.response && (
-                  <div className="mt-4 rounded-xl bg-orange-50/50 border border-orange-100 p-4">
-                    <p className="text-xs font-black uppercase text-orange-600">Sua Resposta Anterior</p>
-                    <p className="mt-1.5 text-sm font-semibold text-slate-700 whitespace-pre-wrap leading-relaxed">
-                      {ticket.response}
-                    </p>
-                  </div>
-                )}
+      {/* Modal de Detalhes e Atendimento do Chamado */}
+      <ChamadoDetailModal
+        isOpen={isDetailModalOpen}
+        onClose={() => {
+          setIsDetailModalOpen(false);
+          setSelectedTicket(null);
+        }}
+        ticket={selectedTicket}
+        onSendResponse={handleSendResponse}
+        onCloseTicket={handleCloseTicket}
+      />
 
-                <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-4 text-xs font-bold text-slate-400">
-                  <div className="flex flex-wrap gap-x-4 gap-y-1">
-                    <span className="flex items-center gap-1">
-                      <Building className="h-3.5 w-3.5 text-slate-400" />
-                      Empresa: <strong className="text-slate-600">{ticket.company?.tradeName || "Não informada"}</strong>
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <User className="h-3.5 w-3.5 text-slate-400" />
-                      Usuário: <strong className="text-slate-600">{ticket.user?.name} ({ticket.user?.email})</strong>
-                    </span>
-                  </div>
-
-                  {ticket.status !== "FECHADO" && (
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRespondingTicketId(respondingTicketId === ticket.id ? null : ticket.id);
-                          setTicketResponse(ticket.response || "");
-                        }}
-                        className="rounded-xl px-4 py-2 text-xs font-black text-white hover:opacity-90 transition bg-orange-500"
-                      >
-                        {respondingTicketId === ticket.id ? "Cancelar" : ticket.status === "RESPONDIDO" ? "Editar Resposta" : "Responder"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleCloseTicket(ticket.id)}
-                        className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-black text-slate-600 transition hover:bg-slate-50"
-                      >
-                        Encerrar
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {respondingTicketId === ticket.id && (
-                  <div className="mt-5 border-t border-dashed border-slate-200 pt-5">
-                    <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-2.5">
-                      Sua resposta (será enviada por e-mail para o cliente)
-                    </label>
-                    <textarea
-                      value={ticketResponse}
-                      onChange={(e) => setTicketResponse(e.target.value)}
-                      placeholder="Descreva a solução ou resposta do suporte..."
-                      className="w-full min-h-[120px] rounded-xl border border-slate-200 p-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                    />
-                    <div className="mt-3 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => handleResponderChamado(ticket.id)}
-                        disabled={isReplying || !ticketResponse.trim()}
-                        className="rounded-xl bg-orange-500 px-5 py-2.5 text-xs font-black text-white transition disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90"
-                      >
-                        {isReplying ? "Enviando..." : "Enviar Resposta"}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* MODAL: INICIAR NOVA CONVERSA (NOVO CHAMADO PELO ADMIN) */}
-      {isNewTicketModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-3xl border border-slate-100 bg-white p-6 shadow-2xl animate-fade-in">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-lg font-black text-slate-900">Iniciar Novo Chamado</h3>
-              <button
-                onClick={() => setIsNewTicketModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 transition"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateNewTicket} className="mt-4 space-y-4">
-              <div>
-                <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-1.5">
-                  Empresa de Destino *
-                </label>
-                <select
-                  value={selectedCompanyId}
-                  onChange={(e) => setSelectedCompanyId(e.target.value)}
-                  className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-orange-500"
-                  required
-                >
-                  <option value="">Selecione a empresa...</option>
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.tradeName || c.companyName}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {selectedCompanyId && (
-                <div>
-                  <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-1.5">
-                    Usuário Destinatário *
-                  </label>
-                  <select
-                    value={selectedUserId}
-                    onChange={(e) => setSelectedUserId(e.target.value)}
-                    className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-orange-500"
-                    required
-                  >
-                    <option value="">Selecione o usuário...</option>
-                    {filteredUsers.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} ({u.email})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-1.5">
-                  Assunto *
-                </label>
-                <input
-                  type="text"
-                  value={newTicketSubject}
-                  onChange={(e) => setNewTicketSubject(e.target.value)}
-                  placeholder="Ex: Atualização de módulo bancário"
-                  className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-orange-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-black uppercase tracking-wider text-slate-500 mb-1.5">
-                  Mensagem Inicial *
-                </label>
-                <textarea
-                  value={newTicketMessage}
-                  onChange={(e) => setNewTicketMessage(e.target.value)}
-                  placeholder="Escreva a mensagem ou notificação..."
-                  rows={4}
-                  className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-semibold outline-none focus:border-orange-500"
-                  required
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsNewTicketModalOpen(false)}
-                  className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmittingNewTicket || !selectedUserId || !newTicketSubject.trim() || !newTicketMessage.trim()}
-                  className="rounded-xl bg-orange-500 px-5 py-2 text-xs font-black text-white transition disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-605"
-                >
-                  {isSubmittingNewTicket ? "Enviando..." : "Criar Chamado"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Modal de Criação de Novo Chamado pelo Admin */}
+      <ChamadoCreateModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        companies={companies}
+        users={users}
+        onCreateTicket={handleCreateTicket}
+      />
     </div>
   );
 }

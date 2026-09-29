@@ -43,6 +43,7 @@ import {
   type UserSettings,
   type UserToolPermission,
   type ViaCepResponse,
+  type IntegrationSettings,
   canResetTestDataRole,
   companyAccessProfiles,
   defaultCompanySettings,
@@ -52,6 +53,7 @@ import {
   defaultResetOptions,
   defaultThemeSettings,
   defaultUserSettings,
+  defaultIntegrationSettings,
   isCompanyAdminRole,
   maxCompanyLogoSizeInBytes,
   normalizeThemeMode,
@@ -77,9 +79,9 @@ import { CompanySettingsTab } from "./components/CompanySettingsTab";
 import { UserSettingsTab } from "./components/UserSettingsTab";
 import { PrintSettingsTab } from "./components/PrintSettingsTab";
 import { AppearanceSettingsTab } from "./components/AppearanceSettingsTab";
+import { IntegrationsSettingsTab } from "./components/IntegrationsSettingsTab";
 import { ResetTestDataModal } from "./components/modals/ResetTestDataModal";
-import { PrintEditorModal } from "./components/modals/PrintEditorModal";
-import { ImportPrintModal } from "./components/modals/ImportPrintModal";
+import { PrintPreviewModal } from "./components/modals/PrintPreviewModal";
 import { RestorePrintModal } from "./components/modals/RestorePrintModal";
 import { SaveSuccessModal } from "./components/modals/SaveSuccessModal";
 
@@ -343,6 +345,8 @@ export default function ConfiguracoesPage() {
   const [isSavingCompanySettings, setIsSavingCompanySettings] = useState(false);
   const [isSavingUserSettings, setIsSavingUserSettings] = useState(false);
   const [isSavingAppearanceSettings, setIsSavingAppearanceSettings] = useState(false);
+  const [isSavingIntegrationSettings, setIsSavingIntegrationSettings] = useState(false);
+  const [integrationSettings, setIntegrationSettings] = useState<IntegrationSettings>(defaultIntegrationSettings);
   const [isSaveSuccessModalOpen, setIsSaveSuccessModalOpen] = useState(false);
 
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
@@ -459,6 +463,20 @@ export default function ConfiguracoesPage() {
       setPrintTemplates(parsedPrintTemplates);
       setInitialPrintTemplates(parsedPrintTemplates);
     }
+
+    const storedIntegrations = getCompanyStorageItem(
+      companyId,
+      "contrx_integration_settings",
+      "contrx_integration_settings",
+    );
+    if (storedIntegrations) {
+      try {
+        setIntegrationSettings({
+          ...defaultIntegrationSettings,
+          ...JSON.parse(storedIntegrations),
+        });
+      } catch {}
+    }
   }, [companyId, userEmail]);
 
   const loadSettings = useCallback(
@@ -493,6 +511,12 @@ export default function ConfiguracoesPage() {
           (settings.printTemplates || {}) as Partial<PrintTemplates>,
         );
 
+        const storedIntegrations = (storedCompanySettings.integrations || {}) as Partial<IntegrationSettings>;
+        const nextIntegrations: IntegrationSettings = {
+          ...defaultIntegrationSettings,
+          ...storedIntegrations,
+        };
+
         setUserSettings(nextUserSettings);
         setInitialUserSettings(nextUserSettings);
         setCompanySettings(nextCompanySettings);
@@ -501,6 +525,7 @@ export default function ConfiguracoesPage() {
         setInitialThemeSettings(nextThemeSettings);
         setPrintTemplates(nextPrintTemplates);
         setInitialPrintTemplates(nextPrintTemplates);
+        setIntegrationSettings(nextIntegrations);
       } catch {
         console.warn("Settings API unavailable. Local cached settings loaded.");
         loadSettingsFromLocalStorage();
@@ -850,18 +875,41 @@ export default function ConfiguracoesPage() {
       setIsImportingPrintTemplate(true);
       const text = await extractTextFromDocx(file);
       const normalized = normalizeImportedTemplateText(text);
-      setPrintTemplates((prev) => ({
-        ...prev,
+      const updatedTemplates: PrintTemplates = {
+        ...printTemplates,
         [documentKey]: {
-          ...prev[documentKey],
+          ...printTemplates[documentKey],
           content: normalized,
           importedFileName: file.name,
           importedAt: new Date().toLocaleDateString("pt-BR"),
         },
-      }));
-      setSuccessMessage(`Modelo de impresso "${printTemplates[documentKey].title}" importado.`);
+      };
+      setPrintTemplates(updatedTemplates);
+      setCompanyStorageItem(
+        companyId,
+        "contrx_print_templates",
+        JSON.stringify(updatedTemplates)
+      );
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("contrx_print_templates", JSON.stringify(updatedTemplates));
+        } catch {}
+      }
+      if (companyId) {
+        await saveAppSettings({
+          companyId,
+          userSettings: { ...userSettings, email: lockedUserEmail },
+          companySettings,
+          printTemplates: updatedTemplates,
+          themeSettings,
+        });
+      }
+      setSuccessMessage(`Modelo "${printTemplates[documentKey].title}" importado e salvo com sucesso a partir de "${file.name}"!`);
+      setTimeout(() => setSuccessMessage(""), 5000);
     } catch (error) {
       console.error(error);
+      setSuccessMessage(error instanceof Error ? error.message : "Erro ao importar arquivo DOCX.");
+      setTimeout(() => setSuccessMessage(""), 5000);
     } finally {
       setIsImportingPrintTemplate(false);
     }
@@ -875,15 +923,36 @@ export default function ConfiguracoesPage() {
     setRestorePrintModalState({ isOpen: false, documentKey: null });
   }
 
-  function handleConfirmRestorePrintTemplate() {
+  async function handleConfirmRestorePrintTemplate() {
     if (!restorePrintModalState.documentKey) return;
     const key = restorePrintModalState.documentKey;
-    setPrintTemplates((prev) => ({
-      ...prev,
+    const updatedTemplates: PrintTemplates = {
+      ...printTemplates,
       [key]: { ...defaultPrintTemplates[key] },
-    }));
+    };
+    setPrintTemplates(updatedTemplates);
+    setCompanyStorageItem(
+      companyId,
+      "contrx_print_templates",
+      JSON.stringify(updatedTemplates)
+    );
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("contrx_print_templates", JSON.stringify(updatedTemplates));
+      } catch {}
+    }
+    if (companyId) {
+      await saveAppSettings({
+        companyId,
+        userSettings: { ...userSettings, email: lockedUserEmail },
+        companySettings,
+        printTemplates: updatedTemplates,
+        themeSettings,
+      });
+    }
     handleCloseRestorePrintModal();
-    setSuccessMessage(`Modelo "${defaultPrintTemplates[key].title}" restaurado.`);
+    setSuccessMessage(`Modelo "${defaultPrintTemplates[key].title}" restaurado para o padrão original.`);
+    setTimeout(() => setSuccessMessage(""), 5000);
   }
 
   // Handlers para Aparência
@@ -903,6 +972,37 @@ export default function ConfiguracoesPage() {
       setSuccessMessage("Erro ao salvar aparencia.");
     } finally {
       setIsSavingAppearanceSettings(false);
+    }
+  }
+
+  // Handlers para Integrações
+  async function handleSaveIntegrationSettings() {
+    setIsSavingIntegrationSettings(true);
+    try {
+      setCompanyStorageItem(
+        companyId,
+        "contrx_integration_settings",
+        JSON.stringify(integrationSettings),
+      );
+      if (companyId) {
+        await saveAppSettings({
+          companyId,
+          userSettings: { ...userSettings, email: lockedUserEmail },
+          companySettings: {
+            ...companySettings,
+            integrations: integrationSettings,
+          },
+          printTemplates,
+          themeSettings,
+        });
+      }
+      setIsSaveSuccessModalOpen(true);
+    } catch {
+      setSuccessMessage("Configurações salvas localmente com sucesso.");
+      setTimeout(() => setSuccessMessage(""), 4000);
+      setIsSaveSuccessModalOpen(true);
+    } finally {
+      setIsSavingIntegrationSettings(false);
     }
   }
 
@@ -1080,12 +1180,24 @@ export default function ConfiguracoesPage() {
                 />
               )}
 
+              {activeSettingsTab === "integrations" && (
+                <IntegrationsSettingsTab
+                  integrationSettings={integrationSettings}
+                  setIntegrationSettings={setIntegrationSettings}
+                  isSaving={isSavingIntegrationSettings}
+                  onSave={handleSaveIntegrationSettings}
+                />
+              )}
+
               {activeSettingsTab === "print" && (
                 <PrintSettingsTab
                   printTemplates={printTemplates}
-                  onOpenPrintModal={handleOpenPrintModal}
-                  onOpenImportPrintModal={handleOpenImportPrintTutorial}
-                  onOpenRestorePrintModal={handleOpenRestorePrintModal}
+                  downloadingPrintTemplateKey={downloadingPrintTemplateKey}
+                  isImportingPrintTemplate={isImportingPrintTemplate}
+                  onDownloadDocx={handleDownloadPrintTemplateForEditing}
+                  onImportDocx={handleImportPrintTemplateFromDocx}
+                  onOpenPreview={(key) => handleOpenPrintModal(key, "view")}
+                  onOpenRestore={handleOpenRestorePrintModal}
                 />
               )}
 
@@ -1117,36 +1229,14 @@ export default function ConfiguracoesPage() {
         onConfirm={handleConfirmResetData}
       />
 
-      <PrintEditorModal
-        printModalState={printModalState}
+      <PrintPreviewModal
+        isOpen={printModalState.isOpen}
+        documentKey={printModalState.documentKey}
         selectedPrintTemplate={selectedPrintTemplate}
         selectedPrintTemplatePreview={selectedPrintTemplatePreview}
-        selectedPrintTemplateStats={selectedPrintTemplateStats}
-        selectedPrintTemplateMissingVariables={selectedPrintTemplateMissingVariables}
-        printEditorViewMode={printEditorViewMode}
-        setPrintEditorViewMode={setPrintEditorViewMode}
-        printTemplateTextareaRef={printTemplateTextareaRef}
         downloadingPrintTemplateKey={downloadingPrintTemplateKey}
-        isImportingPrintTemplate={isImportingPrintTemplate}
         onClose={handleClosePrintModal}
-        onDownloadForEditing={handleDownloadPrintTemplateForEditing}
-        onOpenImportTutorial={handleOpenImportPrintTutorial}
-      />
-
-      <ImportPrintModal
-        importPrintModalState={importPrintModalState}
-        selectedImportPrintTemplate={selectedImportPrintTemplate}
-        printTemplateDocxInputRef={printTemplateDocxInputRef}
-        isImportingPrintTemplate={isImportingPrintTemplate}
-        onClose={handleCloseImportPrintTutorial}
-        onSelectDocx={() => printTemplateDocxInputRef.current?.click()}
-        onFileSelected={(e) => {
-          const file = e.target.files?.[0];
-          if (file && importPrintModalState.documentKey) {
-            handleCloseImportPrintTutorial();
-            handleImportPrintTemplateFromDocx(importPrintModalState.documentKey, file);
-          }
-        }}
+        onDownloadDocx={handleDownloadPrintTemplateForEditing}
       />
 
       <RestorePrintModal

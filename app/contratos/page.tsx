@@ -1,5271 +1,973 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  AlertTriangle,
-  Ban,
-  ChevronDown,
-  Check,
-  CheckCircle,
-  Clock,
-  DollarSign,
-  Eye,
-  ExternalLink,
-  FileText,
-  MapPin,
-  Maximize2,
-  MessageCircle,
-  Minus,
-  Pencil,
-  RefreshCw,
-  RotateCcw,
-  Save,
-  Trash2,
-  X,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { getMediaUrl } from "@/services/api";
-import Link from "next/link";
+import { Plus, Clock, FileText } from "lucide-react";
+
+// Serviços
 import {
   createContract,
-  cancelContract,
   getContracts,
-  finishContract as finishContractAction,
+  updateContract,
+  cancelContract,
+  finishContract,
   renewContract,
   softDeleteContract,
-  updateContract,
-  type Contract as ApiContract,
-  type ContractRenewalRecord as ApiContractRenewalRecord,
-  type ContractStatus as ApiContractStatus,
-  type ContractStatusReasonType as ApiContractStatusReasonType,
+  shareContract,
   type CreateContractDto,
   type UpdateContractDto,
 } from "@/services/contracts.service";
+import { openWhatsAppMessage } from "@/services/whatsapp.service";
+import { getProperties } from "@/services/properties.service";
+import { getPeople } from "@/services/people.service";
 import {
-  deleteReceivableAccount,
-  getContractReceivableAccounts,
   getReceivableAccounts,
+  deleteReceivableAccount,
   type ReceivableAccount,
 } from "@/services/financial.service";
-import { getProperties, type Property as ApiProperty } from "@/services/properties.service";
-import { getPeople, type Person as ApiPerson } from "@/services/people.service";
+import {
+  getScheduleItems,
+  deleteScheduleItem,
+} from "@/services/schedule.service";
 import { createPropertyMovement } from "@/services/property-movements.service";
 import {
-  getCachedCompanySettings,
-  getCachedPrintTemplates,
-} from "@/services/settings-cache";
-import {
-  getCompanyStorageItem,
-  setCompanyStorageItem,
-  removeCompanyStorageItem,
-} from "@/services/company-storage";
-import {
   clearMinimizedModalState,
-  getMinimizedModalState,
   setMinimizedModalState,
   CLOSE_MINIMIZED_MODAL_EVENT,
   RESTORE_MINIMIZED_MODAL_EVENT,
 } from "@/services/minimized-modal.service";
 import {
-  createScheduleItem,
-  getScheduleItems,
-  updateScheduleItem,
-  type ScheduleItem,
-} from "@/services/schedule.service";
-import { openWhatsAppMessage } from "@/services/whatsapp.service";
+  getCompanyStorageItem,
+  setCompanyStorageItem,
+} from "@/services/company-storage";
+
+// Tipos e Componentes Modulares
 import {
-  LEGACY_SETTINGS_TEMPORARY_CONTRACT_CONTENT,
-  DEFAULT_SETTINGS_TEMPORARY_CONTRACT_CONTENT,
-  LEGACY_SETTINGS_STANDARD_CONTRACT_CONTENT,
-  ORIGINAL_STANDARD_RESIDENTIAL_CONTRACT_TEMPLATE,
-  DEFAULT_ASSET_CONTRACT_TEMPLATE,
-} from "./templates";
+  Contract,
+  Property,
+  ContrxTenant,
+  ContractFilterStatus,
+  ContractTypeFilter,
+  ContractRenewalRecord,
+  ContractModalDraft,
+  DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME,
+  DEFAULT_TEMPORARY_RENTAL_CHECK_OUT_TIME,
+  TEMPORARY_RENTAL_TIME_DEFAULTS_STORAGE_KEY,
+  RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
+  CONTRACT_SCHEDULE_DRAFT_KEY,
+  getContractReceivableSchedule,
+  mapApiContractToContract,
+  mapApiPropertyToProperty,
+  mapApiPersonToTenant,
+  mapReceivableAccountToCharge,
+  buildContractPayload,
+  syncPropertiesWithContracts,
+  getDisplayContractStatus,
+  normalizeSearchText,
+  getContractSortTime,
+} from "@/components/contracts/contract-types";
+import { ContractKpis } from "@/components/contracts/contract-kpis";
+import { ContractFilters } from "@/components/contracts/contract-filters";
+import { ContractTable } from "@/components/contracts/contract-table";
+import { ContractMobileCards } from "@/components/contracts/contract-mobile-cards";
+import { ContractFormModal } from "@/components/contracts/contract-form-modal";
+import { ContractDetailsModal } from "@/components/contracts/contract-details-modal";
+import { ContractRenewalModal } from "@/components/contracts/contract-renewal-modal";
+import {
+  ContractFinishModal,
+  ContractCancelModal,
+  ContractDeleteModal,
+  ContractEditConfirmationModal,
+  ContractPromptInstallmentsModal,
+} from "@/components/contracts/contract-lifecycle-modals";
+import { ContractPrintModal } from "@/components/contracts/contract-print-modal";
+import { ContractTimeDefaultsModal } from "@/components/contracts/contract-time-defaults-modal";
+import { ContractShareModal } from "@/components/contracts/contract-share-modal";
 
-type ThemeMode = "light" | "black" | "graphite";
-
-const EXPIRING_CONTRACT_DAYS_LIMIT = 30;
-const DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME = "14:00";
-const DEFAULT_TEMPORARY_RENTAL_CHECK_OUT_TIME = "12:00";
-const TEMPORARY_RENTAL_TIME_DEFAULTS_STORAGE_KEY = "contrx_temporary_rental_time_defaults";
-const RECEIVABLE_FROM_CONTRACT_STORAGE_KEY = "contrx_receivable_from_contract";
-
-
-
-type PropertyStatus = "Available" | "Rented";
-
-type Property = {
-  id: string;
-  name: string;
-  assetCategory?: string | null;
-  rentValue?: number;
-  status: PropertyStatus;
-  isActive?: boolean;
-  zipCode?: string;
-  state?: string;
-  city?: string;
-  street?: string;
-  number?: string;
-  neighborhood?: string;
-  complement?: string;
-  pixKey?: string;
-  contractCity?: string;
-  contractDefaultNotes?: string;
-};
-
-type ContrxTenant = {
-  id: string;
-  name: string;
-  isTenant?: boolean;
-  isActive?: boolean;
-  personType?: "Individual" | "Company";
-  cpf?: string;
-  document?: string;
-  email?: string;
-  phone?: string;
-  zipCode?: string;
-  state?: string;
-  city?: string;
-  street?: string;
-  number?: string;
-  neighborhood?: string;
-  complement?: string;
-  pixKey?: string;
-  contractCity?: string;
-  contractDefaultNotes?: string;
-};
-
-type CompanySettings = {
-  name?: string;
-  legalName?: string;
-  document?: string;
-  stateRegistration?: string;
-  email?: string;
-  phone?: string;
-  zipCode?: string;
-  state?: string;
-  city?: string;
-  street?: string;
-  number?: string;
-  neighborhood?: string;
-  complement?: string;
-  pixKey?: string;
-  contractCity?: string;
-  contractDefaultNotes?: string;
-};
-
-type ContractStatus =
-  | "Active"
-  | "Inactive"
-  | "Canceled"
-  | "Finished"
-  | "Deleted";
-
-type ContractDisplayStatus = ContractStatus | "Expiring" | "Expired";
-
-type ContractFilterStatus = "All" | ContractStatus | "Expiring" | "Expired";
-
-type ContractDetailsTab = "Data" | "Financial" | "History" | "Prints" | "Notes";
-
-type ContractRenewalRecord = {
-  renewedAt: string;
-  previousEndDate: string;
-  newEndDate: string;
-  previousRentValue: number;
-  newRentValue: number;
-  notes?: string;
-};
-
-type Contract = {
-  id: string;
-  propertyId: string;
-  propertyName: string;
-  tenantId: string;
-  tenantName: string;
-  startDate: string;
-  endDate: string;
-  rentValue: number;
-  status?: ContractStatus;
-  deletedAt?: string | null;
-  statusReason?: string | null;
-  statusReasonType?: "Canceled" | "Deleted" | null;
-  statusReasonAt?: string | null;
-  isTemporaryRental?: boolean;
-  checkInTime?: string;
-  checkOutTime?: string;
-  renewedAt?: string | null;
-  renewalHistory?: ContractRenewalRecord[];
-  finishedAt?: string | null;
-  finishReason?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
-};
-
-type ReceivableCharge = {
-  id: string;
-  contractId?: string | number | null;
-  property?: string;
-  tenant?: string;
-  dueDate?: string;
-  amount?: number;
-  status?: "Pending" | "Paid";
-  manual?: boolean;
-  issueDate?: string;
-  installmentNumber?: number;
-  installmentTotal?: number;
-  installmentGroupId?: string;
-};
-
-type PendingStatusChange = {
-  contract: Contract;
-  nextStatus: "Canceled" | "Deleted";
-};
-
-type ActionMenuPosition = {
-  top: number;
-  left: number;
-};
-
-type PropertyMovement = {
-  id: string;
-  propertyId: string;
-  propertyName: string;
-  type:
-    | "ContractCreated"
-    | "ContractUpdated"
-    | "ContractCanceled"
-    | "ContractDeleted"
-    | "ContractRenewed"
-    | "ContractFinished";
-  description: string;
-  createdAt: string;
-};
-
-type ContractModalDraft = {
-  editingContractId: string | null;
-  propertyId: string;
-  tenantId: string;
-  startDate: string;
-  endDate: string;
-  rentValue: string;
-  isTemporaryRental: boolean;
-  checkInTime: string;
-  checkOutTime: string;
-};
+type ToastState = {
+  type: "success" | "error" | "info";
+  message: string;
+} | null;
 
 export default function ContractsPage() {
   const { user } = useAuth();
+  const companyId = user?.companyId;
 
+  // Dados principais
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [tenants, setTenants] = useState<ContrxTenant[]>([]);
   const [receivableAccounts, setReceivableAccounts] = useState<ReceivableAccount[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [isLoadingPageData, setIsLoadingPageData] = useState(true);
-  const [themeMode, setThemeMode] = useState<ThemeMode>("light");
-  const [isBlackTheme, setIsBlackTheme] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [toast, setToast] = useState<ToastState>(null);
+
+  // Filtros
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<ContractFilterStatus>("Active");
+  const [typeFilter, setTypeFilter] = useState<ContractTypeFilter>("All");
+
+  // Estado dos Modais
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isFormMinimized, setIsFormMinimized] = useState(false);
-  const [isSavingContract, setIsSavingContract] = useState(false);
-  const [formError, setFormError] = useState("");
-  const [editingContractId, setEditingContractId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<ContractFilterStatus>("Active");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [printableContract, setPrintableContract] = useState<Contract | null>(null);
-  const printableContractFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const [editingContract, setEditingContract] = useState<Contract | null>(null);
 
-  const [printableAdendum, setPrintableAdendum] = useState<{contract: Contract, renewal: ContractRenewalRecord} | null>(null);
-  const printableAdendumFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const [detailsContract, setDetailsContract] = useState<Contract | null>(null);
+  const [printContract, setPrintContract] = useState<Contract | null>(null);
+  const [printableAdendum, setPrintableAdendum] = useState<{
+    contract: Contract;
+    renewal: ContractRenewalRecord;
+  } | null>(null);
 
-  const [propertyId, setPropertyId] = useState("");
-  const [tenantId, setTenantId] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [rentValue, setRentValue] = useState("");
-  const [isTemporaryRental, setIsTemporaryRental] = useState(false);
-  const [checkInTime, setCheckInTime] = useState("");
-  const [checkOutTime, setCheckOutTime] = useState("");
+  const [renewalContract, setRenewalContract] = useState<Contract | null>(null);
+  const [finishContractTarget, setFinishContractTarget] = useState<Contract | null>(null);
+  const [cancelContractTarget, setCancelContractTarget] = useState<Contract | null>(null);
+  const [deleteContractTarget, setDeleteContractTarget] = useState<Contract | null>(null);
+  const [promptParcelasContract, setPromptParcelasContract] = useState<Contract | null>(null);
+  const [pendingEditContract, setPendingEditContract] = useState<Contract | null>(null);
+  const [postCreateFlowContract, setPostCreateFlowContract] = useState<Contract | null>(null);
+
+  // Compartilhamento via WhatsApp
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareModalContract, setShareModalContract] = useState<Contract | null>(null);
+  const [shareModalUrl, setShareModalUrl] = useState("");
+  const [shareModalExpiresAt, setShareModalExpiresAt] = useState<string | undefined>();
+
+  // Horários padrão de temporada
   const [defaultCheckInTime, setDefaultCheckInTime] = useState(DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME);
   const [defaultCheckOutTime, setDefaultCheckOutTime] = useState(DEFAULT_TEMPORARY_RENTAL_CHECK_OUT_TIME);
-  const [isDefaultTimeModalOpen, setIsDefaultTimeModalOpen] = useState(false);
-  const [draftDefaultCheckInTime, setDraftDefaultCheckInTime] = useState(DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME);
-  const [draftDefaultCheckOutTime, setDraftDefaultCheckOutTime] = useState(DEFAULT_TEMPORARY_RENTAL_CHECK_OUT_TIME);
-  const [pendingStatusChange, setPendingStatusChange] = useState<PendingStatusChange | null>(null);
-  const [statusReason, setStatusReason] = useState("");
-  const [statusReasonError, setStatusReasonError] = useState("");
-  const [renewalContract, setRenewalContract] = useState<Contract | null>(null);
-  const [renewalEndDate, setRenewalEndDate] = useState("");
-  const [renewalRentValue, setRenewalRentValue] = useState("");
-  const [renewalNotes, setRenewalNotes] = useState("");
-  const [renewalError, setRenewalError] = useState("");
-  const [isRenewingContract, setIsRenewingContract] = useState(false);
-  const [promptParcelasContract, setPromptParcelasContract] = useState<Contract | null>(null);
-  const [finishContract, setFinishContract] = useState<Contract | null>(null);
-  const [finishReason, setFinishReason] = useState("");
-  const [finishReasonError, setFinishReasonError] = useState("");
-  const [isFinishingContract, setIsFinishingContract] = useState(false);
-  const [isApplyingStatusChange, setIsApplyingStatusChange] = useState(false);
-  const [pendingEditConfirmation, setPendingEditConfirmation] = useState<Contract | null>(null);
-  const [openActionMenuContractId, setOpenActionMenuContractId] = useState<string | null>(null);
-  const [actionMenuPosition, setActionMenuPosition] = useState<ActionMenuPosition | null>(null);
-  const [selectedContractDetails, setSelectedContractDetails] = useState<Contract | null>(null);
-  const [contractDetailsActiveTab, setContractDetailsActiveTab] = useState<ContractDetailsTab>("Data");
-  const [contractSignedPdfFile, setContractSignedPdfFile] = useState<File | null>(null);
-  const [uploadedContractSignedPdf, setUploadedContractSignedPdf] = useState<any>(null);
-  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
-  const [completionModal, setCompletionModal] = useState<{
-    icon?: string;
-    title: string;
-    description: string;
-    itemTitle?: string;
-    itemDetail?: string;
-  } | null>(null);
-  const [draftCustomContent, setDraftCustomContent] = useState<string | null>(null);
-  const [isPreviewingNewContract, setIsPreviewingNewContract] = useState(false);
-  const [isEditingPrintableMinuta, setIsEditingPrintableMinuta] = useState(false);
+  const [isTimeDefaultsOpen, setIsTimeDefaultsOpen] = useState(false);
 
-  const isEditing = editingContractId !== null;
-  const companyId = user?.companyId;
-  const openActionMenuContract = useMemo(
-    () =>
-      openActionMenuContractId
-        ? contracts.find((contract) => contract.id === openActionMenuContractId) || null
-        : null,
-    [contracts, openActionMenuContractId],
-  );
+  // Carregar dados da empresa
+  const loadData = useCallback(async (cid: string) => {
+    try {
+      setIsLoading(true);
+      const [apiContracts, apiProperties, apiPeople, apiReceivables] = await Promise.all([
+        getContracts(),
+        getProperties(cid),
+        getPeople(cid),
+        getReceivableAccounts(cid),
+      ]);
 
-  useEffect(() => {
-    if (selectedContractDetails) {
-      const compId = companyId;
-      if (compId) {
-        import("@/services/api").then(({ api }) => {
-          api.get(`/files/entity/CONTRACT/${selectedContractDetails.id}`).then((res) => {
-            if (Array.isArray(res.data) && res.data.length > 0) {
-              setUploadedContractSignedPdf(res.data[0]);
-            }
-          }).catch(console.error);
-        });
-      }
-    } else {
-      setUploadedContractSignedPdf(null);
+      const loadedContracts = apiContracts.map(mapApiContractToContract);
+      const loadedProperties = apiProperties.map((p) => mapApiPropertyToProperty(p, loadedContracts));
+      const loadedTenants = apiPeople.map(mapApiPersonToTenant);
+
+      setContracts(loadedContracts);
+      setProperties(syncPropertiesWithContracts(loadedContracts, loadedProperties));
+      setTenants(loadedTenants);
+      setReceivableAccounts(apiReceivables);
+    } catch (err) {
+      setToast({
+        type: "error",
+        message: err instanceof Error ? err.message : "Erro ao carregar dados de contratos.",
+      });
+    } finally {
+      setIsLoading(false);
     }
-  }, [selectedContractDetails]);
-
-  useEffect(() => {
-    function handleWindowMessage(event: MessageEvent) {
-      if (event.data && event.data.type === "SAVE_CONTRACT_CUSTOM_CONTENT") {
-        const { contractId, content } = event.data;
-        if (contractId && contractId !== "draft_new_contract") {
-          saveContractCustomContent(contractId, content);
-        } else {
-          setDraftCustomContent(content);
-        }
-        setCompletionModal({
-          icon: "📝",
-          title: "Edição salva com sucesso!",
-          description: "As alterações do texto foram salvas especificamente para este contrato.",
-        });
-      }
-    }
-    window.addEventListener("message", handleWindowMessage);
-    return () => window.removeEventListener("message", handleWindowMessage);
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !isLoaded || contracts.length === 0) return;
+    if (companyId) {
+      loadData(companyId);
+    } else {
+      setIsLoading(false);
+    }
+  }, [companyId, loadData]);
+
+  // Carregar horários padrão de temporada salvos
+  useEffect(() => {
+    const stored = getCompanyStorageItem(
+      companyId,
+      TEMPORARY_RENTAL_TIME_DEFAULTS_STORAGE_KEY,
+      TEMPORARY_RENTAL_TIME_DEFAULTS_STORAGE_KEY
+    );
+    if (!stored) return;
+    try {
+      const parsed = JSON.parse(stored);
+      if (parsed.checkInTime) setDefaultCheckInTime(parsed.checkInTime);
+      if (parsed.checkOutTime) setDefaultCheckOutTime(parsed.checkOutTime);
+    } catch {
+      // Usa padrões
+    }
+  }, [companyId]);
+
+  // Auto-dismiss do Toast
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  // Notificação de fluxo completo retornado da Agenda
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("flowCompleted") === "1") {
+      setToast({
+        type: "success",
+        message: "Fluxo de contrato concluído com sucesso! Contrato, parcelas e agendamento registrados.",
+      });
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
+  // Suporte a abertura direta de contrato via URL (?openContractId=...)
+  useEffect(() => {
+    if (typeof window === "undefined" || isLoading || contracts.length === 0) return;
     const urlParams = new URLSearchParams(window.location.search);
     const targetId = urlParams.get("openContractId");
     if (targetId) {
-      const targetContract = contracts.find((c) => String(c.id) === String(targetId));
-      if (targetContract) {
-        setPrintableContract(targetContract);
-        const newUrl = window.location.pathname;
-        window.history.replaceState({}, "", newUrl);
+      const found = contracts.find((c) => String(c.id) === String(targetId));
+      if (found) {
+        setPrintContract(found);
+        window.history.replaceState({}, "", window.location.pathname);
       }
     }
-  }, [isLoaded, contracts]);
+  }, [isLoading, contracts]);
 
-  useEffect(() => {
-    const active = true;
-    function applyStoredTheme() {
-      const storedThemeSettings = getCompanyStorageItem(
-        companyId,
-        "contrx_theme_settings",
-        "contrx_theme_settings",
-      );
-      const legacyTheme = getCompanyStorageItem(
-        companyId,
-        "contrx_theme",
-        "contrx_theme",
-      );
-
-      try {
-        const parsedThemeSettings = storedThemeSettings
-          ? (JSON.parse(storedThemeSettings) as { mode?: string })
-          : null;
-
-        const nextTheme =
-          parsedThemeSettings?.mode === "graphite" ||
-          legacyTheme === "graphite" ||
-          legacyTheme === "grafite"
-            ? "graphite"
-            : parsedThemeSettings?.mode === "black" ||
-                parsedThemeSettings?.mode === "dark" ||
-                legacyTheme === "black" ||
-                legacyTheme === "dark"
-              ? "black"
-              : "light";
-
-        setThemeMode(nextTheme);
-        setIsBlackTheme(nextTheme !== "light");
-      } catch {
-        const nextTheme =
-          legacyTheme === "graphite" || legacyTheme === "grafite"
-            ? "graphite"
-            : legacyTheme === "black" || legacyTheme === "dark"
-              ? "black"
-              : "light";
-
-        setThemeMode(nextTheme);
-        setIsBlackTheme(nextTheme !== "light");
-      }
-    }
-
-    applyStoredTheme();
-
-    window.addEventListener("storage", applyStoredTheme);
-    window.addEventListener("contrx-theme-change", applyStoredTheme);
-
-    return () => {
-      window.removeEventListener("storage", applyStoredTheme);
-      window.removeEventListener("contrx-theme-change", applyStoredTheme);
-    };
-  }, [companyId]);
-
-  useEffect(() => {
-    if (!companyId) {
-      setContracts([]);
-      setProperties([]);
-      setTenants([]);
-      setIsLoaded(true);
-      setIsLoadingPageData(false);
-      return;
-    }
-
-    loadPageData(companyId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId]);
-
-
-  useEffect(() => {
-    const storedDefaultTimes = getCompanyStorageItem(
-      companyId,
-      TEMPORARY_RENTAL_TIME_DEFAULTS_STORAGE_KEY,
-      TEMPORARY_RENTAL_TIME_DEFAULTS_STORAGE_KEY,
-    );
-
-    if (!storedDefaultTimes) return;
-
-    try {
-      const parsedDefaultTimes = JSON.parse(storedDefaultTimes) as {
-        checkInTime?: string;
-        checkOutTime?: string;
-      };
-
-      const nextDefaultCheckInTime =
-        parsedDefaultTimes.checkInTime || DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME;
-      const nextDefaultCheckOutTime =
-        parsedDefaultTimes.checkOutTime || DEFAULT_TEMPORARY_RENTAL_CHECK_OUT_TIME;
-
-      setDefaultCheckInTime(nextDefaultCheckInTime);
-      setDefaultCheckOutTime(nextDefaultCheckOutTime);
-      setDraftDefaultCheckInTime(nextDefaultCheckInTime);
-      setDraftDefaultCheckOutTime(nextDefaultCheckOutTime);
-    } catch {
-      setDefaultCheckInTime(DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME);
-      setDefaultCheckOutTime(DEFAULT_TEMPORARY_RENTAL_CHECK_OUT_TIME);
-      setDraftDefaultCheckInTime(DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME);
-      setDraftDefaultCheckOutTime(DEFAULT_TEMPORARY_RENTAL_CHECK_OUT_TIME);
-    }
-  }, [companyId]);
-
-  useEffect(() => {
-    if (!isLoaded) return;
-
-    setProperties((currentProperties) => syncPropertiesWithContracts(contracts, currentProperties));
-  }, [contracts, isLoaded]);
-
-  useEffect(() => {
-    const storedModalState = getMinimizedModalState<ContractModalDraft>();
-
-    if (storedModalState?.tool === "contracts" && storedModalState.draft) {
-      applyContractModalDraft(storedModalState.draft);
-      setIsFormOpen(true);
-      setIsFormMinimized(false);
-      clearMinimizedModalState("contracts");
-    }
-
-    function handleRestoreMinimizedModal(event: Event) {
-      const detail = (event as CustomEvent<{ tool?: string }>).detail;
-
-      if (detail?.tool !== "contracts") return;
-
-      const currentState = getMinimizedModalState<ContractModalDraft>();
-
-      if (currentState?.tool === "contracts" && currentState.draft) {
-        applyContractModalDraft(currentState.draft);
-      }
-
-      setIsFormOpen(true);
-      setIsFormMinimized(false);
-      clearMinimizedModalState("contracts");
-    }
-
-    function handleCloseMinimizedModal(event: Event) {
-      const detail = (event as CustomEvent<{ tool?: string }>).detail;
-
-      if (detail?.tool !== "contracts") return;
-
-      resetForm();
-    }
-
-    window.addEventListener(RESTORE_MINIMIZED_MODAL_EVENT, handleRestoreMinimizedModal);
-    window.addEventListener(CLOSE_MINIMIZED_MODAL_EVENT, handleCloseMinimizedModal);
-
-    return () => {
-      window.removeEventListener(RESTORE_MINIMIZED_MODAL_EVENT, handleRestoreMinimizedModal);
-      window.removeEventListener(CLOSE_MINIMIZED_MODAL_EVENT, handleCloseMinimizedModal);
-    };
+  // Gerenciamento de Modal Minimizável
+  const handleCloseFormModal = useCallback(() => {
+    clearMinimizedModalState("contracts");
+    setIsFormOpen(false);
+    setIsFormMinimized(false);
+    setEditingContract(null);
   }, []);
 
-  const availableProperties = useMemo(() => {
-    return properties.filter((property) => {
-      const isCurrentEditingProperty = isEditing && String(property.id) === String(propertyId);
-      const isPropertyActive = property.isActive !== false;
-      const isPropertyAvailable = property.status === "Available";
-      const hasConflictingContract = contracts.some((contract) => {
-        const isSameProperty = String(contract.propertyId) === String(property.id);
-        const isSameContract = isEditing && contract.id === editingContractId;
-        const isActiveContract =
-          ["Active", "Expiring"].includes(getDisplayContractStatus(contract)) &&
-          contract.status !== "Deleted";
-
-        if (!isSameProperty || isSameContract || !isActiveContract) return false;
-        if (!isTemporaryRental) return !contract.isTemporaryRental;
-        if (!startDate || !endDate) return false;
-
-        return doDateRangesOverlap(startDate, endDate, contract.startDate, contract.endDate);
-      });
-
-      return (isPropertyActive && isPropertyAvailable && !hasConflictingContract) || isCurrentEditingProperty;
+  const handleMinimizeFormModal = useCallback(() => {
+    setIsFormMinimized(true);
+    setMinimizedModalState<ContractModalDraft>({
+      tool: "contracts",
+      draft: {
+        editingContractId: editingContract?.id || null,
+        propertyId: editingContract?.propertyId || "",
+        tenantId: editingContract?.tenantId || "",
+        startDate: editingContract?.startDate || "",
+        endDate: editingContract?.endDate || "",
+        rentValue: String(editingContract?.rentValue || ""),
+        isTemporaryRental: Boolean(editingContract?.isTemporaryRental),
+        checkInTime: editingContract?.checkInTime || "",
+        checkOutTime: editingContract?.checkOutTime || "",
+      },
     });
-  }, [properties, contracts, isEditing, editingContractId, propertyId, isTemporaryRental, startDate, endDate]);
+  }, [editingContract]);
 
-  const availableTenants = useMemo(() => {
-    return tenants.filter((tenant) => {
-      const isActive = tenant.isActive !== false;
-      return isActive;
-    });
-  }, [tenants]);
+  const handleRestoreFormModal = useCallback(() => {
+    setIsFormMinimized(false);
+    setIsFormOpen(true);
+    clearMinimizedModalState("contracts");
+  }, []);
 
+  useEffect(() => {
+    function handleRestore(event: Event) {
+      const detail = (event as CustomEvent<{ tool?: string }>).detail;
+      if (detail?.tool === "contracts") {
+        handleRestoreFormModal();
+      }
+    }
+    function handleClose(event: Event) {
+      const detail = (event as CustomEvent<{ tool?: string }>).detail;
+      if (detail?.tool === "contracts") {
+        handleCloseFormModal();
+      }
+    }
+    window.addEventListener(RESTORE_MINIMIZED_MODAL_EVENT, handleRestore);
+    window.addEventListener(CLOSE_MINIMIZED_MODAL_EVENT, handleClose);
+    return () => {
+      window.removeEventListener(RESTORE_MINIMIZED_MODAL_EVENT, handleRestore);
+      window.removeEventListener(CLOSE_MINIMIZED_MODAL_EVENT, handleClose);
+    };
+  }, [handleRestoreFormModal, handleCloseFormModal]);
+
+  // Filtro de Contratos
   const filteredContracts = useMemo(() => {
-    const normalizedSearchTerm = normalizeSearchText(searchTerm);
+    const term = normalizeSearchText(search);
 
     return contracts
-      .filter((contract) => {
-        const displayStatus = getDisplayContractStatus(contract);
+      .filter((c) => {
+        const displayStatus = getDisplayContractStatus(c);
         const matchesStatus =
           statusFilter === "All" ||
           displayStatus === statusFilter ||
-          (statusFilter === "Active" && displayStatus === "Expiring");
+          (statusFilter === "Active" && (displayStatus === "Expiring" || displayStatus === "Scheduled"));
+
+        const matchesType =
+          typeFilter === "All" ||
+          (typeFilter === "TEMPORARY" && c.isTemporaryRental) ||
+          (typeFilter === "STANDARD" && !c.isTemporaryRental);
+
         const matchesSearch =
-          !normalizedSearchTerm ||
-          normalizeSearchText(contract.propertyName).includes(normalizedSearchTerm) ||
-          normalizeSearchText(contract.tenantName).includes(normalizedSearchTerm);
+          !term ||
+          normalizeSearchText(c.propertyName).includes(term) ||
+          normalizeSearchText(c.tenantName).includes(term);
 
-        return matchesStatus && matchesSearch;
+        return matchesStatus && matchesType && matchesSearch;
       })
-      .sort((firstContract, secondContract) => {
-        return getContractSortTime(secondContract) - getContractSortTime(firstContract);
-      });
-  }, [contracts, statusFilter, searchTerm]);
+      .sort((a, b) => getContractSortTime(b) - getContractSortTime(a));
+  }, [contracts, statusFilter, typeFilter, search]);
 
-  const activeContracts = contracts.filter((contract) =>
-    ["Active", "Expiring"].includes(getDisplayContractStatus(contract))
-  ).length;
-
-  const expiringContracts = contracts.filter(
-    (contract) => getDisplayContractStatus(contract) === "Expiring"
-  ).length;
-
-  const expiredContracts = contracts.filter(
-    (contract) => getDisplayContractStatus(contract) === "Expired"
-  ).length;
-
-  const monthlyRevenue = contracts
-    .filter((contract) => ["Active", "Expiring"].includes(getDisplayContractStatus(contract)))
-    .reduce((total, contract) => total + Number(contract.rentValue || 0), 0);
-
-  async function loadPageData(currentCompanyId: string) {
-    try {
-      setIsLoadingPageData(true);
-      setFormError("");
-
-      const [apiContracts, apiProperties, apiPeople] = await Promise.all([
-        getContracts(currentCompanyId),
-        getProperties(currentCompanyId),
-        getPeople(currentCompanyId),
-      ]);
-
-      const normalizedContracts = apiContracts.map(mapApiContractToContract);
-
-      setContracts(normalizedContracts);
-      setProperties(apiProperties.map((property) => mapApiPropertyToProperty(property, normalizedContracts)));
-      setTenants(apiPeople.map(mapApiPersonToTenant));
-      setReceivableAccounts([]);
-      void loadContractReceivableAccounts(currentCompanyId);
-    } catch (error) {
-      setFormError(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível carregar os contratos do backend."
-      );
-    } finally {
-      setIsLoaded(true);
-      setIsLoadingPageData(false);
-    }
-  }
-
-  async function loadContractReceivableAccounts(currentCompanyId: string) {
-    try {
-      const apiReceivableAccounts = await getContractReceivableAccounts(currentCompanyId);
-      setReceivableAccounts(apiReceivableAccounts);
-    } catch (error) {
-      console.warn("Nao foi possivel carregar o resumo financeiro dos contratos.", error);
-    }
-  }
-
-  function resetForm() {
-    setEditingContractId(null);
-    setPropertyId("");
-    setTenantId("");
-    setStartDate("");
-    setEndDate("");
-    setRentValue("");
-    setIsTemporaryRental(false);
-    setStatusReason("");
-    setStatusReasonError("");
-    setRenewalContract(null);
-    setRenewalEndDate("");
-    setRenewalRentValue("");
-    setRenewalNotes("");
-    setRenewalError("");
-    setFinishContract(null);
-    setFinishReason("");
-    setFinishReasonError("");
-    setOpenActionMenuContractId(null);
-    setActionMenuPosition(null);
-    setSelectedContractDetails(null);
-    setContractDetailsActiveTab("Data");
-    setIsSavingContract(false);
-    setDraftCustomContent(null);
-    setIsPreviewingNewContract(false);
-    removeSavedContractCustomContent("draft_new_contract");
-    setIsFormMinimized(false);
-    setIsFormOpen(false);
-  }
-
-  function getContractModalDraft(): ContractModalDraft {
-    return {
-      editingContractId,
-      propertyId,
-      tenantId,
-      startDate,
-      endDate,
-      rentValue,
-      isTemporaryRental,
-      checkInTime,
-      checkOutTime,
-    };
-  }
-
-  function applyContractModalDraft(draft: ContractModalDraft) {
-    setEditingContractId(draft.editingContractId);
-    setPropertyId(draft.propertyId || "");
-    setTenantId(draft.tenantId || "");
-    setStartDate(draft.startDate || "");
-    setEndDate(draft.endDate || "");
-    setRentValue(draft.rentValue || "");
-    setIsTemporaryRental(draft.isTemporaryRental ?? false);
-    setCheckInTime(draft.checkInTime || "");
-    setCheckOutTime(draft.checkOutTime || "");
-    setFormError("");
-  }
-
-  function handleMinimizeForm() {
-    const selectedPropertyName =
-      properties.find((property) => String(property.id) === String(propertyId))?.name || "";
-
-    setMinimizedModalState<ContractModalDraft>({
-      tool: "contracts",
-      href: "/contratos",
-      title: editingContractId ? "Editar contrato" : "Novo contrato",
-      subtitle: selectedPropertyName || "Contrato em andamento",
-      mode: editingContractId ? "edit" : "create",
-      draft: getContractModalDraft(),
-      updatedAt: Date.now(),
-    });
-    setIsFormMinimized(true);
-  }
-
-  function handleRestoreForm() {
-    clearMinimizedModalState("contracts");
-    setIsFormMinimized(false);
-  }
-
-  function handleOpenCreateForm() {
-    resetForm();
-    removeSavedContractCustomContent("draft_new_contract");
-    setDraftCustomContent(null);
-    setIsFormOpen(true);
-  }
-
-  function handleEditContract(contract: Contract) {
-    setEditingContractId(contract.id);
-    setPropertyId(contract.propertyId);
-    setTenantId(String(contract.tenantId));
-    setStartDate(contract.startDate);
-    setEndDate(contract.endDate);
-    setRentValue(formatCurrencyInput(contract.rentValue));
-    setIsTemporaryRental(contract.isTemporaryRental ?? false);
-    setCheckInTime(contract.checkInTime || "");
-    setCheckOutTime(contract.checkOutTime || "");
-    setFormError("");
-    clearMinimizedModalState("contracts");
-    setIsFormMinimized(false);
-    setIsFormOpen(true);
-  }
-
-  function handleRequestEditContract(contract: Contract) {
-    const displayStatus = getDisplayContractStatus(contract);
-    const requiresConfirmation = ["Canceled", "Deleted", "Finished"].includes(displayStatus);
-
-    if (requiresConfirmation) {
-      setPendingEditConfirmation(contract);
-      setOpenActionMenuContractId(null);
-      setActionMenuPosition(null);
-      return;
-    }
-
-    handleEditContract(contract);
-  }
-
-  function handleCloseEditConfirmation() {
-    setPendingEditConfirmation(null);
-  }
-
-  function handleConfirmEditContract() {
-    if (!pendingEditConfirmation) return;
-
-    const contract = pendingEditConfirmation;
-    setPendingEditConfirmation(null);
-    handleEditContract(contract);
-  }
-
-  function getFirstDueDateFromStartDate(dateValue: string) {
-    if (!dateValue) return "";
-
-    const dueDate = new Date(`${dateValue}T00:00:00`);
-
-    if (Number.isNaN(dueDate.getTime())) {
-      return "";
-    }
-
-    dueDate.setMonth(dueDate.getMonth() + 1);
-
-    const year = dueDate.getFullYear();
-    const month = String(dueDate.getMonth() + 1).padStart(2, "0");
-    const day = String(dueDate.getDate()).padStart(2, "0");
-
-    return `${year}-${month}-${day}`;
-  }
-
-  function addMonthsToDate(dateValue: string, monthsToAdd: number) {
-    if (!dateValue) return "";
-
-    const nextDate = new Date(`${dateValue}T00:00:00`);
-
-    if (Number.isNaN(nextDate.getTime())) {
-      return "";
-    }
-
-    nextDate.setMonth(nextDate.getMonth() + monthsToAdd);
-
-    const year = nextDate.getFullYear();
-    const month = String(nextDate.getMonth() + 1).padStart(2, "0");
-    const day = String(nextDate.getDate()).padStart(2, "0");
-
-    return `${year}-${month}-${day}`;
-  }
-
-  function doDateRangesOverlap(
-    firstStartDateValue: string,
-    firstEndDateValue: string,
-    secondStartDateValue: string,
-    secondEndDateValue: string,
-  ) {
-    const firstStart = new Date(`${firstStartDateValue}T00:00:00`);
-    const firstEnd = new Date(`${firstEndDateValue}T00:00:00`);
-    const secondStart = new Date(`${secondStartDateValue}T00:00:00`);
-    const secondEnd = new Date(`${secondEndDateValue}T00:00:00`);
-
-    if (
-      Number.isNaN(firstStart.getTime()) ||
-      Number.isNaN(firstEnd.getTime()) ||
-      Number.isNaN(secondStart.getTime()) ||
-      Number.isNaN(secondEnd.getTime())
-    ) {
-      return true;
-    }
-
-    return firstStart <= secondEnd && firstEnd >= secondStart;
-  }
-
-  function getContractInstallmentQuantity(startDateValue: string, endDateValue: string) {
-    if (!startDateValue || !endDateValue) return 1;
-
-    const start = new Date(`${startDateValue}T00:00:00`);
-    const end = new Date(`${endDateValue}T00:00:00`);
-
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
-      return 1;
-    }
-
-    const monthDifference =
-      (end.getFullYear() - start.getFullYear()) * 12 +
-      (end.getMonth() - start.getMonth());
-
-    return Math.max(monthDifference, 1);
-  }
-
-  function getContractReceivableSchedule(contract: Contract) {
-    if (contract.isTemporaryRental) {
-      return [
-        {
-          dueDate: contract.startDate,
-          amount: Number(contract.rentValue || 0),
-          installmentNumber: 1,
-          installmentTotal: 1,
-        },
-      ];
-    }
-
-    const installmentQuantity = getContractInstallmentQuantity(contract.startDate, contract.endDate);
-    const firstDueDate = getFirstDueDateFromStartDate(contract.startDate);
-
-    if (!firstDueDate) return [];
-
-    return Array.from({ length: installmentQuantity }, (_, index) => ({
-      dueDate: addMonthsToDate(firstDueDate, index),
-      amount: Number(contract.rentValue || 0),
-      installmentNumber: index + 1,
-      installmentTotal: installmentQuantity,
-    }));
-  }
-
-  function registerPropertyMovementFromContract(
-    contract: Contract,
-    type: PropertyMovement["type"],
-    description: string
-  ) {
-    const companyId = user?.companyId;
-
+  // Ações de Contrato
+  async function handleSaveContract(data: Partial<Contract>) {
     if (!companyId) return;
 
-    createPropertyMovement({
-      companyId,
-      propertyId: String(contract.propertyId),
-      propertyName: contract.propertyName,
-      type,
-      description,
-    }).catch((error) => {
-      console.warn("Nao foi possivel registrar movimentacao do bem/ativo no backend.", error);
-    });
-  }
+    if (editingContract) {
+      // Atualização
+      const updatedDto: UpdateContractDto = {
+        ...buildContractPayload({ ...editingContract, ...data } as Contract),
+      };
+      const res = await updateContract(editingContract.id, updatedDto);
+      const saved = mapApiContractToContract(res);
 
-  async function applyEditedContract(updatedContract: Contract, reason?: string) {
-    const shouldRemoveReceivables =
-      updatedContract.status === "Canceled" || updatedContract.status === "Deleted";
-    const cleanReason = reason?.trim() || updatedContract.statusReason || null;
+      setContracts((prev) => prev.map((c) => (c.id === saved.id ? saved : c)));
+      setToast({ type: "success", message: "Contrato atualizado com sucesso!" });
 
-    const contractToSave: Contract = {
-      ...updatedContract,
-      propertyName: toUpperText(updatedContract.propertyName),
-      deletedAt:
-        updatedContract.status === "Deleted"
-          ? updatedContract.deletedAt || new Date().toISOString()
-          : null,
-      statusReason: shouldRemoveReceivables ? cleanReason : updatedContract.statusReason || null,
-      statusReasonType: shouldRemoveReceivables
-        ? updatedContract.status === "Deleted"
-          ? "Deleted"
-          : "Canceled"
-        : null,
-      statusReasonAt:
-        shouldRemoveReceivables && cleanReason
-          ? new Date().toISOString()
-          : updatedContract.statusReasonAt || null,
-    };
-
-    try {
-      const savedContract = await updateContract(
-        contractToSave.id,
-        buildContractPayload(contractToSave),
-      );
-      Object.assign(contractToSave, mapApiContractToContract(savedContract));
-    } catch (error) {
-      setFormError(
-        error instanceof Error ? error.message : "Não foi possível salvar o contrato."
-      );
-      return;
-    }
-
-    if (shouldRemoveReceivables) {
-      await removeReceivableChargesFromContract(contractToSave);
-      registerPropertyMovementFromContract(
-        contractToSave,
-        contractToSave.status === "Deleted" ? "ContractDeleted" : "ContractCanceled",
-        contractToSave.status === "Deleted"
-          ? "Contrato marcado como excluído e parcelas vinculadas removidas."
-          : "Contrato cancelado e parcelas vinculadas removidas."
-      );
+      createPropertyMovement({
+        companyId,
+        propertyId: String(saved.propertyId),
+        propertyName: saved.propertyName,
+        type: "ContractUpdated",
+        description: "Contrato atualizado no cadastro de locação.",
+      }).catch(console.warn);
     } else {
-      if (user?.companyId) {
-        setReceivableAccounts(await getReceivableAccounts(user.companyId));
+      // Criação
+      const createDto: CreateContractDto = {
+        ...(buildContractPayload(data as Contract) as CreateContractDto),
+      };
+      const res = await createContract(createDto);
+      const saved = mapApiContractToContract(res);
+
+      setContracts((prev) => [saved, ...prev]);
+
+      createPropertyMovement({
+        companyId,
+        propertyId: String(saved.propertyId),
+        propertyName: saved.propertyName,
+        type: "ContractCreated",
+        description: "Contrato criado e bem/ativo vinculado à locação.",
+      }).catch(console.warn);
+
+      // Prepara payload de faturamento para o Contas a Receber
+      const receivableSchedule = getContractReceivableSchedule(saved);
+      if (companyId) {
+        const monthlyAmount = Number(saved.rentValue || 0);
+        const totalAmount = receivableSchedule.reduce(
+          (total, item) => total + Number(item.amount || 0),
+          0
+        );
+        const firstInstallment = receivableSchedule[0] || { dueDate: saved.startDate };
+
+        setCompanyStorageItem(
+          companyId,
+          RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
+          JSON.stringify({
+            contractId: String(saved.id),
+            tenantId: String(saved.tenantId),
+            tenantName:
+              saved.tenantName ||
+              tenants.find((t) => String(t.id) === String(saved.tenantId))?.name ||
+              "",
+            propertyId: String(saved.propertyId),
+            propertyName:
+              saved.propertyName ||
+              properties.find((p) => String(p.id) === String(saved.propertyId))?.name ||
+              "",
+            amount: monthlyAmount,
+            monthlyAmount,
+            totalAmount,
+            issueDate: saved.startDate,
+            dueDate: firstInstallment.dueDate,
+            endDate: saved.endDate,
+            installmentQuantity: receivableSchedule.length || 1,
+          })
+        );
+
+        // Prepara dados para o agendamento posterior na Agenda
+        setCompanyStorageItem(
+          companyId,
+          CONTRACT_SCHEDULE_DRAFT_KEY,
+          JSON.stringify({
+            contractId: String(saved.id),
+            tenantId: String(saved.tenantId),
+            tenantName:
+              saved.tenantName ||
+              tenants.find((t) => String(t.id) === String(saved.tenantId))?.name ||
+              "",
+            propertyId: String(saved.propertyId),
+            propertyName:
+              saved.propertyName ||
+              properties.find((p) => String(p.id) === String(saved.propertyId))?.name ||
+              "",
+            startDate: saved.startDate,
+            endDate: saved.endDate,
+            checkInTime: saved.checkInTime || defaultCheckInTime,
+            checkOutTime: saved.checkOutTime || defaultCheckOutTime,
+            isTemporaryRental: Boolean(saved.isTemporaryRental),
+          })
+        );
       }
 
-      registerPropertyMovementFromContract(
-        contractToSave,
-        "ContractUpdated",
-        "Contrato atualizado no cadastro de locação."
-      );
+      // Fecha o formulário de cadastro
+      handleCloseFormModal();
+
+      // Abre imediatamente a VISUALIZAÇÃO E IMPRESSÃO DO CONTRATO
+      setPostCreateFlowContract(saved);
+      setPrintContract(saved);
+      setToast({ type: "success", message: "Contrato criado! Visualize o documento para conferência e impressão." });
     }
 
-    setContracts((currentContracts) =>
-      currentContracts.map((contract) =>
-        contract.id === contractToSave.id ? contractToSave : contract
-      )
-    );
-
-    resetForm();
-  }
-
-  async function handleConfirmStatusReason() {
-    if (isApplyingStatusChange) return;
-
-    const cleanReason = statusReason.trim();
-
-    if (!pendingStatusChange) return;
-
-    if (cleanReason.length < 5) {
-      setStatusReasonError("Informe um motivo com pelo menos 5 caracteres para continuar.");
-      return;
-    }
-
-    const isDeleted = pendingStatusChange.nextStatus === "Deleted";
-    const targetContract = pendingStatusChange.contract;
-
-    try {
-      setIsApplyingStatusChange(true);
-      const savedContract = isDeleted
-        ? await softDeleteContract(targetContract.id, cleanReason)
-        : await cancelContract(targetContract.id, cleanReason);
-      const nextContract = mapApiContractToContract(savedContract);
-
-      setContracts((currentContracts) =>
-        currentContracts.map((contract) =>
-          contract.id === nextContract.id ? nextContract : contract
-        )
-      );
-      setReceivableAccounts((currentAccounts) =>
-        currentAccounts.filter(
-          (account) =>
-            String(account.contractId || "") !== String(nextContract.id) ||
-            account.status === "PAID",
-        ),
-      );
-
-      registerPropertyMovementFromContract(
-        nextContract,
-        isDeleted ? "ContractDeleted" : "ContractCanceled",
-        isDeleted
-          ? "Contrato marcado como excluído e parcelas em aberto removidas."
-          : "Contrato cancelado e parcelas em aberto removidas.",
-      );
-
-      setIsApplyingStatusChange(false);
-      setPendingStatusChange(null);
-      setStatusReason("");
-      setStatusReasonError("");
-
-      setCompletionModal({
-        icon: "✅",
-        title: isDeleted ? "Contrato excluído com sucesso" : "Contrato cancelado com sucesso",
-        description: isDeleted
-          ? "O contrato foi excluído com sucesso e as contas e agendamentos vinculados a ele também foram excluídos do sistema."
-          : "O contrato foi cancelado com sucesso e as contas em aberto vinculadas a ele foram removidas do sistema.",
-        itemTitle: targetContract.propertyName || "Contrato de locação",
-        itemDetail: targetContract.tenantName ? `Inquilino: ${targetContract.tenantName}` : undefined,
-      });
-    } catch (error) {
-      setStatusReasonError(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível atualizar o status do contrato.",
-      );
+    // Atualiza status operacional dos imóveis
+    if (companyId) {
+      getProperties(companyId)
+        .then((props) => setProperties(syncPropertiesWithContracts(contracts, props.map((p) => mapApiPropertyToProperty(p, contracts)))))
+        .catch(console.warn);
     }
   }
 
-  function handleCancelStatusReason() {
-    if (isApplyingStatusChange) return;
-
-    setPendingStatusChange(null);
-    setStatusReason("");
-    setStatusReasonError("");
+  function handleEditClick(contract: Contract) {
+    if (contract.status === "Finished" || contract.status === "Canceled" || contract.status === "Deleted") {
+      setPendingEditContract(contract);
+    } else {
+      setEditingContract(contract);
+      setIsFormOpen(true);
+      setIsFormMinimized(false);
+    }
   }
 
-  async function removeReceivableChargesFromContract(contract: Contract) {
-    const linkedAccounts = receivableAccounts.filter(
-      (account) => String(account.contractId || "") === String(contract.id),
-    );
-
-    await Promise.all(linkedAccounts.map((account) => deleteReceivableAccount(account.id)));
-
-    setReceivableAccounts((currentAccounts) =>
-      currentAccounts.filter(
-        (account) => String(account.contractId || "") !== String(contract.id),
-      ),
-    );
+  function handleConfirmPendingEdit() {
+    if (pendingEditContract) {
+      setEditingContract(pendingEditContract);
+      setPendingEditContract(null);
+      setIsFormOpen(true);
+      setIsFormMinimized(false);
+    }
   }
 
-  async function openReceivableChargeFromContract(contract: Contract) {
-    const companyId = user?.companyId;
-
-    if (!companyId) {
-      setFormError("Empresa do usuário não encontrada. Faça login novamente.");
-      return;
-    }
-
-    const receivableSchedule = getContractReceivableSchedule(contract);
-
-    if (receivableSchedule.length === 0) {
-      setFormError("Data inicial do contrato inválida para gerar cobranças.");
-      return;
-    }
-
-    let existingAccounts = receivableAccounts.filter(
-      (account) => String(account.contractId || "") === String(contract.id),
-    );
-
-    try {
-      const backendAccounts = await getReceivableAccounts(companyId);
-      existingAccounts = backendAccounts.filter(
-        (account) => String(account.contractId || "") === String(contract.id),
-      );
-      setReceivableAccounts(backendAccounts);
-    } catch (error) {
-      console.warn("Nao foi possivel conferir parcelas do contrato no backend.", error);
-    }
-
-    void existingAccounts;
-
-    const monthlyAmount = Number(contract.rentValue || 0);
-    const totalAmount = receivableSchedule.reduce(
-      (total, installment) => total + Number(installment.amount || 0),
-      0,
-    );
-    const firstInstallment = receivableSchedule[0];
-
-    setCompanyStorageItem(
-      companyId,
-      RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
-      JSON.stringify({
-        contractId: String(contract.id),
-        tenantId: String(contract.tenantId),
-        tenantName:
-          contract.tenantName ||
-          tenants.find((tenant) => String(tenant.id) === String(contract.tenantId))?.name ||
-          "",
-        propertyId: String(contract.propertyId),
-        propertyName:
-          contract.propertyName ||
-          properties.find((property) => String(property.id) === String(contract.propertyId))?.name ||
-          "",
-        amount: monthlyAmount,
-        monthlyAmount,
-        totalAmount,
-        issueDate: contract.startDate,
-        dueDate: firstInstallment.dueDate,
-        endDate: contract.endDate,
-        installmentQuantity: receivableSchedule.length,
-      }),
-    );
-
+  function handleGenerateInstallments() {
+    if (!promptParcelasContract) return;
+    const targetId = promptParcelasContract.id;
+    setPromptParcelasContract(null);
     window.location.href = `/contas-receber?fromContract=1&contractId=${encodeURIComponent(
-      String(contract.id),
+      String(targetId)
     )}`;
   }
 
-  async function handleSubmitContract(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleConfirmRenewal(renewalData: {
+    endDate: string;
+    rentValue: number;
+    notes?: string;
+  }) {
+    if (!renewalContract || !companyId) return;
 
-    if (isSavingContract) {
-      return;
+    const res = await renewContract(renewalContract.id, renewalData);
+    const renewed = mapApiContractToContract(res);
+
+    setContracts((prev) => prev.map((c) => (c.id === renewed.id ? renewed : c)));
+
+    createPropertyMovement({
+      companyId,
+      propertyId: String(renewed.propertyId),
+      propertyName: renewed.propertyName,
+      type: "ContractRenewed",
+      description: `Contrato renovado com vigência estendida até ${renewed.endDate}.`,
+    }).catch(console.warn);
+
+    if (renewed.renewalHistory && renewed.renewalHistory.length > 0) {
+      setPrintableAdendum({
+        contract: renewed,
+        renewal: renewed.renewalHistory[0],
+      });
     }
 
-    setIsSavingContract(true);
-    setFormError("");
-    try {
-
-    const selectedProperty = properties.find(
-      (property) => String(property.id) === String(propertyId)
-    );
-
-    const selectedTenant = tenants.find((tenant) => String(tenant.id) === String(tenantId));
-
-    if (!selectedProperty) {
-      setFormError("Selecione um bem/ativo válido.");
-      return;
-    }
-
-    if (selectedProperty.isActive === false) {
-      setFormError("Este bem/ativo está inativo e não pode ser utilizado para criar ou alterar um contrato.");
-      return;
-    }
-
-    const propertyHasAnotherActiveContract = contracts.some((contract) => {
-      const isSameProperty = String(contract.propertyId) === String(selectedProperty.id);
-      const isSameContract = isEditing && contract.id === editingContractId;
-      const isActiveContract = ["Active", "Expiring"].includes(getDisplayContractStatus(contract));
-
-      if (!isSameProperty || isSameContract || !isActiveContract) return false;
-      if (!isTemporaryRental) return !contract.isTemporaryRental;
-      if (!startDate || !endDate) return false;
-
-      return doDateRangesOverlap(startDate, endDate, contract.startDate, contract.endDate);
-    });
-
-    if (propertyHasAnotherActiveContract) {
-      setFormError(
-        isTemporaryRental
-          ? "Este bem/ativo ja possui contrato ativo nesse periodo."
-          : "Este bem/ativo ja possui contrato ativo e nao pode ser usado em outro contrato.",
+    // Prepara payload das parcelas para o novo período
+    const receivableSchedule = getContractReceivableSchedule(renewed);
+    if (receivableSchedule.length > 0) {
+      const monthlyAmount = Number(renewed.rentValue || 0);
+      const totalAmount = receivableSchedule.reduce(
+        (total, item) => total + Number(item.amount || 0),
+        0
       );
-      return;
+      const firstInstallment = receivableSchedule[0];
+
+      setCompanyStorageItem(
+        companyId,
+        RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
+        JSON.stringify({
+          contractId: String(renewed.id),
+          tenantId: String(renewed.tenantId),
+          tenantName:
+            renewed.tenantName ||
+            tenants.find((t) => String(t.id) === String(renewed.tenantId))?.name ||
+            "",
+          propertyId: String(renewed.propertyId),
+          propertyName:
+            renewed.propertyName ||
+            properties.find((p) => String(p.id) === String(renewed.propertyId))?.name ||
+            "",
+          amount: monthlyAmount,
+          monthlyAmount,
+          totalAmount,
+          issueDate: renewed.startDate,
+          dueDate: firstInstallment.dueDate,
+          endDate: renewed.endDate,
+          installmentQuantity: receivableSchedule.length,
+        })
+      );
+
+      setPromptParcelasContract(renewed);
     }
 
-    if (!selectedTenant) {
-      setFormError("Selecione uma pessoa válida.");
-      return;
-    }
+    setToast({ type: "success", message: "Contrato renovado com sucesso!" });
 
-    if (selectedTenant.isActive === false) {
-      setFormError("Esta pessoa está inativa e não pode ser utilizada para criar ou alterar um contrato.");
-      return;
-    }
+    getReceivableAccounts(companyId).then(setReceivableAccounts).catch(console.warn);
+  }
 
-    if (!startDate || !endDate) {
-      setFormError("Informe a data de início e a data de fim do contrato.");
-      return;
-    }
+  async function handleConfirmFinish(reason: string) {
+    if (!finishContractTarget || !companyId) return;
 
-    if (new Date(endDate) < new Date(startDate)) {
-      setFormError("A data de fim não pode ser menor que a data de início.");
-      return;
-    }
+    const res = await finishContract(finishContractTarget.id, reason);
+    const finished = mapApiContractToContract(res);
 
-    const normalizedRentValue = parseCurrencyInput(rentValue);
+    setContracts((prev) => prev.map((c) => (c.id === finished.id ? finished : c)));
+    setToast({ type: "success", message: "Contrato finalizado e bem/ativo liberado!" });
 
-    if (!normalizedRentValue || normalizedRentValue <= 0) {
-      setFormError("Informe um valor de aluguel válido.");
-      return;
-    }
+    getReceivableAccounts(companyId).then(setReceivableAccounts).catch(console.warn);
+    getProperties(companyId)
+      .then((props) => setProperties(syncPropertiesWithContracts(contracts, props.map((p) => mapApiPropertyToProperty(p, contracts)))))
+      .catch(console.warn);
+  }
 
-    if (isEditing) {
-      const currentContract = contracts.find((contract) => contract.id === editingContractId);
+  async function handleConfirmCancel(reason: string) {
+    if (!cancelContractTarget || !companyId) return;
 
-      if (!currentContract) {
-        setFormError("Contrato não encontrado para edição.");
-        return;
-      }
+    const res = await cancelContract(cancelContractTarget.id, reason);
+    const canceled = mapApiContractToContract(res);
 
-      const updatedContract: Contract = {
-        ...currentContract,
-        propertyId: selectedProperty.id,
-        propertyName: toUpperText(selectedProperty.name),
-        tenantId: selectedTenant.id,
-        tenantName: selectedTenant.name,
-        startDate,
-        endDate,
-        rentValue: normalizedRentValue,
-        status: currentContract.status || "Active",
-        isTemporaryRental,
-        checkInTime: isTemporaryRental ? checkInTime : "",
-        checkOutTime: isTemporaryRental ? checkOutTime : "",
-        deletedAt: currentContract.status === "Deleted" ? currentContract.deletedAt : null,
-      };
+    setContracts((prev) => prev.map((c) => (c.id === canceled.id ? canceled : c)));
+    setToast({ type: "success", message: "Contrato cancelado com sucesso." });
 
-      await applyEditedContract(updatedContract);
-      return;
-    }
+    getReceivableAccounts(companyId).then(setReceivableAccounts).catch(console.warn);
+    getProperties(companyId)
+      .then((props) => setProperties(syncPropertiesWithContracts(contracts, props.map((p) => mapApiPropertyToProperty(p, contracts)))))
+      .catch(console.warn);
+  }
 
-    if (!companyId) {
-      setFormError("Empresa não identificada. Faça login novamente.");
-      return;
-    }
+  async function handleConfirmDelete(reason: string) {
+    if (!deleteContractTarget || !companyId) return;
 
-    const newContract: Contract = {
-      id: crypto.randomUUID(),
-      propertyId: selectedProperty.id,
-      propertyName: toUpperText(selectedProperty.name),
-      tenantId: selectedTenant.id,
-      tenantName: selectedTenant.name,
-      startDate,
-      endDate,
-      rentValue: normalizedRentValue,
-      status: "Active",
-      isTemporaryRental,
-      checkInTime: isTemporaryRental ? checkInTime : "",
-      checkOutTime: isTemporaryRental ? checkOutTime : "",
-      deletedAt: null,
-      statusReason: null,
-      statusReasonType: null,
-      statusReasonAt: null,
-      renewedAt: null,
-      renewalHistory: [],
-      finishedAt: null,
-      finishReason: null,
-    };
+    const targetId = deleteContractTarget.id;
+    const targetContract = deleteContractTarget;
 
     try {
-      const savedContract = await createContract(
-        buildContractPayload(newContract) as CreateContractDto,
+      const res = await softDeleteContract(targetId, reason);
+      const deleted = mapApiContractToContract(res);
+
+      // 1. Atualiza lista de contratos
+      setContracts((prev) => prev.map((c) => (c.id === deleted.id ? deleted : c)));
+
+      // 2. Remove parcelas do estado local de contas a receber e chama limpeza no financeiro
+      const linkedCharges = receivableAccounts.filter(
+        (acc) => String(acc.contractId || "") === String(targetId)
       );
-      Object.assign(newContract, mapApiContractToContract(savedContract));
-    } catch (error) {
-      setFormError(
-        error instanceof Error ? error.message : "Não foi possível criar o contrato."
+      await Promise.all(
+        linkedCharges.map((acc) => deleteReceivableAccount(acc.id).catch(console.warn))
       );
-      return;
-    }
+      setReceivableAccounts((prev) =>
+        prev.filter((acc) => String(acc.contractId || "") !== String(targetId))
+      );
 
-    const createdId = String(newContract.id || "");
-    if (draftCustomContent) {
-      if (createdId) {
-        saveContractCustomContent(createdId, draftCustomContent);
+      // 3. Remove agendamentos vinculados na Agenda
+      try {
+        const allSchedules = await getScheduleItems();
+        const contractSchedules = allSchedules.filter(
+          (item) =>
+            item.notes?.includes(targetId) ||
+            item.notes?.includes(`contract-due:${targetId}`) ||
+            item.notes?.includes(`contract-start:${targetId}`) ||
+            (item.type === "Contrato" && item.propertyName === targetContract.propertyName)
+        );
+        await Promise.all(
+          contractSchedules.map((s) => deleteScheduleItem(s.id).catch(console.warn))
+        );
+      } catch (scheduleErr) {
+        console.warn("Aviso ao limpar agendamentos da agenda:", scheduleErr);
       }
-      if (newContract.propertyId) {
-        saveContractCustomContent(`prop_${newContract.propertyId}`, draftCustomContent);
-      }
-    }
 
-    const updatedContracts = [newContract, ...contracts];
+      // 4. Registra movimentação do bem e atualiza status dos imóveis
+      createPropertyMovement({
+        companyId,
+        propertyId: String(targetContract.propertyId),
+        propertyName: targetContract.propertyName,
+        type: "ContractDeleted",
+        description: "Contrato excluído e contas/agendamentos vinculados removidos do sistema.",
+      }).catch(console.warn);
 
-    setContracts(updatedContracts);
-    registerPropertyMovementFromContract(
-      newContract,
-      "ContractCreated",
-      "Contrato criado e bem/ativo vinculado à locação."
-    );
-    resetForm();
-    await openReceivableChargeFromContract(newContract);
-    } finally {
-      setIsSavingContract(false);
-    }
-  }
+      getProperties(companyId)
+        .then((props) =>
+          setProperties(syncPropertiesWithContracts(contracts, props.map((p) => mapApiPropertyToProperty(p, contracts))))
+        )
+        .catch(console.warn);
 
-  function handlePropertyChange(selectedPropertyId: string) {
-    setPropertyId(selectedPropertyId);
-    setFormError("");
-
-    const selectedProperty = properties.find(
-      (property) => String(property.id) === String(selectedPropertyId)
-    );
-
-    if (selectedProperty) {
-      setRentValue(formatCurrencyInput(selectedProperty.rentValue || 0));
+      setToast({
+        type: "success",
+        message:
+          "Contrato excluído com sucesso. Parcelas a receber e agendamentos vinculados foram removidos do sistema.",
+      });
+    } catch (err) {
+      setToast({
+        type: "error",
+        message: err instanceof Error ? err.message : "Não foi possível excluir o contrato.",
+      });
     }
   }
 
-  function handleApplyDefaultTemporaryRentalTimes() {
-    setCheckInTime(defaultCheckInTime);
-    setCheckOutTime(defaultCheckOutTime);
-    setFormError("");
-  }
-
-  function handleOpenDefaultTimeModal() {
-    setDraftDefaultCheckInTime(defaultCheckInTime);
-    setDraftDefaultCheckOutTime(defaultCheckOutTime);
-    setIsDefaultTimeModalOpen(true);
-  }
-
-  function handleCloseDefaultTimeModal() {
-    setDraftDefaultCheckInTime(defaultCheckInTime);
-    setDraftDefaultCheckOutTime(defaultCheckOutTime);
-    setIsDefaultTimeModalOpen(false);
-  }
-
-  function handleSaveDefaultTemporaryRentalTimes() {
-    const nextDefaultCheckInTime =
-      draftDefaultCheckInTime || DEFAULT_TEMPORARY_RENTAL_CHECK_IN_TIME;
-    const nextDefaultCheckOutTime =
-      draftDefaultCheckOutTime || DEFAULT_TEMPORARY_RENTAL_CHECK_OUT_TIME;
-
-    setDefaultCheckInTime(nextDefaultCheckInTime);
-    setDefaultCheckOutTime(nextDefaultCheckOutTime);
-    setDraftDefaultCheckInTime(nextDefaultCheckInTime);
-    setDraftDefaultCheckOutTime(nextDefaultCheckOutTime);
-    setIsDefaultTimeModalOpen(false);
-
+  function handleSaveTimeDefaults(checkIn: string, checkOut: string) {
+    setDefaultCheckInTime(checkIn);
+    setDefaultCheckOutTime(checkOut);
     setCompanyStorageItem(
       companyId,
       TEMPORARY_RENTAL_TIME_DEFAULTS_STORAGE_KEY,
-      JSON.stringify({
-        checkInTime: nextDefaultCheckInTime,
-        checkOutTime: nextDefaultCheckOutTime,
-      })
+      JSON.stringify({ checkInTime: checkIn, checkOutTime: checkOut })
     );
+    setToast({ type: "success", message: "Horários padrão de temporada salvos!" });
   }
 
-
-  function handleToggleContractActions(
-    contractId: string,
-    event: React.MouseEvent<HTMLButtonElement>,
-  ) {
-    if (openActionMenuContractId === contractId) {
-      handleCloseContractActions();
-      return;
-    }
-
-    const buttonRect = event.currentTarget.getBoundingClientRect();
-    const menuWidth = 224;
-    const estimatedMenuHeight = 316;
-    const viewportPadding = 16;
-    const availableBottomSpace = window.innerHeight - buttonRect.bottom;
-    const top =
-      availableBottomSpace < estimatedMenuHeight
-          ? Math.max(viewportPadding, buttonRect.top - estimatedMenuHeight - 6)
-        : buttonRect.bottom + 8;
-    const left = Math.min(
-      Math.max(viewportPadding, buttonRect.right - menuWidth),
-      window.innerWidth - menuWidth - viewportPadding,
-    );
-
-    setActionMenuPosition({ top, left });
-    setOpenActionMenuContractId(contractId);
-  }
-
-  function handleCloseContractActions() {
-    setOpenActionMenuContractId(null);
-    setActionMenuPosition(null);
-  }
-
-  useEffect(() => {
-    if (!openActionMenuContractId) return;
-
-    function closeFloatingActionMenu() {
-      handleCloseContractActions();
-    }
-
-    function handlePointerDown(event: PointerEvent) {
-      const target = event.target;
-
-      if (!(target instanceof Element)) {
-        closeFloatingActionMenu();
-        return;
-      }
-
-      if (
-        target.closest("[data-contract-action-menu]") ||
-        target.closest("[data-contract-action-trigger]")
-      ) {
-        return;
-      }
-
-      closeFloatingActionMenu();
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        closeFloatingActionMenu();
-      }
-    }
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("resize", closeFloatingActionMenu);
-    window.addEventListener("scroll", closeFloatingActionMenu, true);
-
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("resize", closeFloatingActionMenu);
-      window.removeEventListener("scroll", closeFloatingActionMenu, true);
-    };
-  }, [openActionMenuContractId]);
-
-  function handleOpenContractDetails(contract: Contract) {
-    setSelectedContractDetails(contract);
-    setContractDetailsActiveTab("Data");
-    setOpenActionMenuContractId(null);
-    setContractSignedPdfFile(null);
-    setUploadedContractSignedPdf(null);
-  }
-
-  function sendContractWhatsAppMessage(contract: Contract) {
-    const tenant = tenants.find(
-      (item) => String(item.id) === String(contract.tenantId),
-    );
-    const tenantPhone = tenant?.phone || "";
-
-    if (!tenantPhone) {
-      window.alert("Esta pessoa nao possui telefone cadastrado.");
-      return;
-    }
-
-    const contractCompanySettings = getCompanySettingsForContractPrint();
-    const companyName =
-      contractCompanySettings.name || contractCompanySettings.legalName || "Contrx";
-
-    openWhatsAppMessage({
-      phone: tenantPhone,
-      message: [
-        `Olá, ${contract.tenantName || tenant?.name || "pessoa"}.`,
-        "",
-        `${companyName} informa sobre o contrato de locação:`,
-        `Bem/Ativo: ${contract.propertyName || "Não informado"}`,
-        `Período: ${formatDate(contract.startDate)} até ${formatDate(contract.endDate)}`,
-        `Valor: ${formatCurrency(contract.rentValue)}`,
-        `Status: ${getContractStatusLabel(getDisplayContractStatus(contract))}`,
-        "",
-        "Caso precise de alguma informação ou queira solicitar o documento, pode responder por aqui.",
-      ].join("\n"),
-    });
-  }
-
-  function handleCloseContractDetails() {
-    setSelectedContractDetails(null);
-    setContractDetailsActiveTab("Data");
-  }
-
-  function getContractReceivableCharges(contract: Contract) {
+  const selectedDetailsCharges = useMemo(() => {
+    if (!detailsContract) return [];
     return receivableAccounts
-      .filter((account) => String(account.contractId || "") === String(contract.id))
-      .map(mapReceivableAccountToCharge)
-      .sort((firstCharge, secondCharge) => {
-        const firstDate = firstCharge.dueDate ? new Date(firstCharge.dueDate).getTime() : 0;
-        const secondDate = secondCharge.dueDate ? new Date(secondCharge.dueDate).getTime() : 0;
+      .filter((acc) => String(acc.contractId || "") === String(detailsContract.id))
+      .map(mapReceivableAccountToCharge);
+  }, [detailsContract, receivableAccounts]);
 
-        return firstDate - secondDate;
-      });
-  }
+  const selectedPropertyForPrint = useMemo(() => {
+    const target = printContract || detailsContract;
+    if (!target) return null;
+    return properties.find((p) => String(p.id) === String(target.propertyId)) || null;
+  }, [printContract, detailsContract, properties]);
 
-  function getContractReceivableSummary(contract: Contract) {
-    const contractCharges = getContractReceivableCharges(contract);
-    const paidCharges = contractCharges.filter((charge) => charge.status === "Paid");
-    const pendingCharges = contractCharges.filter((charge) => charge.status !== "Paid");
-    const totalAmount = contractCharges.reduce((total, charge) => total + Number(charge.amount || 0), 0);
-    const paidAmount = paidCharges.reduce((total, charge) => total + Number(charge.amount || 0), 0);
-    const pendingAmount = pendingCharges.reduce((total, charge) => total + Number(charge.amount || 0), 0);
+  const selectedTenantForPrint = useMemo(() => {
+    const target = printContract || detailsContract;
+    if (!target) return null;
+    return tenants.find((t) => String(t.id) === String(target.tenantId)) || null;
+  }, [printContract, detailsContract, tenants]);
 
-    return {
-      charges: contractCharges,
-      paidCharges,
-      pendingCharges,
-      totalAmount,
-      paidAmount,
-      pendingAmount,
-    };
-  }
+  // Parcelas pendentes do contrato selecionado para finalização
+  const finishModalPendingCharges = useMemo(() => {
+    if (!finishContractTarget) return [];
+    return receivableAccounts
+      .filter(
+        (acc) =>
+          String(acc.contractId || "") === String(finishContractTarget.id) &&
+          acc.status !== "PAID"
+      )
+      .map((acc) => ({
+        id: acc.id,
+        amount: Number(acc.amount || 0),
+        dueDate: acc.dueDate,
+        installmentNumber: acc.installmentNumber,
+        installmentTotal: acc.installmentTotal,
+        isDownPayment: acc.isDownPayment,
+        status: acc.status,
+      }));
+  }, [finishContractTarget, receivableAccounts]);
 
-  function canRenewContract(displayStatus: ContractDisplayStatus) {
-    return ["Active", "Expiring", "Expired", "Inactive"].includes(displayStatus);
-  }
-
-  function canFinishContract(displayStatus: ContractDisplayStatus) {
-    return !["Finished", "Deleted", "Canceled"].includes(displayStatus);
-  }
-
-  function canCancelContract(displayStatus: ContractDisplayStatus) {
-    return !["Deleted", "Canceled", "Finished"].includes(displayStatus);
-  }
-
-  function canDeleteContract(displayStatus: ContractDisplayStatus) {
-    return displayStatus !== "Deleted";
-  }
-
-  function getContractScheduleMarker(contractId: string | number) {
-    return `contract-due:${String(contractId)}`;
-  }
-
-  function findContractDueScheduleItem(
-    scheduleItems: ScheduleItem[],
-    contract: Contract,
-  ) {
-    const scheduleMarker = getContractScheduleMarker(contract.id);
-
-    return (
-      scheduleItems.find((item) => item.notes?.includes(scheduleMarker)) ||
-      scheduleItems.find(
-        (item) =>
-          item.type === "Contrato" &&
-          item.title === "Vencimento de contrato" &&
-          item.customerName === contract.tenantName &&
-          item.propertyName === contract.propertyName,
-      ) ||
-      null
-    );
-  }
-
-  async function upsertContractDueScheduleItem(contract: Contract) {
-    if (!contract.endDate) return;
-
-    const scheduleMarker = getContractScheduleMarker(contract.id);
-    const scheduleItems = await getScheduleItems();
-    const existingScheduleItem = findContractDueScheduleItem(scheduleItems, contract);
-    const notes = [
-      `Contrato: ${contract.id}`,
-      `Vencimento em ${formatDate(contract.endDate)}`,
-      scheduleMarker,
-    ].join("\n");
-    const schedulePayload = {
-      title: "Vencimento de contrato",
-      customerName: contract.tenantName || "Pessoa nao informada",
-      propertyName: contract.propertyName || "Bem/ativo nao informado",
-      date: contract.endDate,
-      time: existingScheduleItem?.time || "08:00",
-      type: "Contrato",
-      status: "scheduled" as const,
-      priority: "high" as const,
-      responsibleName: existingScheduleItem?.responsibleName || "Administrativo",
-      reminder: existingScheduleItem?.reminder || "1 dia antes",
-      notes,
-    };
-
-    if (existingScheduleItem) {
-      await updateScheduleItem(existingScheduleItem.id, schedulePayload);
-      return;
-    }
-
-    await createScheduleItem(schedulePayload);
-  }
-
-  async function completeContractDueScheduleItem(contract: Contract) {
-    const scheduleItems = await getScheduleItems();
-    const existingScheduleItem = findContractDueScheduleItem(scheduleItems, contract);
-
-    if (!existingScheduleItem || existingScheduleItem.status === "completed") {
-      return;
-    }
-
-    const currentNotes = existingScheduleItem.notes || "";
-    const finishedNote = `Contrato finalizado em ${formatDate(
-      getDateInputValue(new Date()),
-    )}.`;
-
-    await updateScheduleItem(existingScheduleItem.id, {
-      status: "completed",
-      notes: currentNotes.includes(finishedNote)
-        ? currentNotes
-        : [currentNotes, finishedNote].filter(Boolean).join("\n"),
-    });
-  }
-
-  async function trySyncContractDueSchedule(
-    action: "renew" | "finish",
-    contract: Contract,
-  ) {
+  // Compartilhamento de Contrato via WhatsApp com link público válido por 7 dias
+  async function handleShareContractWhatsApp(contract: Contract) {
     try {
-      if (action === "renew") {
-        await upsertContractDueScheduleItem(contract);
-        return;
-      }
+      setToast({ type: "info", message: "Gerando link de visualização seguro do contrato..." });
+      const res = await shareContract(contract.id);
+      const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+      const url = `${baseUrl}/contrato-compartilhado/${res.id}`;
 
-      await completeContractDueScheduleItem(contract);
-    } catch (error) {
-      console.warn("Nao foi possivel sincronizar a agenda do contrato.", error);
-    }
-  }
+      setShareModalContract(contract);
+      setShareModalUrl(url);
+      setShareModalExpiresAt(res.expiresAt);
+      setIsShareModalOpen(true);
 
-  function handleOpenStatusReasonModal(contract: Contract, nextStatus: "Canceled" | "Deleted") {
-    setPendingStatusChange({
-      contract: {
-        ...contract,
-        status: nextStatus,
-        deletedAt: nextStatus === "Deleted" ? contract.deletedAt || new Date().toISOString() : null,
-      },
-      nextStatus,
-    });
-    setStatusReason("");
-    setStatusReasonError("");
-    handleCloseContractActions();
-  }
+      const tenant = tenants.find((t) => String(t.id) === String(contract.tenantId));
+      if (tenant?.phone) {
+        const cleanPhone = tenant.phone.replace(/\D/g, "");
+        const customerName = contract.tenantName || tenant.name || "Cliente";
+        const propertyTitle = contract.propertyName || "Imóvel / Bem";
+        const msg = [
+          `Olá, *${customerName}*!`,
+          ``,
+          `Segue o link para visualização e impressão do seu Contrato de Locação referente ao bem *${propertyTitle}*:`,
+          `🔗 ${url}`,
+          ``,
+          `ℹ️ _Este link é válido por 7 dias._`,
+        ].join("\n");
 
-
-  function handleOpenRenewalModal(contract: Contract) {
-    setRenewalContract(contract);
-    setRenewalEndDate(contract.endDate || "");
-    setRenewalRentValue(formatCurrencyInput(contract.rentValue || 0));
-    setRenewalNotes("");
-    setRenewalError("");
-  }
-
-  function handleCloseRenewalModal() {
-    if (isRenewingContract) return;
-
-    setRenewalContract(null);
-    setRenewalEndDate("");
-    setRenewalRentValue("");
-    setRenewalNotes("");
-    setRenewalError("");
-  }
-
-  async function handleConfirmContractRenewal() {
-    if (!renewalContract || isRenewingContract) return;
-
-    const nextEndDate = renewalEndDate;
-    const nextRentValue = parseCurrencyInput(renewalRentValue);
-
-    if (!nextEndDate) {
-      setRenewalError("Informe a nova data de término do contrato.");
-      return;
-    }
-
-    if (new Date(nextEndDate) <= new Date(renewalContract.endDate)) {
-      setRenewalError("A nova data de término precisa ser maior que a data final atual.");
-      return;
-    }
-
-    if (!nextRentValue || nextRentValue <= 0) {
-      setRenewalError("Informe um valor de aluguel válido para a renovação.");
-      return;
-    }
-
-    let renewedContractRef: Contract | null = null;
-    try {
-      setIsRenewingContract(true);
-      const savedContract = await renewContract(renewalContract.id, {
-        endDate: nextEndDate,
-        rentValue: nextRentValue,
-        notes: renewalNotes.trim() || undefined,
-      });
-      const renewedContract = mapApiContractToContract(savedContract);
-      renewedContractRef = renewedContract;
-
-      setContracts((currentContracts) =>
-        currentContracts.map((contract) =>
-          contract.id === renewalContract.id ? renewedContract : contract
-        )
-      );
-
-      if (companyId) {
-        setReceivableAccounts(await getReceivableAccounts(companyId));
-      }
-
-      await trySyncContractDueSchedule("renew", renewedContract);
-
-      registerPropertyMovementFromContract(
-        renewedContract,
-        "ContractRenewed",
-        `Contrato renovado até ${formatDate(nextEndDate)}.`
-      );
-    } catch (error) {
-      setRenewalError(
-        error instanceof Error ? error.message : "Não foi possível renovar o contrato."
-      );
-      setIsRenewingContract(false);
-      return;
-    }
-
-    setIsRenewingContract(false);
-    setRenewalContract(null);
-    setRenewalEndDate("");
-    setRenewalRentValue("");
-    setRenewalNotes("");
-    setRenewalError("");
-
-    if (renewedContractRef) {
-      if (renewedContractRef.renewalHistory && renewedContractRef.renewalHistory.length > 0) {
-        // Abre o Aditivo para impressão imediatamente
-        setPrintableAdendum({
-          contract: renewedContractRef,
-          renewal: renewedContractRef.renewalHistory[0] // O backend retorna history ordenado decrescente (o 0 é o atual)
+        openWhatsAppMessage({
+          phone: cleanPhone,
+          message: msg,
         });
       }
-      
-      // Deixa engatilhado o modal que pergunta se quer gerar parcelas (vai aparecer quando fechar o aditivo)
-      setPromptParcelasContract(renewedContractRef);
-    }
-  }
-
-  function handleOpenFinishModal(contract: Contract) {
-    setFinishContract(contract);
-    setFinishReason("");
-    setFinishReasonError("");
-  }
-
-  function handleCloseFinishModal() {
-    if (isFinishingContract) return;
-
-    setFinishContract(null);
-    setFinishReason("");
-    setFinishReasonError("");
-  }
-
-  async function handleConfirmContractFinish() {
-    if (!finishContract || isFinishingContract) return;
-
-    const cleanReason = finishReason.trim();
-
-    if (cleanReason.length < 5) {
-      setFinishReasonError("Informe um motivo com pelo menos 5 caracteres para finalizar o contrato.");
-      return;
-    }
-
-    try {
-      setIsFinishingContract(true);
-      const savedContract = await finishContractAction(finishContract.id, cleanReason);
-      const finishedContract = mapApiContractToContract(savedContract);
-
-      setContracts((currentContracts) =>
-        currentContracts.map((contract) =>
-          contract.id === finishContract.id ? finishedContract : contract
-        )
-      );
-
-      if (companyId) {
-        setReceivableAccounts(await getReceivableAccounts(companyId));
-      }
-
-      await trySyncContractDueSchedule("finish", finishedContract);
-
-      registerPropertyMovementFromContract(
-        finishedContract,
-        "ContractFinished",
-        "Contrato finalizado e bem/ativo liberado para nova locação."
-      );
-    } catch (error) {
-      setFinishReasonError(
-        error instanceof Error ? error.message : "Não foi possível finalizar o contrato."
-      );
-      setIsFinishingContract(false);
-      return;
-    }
-
-    setIsFinishingContract(false);
-    setFinishContract(null);
-    setFinishReason("");
-    setFinishReasonError("");
-  }
-
-  function getSavedContractCustomContent(contractId: string): string | null {
-    if (typeof window === "undefined" || !contractId) return null;
-    const cid = String(contractId);
-    const key = `contrx_custom_contract_content_${cid}`;
-
-    const scopedVal = getCompanyStorageItem(companyId, key, key);
-    if (scopedVal) return scopedVal;
-
-    const directVal = localStorage.getItem(key);
-    if (directVal) return directVal;
-
-    return null;
-  }
-
-  function saveContractCustomContent(contractId: string, content: string) {
-    if (typeof window === "undefined" || !contractId) return;
-    const cid = String(contractId);
-    const key = `contrx_custom_contract_content_${cid}`;
-
-    setCompanyStorageItem(companyId, key, content);
-    localStorage.setItem(key, content);
-  }
-
-  function removeSavedContractCustomContent(contractId: string) {
-    if (typeof window === "undefined" || !contractId) return;
-    const cid = String(contractId);
-    const key = `contrx_custom_contract_content_${cid}`;
-
-    removeCompanyStorageItem(companyId, key);
-    localStorage.removeItem(key);
-  }
-
-  function handleOpenPrintableContract(contract: Contract) {
-    setPrintableContract(contract);
-  }
-
-  function handleOpenNewContractPreview() {
-    if (!propertyId || !tenantId || !startDate || !endDate || !rentValue) {
-      setFormError("Preencha o Bem/Ativo, Inquilino/Pessoa, Valor e Período antes de visualizar ou editar a minuta.");
-      return;
-    }
-
-    const selectedProperty = availableProperties.find((p) => String(p.id) === String(propertyId));
-    const selectedTenant = tenants.find((t) => String(t.id) === String(tenantId));
-
-    const draftContract: Contract = {
-      id: editingContractId ? editingContractId : "draft_new_contract",
-      propertyId,
-      tenantId,
-      propertyName: selectedProperty?.name || "Bem/Ativo",
-      tenantName: selectedTenant?.name || "Pessoa",
-      startDate,
-      endDate,
-      rentValue: parseCurrencyInput(rentValue),
-      status: "Active",
-      isTemporaryRental: Boolean(isTemporaryRental),
-      checkInTime: isTemporaryRental ? checkInTime : undefined,
-      checkOutTime: isTemporaryRental ? checkOutTime : undefined,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    setPrintableContract(draftContract);
-    setIsPreviewingNewContract(true);
-  }
-
-  function syncPrintableContractEditsFromIframe() {
-    if (!printableContract || !printableContractFrameRef.current) return;
-    try {
-      const doc = printableContractFrameRef.current.contentDocument;
-      const contentEl = doc?.querySelector(".content");
-      if (contentEl) {
-        const editedContent = contentEl.innerHTML || contentEl.textContent || "";
-        if (editedContent.trim()) {
-          setDraftCustomContent(editedContent);
-          saveContractCustomContent(printableContract.id, editedContent);
-          if (printableContract.propertyId) {
-            saveContractCustomContent(`prop_${printableContract.propertyId}`, editedContent);
-          }
-          if (printableContract.id === "draft_new_contract" || isPreviewingNewContract) {
-            saveContractCustomContent("draft_new_contract", editedContent);
-          }
-        }
-      }
     } catch (err) {
-      console.error("Erro ao sincronizar edições da minuta do contrato:", err);
+      setToast({
+        type: "error",
+        message: err instanceof Error ? err.message : "Erro ao gerar link de compartilhamento.",
+      });
     }
   }
-
-  function handleSavePrintableContractEdits() {
-    if (!printableContract) return;
-    syncPrintableContractEditsFromIframe();
-    setCompletionModal({
-      icon: "📝",
-      title: "Edição salva com sucesso!",
-      description: "As alterações do texto foram salvas especificamente para este contrato.",
-      itemTitle: printableContract.propertyName || "Contrato de locação",
-      itemDetail: printableContract.tenantName || undefined,
-    });
-  }
-
-  function handleResetPrintableContractEdits() {
-    if (!printableContract) return;
-    setDraftCustomContent(null);
-    removeSavedContractCustomContent(printableContract.id);
-    if (printableContract.propertyId) {
-      removeSavedContractCustomContent(`prop_${printableContract.propertyId}`);
-    }
-    removeSavedContractCustomContent("draft_new_contract");
-    if (printableContractFrameRef.current) {
-      printableContractFrameRef.current.setAttribute(
-        "srcdoc",
-        buildPrintableContractHtml(printableContract, false)
-      );
-    }
-    setCompletionModal({
-      icon: "🔄",
-      title: "Texto restaurado!",
-      description: "O texto do contrato foi restaurado para o modelo padrão do sistema.",
-      itemTitle: printableContract.propertyName || "Contrato de locação",
-    });
-  }
-
-  function handleClosePrintableContract() {
-    syncPrintableContractEditsFromIframe();
-    setPrintableContract(null);
-    setIsPreviewingNewContract(false);
-    setIsEditingPrintableMinuta(false);
-  }
-
-  function handleOpenPrintableAdendum(contract: Contract, renewal: ContractRenewalRecord) {
-    setPrintableAdendum({ contract, renewal });
-  }
-
-  function handleClosePrintableAdendum() {
-    setPrintableAdendum(null);
-  }
-
-  function handlePrintPrintableContract() {
-    if (!printableContract) return;
-    syncPrintableContractEditsFromIframe();
-
-    const htmlContent = buildPrintableContractHtml(printableContract, true);
-    const printWin = window.open("", "_blank", "width=1000,height=900");
-    if (printWin) {
-      printWin.document.open();
-      printWin.document.write(htmlContent);
-      printWin.document.close();
-      printWin.focus();
-    }
-  }
-
-  function handleGeneratePrintableContractPdf() {
-    if (!printableContract) return;
-    syncPrintableContractEditsFromIframe();
-
-    const htmlContent = buildPrintableContractHtml(printableContract, true);
-    const printWin = window.open("", "_blank", "width=1000,height=900");
-    if (printWin) {
-      printWin.document.open();
-      printWin.document.write(htmlContent);
-      printWin.document.close();
-      printWin.focus();
-    }
-  }
-
-  function getPropertyForContract(contract: Contract) {
-    return properties.find((property) => String(property.id) === String(contract.propertyId));
-  }
-
-  function isRealEstateContract(contract: Contract) {
-    const contractProperty = getPropertyForContract(contract);
-
-    return !contractProperty || contractProperty.assetCategory === "PROPERTY";
-  }
-
-  function getPrintableContractTitle(contract: Contract) {
-    if (!isRealEstateContract(contract)) {
-      return "Visualização do contrato de bem/ativo";
-    }
-
-    if (contract.isTemporaryRental) {
-      return "Visualização do contrato temporário";
-    }
-
-    return "Visualização do contrato padrão residencial";
-  }
-
-  function getPrintableContractSubHeaderLabel(contract: Contract) {
-    const property = getPropertyForContract(contract);
-    if (property && property.assetCategory !== "PROPERTY") {
-      return `Contrato de locação de ${getAssetCategoryLabel(property.assetCategory).toLowerCase()}`;
-    }
-
-    if (contract.isTemporaryRental) {
-      return "Visualização do contrato temporário por temporada";
-    }
-
-    return "Visualização do contrato padrão residencial";
-  }
-
-  function buildPrintableContractHtml(contract: Contract, showToolbar = false) {
-    const contractProperty = getPropertyForContract(contract);
-    const contractTenant = tenants.find((tenant) => String(tenant.id) === String(contract.tenantId));
-
-    const savedCustomText =
-      getSavedContractCustomContent(contract.id) ||
-      (contract.propertyId ? getSavedContractCustomContent(`prop_${contract.propertyId}`) : null) ||
-      (contract.id === "draft_new_contract" || (isPreviewingNewContract && contract.id === editingContractId)
-        ? draftCustomContent
-        : null);
-
-    if (savedCustomText) {
-      return buildCustomContentContractHtml(savedCustomText, showToolbar, contract.id);
-    }
-
-    if (contractProperty && contractProperty.assetCategory !== "PROPERTY") {
-      return buildAssetContractHtml(contract, contractProperty, contractTenant, showToolbar);
-    }
-
-    return contract.isTemporaryRental
-      ? buildTemporaryRentalContractHtml(contract, contractProperty, contractTenant, showToolbar)
-      : buildStandardResidentialContractHtml(contract, contractProperty, contractTenant, showToolbar);
-  }
-
-  const contractsThemeClass =
-    themeMode === "graphite"
-      ? "contrx-graphite-theme"
-      : isBlackTheme
-        ? "contrx-black-theme"
-        : "contrx-force-light";
 
   return (
-    <>
-      <style jsx global>{`
-        .contrx-contracts-page.contrx-black-theme {
-          color: #f8fafc;
-        }
+    <div className="min-h-screen bg-slate-50/50 p-4 md:p-8 space-y-6">
+      {/* Toast Notification */}
+      {toast && (
+        <div
+          className={`fixed top-5 right-5 z-[999] flex items-center gap-2 rounded-2xl px-5 py-3.5 text-xs font-black shadow-xl transition-all ${
+            toast.type === "success"
+              ? "bg-emerald-600 text-white shadow-emerald-500/20"
+              : toast.type === "error"
+              ? "bg-rose-600 text-white shadow-rose-500/20"
+              : "bg-slate-900 text-white"
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
 
-        .contrx-contracts-page.contrx-black-theme .bg-white {
-          background-color: #0f172a !important;
-        }
-
-        .contrx-contracts-page.contrx-black-theme .bg-slate-50,
-        .contrx-contracts-page.contrx-black-theme .bg-slate-100 {
-          background-color: #111827 !important;
-        }
-
-        .contrx-contracts-page.contrx-black-theme .bg-orange-50,
-        .contrx-contracts-page.contrx-black-theme .bg-orange-100,
-        .contrx-contracts-page.contrx-black-theme .bg-orange-50\/50,
-        .contrx-contracts-page.contrx-black-theme .bg-orange-50\/60,
-        .contrx-contracts-page.contrx-black-theme .bg-orange-50\/40 {
-          background-color: color-mix(in srgb, var(--primary-color) 13%, transparent) !important;
-        }
-
-        .contrx-contracts-page.contrx-black-theme .bg-red-50,
-        .contrx-contracts-page.contrx-black-theme .bg-red-100 {
-          background-color: rgba(239, 68, 68, 0.12) !important;
-        }
-
-        .contrx-contracts-page.contrx-black-theme .bg-emerald-50,
-        .contrx-contracts-page.contrx-black-theme .bg-emerald-100 {
-          background-color: rgba(16, 185, 129, 0.12) !important;
-        }
-
-        .contrx-contracts-page.contrx-black-theme .bg-amber-50,
-        .contrx-contracts-page.contrx-black-theme .bg-amber-100 {
-          background-color: rgba(245, 158, 11, 0.14) !important;
-        }
-
-        .contrx-contracts-page.contrx-black-theme .bg-blue-100 {
-          background-color: rgba(59, 130, 246, 0.14) !important;
-        }
-
-        .contrx-contracts-page.contrx-black-theme .bg-zinc-200 {
-          background-color: #334155 !important;
-        }
-
-        .contrx-contracts-page.contrx-black-theme .text-slate-950,
-        .contrx-contracts-page.contrx-black-theme .text-slate-900,
-        .contrx-contracts-page.contrx-black-theme .text-slate-800,
-        .contrx-contracts-page.contrx-black-theme .text-slate-700 {
-          color: #f8fafc !important;
-        }
-
-        .contrx-contracts-page.contrx-black-theme .text-slate-600,
-        .contrx-contracts-page.contrx-black-theme .text-slate-500,
-        .contrx-contracts-page.contrx-black-theme .text-slate-400 {
-          color: #cbd5e1 !important;
-        }
-
-        .contrx-contracts-page.contrx-black-theme .text-orange-600,
-        .contrx-contracts-page.contrx-black-theme .text-orange-700,
-        .contrx-contracts-page.contrx-black-theme .text-orange-800 {
-          color: var(--primary-color) !important;
-        }
-
-        .contrx-contracts-page.contrx-black-theme .text-red-600,
-        .contrx-contracts-page.contrx-black-theme .text-red-700 {
-          color: #fca5a5 !important;
-        }
-
-        .contrx-contracts-page.contrx-black-theme .text-emerald-700,
-        .contrx-contracts-page.contrx-black-theme .text-emerald-800 {
-          color: #6ee7b7 !important;
-        }
-
-        .contrx-contracts-page.contrx-black-theme .text-amber-700 {
-          color: #fcd34d !important;
-        }
-
-        .contrx-contracts-page.contrx-black-theme .text-blue-700 {
-          color: #93c5fd !important;
-        }
-
-        .contrx-contracts-page.contrx-black-theme .border-orange-100,
-        .contrx-contracts-page.contrx-black-theme .border-orange-200,
-        .contrx-contracts-page.contrx-black-theme .border-red-100,
-        .contrx-contracts-page.contrx-black-theme .border-red-200,
-        .contrx-contracts-page.contrx-black-theme .border-emerald-200,
-        .contrx-contracts-page.contrx-black-theme .border-slate-100,
-        .contrx-contracts-page.contrx-black-theme .border-slate-200,
-        .contrx-contracts-page.contrx-black-theme .border-slate-300 {
-          border-color: #334155 !important;
-        }
-
-        .contrx-contracts-page.contrx-black-theme input,
-        .contrx-contracts-page.contrx-black-theme select,
-        .contrx-contracts-page.contrx-black-theme textarea {
-          background-color: #020617 !important;
-          border-color: #334155 !important;
-          color: #f8fafc !important;
-        }
-
-        .contrx-contracts-page.contrx-black-theme input::placeholder,
-        .contrx-contracts-page.contrx-black-theme textarea::placeholder {
-          color: #64748b !important;
-        }
-
-        .contrx-contracts-page.contrx-black-theme table,
-        .contrx-contracts-page.contrx-black-theme tbody,
-        .contrx-contracts-page.contrx-black-theme tr {
-          background-color: #0f172a !important;
-        }
-
-        .contrx-contracts-page.contrx-black-theme thead {
-          background-color: color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
-        }
-
-        .contrx-contracts-page.contrx-black-theme tbody tr:hover {
-          background-color: #1e293b !important;
-        }
-
-        .contrx-contracts-page.contrx-graphite-theme {
-          color: #f8fafc;
-        }
-
-        .contrx-contracts-page.contrx-graphite-theme .bg-white,
-        .contrx-contracts-page.contrx-graphite-theme .bg-slate-50,
-        .contrx-contracts-page.contrx-graphite-theme .bg-slate-100,
-        .contrx-contracts-page.contrx-graphite-theme table,
-        .contrx-contracts-page.contrx-graphite-theme tbody,
-        .contrx-contracts-page.contrx-graphite-theme tr {
-          background-color: #0d1b2e !important;
-        }
-
-        .contrx-contracts-page.contrx-graphite-theme .bg-orange-50,
-        .contrx-contracts-page.contrx-graphite-theme .bg-orange-100,
-        .contrx-contracts-page.contrx-graphite-theme .bg-orange-50\/50,
-        .contrx-contracts-page.contrx-graphite-theme .bg-orange-50\/60,
-        .contrx-contracts-page.contrx-graphite-theme .bg-orange-50\/40 {
-          background-color: color-mix(in srgb, var(--primary-color) 18%, transparent) !important;
-        }
-
-        .contrx-contracts-page.contrx-graphite-theme .text-slate-950,
-        .contrx-contracts-page.contrx-graphite-theme .text-slate-900,
-        .contrx-contracts-page.contrx-graphite-theme .text-slate-800,
-        .contrx-contracts-page.contrx-graphite-theme .text-slate-700 {
-          color: #f8fafc !important;
-        }
-
-        .contrx-contracts-page.contrx-graphite-theme .text-slate-600,
-        .contrx-contracts-page.contrx-graphite-theme .text-slate-500,
-        .contrx-contracts-page.contrx-graphite-theme .text-slate-400 {
-          color: #b6c6dc !important;
-        }
-
-        .contrx-contracts-page.contrx-graphite-theme .border-orange-100,
-        .contrx-contracts-page.contrx-graphite-theme .border-orange-200,
-        .contrx-contracts-page.contrx-graphite-theme .border-red-100,
-        .contrx-contracts-page.contrx-graphite-theme .border-red-200,
-        .contrx-contracts-page.contrx-graphite-theme .border-emerald-200,
-        .contrx-contracts-page.contrx-graphite-theme .border-slate-100,
-        .contrx-contracts-page.contrx-graphite-theme .border-slate-200,
-        .contrx-contracts-page.contrx-graphite-theme .border-slate-300 {
-          border-color: #24405f !important;
-        }
-
-        .contrx-contracts-page.contrx-graphite-theme input,
-        .contrx-contracts-page.contrx-graphite-theme select,
-        .contrx-contracts-page.contrx-graphite-theme textarea {
-          background-color: #07111f !important;
-          border-color: #24405f !important;
-          color: #f8fafc !important;
-        }
-
-        .contrx-contracts-page.contrx-graphite-theme thead {
-          background-color: color-mix(in srgb, var(--primary-color) 18%, transparent) !important;
-        }
-
-        .contrx-contracts-page.contrx-graphite-theme tbody tr:hover {
-          background-color: #162a44 !important;
-        }
-      `}</style>
-      <div data-contrx-theme={themeMode} className={`contrx-contracts-page space-y-5 ${contractsThemeClass}`}>
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
-              Contratos
+      {/* Cabeçalho da Página */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-100 text-orange-600">
+              <FileText className="h-5 w-5" />
+            </div>
+            <h1 className="text-2xl font-black tracking-tight text-slate-900">
+              Contratos de Locação
             </h1>
-            <p className="mt-1 text-slate-500">
-              Gerencie os contratos de locação e mantenha o financeiro integrado.
-            </p>
           </div>
+          <p className="mt-1 text-xs font-semibold text-slate-500">
+            Gerencie contratos residenciais, comerciais e por temporada com sincronização financeira.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setIsTimeDefaultsOpen(true)}
+            title="Configurar horários padrão de check-in e check-out"
+            className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-700 hover:bg-slate-100 transition shadow-sm"
+          >
+            <Clock className="h-4 w-4 text-slate-500" />
+            <span className="hidden sm:inline">Horários Temporada</span>
+          </button>
 
           <button
             type="button"
-            onClick={handleOpenCreateForm}
-            className="rounded-2xl bg-orange-500 px-6 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
+            onClick={() => {
+              setEditingContract(null);
+              setIsFormOpen(true);
+              setIsFormMinimized(false);
+            }}
+            className="flex items-center gap-2 rounded-2xl bg-orange-600 px-5 py-3 text-xs font-black text-white shadow-lg shadow-orange-500/20 hover:bg-orange-700 transition active:scale-[0.99]"
           >
-            + Novo contrato
-          </button>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard icon={<FileText className="h-5 w-5" />} title="Contratos ativos" value={activeContracts} detail="Inclui vencendo" />
-          <SummaryCard icon={<Clock className="h-5 w-5" />} title="Vencendo" value={expiringContracts} detail={`Até ${EXPIRING_CONTRACT_DAYS_LIMIT} dias`} />
-          <SummaryCard icon={<AlertTriangle className="h-5 w-5" />} title="Vencidos" value={expiredContracts} detail="Aguardam operação" />
-          <SummaryCard icon={<DollarSign className="h-5 w-5" />} title="Receita mensal" value={formatCurrency(monthlyRevenue)} detail="Contratos ativos" />
-        </div>
-
-        <div className="rounded-3xl border border-orange-100 bg-white shadow-sm">
-          <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 xl:flex-row xl:items-center xl:justify-between">
-            <div>
-              <h2 className="text-xl font-black text-slate-950 sm:text-2xl">
-                Contratos cadastrados
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Exibindo {filteredContracts.length} de {contracts.length} contrato(s)
-              </p>
-            </div>
-
-            <div className="grid w-full grid-cols-1 gap-3 md:grid-cols-[1fr_200px] xl:max-w-2xl">
-              <FormField label="Buscar contrato">
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Buscar por bem/ativo ou pessoa"
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                />
-              </FormField>
-
-              <FormField label="Status">
-                <select
-                  value={statusFilter}
-                  onChange={(event) => setStatusFilter(event.target.value as ContractFilterStatus)}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                >
-                  <option value="Active">Ativos</option>
-                  <option value="Expiring">Vencendo</option>
-                  <option value="Expired">Vencidos</option>
-                  <option value="Inactive">Inativos</option>
-                  <option value="Canceled">Cancelados</option>
-                  <option value="Finished">Finalizados</option>
-                  <option value="Deleted">Excluídos</option>
-                  <option value="All">Todos</option>
-                </select>
-              </FormField>
-            </div>
-          </div>
-
-          {/* Vista Desktop */}
-          <div className="hidden lg:block overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left">
-              <thead className="bg-orange-50">
-                <tr>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">Bem/Ativo</th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">Pessoa</th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">Início</th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">Fim</th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">Valor</th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">Tipo</th>
-                  <th className="px-6 py-4 text-sm font-black text-slate-700">Status</th>
-                  <th className="px-6 py-4 text-right text-sm font-black text-slate-700">Ações</th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-slate-100">
-                {filteredContracts.map((contract) => {
-                  const displayStatus = getDisplayContractStatus(contract);
-                  const receivableSummary = getContractReceivableSummary(contract);
-                  const hasPendingReceivables = receivableSummary.pendingCharges.length > 0;
-                  const shouldShowExpiredReceivableAlert =
-                    displayStatus === "Expired" && hasPendingReceivables;
-
-                  return (
-                    <tr
-                      key={contract.id}
-                      className={`transition hover:bg-slate-50 ${
-                        displayStatus === "Deleted"
-                          ? "bg-slate-50 opacity-70"
-                          : displayStatus === "Expired"
-                            ? "bg-red-50/70"
-                            : displayStatus === "Expiring"
-                            ? "bg-amber-50"
-                            : ""
-                      }`}
-                    >
-                      <td className="px-6 py-4 font-black text-slate-900">
-                        {contract.propertyName || "Não informado"}
-                      </td>
-
-                      <td className="px-6 py-4 text-sm font-semibold text-slate-600">
-                        {contract.tenantName || "Não informado"}
-                      </td>
-
-                      <td className="px-6 py-4 text-sm font-semibold text-slate-600">
-                        {formatDate(contract.startDate)}
-                      </td>
-
-                      <td className="px-6 py-4 text-sm font-semibold text-slate-600">
-                        <div className="flex flex-col gap-1">
-                          <span>{formatDate(contract.endDate)}</span>
-                          {displayStatus === "Expiring" && (
-                            <span className="text-xs font-black text-amber-700">
-                              Vence em {getDaysUntilDate(contract.endDate)} dia(s)
-                            </span>
-                          )}
-                          {displayStatus === "Expired" && (
-                            <span className="text-xs font-black text-red-700">
-                              Vencido há {Math.abs(getDaysUntilDate(contract.endDate))} dia(s)
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="px-6 py-4 text-sm font-black text-slate-900">
-                        {formatCurrency(contract.rentValue)}
-                      </td>
-
-                      <td className="px-6 py-4">
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-black ${
-                            contract.isTemporaryRental
-                              ? "bg-orange-100 text-orange-700"
-                              : "bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          {contract.isTemporaryRental ? "Temporário" : "Padrão"}
-                        </span>
-                      </td>
-
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col gap-1">
-                          <StatusBadge status={displayStatus} />
-                          {(displayStatus === "Canceled" || displayStatus === "Deleted") &&
-                            contract.statusReason && (
-                              <span className="max-w-[220px] text-xs font-semibold text-slate-500">
-                                Motivo: {contract.statusReason}
-                              </span>
-                            )}
-                          {shouldShowExpiredReceivableAlert && (
-                            <Link
-                              href={`/contas-receber?fromContract=1&contractId=${contract.id}`}
-                              className="inline-flex max-w-[260px] items-start gap-1.5 rounded-xl bg-red-50 px-2.5 py-2 text-xs font-bold leading-5 text-red-700 ring-1 ring-red-100 transition hover:bg-red-100 hover:ring-red-200"
-                            >
-                              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                              <span>
-                                Vencido com {receivableSummary.charges.length} conta(s) a receber vinculada(s)
-                                {receivableSummary.pendingCharges.length > 0
-                                  ? `, ${receivableSummary.pendingCharges.length} em aberto`
-                                  : ""}
-                                .
-                              </span>
-                            </Link>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="px-6 py-4 align-top">
-                        <div className="flex justify-end">
-                          <div className="relative flex flex-col items-end gap-2">
-                            <button
-                              type="button"
-                              onClick={(event) => handleToggleContractActions(contract.id, event)}
-                              data-contract-action-trigger
-                              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
-                              aria-expanded={openActionMenuContractId === contract.id}
-                              aria-label={`Abrir ações do contrato ${contract.propertyName || contract.id}`}
-                            >
-                              Ações
-                              <span
-                                className={`text-xs transition ${
-                                  openActionMenuContractId === contract.id ? "rotate-180" : ""
-                                }`}
-                              >
-                                <ChevronDown className="h-4 w-4" />
-                              </span>
-                            </button>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-
-                {isLoadingPageData && (
-                  <tr>
-                    <td colSpan={8} className="px-6 py-10 text-center text-sm font-semibold text-slate-500">
-                      Carregando
-                    </td>
-                  </tr>
-                )}
-
-                {!isLoadingPageData && filteredContracts.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-6 py-10 text-center text-sm font-semibold text-slate-500">
-                      Nenhum contrato encontrado para este filtro.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Vista Mobile */}
-          <div className="space-y-4 p-4 lg:hidden">
-            {isLoadingPageData && (
-              <div className="flex h-32 items-center justify-center bg-white rounded-2xl border border-slate-200">
-                <div className="h-6 w-6 animate-spin rounded-full border-2 border-orange-200 border-t-orange-600" />
-              </div>
-            )}
-
-            {!isLoadingPageData && filteredContracts.map((contract) => {
-              const displayStatus = getDisplayContractStatus(contract);
-              const receivableSummary = getContractReceivableSummary(contract);
-              const hasPendingReceivables = receivableSummary.pendingCharges.length > 0;
-              const shouldShowExpiredReceivableAlert = displayStatus === "Expired" && hasPendingReceivables;
-
-              return (
-                <div
-                  key={contract.id}
-                  className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3 ${
-                    displayStatus === "Deleted"
-                      ? "opacity-70 bg-slate-50/50"
-                      : displayStatus === "Expired"
-                        ? "border-red-200 bg-red-50/20"
-                        : displayStatus === "Expiring"
-                          ? "border-amber-200 bg-amber-50/25"
-                          : ""
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="text-sm font-black uppercase text-slate-900">
-                        {contract.propertyName || "Não informado"}
-                      </h4>
-                      <p className="text-xs text-slate-505 mt-0.5">
-                        Inquilino: <span className="font-bold text-slate-700">{contract.tenantName || "Não informado"}</span>
-                      </p>
-                    </div>
-                    <StatusBadge status={displayStatus} />
-                  </div>
-
-                  <div className="text-xs space-y-1.5 text-slate-600 border-t border-slate-100 pt-3">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase">Data de Início</p>
-                        <p className="font-bold mt-0.5">{formatDate(contract.startDate)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase">Data de Fim</p>
-                        <p className="font-bold mt-0.5">{formatDate(contract.endDate)}</p>
-                      </div>
-                    </div>
-
-                    {displayStatus === "Expiring" && (
-                      <p className="text-xs font-black text-amber-700">
-                        ⚠️ Vence em {getDaysUntilDate(contract.endDate)} dia(s)
-                      </p>
-                    )}
-                    {displayStatus === "Expired" && (
-                      <p className="text-xs font-black text-red-700">
-                        ⚠️ Vencido há {Math.abs(getDaysUntilDate(contract.endDate))} dia(s)
-                      </p>
-                    )}
-
-                    <div className="flex items-center justify-between pt-2">
-                      <div>
-                        <p className="text-[10px] text-slate-400 font-black uppercase">Valor do Aluguel</p>
-                        <p className="text-sm font-black text-slate-950 mt-0.5">
-                          {formatCurrency(contract.rentValue)}
-                        </p>
-                      </div>
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-[10px] font-black ${
-                          contract.isTemporaryRental
-                            ? "bg-orange-100 text-orange-700"
-                            : "bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {contract.isTemporaryRental ? "Temporário" : "Padrão"}
-                      </span>
-                    </div>
-
-                    {shouldShowExpiredReceivableAlert && (
-                      <Link
-                        href={`/contas-receber?fromContract=1&contractId=${contract.id}`}
-                        className="flex items-start gap-1.5 rounded-xl bg-red-50 p-2.5 text-[11px] font-bold leading-4 text-red-700 ring-1 ring-red-100 transition hover:bg-red-100"
-                      >
-                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                        <span>
-                          Vencido com {receivableSummary.charges.length} contas a receber vinculadas ({receivableSummary.pendingCharges.length} em aberto).
-                        </span>
-                      </Link>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-end border-t border-slate-100 pt-3">
-                    <button
-                      type="button"
-                      onClick={(event) => handleToggleContractActions(contract.id, event)}
-                      data-contract-action-trigger
-                      className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-100 px-4 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
-                      aria-expanded={openActionMenuContractId === contract.id}
-                    >
-                      Ações
-                      <ChevronDown className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-
-            {!isLoadingPageData && filteredContracts.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm font-semibold text-slate-500">
-                Nenhum contrato encontrado.
-              </div>
-            )}
-          </div>
-        </div>
-
-        {openActionMenuContract && actionMenuPosition && (
-          <ContractActionMenu
-            contract={openActionMenuContract}
-            displayStatus={getDisplayContractStatus(openActionMenuContract)}
-            position={actionMenuPosition}
-            canRenew={canRenewContract(getDisplayContractStatus(openActionMenuContract))}
-            canFinish={canFinishContract(getDisplayContractStatus(openActionMenuContract))}
-            canCancel={canCancelContract(getDisplayContractStatus(openActionMenuContract))}
-            canDelete={canDeleteContract(getDisplayContractStatus(openActionMenuContract))}
-            onDetails={() => handleOpenContractDetails(openActionMenuContract)}
-            onRenew={() => {
-              handleCloseContractActions();
-              handleOpenRenewalModal(openActionMenuContract);
-            }}
-            onFinish={() => {
-              handleCloseContractActions();
-              handleOpenFinishModal(openActionMenuContract);
-            }}
-            onCancel={() => handleOpenStatusReasonModal(openActionMenuContract, "Canceled")}
-            onPrint={() => {
-              handleCloseContractActions();
-              handleOpenPrintableContract(openActionMenuContract);
-            }}
-            onDelete={() => handleOpenStatusReasonModal(openActionMenuContract, "Deleted")}
-          />
-        )}
-
-        {selectedContractDetails && (() => {
-          const detailsDisplayStatus = getDisplayContractStatus(selectedContractDetails);
-          const detailsProperty = properties.find((property) => String(property.id) === String(selectedContractDetails.propertyId));
-          const detailsTenant = tenants.find((tenant) => String(tenant.id) === String(selectedContractDetails.tenantId));
-          const receivableSummary = getContractReceivableSummary(selectedContractDetails);
-          const shouldShowExpiredReceivableAlert =
-            detailsDisplayStatus === "Expired" && receivableSummary.pendingCharges.length > 0;
-          const detailsTabs: { id: ContractDetailsTab; label: string; icon: React.ReactNode }[] = [
-            { id: "Data", label: "Dados", icon: <MapPin className="h-4 w-4" /> },
-            { id: "Financial", label: "Financeiro", icon: <DollarSign className="h-4 w-4" /> },
-            { id: "History", label: "Histórico", icon: <Clock className="h-4 w-4" /> },
-            { id: "Prints", label: "Impressos", icon: <FileText className="h-4 w-4" /> },
-            { id: "Notes", label: "Observações", icon: <Pencil className="h-4 w-4" /> },
-          ];
-
-          return (
-            <div className="fixed inset-0 z-[72] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
-              <div className={`flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl ${contractsThemeClass}`}>
-                <div className="border-b border-slate-100 bg-white px-6 py-5">
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-500">
-                        Detalhes do contrato
-                      </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-3">
-                        <h2 className="text-2xl font-black text-slate-950">
-                          {selectedContractDetails.propertyName || "Contrato"}
-                        </h2>
-                        <StatusBadge status={detailsDisplayStatus} />
-                        <span className={`rounded-full px-3 py-1 text-xs font-black ${selectedContractDetails.isTemporaryRental ? "bg-orange-100 text-orange-700" : "bg-slate-100 text-slate-600"}`}>
-                          {selectedContractDetails.isTemporaryRental ? "Temporário" : "Padrão residencial"}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-sm font-semibold text-slate-500">
-                        {selectedContractDetails.tenantName || "Pessoa não informada"} ⬢ {formatDate(selectedContractDetails.startDate)} até {formatDate(selectedContractDetails.endDate)}
-                      </p>
-                    </div>
-
-                    <div className="flex justify-end">
-                      <button
-                        type="button"
-                        onClick={handleCloseContractDetails}
-                        className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-red-50 hover:text-red-600"
-                        title="Fechar detalhes"
-                        aria-label="Fechar detalhes"
-                      >
-                        <X className="h-5 w-5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-b border-slate-100 bg-slate-50 px-6 py-3">
-                  <div className="flex gap-2 overflow-x-auto pb-1">
-                    {detailsTabs.map((tab) => (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setContractDetailsActiveTab(tab.id)}
-                        className={`whitespace-nowrap rounded-2xl px-4 py-3 text-sm font-black transition ${
-                          contractDetailsActiveTab === tab.id
-                              ? "bg-orange-500 text-white shadow-md shadow-orange-100"
-                            : "bg-white text-slate-600 ring-1 ring-slate-100 hover:bg-orange-50 hover:text-orange-700"
-                        }`}
-                      >
-                        <span className="mr-2 inline-flex align-[-2px]">{tab.icon}</span>
-                        {tab.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="min-h-0 flex-1 overflow-y-auto bg-white p-6">
-                  {shouldShowExpiredReceivableAlert && (
-                    <div className="mb-5 rounded-3xl border border-red-100 bg-red-50 px-5 py-4 text-red-800">
-                      <div className="flex gap-3">
-                        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
-                        <div>
-                          <p className="text-sm font-black uppercase tracking-wide">
-                            Contrato vencido com contas a receber vinculadas
-                          </p>
-                          <p className="mt-1 text-sm font-semibold leading-6">
-                            Existem {receivableSummary.charges.length} cobrança(s) ligada(s) a este contrato,
-                            sendo {receivableSummary.pendingCharges.length} em aberto.{" "}
-                            <Link
-                              href={`/contas-receber?fromContract=1&contractId=${selectedContractDetails.id}`}
-                              className="font-black text-red-900 underline transition hover:text-red-700"
-                            >
-                              Clique aqui para revisar e dar baixa no financeiro.
-                            </Link>
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {contractDetailsActiveTab === "Data" && (
-                    <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                      <DetailCard title="Bem/Ativo" value={selectedContractDetails.propertyName || "Não informado"} detail={formatFullAddressForPrint({
-                        street: detailsProperty?.street,
-                        number: detailsProperty?.number,
-                        neighborhood: detailsProperty?.neighborhood,
-                        city: detailsProperty?.city,
-                        state: detailsProperty?.state,
-                        zipCode: detailsProperty?.zipCode,
-                        complement: detailsProperty?.complement,
-                      }) || "Endereço não informado"} />
-                      <DetailCard title="Pessoa" value={selectedContractDetails.tenantName || "Não informado"} detail={detailsTenant?.phone || detailsTenant?.email || "Contato não informado"} />
-                      <DetailCard title="Valor do aluguel" value={formatCurrency(selectedContractDetails.rentValue)} detail="Valor base do contrato" />
-                      <DetailCard title="Período" value={`${formatDate(selectedContractDetails.startDate)} até ${formatDate(selectedContractDetails.endDate)}`} detail={`${getContractDurationInMonths(selectedContractDetails.startDate, selectedContractDetails.endDate)} mês(es) / ${getContractDurationInDays(selectedContractDetails.startDate, selectedContractDetails.endDate)} dia(s)`} />
-                      <DetailCard
-                        title="Tipo"
-                        value={selectedContractDetails.isTemporaryRental ? "Locação temporária" : "Contrato padrão residencial"}
-                        detail={
-                          selectedContractDetails.isTemporaryRental
-                            ? `Entrada ${selectedContractDetails.checkInTime || "--:--"} / Saída ${selectedContractDetails.checkOutTime || "--:--"}`
-                            : "Modelo residencial padrão"
-                        }
-                      />
-                      <DetailCard
-                        title="Status atual"
-                        value={getContractStatusLabel(detailsDisplayStatus)}
-                        detail={
-                          detailsDisplayStatus === "Expiring"
-                            ? `Vence em ${getDaysUntilDate(selectedContractDetails.endDate)} dia(s)`
-                            : detailsDisplayStatus === "Expired"
-                              ? `Vencido há ${Math.abs(getDaysUntilDate(selectedContractDetails.endDate))} dia(s). Aguardando operação manual.`
-                              : "Controle operacional do contrato"
-                        }
-                      />
-                    </div>
-                  )}
-
-                  {contractDetailsActiveTab === "Financial" && (
-                    <div className="space-y-5">
-                      <div className="grid gap-5 md:grid-cols-3">
-                        <DetailCard title="Total vinculado" value={formatCurrency(receivableSummary.totalAmount)} detail={`${receivableSummary.charges.length} parcela(s) encontrada(s)`} />
-                        <DetailCard title="Total recebido" value={formatCurrency(receivableSummary.paidAmount)} detail={`${receivableSummary.paidCharges.length} parcela(s) paga(s)`} />
-                        <DetailCard title="Total em aberto" value={formatCurrency(receivableSummary.pendingAmount)} detail={`${receivableSummary.pendingCharges.length} parcela(s) pendente(s)`} />
-                      </div>
-
-                      <div className="overflow-x-auto rounded-3xl border border-slate-100 bg-white">
-                        <div className="border-b border-slate-100 bg-slate-50 px-5 py-4">
-                          <h3 className="text-lg font-black text-slate-950">Parcelas vinculadas</h3>
-                          <p className="mt-1 text-sm font-semibold text-slate-500">Cobranças geradas no Contas a Receber para este contrato.</p>
-                        </div>
-
-                        {receivableSummary.charges.length === 0 ? (
-                          <div className="px-5 py-8 text-center text-sm font-semibold text-slate-500">
-                            Nenhuma parcela vinculada encontrada para este contrato.
-                          </div>
-                        ) : (
-                          <div className="overflow-x-auto">
-                            <table className="w-full min-w-[720px] text-left">
-                              <thead className="bg-orange-50">
-                                <tr>
-                                  <th className="px-5 py-3 text-xs font-black uppercase text-slate-600">Parcela</th>
-                                  <th className="px-5 py-3 text-xs font-black uppercase text-slate-600">Vencimento</th>
-                                  <th className="px-5 py-3 text-xs font-black uppercase text-slate-600">Valor</th>
-                                  <th className="px-5 py-3 text-xs font-black uppercase text-slate-600">Status</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-100">
-                                {receivableSummary.charges.map((charge) => {
-                                  const isPaid = charge.status === "Paid";
-
-                                  return (
-                                    <tr key={charge.id}>
-                                      <td className="px-5 py-4 text-sm font-black text-slate-900">
-                                        {charge.installmentNumber && charge.installmentTotal
-                                          ? `${charge.installmentNumber}/${charge.installmentTotal}`
-                                          : "1/1"}
-                                      </td>
-                                      <td className="px-5 py-4 text-sm font-semibold text-slate-600">
-                                        {charge.dueDate ? new Date(charge.dueDate).toLocaleDateString("pt-BR") : "-"}
-                                      </td>
-                                      <td className="px-5 py-4 text-sm font-black text-slate-900">
-                                        {formatCurrency(Number(charge.amount || 0))}
-                                      </td>
-                                      <td className="px-5 py-4">
-                                        <span className={`rounded-full px-3 py-1 text-xs font-black ${isPaid ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                                          {isPaid ? "Pago" : "Em aberto"}
-                                        </span>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {contractDetailsActiveTab === "History" && (
-                    <div className="space-y-4">
-                      <TimelineItem icon={<FileText className="h-5 w-5" />} title="Contrato criado" description="Contrato registrado no módulo de contratos e bem/ativo vinculado à locação." date={formatDate(selectedContractDetails.startDate)} />
-
-                      {(selectedContractDetails.renewalHistory || []).map((renewal, index) => (
-                        <TimelineItem
-                          key={`${renewal.renewedAt}-${index}`}
-                          icon={<RefreshCw className="h-5 w-5" />}
-                          title="Contrato renovado"
-                          description={`De ${formatDate(renewal.previousEndDate)} para ${formatDate(renewal.newEndDate)} - Valor: ${formatCurrency(renewal.previousRentValue)} para ${formatCurrency(renewal.newRentValue)}${renewal.notes ? ` - ${renewal.notes}` : ""}`}
-                          date={new Date(renewal.renewedAt).toLocaleString("pt-BR")}
-                        />
-                      ))}
-
-                      {selectedContractDetails.finishedAt && (
-                        <TimelineItem icon={<CheckCircle className="h-5 w-5" />} title="Contrato finalizado" description={selectedContractDetails.finishReason || "Contrato finalizado."} date={new Date(selectedContractDetails.finishedAt).toLocaleString("pt-BR")} />
-                      )}
-
-                      {selectedContractDetails.statusReason && (
-                        <TimelineItem
-                          icon={selectedContractDetails.statusReasonType === "Deleted" ? <Trash2 className="h-5 w-5" /> : <Ban className="h-5 w-5" />}
-                          title={selectedContractDetails.statusReasonType === "Deleted" ? "Contrato excluído" : "Contrato cancelado"}
-                          description={selectedContractDetails.statusReason}
-                          date={selectedContractDetails.statusReasonAt ? new Date(selectedContractDetails.statusReasonAt).toLocaleString("pt-BR") : "Data não informada"}
-                        />
-                      )}
-                    </div>
-                  )}
-
-                  {contractDetailsActiveTab === "Prints" && (
-                    <>
-                      <div className="grid gap-5 md:grid-cols-2">
-                        <div className="rounded-3xl border border-orange-100 bg-orange-50 p-6">
-                          <p className="text-sm font-black uppercase tracking-wide text-orange-600">Contrato</p>
-                          <h3 className="mt-3 text-2xl font-black text-slate-950">
-                             {selectedContractDetails.isTemporaryRental ? "Contrato temporário" : "Contrato padrão residencial"}
-                          </h3>
-                          <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
-                            Usa o mesmo modelo configurado na ferramenta de contratos e em Configurações &gt; Impresso.
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenPrintableContract(selectedContractDetails)}
-                            className="mt-5 rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
-                          >
-                            Abrir impressão do contrato
-                          </button>
-                        </div>
-
-                        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 flex flex-col justify-between">
-                          <div>
-                            <p className="text-sm font-black uppercase tracking-wide text-orange-600">Contrato Assinado (PDF)</p>
-                            <h3 className="mt-3 text-2xl font-black text-slate-950">
-                              Upload de Documento
-                            </h3>
-                            <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
-                              Anexe aqui o contrato digitalizado já assinado pelas partes.
-                            </p>
-                          </div>
-                          
-                          <div className="mt-5 space-y-4">
-                            {uploadedContractSignedPdf && !contractSignedPdfFile && (
-                              <div className="flex items-center gap-3 bg-white p-3 rounded-2xl border border-slate-200">
-                                <FileText className="h-6 w-6 text-orange-600 shrink-0" />
-                                <div className="flex-1 truncate">
-                                  <p className="text-sm font-bold text-slate-700 truncate">{uploadedContractSignedPdf.filename}</p>
-                                </div>
-                                <a
-                                  href={getMediaUrl(uploadedContractSignedPdf.url)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-sm font-black text-orange-600 hover:underline"
-                                >
-                                  Visualizar
-                                </a>
-                              </div>
-                            )}
-                            
-                            <input
-                              type="file"
-                              accept="application/pdf"
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  if (file.size > 10 * 1024 * 1024) {
-                                    alert("O arquivo excede o limite de 10MB.");
-                                    return;
-                                  }
-                                  setContractSignedPdfFile(file);
-                                  
-                                  const compId = companyId;
-                                  if (!compId) return;
-                                  
-                                  setIsUploadingPdf(true);
-                                  try {
-                                    const formData = new FormData();
-                                    formData.append("file", file);
-                                    formData.append("companyId", compId);
-                                    formData.append("entityType", "CONTRACT");
-                                    formData.append("entityId", selectedContractDetails.id);
-                                    
-                                    const { api } = await import("@/services/api");
-                                    const res = await api.post("/files/upload", formData, {
-                                      headers: { "Content-Type": "multipart/form-data" }
-                                    });
-                                    setUploadedContractSignedPdf(res.data);
-                                    alert("Upload de PDF concluído com sucesso.");
-                                  } catch (err) {
-                                    alert("Erro ao enviar PDF.");
-                                    console.error(err);
-                                  } finally {
-                                    setIsUploadingPdf(false);
-                                  }
-                                }
-                              }}
-                              className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-2xl file:border-0 file:text-sm file:font-black file:bg-orange-500 file:text-white hover:file:bg-orange-600 disabled:opacity-50"
-                              disabled={isUploadingPdf}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="rounded-3xl border border-slate-100 bg-slate-50 p-6">
-                          <p className="text-sm font-black uppercase tracking-wide text-slate-500">Carnê</p>
-                          <h3 className="mt-3 text-2xl font-black text-slate-950">Parcelas financeiras</h3>
-                          <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
-                            O carnê permanece no módulo Contas a Receber para manter o fluxo financeiro centralizado.
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => (window.location.href = "/contas-receber")}
-                            className="mt-5 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-md shadow-slate-100 transition hover:bg-slate-800"
-                          >
-                            Ir para Contas a Receber
-                          </button>
-                        </div>
-                      </div>
-
-                      {selectedContractDetails.renewalHistory && selectedContractDetails.renewalHistory.length > 0 && (
-                        <div className="rounded-3xl border border-emerald-100 bg-emerald-50 p-6 mt-5">
-                          <p className="text-sm font-black uppercase tracking-wide text-emerald-600">Aditivos</p>
-                          <h3 className="mt-3 text-2xl font-black text-slate-950">Aditivos de Renovação</h3>
-                          <p className="mt-2 text-sm font-semibold leading-6 text-slate-600">
-                            Gerar documento de aditivo para as renovações realizadas.
-                          </p>
-                          <div className="mt-4 space-y-3">
-                            {selectedContractDetails.renewalHistory.map((renewal, index) => (
-                               <div key={index} className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 bg-white p-3 rounded-2xl border border-emerald-200">
-                                 <div>
-                                   <p className="text-sm font-bold text-slate-700">De {formatDate(renewal.previousEndDate)} para {formatDate(renewal.newEndDate)}</p>
-                                   <p className="text-xs text-slate-500">Valor: {formatCurrency(renewal.previousRentValue)} para {formatCurrency(renewal.newRentValue)}</p>
-                                 </div>
-                                 <button
-                                   type="button"
-                                   onClick={() => handleOpenPrintableAdendum(selectedContractDetails, renewal)}
-                                   className="rounded-xl bg-emerald-100 px-4 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-200 whitespace-nowrap text-center"
-                                 >
-                                   Gerar Aditivo
-                                 </button>
-                               </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {contractDetailsActiveTab === "Notes" && (
-                    <div className="grid gap-5 md:grid-cols-2">
-                      <DetailCard title="Motivo / observação de status" value={selectedContractDetails.statusReason || selectedContractDetails.finishReason || "Sem observações registradas"} detail="Informações salvas em cancelamento, exclusão ou finalização." />
-                      <DetailCard
-                        title="Última renovação"
-                        value={selectedContractDetails.renewedAt ? new Date(selectedContractDetails.renewedAt).toLocaleString("pt-BR") : "Sem renovação registrada"}
-                        detail={`${selectedContractDetails.renewalHistory?.length || 0} renovação(ões) no histórico`}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-        {renewalContract && (
-          <div className="fixed inset-0 z-[68] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
-            <div className={`flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] border border-emerald-100 bg-white shadow-2xl ${contractsThemeClass}`}>
-              {/* Header */}
-              <div className="flex items-center justify-between border-b border-slate-100 bg-white px-6 py-5 lg:px-8 lg:py-6">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-600">
-                    RENOVAÇÃO DE CONTRATO
-                  </p>
-                  <h2 className="mt-1 text-2xl font-black text-slate-950">
-                    Renovar contrato
-                  </h2>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">
-                    Atualize a data final e o valor para manter o contrato ativo.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleCloseRenewalModal}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-900"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              {/* Body */}
-              <div className="flex-1 overflow-y-auto bg-slate-50/50 px-6 py-6 lg:px-8 lg:py-8">
-                <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
-                      <RefreshCw className="h-6 w-6" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-slate-900">
-                        {renewalContract.propertyName || "Contrato"}
-                      </p>
-                      <p className="mt-0.5 text-xs font-semibold text-slate-500">
-                        {renewalContract.tenantName || "Pessoa não informada"} <span className="mx-1">•</span> Vence em {formatDate(renewalContract.endDate)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-6 grid gap-5 md:grid-cols-2">
-                  <FormField label="Nova data final" required>
-                    <input
-                      type="date"
-                      value={renewalEndDate}
-                      onChange={(event) => {
-                        setRenewalEndDate(event.target.value);
-                        setRenewalError("");
-                      }}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                    />
-                  </FormField>
-
-                  <FormField label="Novo valor do aluguel" required>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={renewalRentValue}
-                      onChange={(event) => {
-                        setRenewalRentValue(formatCurrencyInput(event.target.value));
-                        setRenewalError("");
-                      }}
-                      placeholder="R$ 0,00"
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                    />
-                  </FormField>
-                </div>
-
-                <div className="mt-5">
-                  <label className="mb-2 block text-sm font-black text-slate-700">
-                    Observação da renovação
-                  </label>
-                  <textarea
-                    value={renewalNotes}
-                    onChange={(event) => setRenewalNotes(event.target.value)}
-                    placeholder="Opcional: descreva alguma condição da renovação"
-                    rows={3}
-                    className="w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                  />
-                </div>
-
-                {renewalError && (
-                  <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
-                    {renewalError}
-                  </div>
-                )}
-              </div>
-
-              {/* Footer */}
-              <div className="flex flex-col-reverse items-center justify-end gap-3 border-t border-slate-100 bg-white px-6 py-5 sm:flex-row lg:px-8">
-                <button
-                  type="button"
-                  onClick={handleCloseRenewalModal}
-                  disabled={isRenewingContract}
-                  className="w-full rounded-2xl px-6 py-3.5 text-center text-sm font-black text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleConfirmContractRenewal}
-                  disabled={isRenewingContract}
-                  className="w-full rounded-2xl bg-emerald-600 px-6 py-3.5 text-center text-sm font-black text-white shadow-md shadow-emerald-100 transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70 sm:w-auto"
-                >
-                  {isRenewingContract ? "Renovando..." : "Confirmar renovação"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {promptParcelasContract && !printableAdendum && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
-            <div className={`w-full max-w-lg rounded-[2rem] border border-emerald-100 bg-white p-8 shadow-2xl ${contractsThemeClass}`}>
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-emerald-50 text-emerald-600">
-                <CheckCircle className="h-8 w-8" />
-              </div>
-
-              <div className="mt-5 text-center">
-                <h3 className="text-2xl font-black text-slate-950">
-                  Renovação concluída!
-                </h3>
-                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
-                  O contrato foi renovado com sucesso. Deseja gerar o faturamento (parcelas) do novo período agora?
-                </p>
-              </div>
-
-              <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => setPromptParcelasContract(null)}
-                  className="w-full rounded-2xl bg-slate-100 px-6 py-3.5 text-center text-sm font-black text-slate-700 transition hover:bg-slate-200"
-                >
-                  Não, talvez depois
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPromptParcelasContract(null);
-                    openReceivableChargeFromContract(promptParcelasContract);
-                  }}
-                  className="w-full rounded-2xl bg-emerald-600 px-6 py-3.5 text-center text-sm font-black text-white shadow-md shadow-emerald-100 transition hover:bg-emerald-700"
-                >
-                  Sim, gerar parcelas
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {finishContract && (() => {
-          const finishContractSummary = getContractReceivableSummary(finishContract);
-          const hasPendingReceivables =
-            finishContractSummary.pendingCharges.length > 0 ||
-            finishReasonError.toLowerCase().includes("conta(s) a receber") ||
-            finishReasonError.toLowerCase().includes("contas a receber");
-
-          return (
-            <div className="fixed inset-0 z-[68] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
-              <div className={`w-full max-w-lg rounded-[2rem] border border-red-100 bg-white p-8 shadow-2xl ${contractsThemeClass}`}>
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 text-red-600">
-                  <CheckCircle className="h-8 w-8" />
-                </div>
-
-                <div className="mt-5 text-center">
-                  <h3 className="text-2xl font-black text-slate-950">
-                    Finalizar contrato
-                  </h3>
-                  <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
-                    Ao confirmar, o contrato será finalizado e o bem/ativo ficará disponível para uma nova locação.
-                  </p>
-                </div>
-
-                <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
-                  <p className="text-sm font-black text-slate-900">
-                    {finishContract.propertyName || "Contrato"}
-                  </p>
-                  <p className="mt-1 text-xs font-semibold text-slate-500">
-                    {finishContract.tenantName || "Pessoa não informada"}
-                  </p>
-                </div>
-
-                <div className="mt-5">
-                  <label className="mb-2 block text-sm font-black text-slate-700">
-                    Motivo da finalização
-                    <span className="ml-1 text-red-500">*</span>
-                  </label>
-                  <textarea
-                    value={finishReason}
-                    onChange={(event) => {
-                      setFinishReason(event.target.value);
-                      setFinishReasonError("");
-                    }}
-                    placeholder="Descreva o motivo da finalização do contrato"
-                    rows={4}
-                    className="w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                  />
-
-                  {finishReasonError && (
-                    <div className="mt-3 flex flex-col gap-3 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-bold text-red-700">
-                      <div className="flex items-start gap-2">
-                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
-                        <span>{finishReasonError}</span>
-                      </div>
-                      {hasPendingReceivables && (
-                        <Link
-                          href={`/contas-receber?fromContract=1&contractId=${finishContract.id}`}
-                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-black text-white shadow-sm transition hover:bg-red-700"
-                        >
-                          <span>Abrir Contas a Receber para abatimento</span>
-                          <ExternalLink className="h-4 w-4" />
-                        </Link>
-                      )}
-                    </div>
-                  )}
-
-                  {!finishReasonError && finishContractSummary.pendingCharges.length > 0 && (
-                    <div className="mt-3 flex flex-col gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 p-3.5 text-xs font-bold text-amber-800">
-                      <div className="flex items-start gap-2">
-                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                        <span>
-                          Atenção: Este contrato possui {finishContractSummary.pendingCharges.length} conta(s) a receber em aberto.
-                        </span>
-                      </div>
-                      <Link
-                        href={`/contas-receber?fromContract=1&contractId=${finishContract.id}`}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-600 px-3.5 py-2 text-xs font-black text-white transition hover:bg-amber-700"
-                      >
-                        <span>Abrir Contas a Receber para abatimento</span>
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </Link>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-8 grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={handleCloseFinishModal}
-                    disabled={isFinishingContract}
-                    className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Cancelar
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleConfirmContractFinish}
-                    disabled={isFinishingContract}
-                    className="rounded-2xl bg-red-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {isFinishingContract ? "Finalizando..." : "Confirmar"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-        {printableContract && (
-          <div className="fixed inset-0 z-[75] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
-            <div className={`flex h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl ${contractsThemeClass}`}>
-              <div className="flex flex-col gap-4 border-b border-slate-100 bg-white px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-500">
-                    {printableContract.isTemporaryRental ? "Contrato temporário" : "Contrato padrão residencial"}
-                  </p>
-                  <h2 className="mt-1 text-2xl font-black text-slate-950">
-                    Visualização do contrato
-                  </h2>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">
-                    Confira o documento antes de gerar PDF ou imprimir.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  {!isEditingPrintableMinuta ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsEditingPrintableMinuta(true);
-                        if (printableContractFrameRef.current) {
-                          try {
-                            const doc = printableContractFrameRef.current.contentDocument;
-                            const contentEl = doc?.querySelector(".content") as HTMLElement;
-                            if (contentEl) {
-                              contentEl.focus();
-                            }
-                          } catch {}
-                        }
-                      }}
-                      className="flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
-                    >
-                      <Pencil className="h-4 w-4" />
-                      Editar Minuta
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        handleSavePrintableContractEdits();
-                        setIsEditingPrintableMinuta(false);
-                      }}
-                      className="flex items-center gap-2 rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
-                    >
-                      <Save className="h-4 w-4" />
-                      Salvar Edição
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={handleGeneratePrintableContractPdf}
-                    className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-md shadow-slate-100 transition hover:bg-slate-800"
-                  >
-                    Gerar PDF
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handlePrintPrintableContract}
-                    className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
-                  >
-                    Imprimir
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleClosePrintableContract}
-                    className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
-                  >
-                    Fechar
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 bg-slate-50 p-4 lg:p-6 overflow-hidden">
-                <iframe
-                  ref={printableContractFrameRef}
-                  title={getPrintableContractTitle(printableContract)}
-                  srcDoc={buildPrintableContractHtml(printableContract, false)}
-                  className="h-full w-full rounded-2xl border border-slate-200 bg-white shadow-inner"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {printableAdendum && (
-          <div className="fixed inset-0 z-[75] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
-            <div className={`flex h-[94vh] w-full max-w-7xl flex-col overflow-hidden rounded-[2rem] border border-emerald-100 bg-white shadow-2xl ${contractsThemeClass}`}>
-              <div className="flex flex-col gap-4 border-b border-slate-100 bg-white px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-600">
-                    Aditivo de Contrato
-                  </p>
-                  <h2 className="mt-1 text-2xl font-black text-slate-950">
-                    Visualização do aditivo
-                  </h2>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">
-                    Confira o documento antes de gerar PDF ou imprimir.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={handleClosePrintableAdendum}
-                    className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
-                  >
-                    Fechar
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      printableAdendumFrameRef.current?.contentWindow?.focus();
-                      printableAdendumFrameRef.current?.contentWindow?.print();
-                    }}
-                    className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-md shadow-slate-100 transition hover:bg-slate-800"
-                  >
-                    Imprimir / Gerar PDF
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 bg-slate-50 p-4 lg:p-6 overflow-hidden">
-                <iframe
-                  ref={printableAdendumFrameRef}
-                  title="Aditivo de Contrato"
-                  srcDoc={buildAdendumHtml(printableAdendum.contract, printableAdendum.renewal, false)}
-                  className="h-full w-full rounded-2xl border border-slate-200 bg-white shadow-inner"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {pendingEditConfirmation && (
-          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
-            <div className={`w-full max-w-lg rounded-[2rem] border border-orange-100 bg-white p-8 shadow-2xl ${contractsThemeClass}`}>
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 text-orange-600">
-                <Pencil className="h-8 w-8" />
-              </div>
-
-              <div className="mt-5 text-center">
-                <h3 className="text-2xl font-black text-slate-950">
-                  Editar contrato?
-                </h3>
-                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
-                  Este contrato ja foi cancelado, excluido ou finalizado. Deseja mesmo editar este contrato?
-                </p>
-              </div>
-
-              <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
-                <p className="text-sm font-black text-slate-900">
-                  {pendingEditConfirmation.propertyName || "Contrato"}
-                </p>
-                <p className="mt-1 text-xs font-semibold text-slate-500">
-                  {pendingEditConfirmation.tenantName || "Pessoa nao informada"}
-                </p>
-              </div>
-
-              <div className="mt-8 grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={handleCloseEditConfirmation}
-                  className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200"
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleConfirmEditContract}
-                  className="rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
-                >
-                  Editar contrato
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {pendingStatusChange && (
-          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
-            <div className={`w-full max-w-lg rounded-[2rem] border border-red-100 bg-white p-8 shadow-2xl ${contractsThemeClass}`}>
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-50 text-red-600">
-                {pendingStatusChange.nextStatus === "Deleted" ? (
-                  <Trash2 className="h-8 w-8" />
-                ) : (
-                  <Ban className="h-8 w-8" />
-                )}
-              </div>
-
-              <div className="mt-5 text-center">
-                <h3 className="text-2xl font-black text-slate-950">
-                  {pendingStatusChange.nextStatus === "Deleted"
-                      ? "Motivo da exclusão"
-                    : "Motivo do cancelamento"}
-                </h3>
-
-                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
-                  Ao confirmar, as parcelas em aberto vinculadas a este contrato serão removidas do Contas a Receber para manter o financeiro consistente.
-                </p>
-              </div>
-
-              <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
-                <p className="text-sm font-black text-slate-900">
-                  {pendingStatusChange.contract.propertyName || "Contrato"}
-                </p>
-                <p className="mt-1 text-xs font-semibold text-slate-500">
-                  {pendingStatusChange.contract.tenantName || "Pessoa não informada"}
-                </p>
-              </div>
-
-              <div className="mt-5">
-                <label className="mb-2 block text-sm font-black text-slate-700">
-                  Motivo
-                  <span className="ml-1 text-red-500">*</span>
-                </label>
-                <textarea
-                  value={statusReason}
-                  onChange={(event) => {
-                    setStatusReason(event.target.value);
-                    setStatusReasonError("");
-                  }}
-                  placeholder={
-                    pendingStatusChange.nextStatus === "Deleted"
-                       ? "Descreva o motivo da exclusão do contrato"
-                      : "Descreva o motivo do cancelamento do contrato"
-                  }
-                  rows={4}
-                  className="w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                />
-
-                {statusReasonError && (
-                  <div className="mt-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
-                    {statusReasonError}
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-8 grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={handleCancelStatusReason}
-                  disabled={isApplyingStatusChange}
-                  className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleConfirmStatusReason}
-                  disabled={isApplyingStatusChange}
-                  className="rounded-2xl bg-red-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-red-100 transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {isApplyingStatusChange ? "Processando..." : "Confirmar"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {completionModal && (
-          <AlertModal
-            icon={completionModal.icon || "✅"}
-            title={completionModal.title}
-            description={completionModal.description}
-            itemTitle={completionModal.itemTitle}
-            itemDetail={completionModal.itemDetail}
-            onClose={() => setCompletionModal(null)}
-          />
-        )}
-
-
-        {isDefaultTimeModalOpen && (
-          <div className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
-            <div className={`w-full max-w-lg rounded-[2rem] border border-orange-100 bg-white p-8 shadow-2xl ${contractsThemeClass}`}>
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 text-orange-600">
-                <Pencil className="h-8 w-8" />
-              </div>
-
-              <div className="mt-5 text-center">
-                <h3 className="text-2xl font-black text-slate-950">
-                  Editar horário padrão
-                </h3>
-                <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">
-                  Defina os horários que serão preenchidos ao clicar em Usar padrão.
-                </p>
-              </div>
-
-              <div className="mt-6 grid gap-5 md:grid-cols-2">
-                <FormField label="Entrada padrão">
-                  <input
-                    type="time"
-                    value={draftDefaultCheckInTime}
-                    onChange={(event) => setDraftDefaultCheckInTime(event.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                  />
-                </FormField>
-
-                <FormField label="Saída padrão">
-                  <input
-                    type="time"
-                    value={draftDefaultCheckOutTime}
-                    onChange={(event) => setDraftDefaultCheckOutTime(event.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                  />
-                </FormField>
-              </div>
-
-              <div className="mt-8 grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={handleCloseDefaultTimeModal}
-                  className="rounded-2xl bg-slate-100 px-5 py-4 text-sm font-black text-slate-700 transition hover:bg-slate-200"
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleSaveDefaultTemporaryRentalTimes}
-                  className="rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600"
-                >
-                  Salvar padrão
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {isFormOpen && isFormMinimized && (
-          <div className="contrx-minimized-modal fixed bottom-6 right-6 z-50 w-[min(30rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border-2 border-orange-300 bg-white shadow-2xl">
-            <div className="h-2 bg-orange-500" />
-            <div className="p-4">
-              <div className="flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="rounded-full bg-orange-100 px-3 py-1 text-[0.68rem] font-black uppercase tracking-wide text-orange-700">
-                      Minimizado
-                    </span>
-                    <span className="h-2 w-2 rounded-full bg-orange-500 shadow-[0_0_0_4px_rgb(249_115_22/0.16)]" />
-                  </div>
-                  <p className="truncate text-base font-black text-slate-950">
-                    {isEditing ? "Editar contrato" : "Novo contrato"}
-                  </p>
-                  <p className="truncate text-sm font-semibold text-slate-500">
-                    {properties.find((property) => String(property.id) === String(propertyId))?.name || "Contrato em andamento"}
-                  </p>
-                </div>
-
-                <div className="flex shrink-0 items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleRestoreForm}
-                    className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-200 transition hover:bg-orange-600"
-                    title="Restaurar modal"
-                    aria-label="Restaurar modal"
-                  >
-                    <Maximize2 className="h-5 w-5" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={resetForm}
-                    className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-slate-200"
-                    title="Fechar modal"
-                    aria-label="Fechar modal"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {isFormOpen && !isFormMinimized && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-8 backdrop-blur-sm">
-            <div className={`max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] border border-orange-100 bg-white shadow-2xl ${contractsThemeClass}`}>
-              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-8 py-6">
-                <div>
-                  <h2 className="text-2xl font-black text-slate-950">
-                    {isEditing ? "Editar contrato" : "Novo contrato"}
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Preencha os dados do contrato.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleMinimizeForm}
-                    className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-orange-50 hover:text-orange-600"
-                    title="Minimizar modal"
-                    aria-label="Minimizar modal"
-                  >
-                    <Minus className="h-5 w-5" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={resetForm}
-                    className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600 transition hover:bg-red-50 hover:text-red-600"
-                    title="Fechar modal"
-                    aria-label="Fechar modal"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-
-              <form onSubmit={handleSubmitContract}>
-                <div className="p-8">
-                  {formError && (
-                    <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-black text-red-600">
-                      {formError}
-                    </div>
-                  )}
-
-                  <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-                    <FormField label="Bem/Ativo" required>
-                      <select
-                        value={propertyId}
-                        onChange={(event) => handlePropertyChange(event.target.value)}
-                        required
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                      >
-                        <option value="">Selecione um bem/ativo</option>
-
-                        {availableProperties.map((property) => (
-                          <option key={property.id} value={property.id}>
-                            {getPropertyOptionLabel(property)}
-                          </option>
-                        ))}
-                      </select>
-                    </FormField>
-
-                    <FormField label="Pessoa" required>
-                      <select
-                        value={tenantId}
-                        onChange={(event) => {
-                          setTenantId(event.target.value);
-                          setFormError("");
-                        }}
-                        required
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                      >
-                        <option value="">Selecione uma pessoa</option>
-                        {availableTenants.map((tenant) => (
-                          <option key={tenant.id} value={tenant.id}>
-                            {tenant.name}
-                          </option>
-                        ))}
-                      </select>
-                    </FormField>
-
-                    <FormField label="Valor aluguel" required>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        value={rentValue}
-                        onChange={(event) => {
-                          setRentValue(formatCurrencyInput(event.target.value));
-                          setFormError("");
-                        }}
-                        placeholder="R$ 0,00"
-                        required
-                        className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                      />
-                    </FormField>
-
-                    <FormField label="Data início" required>
-                      <input
-                        type="date"
-                        value={startDate}
-                        onChange={(event) => {
-                          setStartDate(event.target.value);
-                          setFormError("");
-                        }}
-                        required
-                        className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                      />
-                    </FormField>
-
-                    <FormField label="Data fim" required>
-                      <input
-                        type="date"
-                        value={endDate}
-                        onChange={(event) => {
-                          setEndDate(event.target.value);
-                          setFormError("");
-                        }}
-                        required
-                        className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                      />
-                    </FormField>
-
-                    <div className="rounded-3xl border border-orange-100 bg-orange-50 px-5 py-4">
-                      <p className="text-sm font-black text-slate-800">Status automático</p>
-                      <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
-                        O contrato novo entra como ativo. Cancelamento, finalização e exclusão ficam nas ações do contrato, sempre com registro de motivo quando necessário.
-                      </p>
-                    </div>
-                  </div>
-
-                  <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-2xl border border-orange-100 bg-orange-50 px-5 py-4 transition hover:bg-orange-50">
-                    <input
-                      type="checkbox"
-                      checked={isTemporaryRental}
-                      onChange={(event) => {
-                        const checked = event.target.checked;
-                        setIsTemporaryRental(checked);
-
-                        if (!checked) {
-                          setCheckInTime("");
-                          setCheckOutTime("");
-                        }
-                      }}
-                      className="mt-1 h-5 w-5 rounded border-slate-300 accent-orange-500"
-                    />
-
-                    <div>
-                      <p className="text-sm font-black text-slate-800">
-                        Este contrato é de locação temporária
-                      </p>
-                      <p className="mt-1 text-xs font-semibold text-slate-500">
-                        Use esta opção para contratos de curto prazo. Esta marcação será utilizada na impressão e no modelo do contrato.
-                      </p>
-                    </div>
-                  </label>
-
-                  {isTemporaryRental && (
-                    <div className="mt-5 rounded-3xl border border-orange-100 bg-orange-50 px-5 py-5">
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                        <div>
-                          <h3 className="text-sm font-black text-slate-800">
-                            Horários da locação temporária
-                          </h3>
-                          <p className="mt-1 text-xs font-semibold text-slate-500">
-                            Campos opcionais. Caso não informe, o contrato será gerado sem horários definidos.
-                          </p>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={handleApplyDefaultTemporaryRentalTimes}
-                            className="rounded-2xl bg-orange-500/15 px-4 py-3 text-xs font-black text-orange-700 transition hover:bg-orange-500/25"
-                          >
-                            Usar padrão
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={handleOpenDefaultTimeModal}
-                            className="rounded-2xl bg-slate-100 px-4 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-200"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="mt-5 grid gap-5 md:grid-cols-2">
-                        <FormField label="Hora de entrada (check-in) (opcional)">
-                          <input
-                            type="time"
-                            value={checkInTime}
-                            onChange={(event) => {
-                              setCheckInTime(event.target.value);
-                              setFormError("");
-                            }}
-                            className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                          />
-                        </FormField>
-
-                        <FormField label="Hora de saída (check-out) (opcional)">
-                          <input
-                            type="time"
-                            value={checkOutTime}
-                            onChange={(event) => {
-                              setCheckOutTime(event.target.value);
-                              setFormError("");
-                            }}
-                            className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                          />
-                        </FormField>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-100 bg-white px-8 py-6">
-                  <button
-                    type="button"
-                    onClick={resetForm}
-                    className="rounded-2xl bg-slate-100 px-6 py-4 text-sm font-black text-slate-600 transition hover:bg-slate-200"
-                  >
-                    Cancelar
-                  </button>
-
-                  <button
-                    type="submit"
-                    disabled={isSavingContract}
-                    className="rounded-2xl bg-orange-500 px-6 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {isSavingContract
-                      ? "Salvando..."
-                      : isEditing
-                        ? "Salvar alterações"
-                        : "Criar contrato"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-      </div>
-    </>
-  );
-}
-
-type FormFieldProps = {
-  label: string;
-  children: React.ReactNode;
-  required?: boolean;
-};
-
-function FormField({ label, children, required = false }: FormFieldProps) {
-  return (
-    <div>
-      <label className="mb-2 block text-sm font-black text-slate-700">
-        {label}
-        {required ? <span className="ml-1 text-red-500">*</span> : null}
-      </label>
-      {children}
-    </div>
-  );
-}
-
-type SummaryCardProps = {
-  icon: React.ReactNode;
-  title: string;
-  value: string | number;
-  detail: string;
-};
-
-type ContractActionMenuProps = {
-  contract: Contract;
-  displayStatus: ContractDisplayStatus;
-  position: ActionMenuPosition;
-  canRenew: boolean;
-  canFinish: boolean;
-  canCancel: boolean;
-  canDelete: boolean;
-  onDetails: () => void;
-  onRenew: () => void;
-  onFinish: () => void;
-  onCancel: () => void;
-  onPrint: () => void;
-  onDelete: () => void;
-};
-
-function ContractActionMenu({
-  position,
-  canRenew,
-  canFinish,
-  canCancel,
-  canDelete,
-  onDetails,
-  onRenew,
-  onFinish,
-  onCancel,
-  onPrint,
-  onDelete,
-}: ContractActionMenuProps) {
-  return (
-    <div
-      data-contract-action-menu
-      className="fixed z-[90] w-56 rounded-3xl border border-slate-100 bg-white p-2 text-left shadow-2xl shadow-slate-300/40"
-      style={{ top: position.top, left: position.left }}
-    >
-      <ActionMenuButton onClick={onDetails} icon={<Eye className="h-4 w-4 shrink-0" />}>
-        Ver detalhes
-      </ActionMenuButton>
-
-      {canRenew && (
-        <ActionMenuButton
-          onClick={onRenew}
-          icon={<RefreshCw className="h-4 w-4 shrink-0" />}
-          className="text-emerald-700 hover:bg-emerald-50"
-        >
-          Renovar
-        </ActionMenuButton>
-      )}
-
-      {canFinish && (
-        <ActionMenuButton
-          onClick={onFinish}
-          icon={<CheckCircle className="h-4 w-4 shrink-0" />}
-          className="text-red-600 hover:bg-red-50"
-        >
-          Finalizar
-        </ActionMenuButton>
-      )}
-
-      {canCancel && (
-        <ActionMenuButton
-          onClick={onCancel}
-          icon={<Ban className="h-4 w-4 shrink-0" />}
-          className="text-red-600 hover:bg-red-50"
-        >
-          Cancelar
-        </ActionMenuButton>
-      )}
-
-      <ActionMenuButton
-        onClick={onPrint}
-        icon={<FileText className="h-4 w-4 shrink-0" />}
-        className="text-orange-600 hover:bg-orange-50"
-      >
-        Gerar contrato
-      </ActionMenuButton>
-
-
-
-      {canDelete && (
-        <ActionMenuButton
-          onClick={onDelete}
-          icon={<Trash2 className="h-4 w-4 shrink-0" />}
-          className="text-zinc-700 hover:bg-zinc-100"
-        >
-          Excluir
-        </ActionMenuButton>
-      )}
-    </div>
-  );
-}
-
-function ActionMenuButton({
-  children,
-  className = "text-slate-700 hover:bg-slate-100",
-  icon,
-  onClick,
-}: {
-  children: React.ReactNode;
-    className?: string;
-  icon: React.ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-sm font-black transition ${className}`}
-    >
-      {icon}
-      <span>{children}</span>
-    </button>
-  );
-}
-
-function SummaryCard({ icon, title, value, detail }: SummaryCardProps) {
-  return (
-    <div className="flex items-center gap-4 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-600">
-        {icon}
-      </div>
-
-      <div className="min-w-0">
-        <p className="truncate text-xs font-bold text-slate-500">{title}</p>
-        <h3 className="mt-1 truncate text-xl font-black text-slate-950">{value}</h3>
-        <p className="mt-1 truncate text-xs font-bold text-orange-600">{detail}</p>
-      </div>
-    </div>
-  );
-}
-
-function getContractStatusLabel(status: ContractDisplayStatus) {
-  const statusConfig = {
-    Active: "Ativo",
-    Expiring: "Vencendo",
-    Expired: "Vencido",
-    Inactive: "Inativo",
-    Canceled: "Cancelado",
-    Finished: "Finalizado",
-    Deleted: "Excluído",
-  };
-
-  return statusConfig[status];
-}
-
-function StatusBadge({ status }: { status: ContractDisplayStatus }) {
-  const statusConfig = {
-    Active: { label: "Ativo", className: "bg-emerald-100 text-emerald-700" },
-    Expiring: { label: "⚠️ Vencendo", className: "bg-amber-100 text-amber-700 animate-pulse border border-amber-200" },
-    Expired: { label: "🚨 Vencido", className: "bg-red-100 text-red-700 font-extrabold border border-red-200" },
-    Inactive: { label: "Inativo", className: "bg-slate-100 text-slate-600" },
-    Canceled: { label: "Cancelado", className: "bg-red-100 text-red-700" },
-    Finished: { label: "Finalizado", className: "bg-blue-100 text-blue-700" },
-    Deleted: { label: "Excluído", className: "bg-zinc-200 text-zinc-700" },
-  };
-
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-black ${statusConfig[status].className}`}>
-      {statusConfig[status].label}
-    </span>
-  );
-}
-
-function DetailCard({
-  title,
-  value,
-  detail,
-}: {
-  title: string;
-  value: React.ReactNode;
-  detail?: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
-      <p className="text-xs font-black uppercase tracking-wide text-slate-500">{title}</p>
-      <div className="mt-3 text-lg font-black text-slate-950">{value}</div>
-      {detail && <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">{detail}</p>}
-    </div>
-  );
-}
-
-function TimelineItem({
-  icon,
-  title,
-  description,
-  date,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  date: string;
-}) {
-  return (
-    <div className="flex gap-4 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-xl">
-        {icon}
-      </div>
-      <div>
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-base font-black text-slate-950">{title}</h3>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">{date}</span>
-        </div>
-        <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">{description}</p>
-      </div>
-    </div>
-  );
-}
-
-function getContractSortTime(contract: Contract) {
-  const dateCandidates = [
-    contract.createdAt,
-    contract.updatedAt,
-    contract.startDate,
-    contract.endDate,
-  ];
-
-  for (const dateCandidate of dateCandidates) {
-    if (!dateCandidate) {
-      continue;
-    }
-
-    const timestamp = new Date(dateCandidate).getTime();
-
-    if (Number.isFinite(timestamp)) {
-      return timestamp;
-    }
-  }
-
-  return 0;
-}
-
-function mapApiContractToContract(apiContract: ApiContract): Contract {
-  const propertyName =
-    apiContract.propertyName ||
-    apiContract.property?.title ||
-    "BEM/ATIVO NÃO INFORMADO";
-  const tenantName =
-    apiContract.tenantName ||
-    apiContract.tenant?.name ||
-    "LOCATÁRIO NÃO INFORMADO";
-
-  return {
-    id: apiContract.id,
-    propertyId: apiContract.propertyId,
-    propertyName: toUpperText(propertyName),
-    tenantId: apiContract.tenantId,
-    tenantName,
-    startDate: formatApiDateForInput(apiContract.startDate),
-    endDate: formatApiDateForInput(apiContract.endDate),
-    rentValue: Number(apiContract.rentValue || 0),
-    status: mapApiContractStatus(apiContract.status),
-    deletedAt: apiContract.deletedAt || null,
-    statusReason: apiContract.statusReason || null,
-    statusReasonType: mapApiContractStatusReasonType(apiContract.statusReasonType),
-    statusReasonAt: apiContract.statusReasonAt || null,
-    isTemporaryRental: apiContract.isTemporaryRental ?? false,
-    checkInTime: apiContract.checkInTime || "",
-    checkOutTime: apiContract.checkOutTime || "",
-    renewedAt: apiContract.renewedAt || null,
-    renewalHistory: Array.isArray(apiContract.renewalHistory)
-      ? apiContract.renewalHistory.map(mapApiRenewalRecord)
-      : [],
-    finishedAt: apiContract.finishedAt || null,
-    finishReason: apiContract.finishReason || null,
-    createdAt: apiContract.createdAt,
-    updatedAt: apiContract.updatedAt,
-  };
-}
-
-function mapReceivableAccountToCharge(account: ReceivableAccount): ReceivableCharge {
-  return {
-    id: account.id,
-    contractId: account.contractId || null,
-    property: account.propertyName,
-    tenant: account.tenantName,
-    dueDate: account.dueDate,
-    amount: normalizeApiAmount(account.amount),
-    status: account.status === "PAID" ? "Paid" : "Pending",
-    manual: account.manual,
-    issueDate: account.issueDate || undefined,
-    installmentNumber: account.installmentNumber || undefined,
-    installmentTotal: account.installmentTotal || undefined,
-    installmentGroupId: account.installmentGroupId || undefined,
-  };
-}
-
-function normalizeApiAmount(value: unknown) {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : 0;
-  }
-
-  if (typeof value === "string") {
-    const parsedValue = Number(value);
-
-    return Number.isFinite(parsedValue) ? parsedValue : 0;
-  }
-
-  return 0;
-}
-
-function mapApiPropertyToProperty(
-  apiProperty: ApiProperty,
-  contracts: Contract[],
-): Property {
-  const hasActiveContract = contracts.some(
-    (contract) =>
-      String(contract.propertyId) === String(apiProperty.id) &&
-      ["Active", "Expiring"].includes(getDisplayContractStatus(contract)) &&
-      contract.status !== "Deleted" &&
-      !contract.isTemporaryRental,
-  );
-
-  return {
-    id: apiProperty.id,
-    name: toUpperText(apiProperty.title || ""),
-    assetCategory: apiProperty.assetCategory || "PROPERTY",
-    rentValue: Number(apiProperty.rentalValue || 0),
-    status: hasActiveContract ? "Rented" : "Available",
-    isActive: apiProperty.isActive ?? true,
-    zipCode: apiProperty.zipCode || "",
-    state: toUpperText(apiProperty.state || ""),
-    city: toUpperText(apiProperty.city || ""),
-    street: toUpperText(apiProperty.address || ""),
-    number: toUpperText(apiProperty.number || ""),
-    neighborhood: toUpperText(apiProperty.district || ""),
-    complement: toUpperText(apiProperty.complement || ""),
-  };
-}
-
-function mapApiPersonToTenant(apiPerson: ApiPerson): ContrxTenant {
-  return {
-    id: apiPerson.id,
-    name: apiPerson.name,
-    isTenant: apiPerson.isTenant !== false,
-    isActive: apiPerson.status === "ACTIVE",
-    personType: apiPerson.type === "COMPANY" ? "Company" : "Individual",
-    cpf: apiPerson.document,
-    document: apiPerson.document,
-    email: apiPerson.email || "",
-    phone: apiPerson.phone || "",
-    zipCode: apiPerson.zipCode || "",
-    state: apiPerson.state || "",
-    city: apiPerson.city || "",
-    street: apiPerson.address || "",
-  };
-}
-
-function buildContractPayload(contract: Contract): CreateContractDto | UpdateContractDto {
-  return {
-    propertyId: contract.propertyId,
-    tenantId: contract.tenantId,
-    propertyName: contract.propertyName,
-    tenantName: contract.tenantName,
-    startDate: contract.startDate,
-    endDate: contract.endDate,
-    rentValue: Number(contract.rentValue || 0),
-    status: mapContractStatusToApi(contract.status || "Active"),
-    deletedAt: contract.deletedAt || null,
-    statusReason: contract.statusReason || null,
-    statusReasonType: mapContractStatusReasonTypeToApi(contract.statusReasonType),
-    statusReasonAt: contract.statusReasonAt || null,
-    isTemporaryRental: contract.isTemporaryRental ?? false,
-    checkInTime: contract.checkInTime || "",
-    checkOutTime: contract.checkOutTime || "",
-    renewedAt: contract.renewedAt || null,
-    renewalHistory: contract.renewalHistory || [],
-    finishedAt: contract.finishedAt || null,
-    finishReason: contract.finishReason || null,
-  };
-}
-
-function mapApiRenewalRecord(record: ApiContractRenewalRecord): ContractRenewalRecord {
-  return {
-    renewedAt: record.renewedAt,
-    previousEndDate: formatApiDateForInput(record.previousEndDate),
-    newEndDate: formatApiDateForInput(record.newEndDate),
-    previousRentValue: Number(record.previousRentValue || 0),
-    newRentValue: Number(record.newRentValue || 0),
-    notes: record.notes,
-  };
-}
-
-function mapApiContractStatus(status: ApiContractStatus): ContractStatus {
-  const statusMap: Record<ApiContractStatus, ContractStatus> = {
-    ACTIVE: "Active",
-    INACTIVE: "Inactive",
-    CANCELED: "Canceled",
-    FINISHED: "Finished",
-    DELETED: "Deleted",
-  };
-
-  return statusMap[status] || "Inactive";
-}
-
-function mapContractStatusToApi(status: ContractStatus): ApiContractStatus {
-  const statusMap: Record<ContractStatus, ApiContractStatus> = {
-    Active: "ACTIVE",
-    Inactive: "INACTIVE",
-    Canceled: "CANCELED",
-    Finished: "FINISHED",
-    Deleted: "DELETED",
-  };
-
-  return statusMap[status] || "INACTIVE";
-}
-
-function mapApiContractStatusReasonType(
-  value?: ApiContractStatusReasonType | null,
-): Contract["statusReasonType"] {
-  if (value === "CANCELED") return "Canceled";
-  if (value === "DELETED") return "Deleted";
-  return null;
-}
-
-function mapContractStatusReasonTypeToApi(
-  value?: Contract["statusReasonType"],
-): ApiContractStatusReasonType | null {
-  if (value === "Canceled") return "CANCELED";
-  if (value === "Deleted") return "DELETED";
-  return null;
-}
-
-function formatApiDateForInput(value: string) {
-  if (!value) return "";
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return value;
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
-
-function syncPropertiesWithContracts(contracts: Contract[], properties: Property[]): Property[] {
-  return properties.map((property) => {
-  const hasActiveContract = contracts.some(
-    (contract) =>
-      String(contract.propertyId) === String(property.id) &&
-      ["Active", "Expiring"].includes(getDisplayContractStatus(contract)) &&
-      contract.status !== "Deleted" &&
-      !contract.isTemporaryRental
-  );
-
-    return {
-      ...property,
-      name: toUpperText(property.name || ""),
-      status: hasActiveContract ? "Rented" : "Available",
-      isActive: property.isActive ?? true,
-    };
-  });
-}
-
-function getDisplayContractStatus(contract: Contract): ContractDisplayStatus {
-  if (contract.status === "Deleted") return "Deleted";
-  if (contract.status === "Canceled") return "Canceled";
-  if (contract.status === "Finished") return "Finished";
-  if (contract.status === "Inactive") return "Inactive";
-
-  const automaticStatus = getAutomaticContractStatus(contract.endDate);
-
-  if (automaticStatus === "Active" && isContractExpiring(contract.endDate)) {
-    return "Expiring";
-  }
-
-  return automaticStatus;
-}
-
-function getAutomaticContractStatus(endDate: string): "Active" | "Inactive" | "Expired" {
-  if (!endDate) return "Inactive";
-
-  const today = new Date();
-  const contractEndDate = new Date(`${endDate}T23:59:59`);
-
-  return contractEndDate >= today ? "Active" : "Expired";
-}
-
-function isContractExpiring(endDate: string) {
-  const daysUntilEndDate = getDaysUntilDate(endDate);
-
-  return daysUntilEndDate >= 0 && daysUntilEndDate <= EXPIRING_CONTRACT_DAYS_LIMIT;
-}
-
-function getDaysUntilDate(value: string) {
-  if (!value) return -1;
-
-  const today = new Date();
-  const endDate = new Date(`${value}T00:00:00`);
-  const millisecondsPerDay = 1000 * 60 * 60 * 24;
-
-  today.setHours(0, 0, 0, 0);
-
-  if (Number.isNaN(endDate.getTime())) {
-    return -1;
-  }
-
-  return Math.round((endDate.getTime() - today.getTime()) / millisecondsPerDay);
-}
-
-function buildStandardResidentialContractHtml(
-  contract: Contract,
-  property?: Property,
-  tenant?: ContrxTenant,
-  showToolbar = true
-) {
-  const companySettings = getCompanySettingsForContractPrint();
-  const landlordName =
-    companySettings.legalName || companySettings.name || "LOCADOR NÃO INFORMADO";
-  const landlordDocument = formatDocumentForPrint(companySettings.document || "");
-  const landlordAddress = formatFullAddressForPrint({
-    street: companySettings.street,
-    number: companySettings.number,
-    neighborhood: companySettings.neighborhood,
-    city: companySettings.city,
-    state: companySettings.state,
-    zipCode: companySettings.zipCode,
-    complement: companySettings.complement,
-  });
-  const tenantName = contract.tenantName || tenant?.name || "LOCATÁRIO NÃO INFORMADO";
-  const tenantDocument = formatDocumentForPrint(tenant?.cpf || tenant?.document || "");
-  const tenantAddress = formatFullAddressForPrint({
-    street: tenant?.street,
-    number: tenant?.number,
-    neighborhood: tenant?.neighborhood,
-    city: tenant?.city,
-    state: tenant?.state,
-    zipCode: tenant?.zipCode,
-    complement: tenant?.complement,
-  });
-  const propertyName = contract.propertyName || property?.name || "BEM/ATIVO NÃO INFORMADO";
-  const assetCategory = property ? getAssetCategoryLabel(property.assetCategory) : "Imóvel";
-  const propertyAddress = formatFullAddressForPrint({
-    street: property?.street,
-    number: property?.number,
-    neighborhood: property?.neighborhood,
-    city: property?.city,
-    state: property?.state,
-    zipCode: property?.zipCode,
-    complement: property?.complement,
-  });
-  const currentDate = new Date();
-  const locationText =
-    property?.city && property?.state
-      ? `${property.city}/${property.state}`
-      : companySettings.city && companySettings.state
-        ? `${companySettings.city}/${companySettings.state}`
-        : "______/__";
-  const durationInMonths = getContractDurationInMonths(contract.startDate, contract.endDate);
-  const monthlyAmount = formatCurrency(contract.rentValue);
-  const penaltyAmount = formatCurrency(Number(contract.rentValue || 0) * 3);
-  const dueDay = getContractRentDueDay(contract.startDate);
-  const templateData: TemplateData = {
-    companyName: landlordName,
-    tradeName: companySettings.name || landlordName,
-    landlordName,
-    landlordDocument: landlordDocument || "não informado",
-    landlordAddress: landlordAddress || "endereço não informado",
-    companyEmail: companySettings.email || "não informado",
-    companyPhone: companySettings.phone || "não informado",
-    personName: tenantName,
-    tenantName,
-    tenantDocument: tenantDocument || "não informado",
-    tenantAddress: tenantAddress || "endereço não informado",
-    tenantPhone: tenant?.phone || "não informado",
-    tenantEmail: tenant?.email || "não informado",
-    propertyName,
-    assetCategory,
-    propertyAddress: propertyAddress || "endereço não informado",
-    startDate: formatDate(contract.startDate),
-    endDate: formatDate(contract.endDate),
-    contractMonths: String(durationInMonths),
-    contractDays: String(getContractDurationInDays(contract.startDate, contract.endDate)),
-    amount: monthlyAmount,
-    rentValue: monthlyAmount,
-    monthlyAmount,
-    penaltyAmount,
-    dueDay: String(dueDay),
-    pixKey: companySettings.pixKey || "não informado",
-    contractCity: companySettings.contractCity || locationText,
-    currentDate: formatLongDateForPrint(currentDate),
-    contractDefaultNotes: companySettings.contractDefaultNotes || "",
-  };
-  const configuredTemplateContent = getConfiguredStandardContractTemplateContent();
-
-  return buildConfiguredContractHtml(
-    configuredTemplateContent || ORIGINAL_STANDARD_RESIDENTIAL_CONTRACT_TEMPLATE,
-    templateData,
-    showToolbar,
-    contract.id
-  );
-}
-
-function buildAssetContractHtml(
-  contract: Contract,
-  property?: Property,
-  tenant?: ContrxTenant,
-  showToolbar = true
-) {
-  const companySettings = getCompanySettingsForContractPrint();
-  const landlordName =
-    companySettings.legalName || companySettings.name || "LOCADOR NÃO INFORMADO";
-  const landlordDocument = formatDocumentForPrint(companySettings.document || "");
-  const landlordAddress = formatFullAddressForPrint({
-    street: companySettings.street,
-    number: companySettings.number,
-    neighborhood: companySettings.neighborhood,
-    city: companySettings.city,
-    state: companySettings.state,
-    zipCode: companySettings.zipCode,
-    complement: companySettings.complement,
-  });
-  const tenantName = contract.tenantName || tenant?.name || "LOCATÁRIO NÃO INFORMADO";
-  const tenantDocument = formatDocumentForPrint(tenant?.cpf || tenant?.document || "");
-  const tenantAddress = formatFullAddressForPrint({
-    street: tenant?.street,
-    number: tenant?.number,
-    neighborhood: tenant?.neighborhood,
-    city: tenant?.city,
-    state: tenant?.state,
-    zipCode: tenant?.zipCode,
-    complement: tenant?.complement,
-  });
-  const propertyName = contract.propertyName || property?.name || "BEM/ATIVO NÃO INFORMADO";
-  const assetCategory = property ? getAssetCategoryLabel(property.assetCategory) : "Bem/Ativo";
-  const propertyAddress = formatFullAddressForPrint({
-    street: property?.street,
-    number: property?.number,
-    neighborhood: property?.neighborhood,
-    city: property?.city,
-    state: property?.state,
-    zipCode: property?.zipCode,
-    complement: property?.complement,
-  });
-  const currentDate = new Date();
-  const locationText =
-    property?.city && property?.state
-      ? `${property.city}/${property.state}`
-      : companySettings.city && companySettings.state
-        ? `${companySettings.city}/${companySettings.state}`
-        : "______/__";
-  const monthlyAmount = formatCurrency(contract.rentValue);
-  const templateData: TemplateData = {
-    companyName: landlordName,
-    tradeName: companySettings.name || landlordName,
-    landlordName,
-    landlordDocument: landlordDocument || "não informado",
-    landlordAddress: landlordAddress || "endereço não informado",
-    companyEmail: companySettings.email || "não informado",
-    companyPhone: companySettings.phone || "não informado",
-    personName: tenantName,
-    tenantName,
-    tenantDocument: tenantDocument || "não informado",
-    tenantAddress: tenantAddress || "endereço não informado",
-    tenantPhone: tenant?.phone || "não informado",
-    tenantEmail: tenant?.email || "não informado",
-    propertyName,
-    assetCategory,
-    propertyAddress: propertyAddress || "não informado",
-    startDate: formatDate(contract.startDate),
-    endDate: formatDate(contract.endDate),
-    contractMonths: String(getContractDurationInMonths(contract.startDate, contract.endDate)),
-    contractDays: String(getContractDurationInDays(contract.startDate, contract.endDate)),
-    amount: monthlyAmount,
-    rentValue: monthlyAmount,
-    monthlyAmount,
-    penaltyAmount: formatCurrency(Number(contract.rentValue || 0) * 3),
-    dueDay: String(getContractRentDueDay(contract.startDate)),
-    pixKey: companySettings.pixKey || "não informado",
-    contractCity: companySettings.contractCity || locationText,
-    currentDate: formatLongDateForPrint(currentDate),
-    contractDefaultNotes: companySettings.contractDefaultNotes || "",
-  };
-  const configuredTemplateContent = getConfiguredAssetContractTemplateContent();
-
-  return buildConfiguredContractHtml(
-    configuredTemplateContent || DEFAULT_ASSET_CONTRACT_TEMPLATE,
-    templateData,
-    showToolbar,
-    contract.id
-  );
-}
-
-function buildTemporaryRentalContractHtml(
-  contract: Contract,
-  property?: Property,
-  tenant?: ContrxTenant,
-  showToolbar = true
-) {
-  const companySettings = getCompanySettingsForContractPrint();
-  const landlordName =
-    companySettings.legalName || companySettings.name || "LOCADOR NÃO INFORMADO";
-  const landlordDocument = formatDocumentForPrint(companySettings.document || "");
-  const landlordAddress = formatFullAddressForPrint({
-    street: companySettings.street,
-    number: companySettings.number,
-    neighborhood: companySettings.neighborhood,
-    city: companySettings.city,
-    state: companySettings.state,
-    zipCode: companySettings.zipCode,
-    complement: companySettings.complement,
-  });
-  const tenantName = contract.tenantName || tenant?.name || "LOCATÁRIO NÃO INFORMADO";
-  const tenantDocument = formatDocumentForPrint(tenant?.cpf || tenant?.document || "");
-  const tenantAddress = formatFullAddressForPrint({
-    street: tenant?.street,
-    number: tenant?.number,
-    neighborhood: tenant?.neighborhood,
-    city: tenant?.city,
-    state: tenant?.state,
-    zipCode: tenant?.zipCode,
-    complement: tenant?.complement,
-  });
-  const propertyName = contract.propertyName || property?.name || "BEM/ATIVO NÃO INFORMADO";
-  const assetCategory = property ? getAssetCategoryLabel(property.assetCategory) : "Bem/Ativo";
-  const propertyAddress = formatFullAddressForPrint({
-    street: property?.street,
-    number: property?.number,
-    neighborhood: property?.neighborhood,
-    city: property?.city,
-    state: property?.state,
-    zipCode: property?.zipCode,
-    complement: property?.complement,
-  });
-  const currentDate = new Date();
-  const locationText =
-    companySettings.contractCity ||
-    (property?.city && property?.state
-      ? `${property.city}/${property.state}`
-      : companySettings.city && companySettings.state
-        ? `${companySettings.city}/${companySettings.state}`
-        : "______/__");
-  const configuredTemplateContent = getConfiguredTemporaryContractTemplateContent();
-  const templateData: TemplateData = {
-    companyName: landlordName,
-    tradeName: companySettings.name || landlordName,
-    landlordName,
-    landlordDocument: landlordDocument || "não informado",
-    landlordAddress: landlordAddress || "endereço não informado",
-    companyEmail: companySettings.email || "não informado",
-    companyPhone: companySettings.phone || "não informado",
-    personName: tenantName,
-    tenantName,
-    tenantDocument: tenantDocument || "não informado",
-    tenantAddress: tenantAddress || "endereço não informado",
-    tenantPhone: tenant?.phone || "não informado",
-    tenantEmail: tenant?.email || "não informado",
-    propertyName,
-    assetCategory,
-    propertyAddress: propertyAddress || "endereço não informado",
-    startDate: formatDate(contract.startDate),
-    endDate: formatDate(contract.endDate),
-    entryTime: contract.checkInTime || "____:____",
-    exitTime: contract.checkOutTime || "____:____",
-    checkInTime: contract.checkInTime || "____:____",
-    checkOutTime: contract.checkOutTime || "____:____",
-    contractDays: String(getContractDurationInDays(contract.startDate, contract.endDate)),
-    contractMonths: String(getContractDurationInMonths(contract.startDate, contract.endDate)),
-    amount: formatCurrency(contract.rentValue),
-    rentValue: formatCurrency(contract.rentValue),
-    monthlyAmount: formatCurrency(contract.rentValue),
-    penaltyAmount: formatCurrency(Number(contract.rentValue || 0) * 3),
-    dueDay: String(getContractRentDueDay(contract.startDate)),
-    pixKey: companySettings.pixKey || "não informado",
-    contractCity: locationText,
-    currentDate: formatLongDateForPrint(currentDate),
-    contractDefaultNotes: companySettings.contractDefaultNotes || "",
-  };
-
-  return buildConfiguredTemporaryContractHtml(
-    configuredTemplateContent || DEFAULT_SETTINGS_TEMPORARY_CONTRACT_CONTENT,
-    templateData,
-    showToolbar,
-    contract.id
-  );
-}
-
-
-type TemplateData = Record<string, string>;
-
-function getConfiguredTemporaryContractTemplateContent() {
-  try {
-    const parsedTemplates = getCachedPrintTemplates();
-
-    if (!parsedTemplates) return null;
-    const temporaryContractTemplate = parsedTemplates.temporaryContract;
-    const legacyContractTemplate = parsedTemplates.contract;
-    let templateContent = "";
-
-    if (
-      temporaryContractTemplate &&
-      typeof temporaryContractTemplate === "object" &&
-      !Array.isArray(temporaryContractTemplate) &&
-      typeof (temporaryContractTemplate as { content?: unknown }).content === "string"
-    ) {
-      templateContent = (temporaryContractTemplate as { content: string }).content;
-    }
-
-    if (!templateContent && typeof legacyContractTemplate === "string") {
-      templateContent = legacyContractTemplate;
-    }
-
-    const cleanTemplateContent = templateContent.trim();
-
-    if (!cleanTemplateContent) return null;
-
-    if (
-      cleanTemplateContent === DEFAULT_SETTINGS_TEMPORARY_CONTRACT_CONTENT.trim() ||
-      cleanTemplateContent === LEGACY_SETTINGS_TEMPORARY_CONTRACT_CONTENT.trim()
-    ) {
-      return null;
-    }
-
-    return templateContent;
-  } catch {
-    return null;
-  }
-}
-
-
-function normalizeTemplateContent(value: string) {
-  return String(value || "")
-    .replace(/\r\n/g, "\n")
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-function getConfiguredStandardContractTemplateContent() {
-  try {
-    const parsedTemplates = getCachedPrintTemplates();
-
-    if (!parsedTemplates) return null;
-    const standardContractTemplate = parsedTemplates.standardContract;
-    let templateContent = "";
-
-    if (
-      standardContractTemplate &&
-      typeof standardContractTemplate === "object" &&
-      !Array.isArray(standardContractTemplate) &&
-      typeof (standardContractTemplate as { content?: unknown }).content === "string"
-    ) {
-      templateContent = (standardContractTemplate as { content: string }).content;
-    }
-
-    const cleanTemplateContent = templateContent.trim();
-
-    if (!cleanTemplateContent) return null;
-
-    const normalizedTemplateContent = normalizeTemplateContent(cleanTemplateContent);
-    const normalizedLegacyTemplateContent = normalizeTemplateContent(LEGACY_SETTINGS_STANDARD_CONTRACT_CONTENT);
-    const normalizedOriginalTemplateContent = normalizeTemplateContent(ORIGINAL_STANDARD_RESIDENTIAL_CONTRACT_TEMPLATE);
-
-    if (
-      normalizedTemplateContent === normalizedLegacyTemplateContent ||
-      normalizedTemplateContent === normalizedOriginalTemplateContent
-    ) {
-      return null;
-    }
-
-    return templateContent;
-  } catch {
-    return null;
-  }
-}
-
-function getConfiguredAssetContractTemplateContent() {
-  try {
-    const parsedTemplates = getCachedPrintTemplates();
-
-    if (!parsedTemplates) return null;
-    const assetContractTemplate = (parsedTemplates as { assetContract?: unknown }).assetContract;
-    let templateContent = "";
-
-    if (
-      assetContractTemplate &&
-      typeof assetContractTemplate === "object" &&
-      !Array.isArray(assetContractTemplate) &&
-      typeof (assetContractTemplate as { content?: unknown }).content === "string"
-    ) {
-      templateContent = (assetContractTemplate as { content: string }).content;
-    }
-
-    const cleanTemplateContent = templateContent.trim();
-
-    if (!cleanTemplateContent) return null;
-
-    if (normalizeTemplateContent(cleanTemplateContent) === normalizeTemplateContent(DEFAULT_ASSET_CONTRACT_TEMPLATE)) {
-      return null;
-    }
-
-    return templateContent;
-  } catch {
-    return null;
-  }
-}
-
-function buildConfiguredContractHtml(
-  templateContent: string,
-  templateData: TemplateData,
-  showToolbar: boolean,
-  contractId = ""
-) {
-  const renderedTemplateContent = renderTemporaryContractTemplate(templateContent, templateData);
-
-  return `<!doctype html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title></title>
-  <style>
-    @page { size: A4; margin: 0; }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; }
-    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
-    .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
-    .print-button { background: #f97316; color: #ffffff; }
-    .close-button { background: #f1f5f9; color: #334155; }
-    .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }
-    .page-inner { padding: 18mm; }
-    .content { white-space: pre-wrap; font-size: 12.5px; line-height: 1.65; font-weight: 600; }
-    @media print {
-      body { background: #ffffff; }
-      .toolbar { display: none; }
-      .page { width: 210mm; min-height: 297mm; margin: 0; box-shadow: none; }
-      .page-inner { padding: 18mm; }
-    }
-  </style>
-</head>
-<body>
-  ${showToolbar ? `<div class="toolbar">
-    <button class="close-button" onclick="window.close()">Fechar</button>
-    <button class="print-button" onclick="window.print()">Imprimir contrato</button>
-  </div>` : ""}
-
-  <main class="page">
-    <div class="page-inner">
-      <div class="content" contenteditable="${!showToolbar}" spellcheck="false">${escapeHtml(renderedTemplateContent)}</div>
-    </div>
-  </main>
-</body>
-</html>`;
-}
-
-function buildCustomContentContractHtml(customContent: string, showToolbar: boolean, contractId = "") {
-  return `<!doctype html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title></title>
-  <style>
-    @page { size: A4; margin: 0; }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; }
-    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
-    .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
-    .print-button { background: #f97316; color: #ffffff; }
-    .close-button { background: #f1f5f9; color: #334155; }
-    .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }
-    .page-inner { padding: 18mm; }
-    .content { white-space: pre-wrap; font-size: 12.5px; line-height: 1.65; font-weight: 600; }
-    @media print {
-      body { background: #ffffff; }
-      .toolbar { display: none; }
-      .page { width: 210mm; min-height: 297mm; margin: 0; box-shadow: none; }
-      .page-inner { padding: 18mm; }
-    }
-  </style>
-</head>
-<body>
-  ${showToolbar ? `<div class="toolbar">
-    <button class="close-button" onclick="window.close()">Fechar</button>
-    <button class="print-button" onclick="window.print()">Imprimir contrato</button>
-  </div>` : ""}
-
-  <main class="page">
-    <div class="page-inner">
-      <div class="content" contenteditable="${!showToolbar}" spellcheck="false">${customContent}</div>
-    </div>
-  </main>
-</body>
-</html>`;
-}
-
-function buildConfiguredTemporaryContractHtml(
-  templateContent: string,
-  templateData: TemplateData,
-  showToolbar: boolean,
-  contractId = ""
-) {
-  const renderedTemplateContent = renderTemporaryContractTemplate(templateContent, templateData);
-
-  return `<!doctype html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title></title>
-  <style>
-    @page { size: A4; margin: 0; }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; }
-    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
-    .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
-    .print-button { background: #f97316; color: #ffffff; }
-    .close-button { background: #f1f5f9; color: #334155; }
-    .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }
-    .page-inner { padding: 18mm; }
-    .content { white-space: pre-wrap; font-size: 12.5px; line-height: 1.65; font-weight: 600; }
-    @media print {
-      body { background: #ffffff; }
-      .toolbar { display: none; }
-      .page { width: 210mm; min-height: 297mm; margin: 0; box-shadow: none; }
-      .page-inner { padding: 18mm; }
-    }
-  </style>
-</head>
-<body>
-  ${showToolbar ? `<div class="toolbar">
-    <button class="close-button" onclick="window.close()">Fechar</button>
-    <button class="print-button" onclick="window.print()">Imprimir contrato</button>
-  </div>` : ""}
-
-  <main class="page">
-    <div class="page-inner">
-      <div class="content" contenteditable="${!showToolbar}" spellcheck="false">${escapeHtml(renderedTemplateContent)}</div>
-    </div>
-  </main>
-</body>
-</html>`;
-}
-
-function buildAdendumHtml(contract: Contract, renewal: ContractRenewalRecord, showToolbar: boolean) {
-  const companySettings = getCompanySettingsForContractPrint();
-  const landlordName = companySettings.legalName || companySettings.name || "LOCADOR NÃO INFORMADO";
-  const landlordDocument = formatDocumentForPrint(companySettings.document || "");
-  const tenantName = contract.tenantName || "LOCATÁRIO NÃO INFORMADO";
-  const propertyName = contract.propertyName || "BEM/ATIVO NÃO INFORMADO";
-  
-  const content = `ADITIVO DE RENOVAÇÃO DE CONTRATO DE LOCAÇÃO
-
-LOCADOR: ${landlordName}, Documento: ${landlordDocument || "não informado"}
-LOCATÁRIO: ${tenantName}
-IMÓVEL / BEM: ${propertyName}
-
-As partes acima qualificadas têm entre si, justo e contratado, o presente Termo Aditivo de Renovação de Contrato de Locação, que se regerá pelas seguintes cláusulas e condições:
-
-CLÁUSULA PRIMEIRA - DA RENOVAÇÃO
-Fica renovado o prazo de locação do imóvel/bem acima descrito, cujo término anterior era em ${formatDate(renewal.previousEndDate)}, passando o novo término para ${formatDate(renewal.newEndDate)}.
-
-CLÁUSULA SEGUNDA - DO VALOR DO ALUGUEL
-O valor do aluguel mensal que era de ${formatCurrency(renewal.previousRentValue)} passa a ser de ${formatCurrency(renewal.newRentValue)}, mantendo-se inalteradas as demais condições e datas de vencimento estabelecidas no contrato original.
-
-CLÁUSULA TERCEIRA - DA RATIFICAÇÃO
-Permanecem em pleno vigor e ratificam-se todas as demais cláusulas e condições do Contrato de Locação original que não tenham sido expressamente modificadas por este Aditivo.
-
-E, por estarem assim justas e contratadas, as partes assinam o presente aditivo em 02 (duas) vias de igual teor e forma.
-
-${companySettings.contractCity || "__________________"}, ${formatLongDateForPrint(new Date(renewal.renewedAt))}.
-
-_________________________________________________________
-LOCADOR: ${landlordName}
-
-_________________________________________________________
-LOCATÁRIO: ${tenantName}
-`;
-
-  return `<!doctype html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Aditivo de Renovação</title>
-  <style>
-    @page { size: A4; margin: 0; }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: #e5e7eb; color: #111827; font-family: Arial, Helvetica, sans-serif; }
-    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
-    .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
-    .print-button { background: #10b981; color: #ffffff; }
-    .close-button { background: #f1f5f9; color: #334155; }
-    .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); }
-    .page-inner { padding: 18mm; }
-    .content { white-space: pre-wrap; font-size: 13.5px; line-height: 1.8; font-weight: 500; color: #333; }
-    h1 { text-align: center; font-size: 16px; margin-bottom: 30px; font-weight: 800; }
-    @media print {
-      body { background: #ffffff; }
-      .toolbar { display: none; }
-      .page { width: 210mm; min-height: 297mm; margin: 0; box-shadow: none; }
-      .page-inner { padding: 18mm; }
-    }
-  </style>
-</head>
-<body>
-  ${showToolbar ? `<div class="toolbar">
-    <button class="close-button" onclick="window.close()">Fechar</button>
-    <button class="print-button" onclick="window.print()">Imprimir Aditivo</button>
-  </div>` : ""}
-
-  <main class="page">
-    <div class="page-inner">
-      <div class="content" contenteditable="${!showToolbar}" spellcheck="false">${escapeHtml(content)}</div>
-    </div>
-  </main>
-</body>
-</html>`;
-}
-
-function renderTemporaryContractTemplate(templateContent: string, templateData: TemplateData) {
-  return Object.entries(templateData).reduce((renderedContent, [key, value]) => {
-    return renderedContent.replace(new RegExp(`{${key}}`, "g"), value);
-  }, templateContent);
-}
-
-
-function getCompanySettingsForContractPrint(): CompanySettings {
-  const cachedCompanySettings = getCachedCompanySettings();
-
-  if (cachedCompanySettings) {
-    const source = getNestedCompanySettingsSource(cachedCompanySettings);
-    const normalizedSettings = normalizeCompanySettingsSource(source);
-
-    if (normalizedSettings.name || normalizedSettings.legalName || normalizedSettings.document) {
-      return normalizedSettings;
-    }
-  }
-
-  return {};
-}
-
-function getNestedCompanySettingsSource(source: Record<string, unknown>) {
-  const nestedKeys = ["company", "companySettings", "companyData", "business", "businessData", "registration"];
-
-  for (const nestedKey of nestedKeys) {
-    const nestedValue = source[nestedKey];
-
-    if (nestedValue && typeof nestedValue === "object" && !Array.isArray(nestedValue)) {
-      return nestedValue as Record<string, unknown>;
-    }
-  }
-
-  return source;
-}
-
-function normalizeCompanySettingsSource(source: Record<string, unknown>): CompanySettings {
-  return {
-    name: getFirstStringValue(source, ["name", "companyName", "fantasyName", "tradeName", "nomeFantasia", "nome"]),
-    legalName: getFirstStringValue(source, ["legalName", "corporateName", "businessName", "razaoSocial", "companyLegalName"]),
-    document: getFirstStringValue(source, ["document", "cnpj", "cpfCnpj", "taxId", "companyDocument"]),
-    stateRegistration: getFirstStringValue(source, ["stateRegistration", "ie", "inscricaoEstadual"]),
-    email: getFirstStringValue(source, ["email", "companyEmail", "contactEmail"]),
-    phone: getFirstStringValue(source, ["phone", "companyPhone", "whatsapp", "cellphone", "mobile"]),
-    zipCode: getFirstStringValue(source, ["zipCode", "cep", "postalCode"]),
-    state: getFirstStringValue(source, ["state", "uf"]),
-    city: getFirstStringValue(source, ["city", "cidade", "municipality", "municipio"]),
-    street: getFirstStringValue(source, ["street", "logradouro", "address", "endereco"]),
-    number: getFirstStringValue(source, ["number", "numero", "addressNumber"]),
-    neighborhood: getFirstStringValue(source, ["neighborhood", "bairro", "district"]),
-    complement: getFirstStringValue(source, ["complement", "complemento", "addressComplement"]),
-    pixKey: getFirstStringValue(source, ["pixKey", "pix", "companyPixKey"]),
-    contractCity: getFirstStringValue(source, ["contractCity", "cityForContract", "signatureCity"]),
-    contractDefaultNotes: getFirstStringValue(source, ["contractDefaultNotes", "defaultContractNotes", "contractNotes"]),
-  };
-}
-
-function getFirstStringValue(source: Record<string, unknown>, keys: string[]) {
-  for (const key of keys) {
-    const value = source[key];
-
-    if (typeof value === "string" && value.trim()) {
-      return value.trim();
-    }
-
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return String(value);
-    }
-  }
-
-  return "";
-}
-
-function formatFullAddressForPrint(address: {
-  street?: string;
-  number?: string;
-  neighborhood?: string;
-  city?: string;
-  state?: string;
-  zipCode?: string;
-  complement?: string;
-}) {
-  const parts = [
-    address.street,
-    address.number ? `nº ${address.number}` : "",
-    address.complement,
-     address.neighborhood ? `Bairro: ${address.neighborhood}` : "",
-    address.city && address.state ? `${address.city}/${address.state}` : address.city || address.state,
-    address.zipCode ? `CEP ${address.zipCode}` : "",
-  ];
-
-  return parts.filter(Boolean).join(", ");
-}
-
-function formatDocumentForPrint(value: string) {
-  const digits = String(value || "").replace(/\D/g, "");
-
-  if (digits.length > 11) {
-    return digits
-      .slice(0, 14)
-      .replace(/^(\d{2})(\d)/, "$1.$2")
-      .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
-      .replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3/$4")
-      .replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/, "$1.$2.$3/$4-$5");
-  }
-
-  return digits
-    .slice(0, 11)
-    .replace(/^(\d{3})(\d)/, "$1.$2")
-    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
-    .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3-$4");
-}
-
-function getContractDurationInDays(startDateValue: string, endDateValue: string) {
-  const startDate = normalizeDateInputValue(startDateValue);
-  const endDate = normalizeDateInputValue(endDateValue);
-
-  if (!startDate || !endDate) return 1;
-
-  const start = new Date(`${startDate}T00:00:00`);
-  const end = new Date(`${endDate}T00:00:00`);
-
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 1;
-
-  const millisecondsPerDay = 1000 * 60 * 60 * 24;
-
-  return Math.max(Math.floor((end.getTime() - start.getTime()) / millisecondsPerDay) + 1, 1);
-}
-
-function getContractDurationInMonths(startDateValue: string, endDateValue: string) {
-  const startDate = normalizeDateInputValue(startDateValue);
-  const endDate = normalizeDateInputValue(endDateValue);
-
-  if (!startDate || !endDate) return 1;
-
-  const start = new Date(`${startDate}T00:00:00`);
-  const end = new Date(`${endDate}T00:00:00`);
-
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
-    return 1;
-  }
-
-  const monthDifference =
-    (end.getFullYear() - start.getFullYear()) * 12 +
-    (end.getMonth() - start.getMonth()) +
-    1;
-
-  return Math.max(monthDifference, 1);
-}
-
-function getContractRentDueDay(startDateValue: string) {
-  const startDate = normalizeDateInputValue(startDateValue);
-
-  if (!startDate) return "____";
-
-  const [, , day] = startDate.split("-");
-
-  return day || "____";
-}
-
-function formatLongDateForPrint(value: Date) {
-  return value.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
-}
-
-function escapeHtml(value: string) {
-  return String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function getPropertyOptionLabel(property: Property) {
-  const categoryLabel = getAssetCategoryLabel(property.assetCategory);
-  const propertyName = toUpperText(property.name || "");
-
-  return categoryLabel ? `${propertyName} - ${categoryLabel}` : propertyName;
-}
-
-function getAssetCategoryLabel(value?: string | null) {
-  const labels: Record<string, string> = {
-    PROPERTY: "Imóvel",
-    EQUIPMENT: "Equipamento",
-    MACHINE: "Máquina",
-    VEHICLE: "Veículo",
-    TOOL: "Ferramenta",
-    OTHER: "Outro bem",
-  };
-
-  return labels[value || ""] || "";
-}
-
-function normalizeSearchText(value: string) {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
-}
-
-function toUpperText(value: string) {
-  return value.toLocaleUpperCase("pt-BR").trimStart();
-}
-
-function formatCurrency(value?: number) {
-  const safeValue = Number(value || 0);
-
-  return safeValue.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
-}
-
-function parseCurrencyInput(value: string) {
-  const digits = String(value || "").replace(/\D/g, "");
-
-  return Number(digits || 0) / 100;
-}
-
-function formatCurrencyInput(value: string | number) {
-  if (typeof value === "number") {
-    return formatCurrency(value);
-  }
-
-  return formatCurrency(parseCurrencyInput(value));
-}
-
-function getDateInputValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
-
-function formatDate(value: string) {
-  const normalizedDate = normalizeDateInputValue(value);
-
-  if (!normalizedDate) return "-";
-
-  const [year, month, day] = normalizedDate.split("-");
-
-  return `${day}/${month}/${year}`;
-}
-
-function normalizeDateInputValue(value?: string | null) {
-  if (!value) return "";
-
-  if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
-    return value.slice(0, 10);
-  }
-
-  const parsedDate = new Date(value);
-
-  if (Number.isNaN(parsedDate.getTime())) return "";
-
-  const year = parsedDate.getFullYear();
-  const month = String(parsedDate.getMonth() + 1).padStart(2, "0");
-  const day = String(parsedDate.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
-
-type AlertModalProps = {
-  icon?: string;
-  title: string;
-  description: string;
-  itemTitle?: string;
-  itemDetail?: string;
-  onClose: () => void;
-};
-
-function AlertModal({ icon = "⚠️", title, description, itemTitle, itemDetail, onClose }: AlertModalProps) {
-  return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/50 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-[2rem] border border-orange-100 bg-white p-8 shadow-2xl">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-50 text-3xl">
-          {icon}
-        </div>
-
-        <div className="mt-5 text-center">
-          <h3 className="text-2xl font-black text-slate-950">{title}</h3>
-          <p className="mt-3 text-sm font-semibold leading-6 text-slate-500">{description}</p>
-
-          {itemTitle && (
-            <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3">
-              <p className="text-sm font-black text-slate-900">{itemTitle}</p>
-              {itemDetail && <p className="mt-1 text-xs font-semibold text-slate-500">{itemDetail}</p>}
-            </div>
-          )}
-        </div>
-
-        <div className="mt-8">
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-white shadow-md shadow-orange-100 transition hover:bg-orange-600 active:scale-95"
-          >
-            Entendi
+            <Plus className="h-4 w-4" />
+            Novo Contrato
           </button>
         </div>
       </div>
+
+      {/* Indicadores / KPIs */}
+      <ContractKpis
+        contracts={contracts}
+        selectedFilter={statusFilter}
+        onSelectFilter={setStatusFilter}
+      />
+
+      {/* Barra de Filtros e Busca */}
+      <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+        <ContractFilters
+          search={search}
+          onSearchChange={setSearch}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          typeFilter={typeFilter}
+          onTypeFilterChange={setTypeFilter}
+        />
+      </div>
+
+      {/* Listagem Desktop (Tabela) */}
+      {/* Listagem Desktop (Tabela) */}
+      <ContractTable
+        contracts={filteredContracts}
+        properties={properties}
+        tenants={tenants}
+        isLoading={isLoading}
+        onOpenDetails={setDetailsContract}
+        onPrintContract={setPrintContract}
+        onShareWhatsApp={handleShareContractWhatsApp}
+        onEdit={handleEditClick}
+        onRenew={setRenewalContract}
+        onFinish={setFinishContractTarget}
+        onCancel={setCancelContractTarget}
+        onDelete={setDeleteContractTarget}
+      />
+
+      {/* Listagem Mobile (Cards) */}
+      <ContractMobileCards
+        contracts={filteredContracts}
+        properties={properties}
+        tenants={tenants}
+        onOpenDetails={setDetailsContract}
+        onPrintContract={setPrintContract}
+        onShareWhatsApp={handleShareContractWhatsApp}
+        onEdit={handleEditClick}
+        onRenew={setRenewalContract}
+        onFinish={setFinishContractTarget}
+        onCancel={setCancelContractTarget}
+        onDelete={setDeleteContractTarget}
+      />
+
+      {/* Modais do Sistema */}
+      {/* 1. Modal de Cadastro/Edição */}
+      <ContractFormModal
+        isOpen={isFormOpen}
+        isMinimized={isFormMinimized}
+        onMinimize={handleMinimizeFormModal}
+        onRestore={handleRestoreFormModal}
+        onClose={handleCloseFormModal}
+        editingContract={editingContract}
+        properties={properties}
+        tenants={tenants}
+        allContracts={contracts}
+        defaultCheckInTime={defaultCheckInTime}
+        defaultCheckOutTime={defaultCheckOutTime}
+        onOpenTimeDefaults={() => setIsTimeDefaultsOpen(true)}
+        onSave={handleSaveContract}
+      />
+
+      {/* 2. Modal de Detalhes 360° */}
+      <ContractDetailsModal
+        contract={detailsContract}
+        property={selectedPropertyForPrint}
+        tenant={selectedTenantForPrint}
+        charges={selectedDetailsCharges}
+        companyName={(user as any)?.company?.name || (user as any)?.companyName || "Contrx"}
+        isOpen={Boolean(detailsContract)}
+        onClose={() => setDetailsContract(null)}
+        onPrintContract={(c) => {
+          setDetailsContract(null);
+          setPrintContract(c);
+        }}
+      />
+
+      {/* 3. Modal de Impressão e Minuta */}
+      <ContractPrintModal
+        contract={printContract}
+        property={selectedPropertyForPrint}
+        tenant={selectedTenantForPrint}
+        companyId={companyId}
+        isOpen={Boolean(printContract)}
+        onProceedToInstallments={
+          postCreateFlowContract
+            ? () => {
+                const targetId = postCreateFlowContract.id;
+                setPrintContract(null);
+                setPostCreateFlowContract(null);
+                window.location.href = `/contas-receber?fromContract=1&contractId=${encodeURIComponent(String(targetId))}`;
+              }
+            : undefined
+        }
+        onClose={() => {
+          const pendingFlow = postCreateFlowContract;
+          setPrintContract(null);
+          setPostCreateFlowContract(null);
+          if (pendingFlow) {
+            window.location.href = `/contas-receber?fromContract=1&contractId=${encodeURIComponent(String(pendingFlow.id))}`;
+          }
+        }}
+      />
+
+      {/* 4. Modal de Impressão de Aditivo */}
+      {printableAdendum && (
+        <ContractPrintModal
+          contract={printableAdendum.contract}
+          adendum={printableAdendum}
+          companyId={companyId}
+          isOpen={Boolean(printableAdendum)}
+          onClose={() => setPrintableAdendum(null)}
+        />
+      )}
+
+      {/* 5. Modal de Renovação */}
+      <ContractRenewalModal
+        contract={renewalContract}
+        isOpen={Boolean(renewalContract)}
+        onClose={() => setRenewalContract(null)}
+        onConfirm={handleConfirmRenewal}
+      />
+
+      {/* 6. Modal de Finalização com Bloqueio de Parcelas Pendentes */}
+      <ContractFinishModal
+        contract={finishContractTarget}
+        isOpen={Boolean(finishContractTarget)}
+        onClose={() => setFinishContractTarget(null)}
+        onConfirm={handleConfirmFinish}
+        pendingCharges={finishModalPendingCharges}
+        onGoToReceivables={(contractId) => {
+          setFinishContractTarget(null);
+          window.location.href = `/contas-receber?filterContractId=${encodeURIComponent(contractId)}`;
+        }}
+      />
+
+      {/* 6.1. Modal de Compartilhamento de Contrato via WhatsApp */}
+      <ContractShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => {
+          setIsShareModalOpen(false);
+          setShareModalContract(null);
+          setShareModalUrl("");
+        }}
+        contract={shareModalContract}
+        shareUrl={shareModalUrl}
+        expiresAt={shareModalExpiresAt}
+        tenant={tenants.find((t) => String(t.id) === String(shareModalContract?.tenantId)) || null}
+      />
+
+      {/* 7. Modal de Cancelamento */}
+      <ContractCancelModal
+        contract={cancelContractTarget}
+        isOpen={Boolean(cancelContractTarget)}
+        onClose={() => setCancelContractTarget(null)}
+        onConfirm={handleConfirmCancel}
+      />
+
+      {/* 8. Modal de Exclusão com limpeza de parcelas e agenda */}
+      <ContractDeleteModal
+        contract={deleteContractTarget}
+        isOpen={Boolean(deleteContractTarget)}
+        onClose={() => setDeleteContractTarget(null)}
+        onConfirm={handleConfirmDelete}
+      />
+
+      {/* 9. Confirmação de Edição de Contrato Encerrado */}
+      <ContractEditConfirmationModal
+        contract={pendingEditContract}
+        isOpen={Boolean(pendingEditContract)}
+        onClose={() => setPendingEditContract(null)}
+        onConfirm={handleConfirmPendingEdit}
+      />
+
+      {/* 10. Prompt de Faturamento / Gerar Parcelas no Contas a Receber */}
+      <ContractPromptInstallmentsModal
+        isOpen={Boolean(promptParcelasContract)}
+        onClose={() => setPromptParcelasContract(null)}
+        onGenerate={handleGenerateInstallments}
+        propertyName={promptParcelasContract?.propertyName || undefined}
+        title="Deseja gerar o faturamento agora?"
+        description="O contrato foi processado e registrado com sucesso. Deseja abrir o Contas a Receber para conferir e gerar o carnê de parcelas deste contrato?"
+      />
+
+      {/* 11. Configuração de Horários Padrão */}
+      <ContractTimeDefaultsModal
+        isOpen={isTimeDefaultsOpen}
+        onClose={() => setIsTimeDefaultsOpen(false)}
+        defaultCheckInTime={defaultCheckInTime}
+        defaultCheckOutTime={defaultCheckOutTime}
+        onSave={handleSaveTimeDefaults}
+      />
     </div>
   );
 }

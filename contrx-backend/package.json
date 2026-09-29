@@ -1,6 +1,6 @@
 {
   "name": "contrx-backend",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "description": "",
   "author": "",
   "private": true,
@@ -15,7 +15,7 @@
     "start": "node scripts/ensure-local-postgres.js && nest start",
     "start:dev": "node scripts/ensure-local-postgres.js && nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/src/main.js",
+    "start:prod": "node scripts/ensure-local-postgres.js && node dist/src/main.js",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
     "lint:fix": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",

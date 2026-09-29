@@ -96,4 +96,8 @@ export class PagarContaDto {
   @IsOptional()
   @IsString()
   note?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  bankAccountId?: string | null;
 }

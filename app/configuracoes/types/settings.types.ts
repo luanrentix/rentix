@@ -90,13 +90,35 @@ export type ViaCepResponse = {
   bairro?: string;
 };
 
-export type SettingsTab = "company" | "user" | "print" | "appearance";
+export type SettingsTab = "company" | "user" | "print" | "appearance" | "integrations";
 
 export type ThemeMode = "light" | "black" | "graphite";
 
 export type ThemeSettings = {
   mode: ThemeMode;
   accent?: string;
+};
+
+export type IntegrationSettings = {
+  whatsappBillingMessage?: string;
+  whatsappContractDueMessage?: string;
+  emailSenderName?: string;
+  emailBcc?: string;
+  paymentGatewayProvider?: "asaas" | "mercadopago" | "manual";
+  paymentGatewayApiKey?: string;
+  paymentGatewayEnvironment?: "sandbox" | "production";
+};
+
+export const defaultIntegrationSettings: IntegrationSettings = {
+  whatsappBillingMessage:
+    "Olá, {nome}. Informamos sobre a cobrança do aluguel referente a {imovel} no valor de {valor}.",
+  whatsappContractDueMessage:
+    "Olá, {nome}. Lembramos que seu contrato de locação do imóvel {imovel} vence em {data}.",
+  emailSenderName: "",
+  emailBcc: "",
+  paymentGatewayProvider: "manual",
+  paymentGatewayApiKey: "",
+  paymentGatewayEnvironment: "sandbox",
 };
 
 export type PrintDocumentKey =

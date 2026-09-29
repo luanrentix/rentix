@@ -17,6 +17,7 @@ export class FinanceiroController {
     @CurrentUser() user: UsuarioAutenticado,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('accountingMode') accountingMode?: string,
     @Query('refresh') refresh?: string,
   ) {
     return this.financeiroService.getResumo(
@@ -24,6 +25,7 @@ export class FinanceiroController {
       {
         startDate,
         endDate,
+        accountingMode: accountingMode === 'accrual' ? 'accrual' : 'cash',
       },
       refresh === 'true',
     );

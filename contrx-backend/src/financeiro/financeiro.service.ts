@@ -3,9 +3,24 @@ import { FinancialAccountStatus, Prisma } from '@prisma/client';
 import { getFinancialSettlementAmount } from '../common/financial-settlement';
 import { PrismaService } from '../prisma/prisma.service';
 
-type FinancialStatus = 'Pending' | 'Paid' | 'Overdue';
+export type FinancialStatus = 'Pending' | 'Paid' | 'Overdue';
+export type AccountingMode = 'cash' | 'accrual';
 
-type FinancialReceivable = {
+export type BankAccountSummary = {
+  id: string;
+  name: string;
+  bankName: string | null;
+  type: string;
+  currentBalance: number;
+};
+
+export type BankSummary = {
+  totalCurrentBalance: number;
+  activeAccountsCount: number;
+  accounts: BankAccountSummary[];
+};
+
+export type FinancialReceivable = {
   id: string;
   tenantName: string;
   propertyName: string;
@@ -20,7 +35,7 @@ type FinancialReceivable = {
   propertyId?: string | null;
 };
 
-type FinancialPayable = {
+export type FinancialPayable = {
   id: string;
   personName: string;
   description: string;
@@ -36,9 +51,10 @@ type FinancialPayable = {
   propertyId?: string | null;
 };
 
-type FinancialSummary = {
+export type FinancialSummary = {
   receivables: FinancialReceivable[];
   payables: FinancialPayable[];
+  bankSummary: BankSummary;
 };
 
 type FinancialPayment = {
@@ -48,9 +64,10 @@ type FinancialPayment = {
   interest?: unknown;
 };
 
-type FinancialSummaryFilters = {
+export type FinancialSummaryFilters = {
   startDate?: string;
   endDate?: string;
+  accountingMode?: AccountingMode;
 };
 
 @Injectable()
@@ -69,7 +86,7 @@ export class FinanceiroService {
   ): Promise<FinancialSummary> {
     await this.validateCompany(companyId);
 
-    const cacheKey = `${companyId}:${filters.startDate || ''}:${filters.endDate || ''}`;
+    const cacheKey = `${companyId}:${filters.startDate || ''}:${filters.endDate || ''}:${filters.accountingMode || 'cash'}`;
     const now = Date.now();
     const cached = this.resumoCache.get(cacheKey);
 
@@ -78,10 +95,11 @@ export class FinanceiroService {
     }
 
     const dateRange = this.getDateRange(filters);
+    const accountingMode = filters.accountingMode || 'cash';
 
-    const [receivables, payables] = await Promise.all([
+    const [receivables, payables, bankAccounts] = await Promise.all([
       this.prisma.contaReceber.findMany({
-        where: this.buildReceivableWhere(companyId, dateRange),
+        where: this.buildReceivableWhere(companyId, dateRange, accountingMode),
         orderBy: { dueDate: 'asc' },
         include: {
           payments: { orderBy: { paidAt: 'desc' } },
@@ -89,7 +107,7 @@ export class FinanceiroService {
         },
       }),
       this.prisma.contaPagar.findMany({
-        where: this.buildPayableWhere(companyId, dateRange),
+        where: this.buildPayableWhere(companyId, dateRange, accountingMode),
         orderBy: { dueDate: 'asc' },
         select: {
           id: true,
@@ -111,7 +129,39 @@ export class FinanceiroService {
           },
         },
       }),
+      this.prisma.bankAccount.findMany({
+        where: {
+          companyId,
+          active: true,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          name: true,
+          bankName: true,
+          type: true,
+          currentBalance: true,
+        },
+        orderBy: { name: 'asc' },
+      }),
     ]);
+
+    const totalCurrentBalance = bankAccounts.reduce(
+      (total, acc) => total + Number(acc.currentBalance || 0),
+      0,
+    );
+
+    const bankSummary: BankSummary = {
+      totalCurrentBalance,
+      activeAccountsCount: bankAccounts.length,
+      accounts: bankAccounts.map((acc) => ({
+        id: acc.id,
+        name: acc.name,
+        bankName: acc.bankName,
+        type: String(acc.type),
+        currentBalance: Number(acc.currentBalance || 0),
+      })),
+    };
 
     const result: FinancialSummary = {
       receivables: receivables.map<FinancialReceivable>((account) => {
@@ -173,6 +223,7 @@ export class FinanceiroService {
           propertyId: account.propertyId || null,
         };
       }),
+      bankSummary,
     };
 
     this.resumoCache.set(cacheKey, {
@@ -200,7 +251,13 @@ export class FinanceiroService {
   private buildReceivableWhere(
     companyId: string,
     dateRange: { startDate: Date | null; endDate: Date | null },
+    accountingMode: AccountingMode = 'cash',
   ): Prisma.ContaReceberWhereInput {
+    if (accountingMode === 'accrual') {
+      const range = this.buildPrismaDateRange(dateRange);
+      return range ? { companyId, dueDate: range } : { companyId };
+    }
+
     const periodFilter = this.buildPeriodFilter(dateRange, 'payments');
 
     return periodFilter
@@ -214,7 +271,13 @@ export class FinanceiroService {
   private buildPayableWhere(
     companyId: string,
     dateRange: { startDate: Date | null; endDate: Date | null },
+    accountingMode: AccountingMode = 'cash',
   ): Prisma.ContaPagarWhereInput {
+    if (accountingMode === 'accrual') {
+      const range = this.buildPrismaDateRange(dateRange);
+      return range ? { companyId, dueDate: range } : { companyId };
+    }
+
     const periodFilter = this.buildPeriodFilter(dateRange, 'payments');
 
     return periodFilter

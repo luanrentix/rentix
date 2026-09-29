@@ -195,6 +195,41 @@ export class ContasReceberService {
 
       await this.syncOwnerPayoutFromReceivable(tx, id, companyId);
 
+      if (data.bankAccountId && (tx as any).bankTransaction) {
+        const bankAccount = await (tx as any).bankAccount.findFirst({
+          where: { id: data.bankAccountId, companyId, deletedAt: null },
+        });
+        if (bankAccount && bankAccount.active) {
+          const inflowAmount = Number(data.amountPaid);
+          await (tx as any).bankTransaction.create({
+            data: {
+              bankAccountId: data.bankAccountId,
+              type: BankTransactionType.INFLOW,
+              status: BankTransactionStatus.CONFIRMED,
+              amount: inflowAmount,
+              description:
+                `RECEBIMENTO ${data.method} - ${account.tenantName || account.propertyName || 'CLIENTE'}`.toUpperCase(),
+              competenceDate: new Date(),
+              paymentDate: this.parseDate(
+                data.paidAt,
+                'Data de pagamento invalida.',
+              ),
+              category: 'RECEITAS DE LOCACAO',
+              referenceType: 'RECEIVABLE',
+              referenceId: id,
+            },
+          });
+          await (tx as any).bankAccount.update({
+            where: { id: data.bankAccountId },
+            data: {
+              currentBalance: {
+                increment: inflowAmount,
+              },
+            },
+          });
+        }
+      }
+
       return tx.contaReceber.update({
         where: { id },
         data: {
@@ -437,7 +472,12 @@ export class ContasReceberService {
   private async ensureExists(id: string, companyId: string) {
     const account = await this.prisma.contaReceber.findFirst({
       where: { id, companyId },
-      select: { id: true, amount: true },
+      select: {
+        id: true,
+        amount: true,
+        tenantName: true,
+        propertyName: true,
+      },
     });
 
     if (!account) {

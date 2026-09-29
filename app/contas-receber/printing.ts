@@ -191,22 +191,45 @@ async function getPixQrCodeDataUrl(pixPayload: string): Promise<string> {
   }
 }
 
+function defaultRenderPaymentBookletTemplate(
+  templateContent: string,
+  templateData: Record<string, string>,
+) {
+  return Object.entries(templateData).reduce((content, [key, value]) => {
+    return content.replace(new RegExp(`{${key}}`, "g"), value);
+  }, templateContent);
+}
+
+function defaultRenderPaymentBookletInstructions(instructions: string) {
+  const instructionRows = instructions
+    .split("\n")
+    .map((instruction) => instruction.trim())
+    .filter(Boolean)
+    .map((instruction) => `<p>${escapeHtml(instruction)}</p>`)
+    .join("");
+
+  if (!instructionRows) {
+    return "";
+  }
+
+  return `<div class="instructions"><span>Instruções</span>${instructionRows}</div>`;
+}
+
 export async function generatePaymentCarnet(params: {
-  carnetCharges: Charge[];
-  companySettings: any;
-  paymentBookletInstructions: string;
-  renderPaymentBookletTemplate: (instructions: string, data: Record<string, string>) => string;
-  renderPaymentBookletInstructions: (content: string) => string;
-  setChargeFormError: (msg: string) => void;
+  carnetCharges?: Charge[];
+  charges?: Charge[];
+  companySettings?: any;
+  paymentBookletInstructions?: string;
+  renderPaymentBookletTemplate?: (instructions: string, data: Record<string, string>) => string;
+  renderPaymentBookletInstructions?: (content: string) => string;
+  setChargeFormError?: (msg: string) => void;
 }) {
-  const {
-    carnetCharges,
-    companySettings,
-    paymentBookletInstructions,
-    renderPaymentBookletTemplate,
-    renderPaymentBookletInstructions,
-    setChargeFormError,
-  } = params;
+  const carnetCharges = params.carnetCharges || params.charges || [];
+  const companySettings = params.companySettings || {};
+  const paymentBookletInstructions = params.paymentBookletInstructions || "";
+  const renderPaymentBookletTemplate = params.renderPaymentBookletTemplate || defaultRenderPaymentBookletTemplate;
+  const renderPaymentBookletInstructions = params.renderPaymentBookletInstructions || defaultRenderPaymentBookletInstructions;
+  const setChargeFormError = params.setChargeFormError || ((msg: string) => console.warn(msg));
 
   if (carnetCharges.length === 0) return;
 
@@ -236,7 +259,7 @@ export async function generatePaymentCarnet(params: {
     .map(
       (charge) => `
         <tr>
-          <td>${charge.installmentNumber || 1}/${charge.installmentTotal || carnetCharges.length}</td>
+          <td>${charge.isDownPayment ? "Entrada" : `${charge.installmentNumber || 1}/${charge.installmentTotal || carnetCharges.length}`}</td>
           <td>${escapeHtml(charge.tenant)}</td>
           <td>${escapeHtml(charge.property)}</td>
           <td>${formatDate(charge.dueDate)}</td>
@@ -249,9 +272,9 @@ export async function generatePaymentCarnet(params: {
   const vouchers = (
     await Promise.all(
       carnetCharges.map(async (charge) => {
-        const installmentLabel = `${charge.installmentNumber || 1}/${
-          charge.installmentTotal || carnetCharges.length
-        }`;
+        const installmentLabel = charge.isDownPayment
+          ? "Entrada / Sinal"
+          : `${charge.installmentNumber || 1}/${charge.installmentTotal || carnetCharges.length}`;
         const pixPayload = generatePixPayload({
           pixKey: companySettings.pixKey || "",
           pixKeyType,

@@ -1,58 +1,99 @@
 ---
 name: contrx-security-protocol
-description: Protocolo padrão de auditoria e aplicação de correções de segurança DevSecOps no projeto Contrx.
+description: Protocolo padrão de auditoria técnica e aplicação de correções de segurança DevSecOps no projeto Contrx.
 ---
-# Protocolo Permanente de Segurança DevSecOps Contrx
+# Protocolo Permanente de Auditoria e Segurança DevSecOps Contrx (SaaS Multi-tenant)
 
-**Versão do Protocolo**: `v1.0.0` (Contrx SaaS)
+**Versão do Protocolo**: `v2.0.0` (Contrx SaaS)
 
-Sempre que o usuário solicitar "auditoria de segurança", "aplicar correções de segurança", "verificar vulnerabilidades", "rodar protocolo de segurança" ou similar, execute **AUTOMATICAMENTE** os seguintes passos de verificação e aplicação:
-
----
-
-## Eixos do Protocolo de Segurança
-
-### 1. **Supabase & Banco de Dados (Row Level Security & Permissions)**
-- **Verificação**:
-  - Inspecionar novas tabelas criadas no `schema.prisma` e na pasta de migrations (`contrx-backend/prisma/migrations`).
-  - Garantir que toda nova tabela criada possua uma migration associada aplicando `ENABLE ROW LEVEL SECURITY` e `REVOKE ALL ON TABLE public.<tabela> FROM anon, authenticated`.
-- **Ação Automática**:
-  - Se houver novas tabelas sem hardening, gerar a migration SQL complementar na pasta `contrx-backend/prisma/migrations/<timestamp>_harden_tables_supabase/migration.sql`.
-
-### 2. **Isolamento Multiempresa (Multi-tenancy)**
-- **Verificação**:
-  - Inspecionar controllers e services no backend (`contrx-backend/src`) garantindo que **TODAS** as consultas (`findMany`, `findFirst`, `update`, `delete`, `count`, etc.) possuam a cláusula `where: { companyId }` associada ao usuário autenticado `user.companyId`.
-  - Garantir que IDs recebidos via parâmetros (`@Param('id')`) sejam filtrados em conjunto com `companyId`.
-
-### 3. **Rate Limiting & Proteção contra DoS / Brute-Force**
-- **Verificação**:
-  - Garantir que todos os endpoints de autenticação (`/autenticacao/login`, `/autenticacao/recuperar-senha`, `/autenticacao/criar-conta`) e rotas públicas/anônimas de ingestão (como `POST /admin/errors`) possuam o decorator `@UseGuards(RateLimitGuard)`.
-- **Ação Automática**:
-  - Aplicar o `RateLimitGuard` e prover no módulo correspondente se algum novo endpoint for identificado sem proteção.
-
-### 4. **Alinhamento de Limites de Payload HTTP & Headers de Segurança**
-- **Verificação**:
-  - Verificar alinhamento entre o Express (`main.ts`: `json({ limit })`) e o Nginx (`nginx/contrx.conf`: `client_max_body_size`).
-  - Verificar presença dos headers de segurança: `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` e `Permissions-Policy`.
-
-### 5. **Frontend (Sanitização e Exposição de Segredos)**
-- **Verificação**:
-  - Verificar se `.env.local` ou código no frontend contêm chaves de serviço (`SERVICE_ROLE_KEY` ou `JWT_SECRET`).
-  - Garantir que apenas `NEXT_PUBLIC_...` contenham variáveis públicas (como URL da API).
-  - Verificar XSS e renderização de dados sensíveis.
-
-### 6. **Validação Automática Local**
-- Executar os testes de verificação e compilação:
-  - `npm run lint` na raiz
-  - `npm --prefix contrx-backend run build` no backend
+Quando acionado para auditoria de segurança ou aplicação do protocolo, siga rigorosamente o fluxo em duas fases:
 
 ---
 
-## Diretrizes Rigorosas
+## REGRAS DE EXECUÇÃO RIGOROSAS (NÃO NEGOCIÁVEIS)
 
-- **NÃO alterar regras de negócio ou comportamento funcional do ERP**.
-- **NÃO realizar commits, pushes ou deploys automáticos em produção (Oracle VPS/GitHub/Supabase)**.
-- **Ao final da verificação/aplicação**, gerar um relatório consolidado resumindo:
-  - Vulnerabilidades / Pontos auditados
-  - Correções aplicadas (com links para os arquivos alterados)
-  - Status dos builds de validação local.
+1. **FASE 1 - APENAS AUDITORIA E ANÁLISE ESTÁTICA**:
+   - **NÃO executar correções imediatamente**.
+   - Analisar todo o projeto, documentar, comprovar e apresentar o relatório técnico detalhado e o relatório executivo.
+   - Aguardar a aprovação expressa do usuário antes de realizar qualquer alteração no código ou banco de dados.
+
+2. **REGRAS PARA CORREÇÕES (FASE 2 - APÓS APROVAÇÃO)**:
+   - **NÃO fazer alterações destrutivas**.
+   - **NÃO remover funcionalidades existentes**.
+   - **NÃO alterar regras de negócio**.
+   - Manter 100% o comportamento atual do sistema.
+   - **NÃO fazer commits, pushes ou deploys automáticos em produção** (respeitar regras do projeto).
+
+---
+
+## EIXOS OBRIGATÓRIOS DA AUDITORIA
+
+### 1. **SUPABASE & BANCO DE DADOS**
+- **Verificações**:
+  - Tabelas sem RLS habilitado ou sem políticas declarativas.
+  - Revogação de acesso das roles públicas `anon` e `authenticated` (`REVOKE ALL ON TABLE ... FROM anon, authenticated`).
+  - Segurança de funções SQL / `SECURITY DEFINER` sem proteção de `search_path`.
+  - Exposição indevida de Storage / Buckets.
+  - Riscos de vazamento entre empresas / acesso cruzado.
+- **Relatório por Tabela**:
+  - RLS Habilitado? (Sim/Não) | Existe Risco? (Sim/Não) | Existe Vazamento? (Sim/Não) | Nível de Risco (Crítico/Alto/Médio/Baixo).
+
+### 2. **ISOLAMENTO MULTIEMPRESA (MULTI-TENANCY)**
+- **Verificações**:
+  - Inspeção de todas as rotas, APIs e consultas (`findMany`, `findFirst`, `update`, `delete`, `count`, etc.).
+  - Garantir a presença obrigatória da cláusula `where: { companyId }` vinculada ao `user.companyId` do token JWT autenticado.
+  - Verificar se parâmetros de ID (`@Param('id')`) são isolados em conjunto com `companyId`.
+  - Identificar qualquer filtro ausente ou bypass de isolamento.
+
+### 3. **FRONTEND (NEXT.JS)**
+- **Verificações**:
+  - Exposição de chaves de serviço ou segredos privados (`SERVICE_ROLE_KEY`, `JWT_SECRET`).
+  - URLs sensíveis, tokens visíveis em cliente ou credenciais hardcoded.
+  - Vulnerabilidades XSS, DOM Injection e renderizações inseguras.
+  - Armazenamento inseguro em `localStorage` ou `sessionStorage`.
+
+### 4. **BACKEND (NESTJS)**
+- **Verificações**:
+  - Autenticação e proteção de rotas (`@UseGuards(JwtGuardAutenticacao)`).
+  - Validação rigorosa de payloads (`ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })`).
+  - Prevenção contra SQL Injection / NoSQL Injection / Mass Assignment / Escalada de Privilégios / SSRF.
+  - Verificação de controle de autorização e papéis de usuário (`CompanyAdminGuard`, `SystemOwnerGuard`, `ToolPermissionGuard`).
+
+### 5. **APIS & RATE LIMITING**
+- **Verificações**:
+  - Identificação de endpoints públicos e acesso anônimo sem proteção.
+  - Proteção por Rate Limit (`@UseGuards(RateLimitGuard)`) em login, recuperação de senha e endpoints de ingestão (ex: `POST /admin/errors`).
+  - Retorno indevido de dados sensíveis ou payloads excessivos.
+
+### 6. **INFRAESTRUTURA & CONFIGURAÇÕES**
+- **Verificações**:
+  - Imagens Docker e Docker Compose (`Dockerfile`, `docker-compose.prod.yml`).
+  - Variáveis de ambiente e gestão de segredos (`.env`, `.env.local`).
+  - Configuração do proxy Nginx e cabeçalhos de segurança: `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, CSP e CORS.
+  - Alinhamento de limites de body (`client_max_body_size` vs Express json limit).
+
+### 7. **CÓDIGO & DEPENDÊNCIAS**
+- **Verificações**:
+  - Identificação de código morto, rotas abandonadas e funções não utilizadas.
+  - Análise de bibliotecas vulneráveis ou dependências desatualizadas no `package.json`.
+
+---
+
+## CLASSIFICAÇÃO DE VULNERABILIDADES (MATRIZ DE RISCO)
+
+Para cada vulnerabilidade identificada na auditoria, informar obrigatoriamente:
+- **Arquivo**: Caminho exato do arquivo.
+- **Função / Localização**: Método e linhas aproximadas.
+- **Descrição**: O que é o problema.
+- **Impacto**: Qual a consequência técnica e de negócio.
+- **Como Explorar**: Cenário/passo a passo de exploração.
+- **Probabilidade**: Alta / Média / Baixa.
+- **Severidade**: Crítica / Alta / Média / Baixa.
+
+---
+
+## ESTRUTURA DOS RELATÓRIOS DE AUDITORIA
+
+Ao concluir a auditoria estática (Fase 1), gerar obrigatoriamente:
+1. **Relatório Executivo**: Visão geral de alto nível, matriz de risco e estado de conformidade para a diretoria/gestão.
+2. **Relatório Técnico Detalhado**: Listagem minuciosa de todas as vulnerabilidades agrupadas pelas 8 áreas, plano de correções recomendadas, impacto, riscos de regressão e estratégia de implementação segura.

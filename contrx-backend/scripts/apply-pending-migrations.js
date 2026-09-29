@@ -94,7 +94,8 @@ async function applyMigration(migrationName) {
   }
 
   const migrationPath = path.join(migrationsDir, migrationName, 'migration.sql');
-  const sql = fs.readFileSync(migrationPath, 'utf8');
+  const rawSql = fs.readFileSync(migrationPath, 'utf8');
+  const sql = rawSql.replace(/^\uFEFF/, '').trim();
   const checksum = crypto.createHash('sha256').update(sql).digest('hex');
   const id = crypto.randomUUID();
 

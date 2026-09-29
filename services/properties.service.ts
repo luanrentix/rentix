@@ -3,6 +3,13 @@ import { uppercaseFields } from './text-normalization';
 
 export type PropertyStatus = 'Available' | 'Rented';
 
+export type AssetOperationalStatus =
+  | 'AVAILABLE'
+  | 'RENTED'
+  | 'MAINTENANCE'
+  | 'RESERVED'
+  | 'INACTIVE';
+
 export type AssetCategory =
   | 'PROPERTY'
   | 'EQUIPMENT'
@@ -18,7 +25,8 @@ export type PropertyType =
   | 'Farm'
   | 'Commercial'
   | 'Land'
-  | 'Other';
+  | 'Other'
+  | string;
 
 export type PropertyManagementMode = 'OWNED' | 'MANAGED';
 
@@ -42,6 +50,7 @@ export type Property = {
   patrimonyCode?: string | null;
 
   rentalValue?: number | null;
+  operationalStatus?: AssetOperationalStatus | string | null;
   managementMode?: PropertyManagementMode | string | null;
   administrationFeePercentage?: number | null;
   ownerPayoutDay?: number | null;
@@ -92,6 +101,7 @@ export type CreatePropertyDto = {
   patrimonyCode?: string;
 
   rentalValue?: number;
+  operationalStatus?: AssetOperationalStatus | string;
   managementMode?: PropertyManagementMode | string;
   administrationFeePercentage?: number | null;
   ownerPayoutDay?: number | null;
@@ -102,6 +112,8 @@ export type CreatePropertyDto = {
   state?: string;
   address?: string;
   district?: string;
+  street?: string;
+  neighborhood?: string;
   number?: string;
   complement?: string;
 
@@ -149,10 +161,28 @@ export async function deleteProperty(id: string) {
   });
 }
 
+export async function setAssetOperationalStatus(
+  id: string,
+  operationalStatus: AssetOperationalStatus,
+) {
+  return updateProperty(id, { operationalStatus });
+}
+
 function normalizePropertyPayload<
   TData extends CreatePropertyDto | UpdatePropertyDto,
 >(data: TData) {
-  return uppercaseFields(data, [
+  const cloned = { ...data } as any;
+
+  if (cloned.street && !cloned.address) {
+    cloned.address = cloned.street;
+  }
+  if (cloned.neighborhood && !cloned.district) {
+    cloned.district = cloned.neighborhood;
+  }
+  delete cloned.street;
+  delete cloned.neighborhood;
+
+  return uppercaseFields(cloned, [
     'title',
     'code',
     'type',

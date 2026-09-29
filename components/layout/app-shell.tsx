@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { AlertTriangle, Bell, CalendarDays, Clock3, Command, Loader2, Maximize2, Search, X } from "lucide-react";
+import { AlertTriangle, Bell, CalendarDays, Clock3, Command, Loader2, Maximize2, RotateCcw, Search, Star, X } from "lucide-react";
 import AuthGuard from "@/components/auth/auth-guard";
 import { useAuth } from "@/context/AuthContext";
 import { changePasswordRequest } from "@/services/auth";
@@ -38,6 +38,7 @@ import {
 } from "@/services/app-routes";
 import { getChamados } from "@/services/chamados.service";
 import AgendaNotificationListener from "./agenda-notification-listener";
+import { AdminImpersonateBanner } from "@/components/admin/modals/admin-impersonate-banner";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -405,12 +406,13 @@ function GlobalMinimizedModalDock() {
   function handleRestore() {
     if (!modalState) return;
 
-    if (pathname === modalState.href) {
+    const targetHref = modalState.href || modalState.route || "/dashboard";
+    if (pathname === targetHref) {
       dispatchRestoreMinimizedModal(modalState.tool);
       return;
     }
 
-    router.push(modalState.href);
+    router.push(targetHref);
   }
 
   function handleClose() {
@@ -555,6 +557,13 @@ export default function AppShell({ children }: AppShellProps) {
   const [isApiOnline, setIsApiOnline] = useState(true);
   const [isQuickSearchOpen, setIsQuickSearchOpen] = useState(false);
   const [quickSearchQuery, setQuickSearchQuery] = useState("");
+  const [favoriteHrefs, setFavoriteHrefs] = useState<string[]>([]);
+  const [sidebarContextMenu, setSidebarContextMenu] = useState<{
+    x: number;
+    y: number;
+    targetHref?: string;
+    targetLabel?: string;
+  } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -590,6 +599,90 @@ export default function AppShell({ children }: AppShellProps) {
     },
     [user?.permissions, user?.role],
   );
+
+  const favoriteItems = useMemo(
+    () => visibleMenuItems.filter((item) => favoriteHrefs.includes(item.href)),
+    [favoriteHrefs, visibleMenuItems],
+  );
+
+  useEffect(() => {
+    const raw = getCompanyStorageItem(
+      companyId,
+      "contrx_sidebar_favorites",
+      "contrx_sidebar_favorites",
+    );
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setFavoriteHrefs(parsed);
+          return;
+        }
+      } catch {
+        // ignora erro de parse
+      }
+    }
+    setFavoriteHrefs([]);
+  }, [companyId]);
+
+  const saveFavorites = useCallback(
+    (newFavorites: string[]) => {
+      setFavoriteHrefs(newFavorites);
+      setCompanyStorageItem(
+        companyId,
+        "contrx_sidebar_favorites",
+        JSON.stringify(newFavorites),
+      );
+    },
+    [companyId],
+  );
+
+  const toggleFavorite = useCallback(
+    (href: string) => {
+      setFavoriteHrefs((prev) => {
+        const next = prev.includes(href)
+          ? prev.filter((h) => h !== href)
+          : [...prev, href];
+        setCompanyStorageItem(
+          companyId,
+          "contrx_sidebar_favorites",
+          JSON.stringify(next),
+        );
+        return next;
+      });
+      setSidebarContextMenu(null);
+    },
+    [companyId],
+  );
+
+  const resetFavoritesToDefault = useCallback(() => {
+    saveFavorites([]);
+    setSidebarContextMenu(null);
+  }, [saveFavorites]);
+
+  useEffect(() => {
+    if (!sidebarContextMenu) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("#contrx-sidebar-context-menu")) return;
+      setSidebarContextMenu(null);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSidebarContextMenu(null);
+      }
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [sidebarContextMenu]);
+
   const isSystemOwner = isSystemOwnerRole(user?.role);
   const [unreadSupportCount, setUnreadSupportCount] = useState(0);
 
@@ -1224,7 +1317,112 @@ export default function AppShell({ children }: AppShellProps) {
             </div>
           </div>
 
-          <nav className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-2 py-3 lg:py-4">
+          <nav
+            onContextMenu={(e) => {
+              if ((e.target as HTMLElement)?.closest("[data-menu-item]")) return;
+              e.preventDefault();
+              const clickX = Math.min(e.clientX, window.innerWidth - 230);
+              const clickY = Math.min(e.clientY, window.innerHeight - 120);
+              setSidebarContextMenu({ x: clickX, y: clickY });
+            }}
+            className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-2 py-3 lg:py-4"
+          >
+            {favoriteItems.length > 0 && (
+              <div className="space-y-1">
+                <div
+                  className={`flex items-center justify-between px-3 pt-2 pb-1 text-[10px] font-black uppercase tracking-wider text-amber-500 transition-all duration-300 ${
+                    isSidebarOpen ? "opacity-100 max-h-8" : "opacity-0 max-h-0 overflow-hidden"
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Star className="h-3 w-3 fill-amber-400 text-amber-500" />
+                    Favoritos
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      resetFavoritesToDefault();
+                    }}
+                    title="Restaurar padrão (limpar favoritos)"
+                    className="text-[9px] lowercase font-semibold text-slate-400 hover:text-red-500 hover:underline transition"
+                  >
+                    limpar
+                  </button>
+                </div>
+
+                {favoriteItems.map((item) => {
+                  const isActive = isActiveRoute(item.href);
+
+                  return (
+                    <div key={`fav-${item.href}`} className="relative group/fav">
+                      <Link
+                        href={item.href}
+                        data-menu-item={item.href}
+                        prefetch={menuLinkPrefetch}
+                        title={!isSidebarOpen ? `⭐ ${item.label} (Favorito)` : undefined}
+                        onClick={handleCloseMobileSidebar}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const clickX = Math.min(e.clientX, window.innerWidth - 230);
+                          const clickY = Math.min(e.clientY, window.innerHeight - 150);
+                          setSidebarContextMenu({
+                            x: clickX,
+                            y: clickY,
+                            targetHref: item.href,
+                            targetLabel: item.label,
+                          });
+                        }}
+                        className={`group flex items-center overflow-hidden rounded-2xl px-3 py-2.5 text-sm font-bold transition-colors duration-200 ${
+                          isActive
+                            ? "bg-amber-500 text-white shadow-md shadow-amber-100"
+                            : "text-slate-600 hover:bg-amber-50 hover:text-amber-700"
+                        }`}
+                      >
+                        <span
+                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors duration-200 ${
+                            isActive
+                              ? "bg-white/20"
+                              : "bg-amber-100/60 text-amber-600 group-hover:bg-amber-100"
+                          }`}
+                        >
+                          {item.icon}
+                        </span>
+
+                        <span
+                          className={`ml-3 flex-1 whitespace-nowrap transition-all duration-300 ease-in-out ${
+                            isSidebarOpen
+                              ? "max-w-48 translate-x-0 opacity-100"
+                              : "max-w-0 -translate-x-2 overflow-hidden opacity-0"
+                          }`}
+                        >
+                          {item.label}
+                        </span>
+
+                        {isSidebarOpen && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              toggleFavorite(item.href);
+                            }}
+                            title="Remover dos favoritos"
+                            className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-amber-400 hover:bg-amber-200/50 hover:text-amber-600 transition"
+                          >
+                            <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-500" />
+                          </button>
+                        )}
+                      </Link>
+                    </div>
+                  );
+                })}
+
+                <div className="mx-2 my-2 border-t border-slate-100 dark:border-slate-800" />
+              </div>
+            )}
+
             {["PRINCIPAL", "OPERACIONAL", "FINANCEIRO"].map((sectionKey) => {
               const sectionItems = visibleMenuItems.filter(
                 (item) => item.category === sectionKey || (!item.category && sectionKey === "PRINCIPAL")
@@ -1242,40 +1440,78 @@ export default function AppShell({ children }: AppShellProps) {
                   </div>
                   {sectionItems.map((item) => {
                     const isActive = isActiveRoute(item.href);
+                    const isFav = favoriteHrefs.includes(item.href);
 
                     return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        prefetch={menuLinkPrefetch}
-                        title={!isSidebarOpen ? item.label : undefined}
-                        onClick={handleCloseMobileSidebar}
-                        className={`group flex items-center overflow-hidden rounded-2xl px-3 py-2.5 text-sm font-bold transition-colors duration-200 ${
-                          isActive
-                            ? "bg-orange-500 text-white shadow-md shadow-orange-100"
-                            : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
-                        }`}
-                      >
-                        <span
-                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors duration-200 ${
+                      <div key={item.href} className="relative group/navitem">
+                        <Link
+                          href={item.href}
+                          data-menu-item={item.href}
+                          prefetch={menuLinkPrefetch}
+                          title={!isSidebarOpen ? item.label : undefined}
+                          onClick={handleCloseMobileSidebar}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const clickX = Math.min(e.clientX, window.innerWidth - 230);
+                            const clickY = Math.min(e.clientY, window.innerHeight - 150);
+                            setSidebarContextMenu({
+                              x: clickX,
+                              y: clickY,
+                              targetHref: item.href,
+                              targetLabel: item.label,
+                            });
+                          }}
+                          className={`group flex items-center overflow-hidden rounded-2xl px-3 py-2.5 text-sm font-bold transition-colors duration-200 ${
                             isActive
-                              ? "bg-white/20"
-                              : "bg-slate-100 group-hover:bg-orange-100"
+                              ? "bg-orange-500 text-white shadow-md shadow-orange-100"
+                              : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
                           }`}
                         >
-                          {item.icon}
-                        </span>
+                          <span
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors duration-200 ${
+                              isActive
+                                ? "bg-white/20"
+                                : "bg-slate-100 group-hover:bg-orange-100"
+                            }`}
+                          >
+                            {item.icon}
+                          </span>
 
-                        <span
-                          className={`ml-3 whitespace-nowrap transition-all duration-300 ease-in-out ${
-                            isSidebarOpen
-                              ? "max-w-48 translate-x-0 opacity-100"
-                              : "max-w-0 -translate-x-2 overflow-hidden opacity-0"
-                          }`}
-                        >
-                          {item.label}
-                        </span>
-                      </Link>
+                          <span
+                            className={`ml-3 flex-1 whitespace-nowrap transition-all duration-300 ease-in-out ${
+                              isSidebarOpen
+                                ? "max-w-48 translate-x-0 opacity-100"
+                                : "max-w-0 -translate-x-2 overflow-hidden opacity-0"
+                            }`}
+                          >
+                            {item.label}
+                          </span>
+
+                          {isSidebarOpen && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                toggleFavorite(item.href);
+                              }}
+                              title={isFav ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+                              className={`ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-lg transition ${
+                                isFav
+                                  ? "text-amber-500 opacity-100"
+                                  : "text-slate-300 opacity-0 group-hover/navitem:opacity-100 hover:text-amber-500 hover:bg-orange-100/50"
+                              }`}
+                            >
+                              <Star
+                                className={`h-3.5 w-3.5 ${
+                                  isFav ? "fill-amber-400 text-amber-500" : ""
+                                }`}
+                              />
+                            </button>
+                          )}
+                        </Link>
+                      </div>
                     );
                   })}
                 </div>
@@ -1484,6 +1720,7 @@ export default function AppShell({ children }: AppShellProps) {
               />
             ) : (
               <>
+                <AdminImpersonateBanner />
                 {children}
                 <AgendaNotificationListener />
               </>
@@ -1525,6 +1762,79 @@ export default function AppShell({ children }: AppShellProps) {
 
           <GlobalMinimizedModalDock />
         </div>
+
+        {sidebarContextMenu && (
+          <div
+            id="contrx-sidebar-context-menu"
+            style={{
+              left: `${sidebarContextMenu.x}px`,
+              top: `${sidebarContextMenu.y}px`,
+            }}
+            className={`fixed z-[100] min-w-56 overflow-hidden rounded-2xl border p-1.5 shadow-2xl backdrop-blur animate-in fade-in zoom-in-95 duration-100 ${
+              themeSettings.mode !== "light"
+                ? darkSurfaceClass
+                : "border-slate-200/90 bg-white"
+            }`}
+          >
+            {sidebarContextMenu.targetHref && (
+              <>
+                <div
+                  className={`px-3 py-1.5 text-[11px] font-bold truncate ${
+                    themeSettings.mode !== "light" ? "text-slate-400" : "text-slate-400"
+                  }`}
+                >
+                  {sidebarContextMenu.targetLabel || "Módulo"}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (sidebarContextMenu.targetHref) {
+                      toggleFavorite(sidebarContextMenu.targetHref);
+                    }
+                  }}
+                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold transition ${
+                    themeSettings.mode !== "light"
+                      ? darkMenuItemClass
+                      : "text-slate-700 hover:bg-orange-50 hover:text-orange-600"
+                  }`}
+                >
+                  <Star
+                    className={`h-4 w-4 ${
+                      favoriteHrefs.includes(sidebarContextMenu.targetHref)
+                        ? "fill-amber-400 text-amber-500"
+                        : "text-slate-400"
+                    }`}
+                  />
+                  <span>
+                    {favoriteHrefs.includes(sidebarContextMenu.targetHref)
+                      ? "Remover dos favoritos"
+                      : "Adicionar aos favoritos"}
+                  </span>
+                </button>
+                <div
+                  className={`my-1 border-t ${
+                    themeSettings.mode !== "light"
+                      ? "border-slate-800"
+                      : "border-slate-100"
+                  }`}
+                />
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={() => resetFavoritesToDefault()}
+              className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold transition ${
+                themeSettings.mode !== "light"
+                  ? "text-slate-300 hover:bg-red-950/40 hover:text-red-400"
+                  : "text-slate-600 hover:bg-red-50 hover:text-red-600"
+              }`}
+            >
+              <RotateCcw className="h-4 w-4" />
+              <span>Restaurar padrão</span>
+            </button>
+          </div>
+        )}
 
         {isTrialLoginNoticeOpen && (
           <div

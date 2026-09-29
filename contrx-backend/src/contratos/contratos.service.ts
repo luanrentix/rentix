@@ -54,7 +54,12 @@ export class ContratosService {
         include: this.defaultInclude,
       });
 
-      await this.upsertContractDueScheduleItem(tx, contract);
+      if (tx.property?.update) {
+        await tx.property.update({
+          where: { id: data.propertyId },
+          data: { operationalStatus: 'RENTED' },
+        });
+      }
 
       return contract;
     });
@@ -185,6 +190,12 @@ export class ContratosService {
       });
 
       await this.cancelContractDueScheduleItem(tx, contract);
+      await this.syncPropertyStatusOnContractEnd(
+        tx,
+        contract.propertyId,
+        companyId,
+        id,
+      );
 
       return contract;
     });
@@ -195,7 +206,7 @@ export class ContratosService {
     await this.ensureContractExists(id, companyId);
 
     return this.prisma.$transaction(async (tx) => {
-      await this.deletePendingReceivablesFromContract(tx, id, companyId);
+      await this.deleteAllReceivablesFromContract(tx, id, companyId);
 
       const contract = await tx.contract.update({
         where: { id },
@@ -210,6 +221,12 @@ export class ContratosService {
       });
 
       await this.deleteContractScheduleItems(tx, contract);
+      await this.syncPropertyStatusOnContractEnd(
+        tx,
+        contract.propertyId,
+        companyId,
+        id,
+      );
 
       return contract;
     });
@@ -237,6 +254,12 @@ export class ContratosService {
       });
 
       await this.completeContractDueScheduleItem(tx, contract);
+      await this.syncPropertyStatusOnContractEnd(
+        tx,
+        contract.propertyId,
+        companyId,
+        id,
+      );
 
       return contract;
     });
@@ -365,6 +388,30 @@ export class ContratosService {
     });
     await tx.contaReceber.deleteMany({
       where: { id: { in: pendingAccountIds } },
+    });
+  }
+
+  private async deleteAllReceivablesFromContract(
+    tx: Prisma.TransactionClient,
+    contractId: string,
+    companyId: string,
+  ) {
+    const accounts = await tx.contaReceber.findMany({
+      where: {
+        contractId,
+        companyId,
+      },
+      select: { id: true },
+    });
+    const accountIds = accounts.map((account) => account.id);
+
+    if (accountIds.length === 0) return;
+
+    await tx.pagamentoRecebido.deleteMany({
+      where: { chargeId: { in: accountIds } },
+    });
+    await tx.contaReceber.deleteMany({
+      where: { id: { in: accountIds } },
     });
   }
 
@@ -599,6 +646,65 @@ export class ContratosService {
         where: { id: existingScheduleItem.id },
         data,
       });
+    }
+  }
+
+  private async upsertContractStartScheduleItem(
+    tx: Prisma.TransactionClient,
+    contract: Contract,
+  ) {
+    if (!contract.startDate) return;
+    const scheduleMarker = `contract-start:${contract.id}`;
+    const title = contract.isTemporaryRental
+      ? 'Check-in (Entrada de Locação)'
+      : 'Início de contrato / Vistoria de entrada';
+
+    const existingScheduleItem = await tx.scheduleItem.findFirst({
+      where: {
+        companyId: contract.companyId,
+        OR: [
+          { notes: { contains: scheduleMarker } },
+          {
+            type: 'Contrato',
+            title,
+            customerName: contract.tenantName || '',
+            propertyName: contract.propertyName || '',
+          },
+        ],
+      },
+    });
+
+    const notes = [
+      `Contrato: ${contract.id}`,
+      `Início em ${this.formatDateForDisplay(contract.startDate)}`,
+      contract.isTemporaryRental && contract.checkInTime
+        ? `Horário de Check-in: ${contract.checkInTime}`
+        : '',
+      scheduleMarker,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const data = {
+      title,
+      customerName: contract.tenantName || 'Pessoa não informada',
+      propertyName: contract.propertyName || 'Bem/ativo não informado',
+      date: contract.startDate,
+      time: contract.checkInTime || existingScheduleItem?.time || '08:00',
+      type: 'Contrato',
+      status: 'scheduled' as const,
+      priority: 'high' as const,
+      responsibleName:
+        existingScheduleItem?.responsibleName || 'Administrativo',
+      reminder: existingScheduleItem?.reminder || '1 dia antes',
+      notes,
+    };
+
+    if (existingScheduleItem) {
+      await tx.scheduleItem.update({
+        where: { id: existingScheduleItem.id },
+        data,
+      });
       return;
     }
 
@@ -615,9 +721,11 @@ export class ContratosService {
     contract: Contract,
   ) {
     const scheduleMarker = this.getContractDueScheduleMarker(contract.id);
+    const startMarker = `contract-start:${contract.id}`;
 
     const conditions: Prisma.ScheduleItemWhereInput[] = [
       { notes: { contains: scheduleMarker } },
+      { notes: { contains: startMarker } },
       { notes: { contains: `Contrato: ${contract.id}` } },
       { notes: { contains: contract.id } },
     ];
@@ -777,6 +885,12 @@ export class ContratosService {
       throw new BadRequestException('Bem/ativo inativo nao pode ser alugado.');
     }
 
+    if (property.operationalStatus === 'MAINTENANCE') {
+      throw new BadRequestException(
+        'O bem/ativo está em manutenção e não pode ser locado.',
+      );
+    }
+
     const tenant = await this.prisma.person.findFirst({
       where: {
         id: tenantId,
@@ -803,16 +917,34 @@ export class ContratosService {
   ) {
     const startDate = this.parseDate(startDateValue, 'Data inicial invalida.');
     const endDate = this.parseDate(endDateValue, 'Data final invalida.');
-    const periodWhere = isTemporaryRental
+
+    const property = await this.prisma.property.findFirst({
+      where: { id: propertyId, companyId },
+      select: { id: true, assetCategory: true },
+    });
+
+    const isNonPropertyAsset =
+      property?.assetCategory != null && property.assetCategory !== 'PROPERTY';
+    const allowMultiplePeriods = isTemporaryRental || isNonPropertyAsset;
+
+    const periodWhere: Prisma.ContractWhereInput = allowMultiplePeriods
       ? {
           startDate: { lte: endDate },
           endDate: { gte: startDate },
         }
       : {
-          endDate: {
-            gte: this.getTodayStart(),
-          },
-          isTemporaryRental: false,
+          OR: [
+            {
+              endDate: {
+                gte: this.getTodayStart(),
+              },
+              isTemporaryRental: false,
+            },
+            {
+              startDate: { lte: endDate },
+              endDate: { gte: startDate },
+            },
+          ],
         };
     const existingContract = await this.prisma.contract.findFirst({
       where: {
@@ -828,7 +960,7 @@ export class ContratosService {
 
     if (existingContract) {
       throw new BadRequestException(
-        isTemporaryRental
+        allowMultiplePeriods
           ? 'Este bem/ativo ja possui contrato ativo nesse periodo.'
           : 'Este bem/ativo ja possui contrato ativo.',
       );
@@ -1029,5 +1161,144 @@ export class ContratosService {
     today.setHours(0, 0, 0, 0);
 
     return today;
+  }
+
+  private async syncPropertyStatusOnContractEnd(
+    tx: Prisma.TransactionClient,
+    propertyId: string,
+    companyId: string,
+    excludeContractId: string,
+  ) {
+    if (
+      !tx.contract?.count ||
+      !tx.property?.findUnique ||
+      !tx.property?.update
+    ) {
+      return;
+    }
+
+    const activeRemaining = await tx.contract.count({
+      where: {
+        companyId,
+        propertyId,
+        status: ContractStatus.ACTIVE,
+        id: { not: excludeContractId },
+      },
+    });
+
+    if (activeRemaining === 0) {
+      const property = await tx.property.findUnique({
+        where: { id: propertyId },
+        select: { operationalStatus: true, isActive: true },
+      });
+
+      if (
+        property &&
+        property.isActive &&
+        property.operationalStatus !== 'MAINTENANCE'
+      ) {
+        await tx.property.update({
+          where: { id: propertyId },
+          data: { operationalStatus: 'AVAILABLE' },
+        });
+      }
+    }
+  }
+
+  async shareContract(id: string, companyId: string) {
+    await this.ensureContractExists(id, companyId);
+
+    await this.prisma.sharedBankStatement
+      .deleteMany({
+        where: {
+          expiresAt: { lt: new Date() },
+        },
+      })
+      .catch(() => {});
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    const contract = await this.prisma.contract.findFirst({
+      where: { id, companyId },
+      include: { tenant: true, property: true },
+    });
+
+    if (!contract) {
+      throw new NotFoundException('Contrato não encontrado.');
+    }
+
+    return this.prisma.sharedBankStatement.create({
+      data: {
+        companyId,
+        documentType: 'CONTRATO_LOCACAO',
+        tenantId: contract.tenantId || null,
+        filterDescription: contract.id,
+        filterCategory: contract.isTemporaryRental ? 'TEMPORARY' : 'STANDARD',
+        expiresAt,
+      },
+    });
+  }
+
+  async findSharedContract(id: string) {
+    await this.prisma.sharedBankStatement
+      .deleteMany({
+        where: {
+          expiresAt: { lt: new Date() },
+        },
+      })
+      .catch(() => {});
+
+    const shared = await this.prisma.sharedBankStatement.findUnique({
+      where: { id },
+      include: {
+        company: true,
+      },
+    });
+
+    if (!shared) {
+      throw new NotFoundException(
+        'Link de contrato compartilhado não encontrado ou expirado.',
+      );
+    }
+
+    if (new Date() > shared.expiresAt) {
+      await this.prisma.sharedBankStatement
+        .delete({ where: { id } })
+        .catch(() => {});
+
+      throw new BadRequestException(
+        'Este link de contrato compartilhado já expirou (limite de 7 dias).',
+      );
+    }
+
+    const contract = await this.prisma.contract.findUnique({
+      where: { id: shared.filterDescription || '' },
+      include: {
+        property: true,
+        tenant: true,
+      },
+    });
+
+    if (!contract) {
+      throw new NotFoundException('Contrato original não encontrado.');
+    }
+
+    return {
+      contract,
+      company: {
+        id: shared.company.id,
+        tradeName: shared.company.tradeName,
+        companyName: shared.company.companyName,
+        document: shared.company.document,
+        phone: shared.company.phone,
+        email: shared.company.email,
+        address: (shared.company as any).address || '',
+        city: (shared.company as any).city || '',
+        state: (shared.company as any).state || '',
+        zipCode: (shared.company as any).zipCode || '',
+      },
+      expiresAt: shared.expiresAt,
+    };
   }
 }

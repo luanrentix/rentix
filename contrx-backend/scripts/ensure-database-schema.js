@@ -87,6 +87,40 @@ async function ensureSchema(client) {
   `);
 
   await client.query(`
+    ALTER TABLE IF EXISTS "imoveis"
+    ADD COLUMN IF NOT EXISTS "status_operacional" TEXT NOT NULL DEFAULT 'AVAILABLE'
+  `);
+
+  await client.query(`
+    UPDATE "imoveis"
+    SET "status_operacional" = 'RENTED'
+    WHERE "id" IN (
+      SELECT DISTINCT "imovel_id"
+      FROM "contratos"
+      WHERE ("status" = 'ATIVO' OR "status" = 'ACTIVE') AND "excluido_em" IS NULL
+    )
+    AND "status_operacional" = 'AVAILABLE'
+  `);
+
+  await client.query(`
+    UPDATE "imoveis"
+    SET "status_operacional" = 'AVAILABLE'
+    WHERE "status_operacional" = 'RENTED'
+    AND "id" NOT IN (
+      SELECT DISTINCT "imovel_id"
+      FROM "contratos"
+      WHERE ("status" = 'ATIVO' OR "status" = 'ACTIVE') AND "excluido_em" IS NULL
+    )
+  `);
+
+  await client.query(`
+    UPDATE "imoveis"
+    SET "status_operacional" = 'INACTIVE'
+    WHERE "ativo" = false
+    AND "status_operacional" <> 'INACTIVE'
+  `);
+
+  await client.query(`
     ALTER TABLE IF EXISTS "contas_pagar"
     ADD COLUMN IF NOT EXISTS "imovel_id" TEXT
   `);

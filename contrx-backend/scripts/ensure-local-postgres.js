@@ -57,11 +57,15 @@ function canConnect() {
   });
 }
 
-async function waitForPostgres() {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+async function waitForPostgres(maxAttempts = 120, intervalMs = 1000) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     if (await canConnect()) return true;
 
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    if (attempt % 5 === 0) {
+      console.log(`Aguardando PostgreSQL local inicializar na porta ${LOCAL_POSTGRES_PORT} (${attempt}s)...`);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
 
   return false;
@@ -88,14 +92,16 @@ async function main() {
     },
   );
 
+  if (await waitForPostgres()) {
+    return;
+  }
+
   if (result.status !== 0 && result.status !== null) {
     process.exit(result.status);
   }
 
-  if (!(await waitForPostgres())) {
-    console.error('PostgreSQL local nao ficou disponivel na porta 55432.');
-    process.exit(1);
-  }
+  console.error('PostgreSQL local nao ficou disponivel na porta 55432.');
+  process.exit(1);
 }
 
 main().catch((error) => {

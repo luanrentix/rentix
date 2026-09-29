@@ -20,6 +20,9 @@ describe('FinanceiroService', () => {
       contaPagar: {
         findMany: jest.fn().mockResolvedValue(payables),
       },
+      bankAccount: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
     } as unknown as PrismaService;
 
     return {

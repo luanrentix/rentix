@@ -14,7 +14,8 @@ export function setCachedAppSettings(settings: CachedSettings) {
   };
 }
 
-export function getCachedCompanySettings() {
+export function getCachedCompanySettings(companyId?: string) {
+  void companyId;
   return cachedSettings.companySettings || null;
 }
 

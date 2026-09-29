@@ -8,6 +8,22 @@ export type PeriodShortcut =
   | 'All'
   | 'Custom';
 
+export type AccountingMode = 'cash' | 'accrual';
+
+export type BankAccountSummary = {
+  id: string;
+  name: string;
+  bankName?: string | null;
+  type: string;
+  currentBalance: number;
+};
+
+export type BankSummary = {
+  totalCurrentBalance: number;
+  activeAccountsCount: number;
+  accounts: BankAccountSummary[];
+};
+
 export type FinancialReceivable = {
   id: string;
   tenantName: string;
@@ -47,11 +63,13 @@ export type FinancialPayable = {
 export type FinancialSummaryResponse = {
   receivables: FinancialReceivable[];
   payables: FinancialPayable[];
+  bankSummary?: BankSummary;
 };
 
 export type FinancialSummaryFilters = {
   startDate?: string;
   endDate?: string;
+  accountingMode?: AccountingMode;
 };
 
 export async function getFinancialSummary(
@@ -63,6 +81,7 @@ export async function getFinancialSummary(
 
   if (filters.startDate) searchParams.set('startDate', filters.startDate);
   if (filters.endDate) searchParams.set('endDate', filters.endDate);
+  if (filters.accountingMode) searchParams.set('accountingMode', filters.accountingMode);
   if (refresh) searchParams.set('refresh', 'true');
 
   const queryString = searchParams.toString();

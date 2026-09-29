@@ -11,7 +11,9 @@ import {
   LockKeyhole,
   LogIn,
   Mail,
+  ShieldCheck,
   Sparkles,
+  TrendingUp,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -388,6 +390,18 @@ export default function LoginPage() {
             </div>
           </div>
 
+          {/* Micro badges de segurança e conformidade */}
+          <div className="relative z-10 mb-5 flex flex-wrap items-center justify-center gap-5 text-xs font-bold text-white/90">
+            <span className="inline-flex items-center gap-1.5">
+              <LockKeyhole size={13} className="text-white" />
+              Ambiente Seguro TLS 1.3
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <ShieldCheck size={13} className="text-white" />
+              Conforme LGPD
+            </span>
+          </div>
+
           <p className="relative z-10 mt-auto pb-5 text-center text-sm font-black text-white sm:pb-8 sm:text-base">
             Contrx © 2026
           </p>
@@ -398,61 +412,122 @@ export default function LoginPage() {
             <div className="absolute inset-x-0 top-0 h-24 bg-[linear-gradient(135deg,rgba(255,75,0,0.10),rgba(20,184,166,0.08),rgba(99,102,241,0.08))]" />
             <div className="absolute inset-x-10 top-24 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
 
-            <div className="relative mx-auto mb-8 flex h-[260px] max-w-[545px] items-center justify-center">
+            <div className="relative mx-auto mb-8 flex h-[290px] max-w-[560px] items-center justify-center">
               <div className="absolute inset-x-10 bottom-2 h-24 rounded-[28px] bg-slate-200/70 blur-xl" />
 
-              <div className="absolute left-5 top-9 flex h-20 w-36 items-center gap-3 rounded-[22px] border border-white/80 bg-white/90 px-4 shadow-[0_18px_38px_rgba(15,23,42,0.10)]">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#e8fff7] text-[#059669]">
-                  <CalendarCheck size={23} strokeWidth={2.4} />
+              {/* Card 1: Agenda */}
+              <div className="absolute left-3 top-5 z-20 flex h-20 w-44 items-center gap-3 rounded-[22px] border border-white/80 bg-white/95 px-4 shadow-[0_18px_38px_rgba(15,23,42,0.10)] backdrop-blur-md">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#e8fff7] text-[#059669]">
+                  <CalendarCheck size={22} strokeWidth={2.4} />
                 </div>
-                <div>
-                  <p className="text-xs font-black text-slate-900">Agenda</p>
-                  <p className="mt-1 text-[11px] font-bold text-slate-400">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    Agenda
+                  </p>
+                  <p className="text-sm font-black text-slate-900">
                     24 visitas
                   </p>
+                  <p className="text-[10px] font-bold text-emerald-600">
+                    Vistorias em dia
+                  </p>
                 </div>
               </div>
 
-              <div className="absolute right-3 top-16 flex h-20 w-40 items-center gap-3 rounded-[22px] border border-white/80 bg-white/90 px-4 shadow-[0_18px_38px_rgba(15,23,42,0.10)]">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f46e5]">
-                  <FileText size={23} strokeWidth={2.4} />
+              {/* Card 2: Contratos */}
+              <div className="absolute right-3 top-8 z-20 flex h-20 w-44 items-center gap-3 rounded-[22px] border border-white/80 bg-white/95 px-4 shadow-[0_18px_38px_rgba(15,23,42,0.10)] backdrop-blur-md">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#eef2ff] text-[#4f46e5]">
+                  <FileText size={22} strokeWidth={2.4} />
                 </div>
-                <div>
-                  <p className="text-xs font-black text-slate-900">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
                     Contratos
                   </p>
-                  <p className="mt-1 text-[11px] font-bold text-slate-400">
-                    Em dia
+                  <p className="text-sm font-black text-slate-900">
+                    38 ativos
+                  </p>
+                  <p className="text-[10px] font-bold text-indigo-600">
+                    100% monitorados
                   </p>
                 </div>
               </div>
 
-              <div className="relative flex h-[205px] w-[300px] flex-col items-center justify-center rounded-[36px] border border-white bg-white shadow-[0_28px_60px_rgba(15,23,42,0.14)]">
-                <div className="absolute -top-5 flex h-11 items-center gap-2 rounded-full border border-orange-100 bg-white px-4 text-[#ff4b00] shadow-lg shadow-orange-500/10">
-                  <Sparkles size={16} fill="currentColor" />
+              {/* Card Central: Cockpit com Mini-Gráfico de Barras Financeiro */}
+              <div className="relative z-10 flex h-[215px] w-[300px] flex-col items-center justify-center rounded-[36px] border border-white bg-white p-5 shadow-[0_28px_60px_rgba(15,23,42,0.14)]">
+                <div className="absolute -top-5 flex h-10 items-center gap-2 rounded-full border border-orange-100 bg-white px-4 text-[#ff4b00] shadow-lg shadow-orange-500/10">
+                  <Sparkles size={15} fill="currentColor" />
                   <span className="text-xs font-black text-slate-800">
-                    Contrx
+                    Contrx ERP SaaS
                   </span>
                 </div>
 
-                <div className="relative flex h-28 w-28 items-center justify-center rounded-[30px] bg-[#fff1df] text-[#ff4b00] shadow-[inset_0_0_0_1px_rgba(255,75,0,0.08)]">
-                  <div className="absolute -right-4 -top-4 h-10 w-10 rounded-2xl bg-[#d9f99d]" />
-                  <div className="absolute -bottom-3 -left-3 h-9 w-9 rounded-2xl bg-[#bae6fd]" />
-                  <Building2 size={66} strokeWidth={2.2} />
+                <div className="relative mt-2 flex h-16 w-16 items-center justify-center rounded-[22px] bg-[#fff1df] text-[#ff4b00] shadow-[inset_0_0_0_1px_rgba(255,75,0,0.08)]">
+                  <Building2 size={38} strokeWidth={2.2} />
                 </div>
 
-                <div className="mt-5 grid w-full grid-cols-3 gap-2 px-8">
-                  <div className="h-2 rounded-full bg-[#ff4b00]" />
-                  <div className="h-2 rounded-full bg-[#14b8a6]" />
-                  <div className="h-2 rounded-full bg-[#6366f1]" />
+                {/* Mini Gráfico de Barras de Resultado Financeiro */}
+                <div className="mt-3.5 flex w-full items-end justify-center gap-2 px-6">
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="h-6 w-3.5 rounded-full bg-orange-200" />
+                    <span className="text-[9px] font-black text-slate-400">Mai</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="h-9 w-3.5 rounded-full bg-orange-300" />
+                    <span className="text-[9px] font-black text-slate-400">Jun</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="h-11 w-3.5 rounded-full bg-orange-400" />
+                    <span className="text-[9px] font-black text-slate-400">Jul</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="h-13 w-3.5 rounded-full bg-[#ff4b00]" />
+                    <span className="text-[9px] font-black text-slate-400">Ago</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="h-15 w-3.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/30" />
+                    <span className="text-[9px] font-black text-emerald-600">Set</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="absolute bottom-8 left-16 flex h-16 w-32 items-center justify-center rounded-[20px] border border-white/80 bg-white/85 text-sm font-black text-slate-700 shadow-[0_16px_34px_rgba(15,23,42,0.08)]">
-                Ativos
+              {/* Card 3: Bens / Ativos no padrão AssetKpis */}
+              <div className="absolute -bottom-2 left-2 z-20 flex h-21 w-46 items-center gap-3 rounded-[22px] border border-white/90 bg-white/95 px-3.5 py-3 shadow-[0_20px_42px_rgba(15,23,42,0.12)] backdrop-blur-md">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-orange-600">
+                  <Building2 size={22} strokeWidth={2.4} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    Bens / Ativos
+                  </p>
+                  <p className="text-sm font-black text-slate-900">
+                    82% ocupação
+                  </p>
+                  <p className="text-[10px] font-bold text-slate-500">
+                    14 disponíveis
+                  </p>
+                </div>
               </div>
-              <div className="absolute bottom-4 right-20 flex h-16 w-36 items-center justify-center rounded-[20px] border border-white/80 bg-white/85 text-sm font-black text-slate-700 shadow-[0_16px_34px_rgba(15,23,42,0.08)]">
-                Financeiro
+
+              {/* Card 4: Resultado Financeiro no padrão AssetKpis */}
+              <div className="absolute -bottom-3 right-1 z-20 flex h-22 w-54 items-center gap-3 rounded-[24px] border border-white/90 bg-white/95 px-4 py-3 shadow-[0_24px_50px_rgba(15,23,42,0.16)] backdrop-blur-md">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                  <TrendingUp size={24} strokeWidth={2.4} />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                      Financeiro
+                    </p>
+                    <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-black text-emerald-700">
+                      +12%
+                    </span>
+                  </div>
+                  <p className="text-base font-black text-slate-950">
+                    R$ 86,4 mil
+                  </p>
+                  <p className="text-[10px] font-bold text-emerald-600">
+                    98% recebido no mês
+                  </p>
+                </div>
               </div>
             </div>
 

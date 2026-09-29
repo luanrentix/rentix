@@ -22,6 +22,11 @@ export type ScheduleItem = {
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
+  person?: {
+    id: string;
+    name: string;
+    phone?: string | null;
+  } | null;
 };
 
 export type CreateScheduleItemDto = {
@@ -42,8 +47,17 @@ export type CreateScheduleItemDto = {
 
 export type UpdateScheduleItemDto = Partial<CreateScheduleItemDto>;
 
-export async function getScheduleItems() {
-  return apiFetch<ScheduleItem[]>(`/agenda?_t=${Date.now()}`);
+export async function getScheduleItems(inicio?: string, fim?: string) {
+  const params = new URLSearchParams();
+  params.set('_t', String(Date.now()));
+  if (inicio) params.set('inicio', inicio);
+  if (fim) params.set('fim', fim);
+
+  return apiFetch<ScheduleItem[]>(`/agenda?${params.toString()}`);
+}
+
+export async function getPendingScheduleReminders() {
+  return apiFetch<ScheduleItem[]>(`/agenda/lembretes-pendentes?_t=${Date.now()}`);
 }
 
 export async function createScheduleItem(data: CreateScheduleItemDto) {

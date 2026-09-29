@@ -153,7 +153,22 @@ export default async function HomePage() {
               </Link>
             </div>
 
-            <div className="mt-8 rounded-[8px] border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-bold text-slate-500">
+              <span className="inline-flex items-center gap-1.5">
+                <ShieldCheck size={15} className="text-emerald-500" />
+                Criptografia TLS 1.3 & LGPD
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <CheckCircle2 size={15} className="text-emerald-500" />
+                DRE & Regime de Caixa
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <CheckCircle2 size={15} className="text-emerald-500" />
+                Backup Diário em Nuvem
+              </span>
+            </div>
+
+            <div className="mt-8 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="mb-3 flex items-center justify-between gap-4">
                 <p className="text-xs font-black uppercase tracking-wide text-slate-500">
                   Exemplo de operação monitorada
@@ -164,7 +179,7 @@ export default async function HomePage() {
                 {overviewMetrics.map((metric) => (
                   <div
                     key={metric.label}
-                    className="rounded-[8px] border border-slate-100 bg-slate-50 px-4 py-3"
+                    className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3"
                   >
                     <p className="text-2xl font-black text-slate-950">
                       {metric.value}

@@ -1,113 +1,34 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle,
-  ArrowRight,
-  CalendarDays,
-  ChartLine,
-  CircleCheck,
   DollarSign,
+  ChartLine,
   FileText,
   Home,
-  Info,
-  X,
+  CheckCircle2,
+  ArrowDownCircle,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import {
-  getContracts,
-  type Contract as ApiContract,
-} from "@/services/contracts.service";
-import {
-  getFinancialSummary,
-  type FinancialPayable,
-  type FinancialReceivable,
-} from "@/services/financial-summary.service";
-import {
-  getProperties,
-  type Property as ApiProperty,
-} from "@/services/properties.service";
-import { getCompanyStorageItem, setCompanyStorageItem } from "@/services/company-storage";
+import { getDashboardOverview } from "@/services/dashboard.service";
 import { getAppSettings } from "@/services/settings.service";
 import {
-  Bar,
-  CartesianGrid,
-  ComposedChart,
-  Line,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-
-type PropertyStatus = "Available" | "Rented";
-
-type Property = {
-  id: string;
-  name: string;
-  address: string;
-  rentValue: number;
-  status: PropertyStatus;
-};
-
-type ContractStatus =
-  | "Active"
-  | "Finished"
-  | "Inactive"
-  | "Canceled"
-  | "Deleted";
-
-type Contract = {
-  id: string;
-  propertyId: string;
-  tenantId: string;
-  startDate: string;
-  endDate?: string;
-  value?: number;
-  rentValue?: number;
-  status: ContractStatus;
-};
-
-type DashboardAlert = {
-  id: string;
-  title: string;
-  description: string;
-  level: "critical" | "warning" | "info" | "success";
-};
-
-type RevenueMonth = {
-  month: string;
-  expected: number;
-  activeContracts: number;
-};
-
-type ContractEvolutionItem = {
-  month: string;
-  createdContracts: number;
-  activeContracts: number;
-};
-
-type FinancialMovement = {
-  id: string;
-  title: string;
-  subtitle: string;
-  dueDate: string;
-  amount: number;
-  status: "overdue" | "today" | "upcoming";
-};
-
-type ThemeMode = "light" | "black" | "graphite";
-type DashboardFinancialPeriod = "CurrentMonth" | "CurrentYear" | "All" | "Custom";
-
-const chartColors = {
-  orange: "var(--primary-color, #f97316)",
-  orangeSoft: "var(--primary-border-light, #fed7aa)",
-  slate: "#94a3b8",
-  slateSoft: "#e2e8f0",
-  green: "#16a34a",
-  red: "#dc2626",
-};
+  getCompanyStorageItem,
+  setCompanyStorageItem,
+} from "@/services/company-storage";
+import type {
+  DashboardFinancialPeriod,
+  DashboardOverviewResponse,
+  ThemeMode,
+} from "@/types/dashboard.types";
+import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
+import { MetricCard } from "@/components/dashboard/metric-card";
+import { FinancialSummaryCard } from "@/components/dashboard/financial-summary-card";
+import { RevenueEvolutionChart } from "@/components/dashboard/revenue-evolution-chart";
+import { ContractEvolutionChart } from "@/components/dashboard/contract-evolution-chart";
+import { AlertsSection } from "@/components/dashboard/alerts-section";
+import { FinancialOperationsSection } from "@/components/dashboard/financial-operations-section";
 
 const contrxDashboardThemeStyle = `
   .contrx-dashboard-page[data-contrx-theme="black"] {
@@ -194,33 +115,23 @@ const contrxDashboardThemeStyle = `
   .contrx-dashboard-page[data-contrx-theme="black"] .recharts-tooltip-wrapper .recharts-tooltip-item {
     color: #f8fafc !important;
   }
-
-  .contrx-dashboard-page[data-contrx-theme="black"] .hover\\:bg-orange-50:hover {
-    background-color: color-mix(in srgb, var(--primary-color) 20%, transparent) !important;
-  }
-
-  .contrx-dashboard-page[data-contrx-theme="black"] .hover\\:bg-slate-200:hover {
-    background-color: #1e293b !important;
-  }
 `;
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const companyId = user?.companyId;
 
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [contracts, setContracts] = useState<Contract[]>([]);
-  const [dashboardTheme, setDashboardTheme] = useState<ThemeMode>("light");
-  const [receivables, setReceivables] = useState<FinancialReceivable[]>([]);
-  const [payables, setPayables] = useState<FinancialPayable[]>([]);
-  const [isDashboardLoading, setIsDashboardLoading] = useState(true);
-  const [dashboardError, setDashboardError] = useState("");
-  const [financialSummaryError, setFinancialSummaryError] = useState("");
+  const [dashboardData, setDashboardData] =
+    useState<DashboardOverviewResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+
   const [financialPeriod, setFinancialPeriod] =
     useState<DashboardFinancialPeriod>("CurrentMonth");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
+
   const [revenueChartView, setRevenueChartView] = useState<"month" | "day">(
     "month",
   );
@@ -228,15 +139,34 @@ export default function DashboardPage() {
     "month",
   );
 
+  const [dashboardTheme, setDashboardTheme] = useState<ThemeMode>("light");
   const [isOnboardingDismissed, setIsOnboardingDismissed] = useState(false);
   const [hasCompanyConfigured, setHasCompanyConfigured] = useState(false);
+  const [isPrivacyMode, setIsPrivacyMode] = useState(false);
 
   useEffect(() => {
     if (!companyId) return;
-    const storedDismissed = getCompanyStorageItem(companyId, "contrx_onboarding_dismissed", "contrx_onboarding_dismissed") === "true";
+    const storedDismissed =
+      getCompanyStorageItem(
+        companyId,
+        "contrx_onboarding_dismissed",
+        "contrx_onboarding_dismissed",
+      ) === "true";
     setIsOnboardingDismissed(storedDismissed);
 
-    const storedCompanySettings = getCompanyStorageItem(companyId, "contrx_company_settings", "contrx_company_settings");
+    const storedPrivacy =
+      getCompanyStorageItem(
+        companyId,
+        "contrx_privacy_mode",
+        "contrx_privacy_mode",
+      ) === "true";
+    setIsPrivacyMode(storedPrivacy);
+
+    const storedCompanySettings = getCompanyStorageItem(
+      companyId,
+      "contrx_company_settings",
+      "contrx_company_settings",
+    );
     if (storedCompanySettings) {
       try {
         const parsed = JSON.parse(storedCompanySettings);
@@ -249,137 +179,68 @@ export default function DashboardPage() {
     }
   }, [companyId]);
 
-  const dismissOnboarding = () => {
+  const togglePrivacyMode = () => {
     if (!companyId) return;
-    setCompanyStorageItem(companyId, "contrx_onboarding_dismissed", "true");
-    setIsOnboardingDismissed(true);
+    setIsPrivacyMode((prev) => {
+      const next = !prev;
+      setCompanyStorageItem(companyId, "contrx_privacy_mode", String(next));
+      return next;
+    });
   };
 
-  const loadDashboardData = useCallback(async (currentCompanyId: string, forceRefresh = false) => {
-    setIsDashboardLoading(true);
-    setDashboardError("");
-    setFinancialSummaryError("");
+  const loadData = useCallback(
+    async (forceRefresh = false) => {
+      if (!companyId) return;
 
-    try {
-      const [apiProperties, apiContracts, appSettings, financialSummary] = await Promise.all([
-        getProperties(currentCompanyId),
-        getContracts(currentCompanyId),
-        getAppSettings(currentCompanyId).catch(() => null),
-        getFinancialSummary(
-          currentCompanyId,
-          getFinancialSummaryFilters(financialPeriod, customStartDate, customEndDate),
-          forceRefresh,
-        ).catch((error) => {
-          setFinancialSummaryError(
-            error instanceof Error
-              ? error.message
-              : "Não foi possível carregar o resumo financeiro.",
+      setIsLoading(true);
+      setError("");
+
+      try {
+        const [overview, appSettings] = await Promise.all([
+          getDashboardOverview(
+            {
+              period: financialPeriod,
+              startDate: customStartDate || undefined,
+              endDate: customEndDate || undefined,
+            },
+            forceRefresh,
+          ),
+          getAppSettings(companyId).catch(() => null),
+        ]);
+
+        if (appSettings?.companySettings) {
+          const isConfigured = !!(
+            appSettings.companySettings.companyName ||
+            appSettings.companySettings.tradeName
           );
-          return {
-            receivables: [],
-            payables: [],
-          };
-        })
-      ]);
+          setHasCompanyConfigured(isConfigured);
+          setCompanyStorageItem(
+            companyId,
+            "contrx_company_settings",
+            JSON.stringify(appSettings.companySettings),
+          );
+        }
 
-      if (appSettings && appSettings.companySettings) {
-        const isConfigured = !!(appSettings.companySettings.companyName || appSettings.companySettings.tradeName);
-        setHasCompanyConfigured(isConfigured);
-        setCompanyStorageItem(
-          currentCompanyId,
-          "contrx_company_settings",
-          JSON.stringify(appSettings.companySettings),
+        setDashboardData(overview);
+        setLastUpdatedAt(new Date());
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Não foi possível carregar as informações do Dashboard.",
         );
+      } finally {
+        setIsLoading(false);
       }
-
-      const normalizedContracts = apiContracts.map(mapApiContractToDashboardContract);
-      const activePropertyIds = new Set(
-        normalizedContracts
-          .filter((contract) => contract.status === "Active")
-          .map((contract) => contract.propertyId),
-      );
-
-      setContracts(normalizedContracts);
-      setProperties(
-        apiProperties.map((property) =>
-          mapApiPropertyToDashboardProperty(property, activePropertyIds),
-        ),
-      );
-      setReceivables(
-        financialSummary.receivables.map((receivable) => ({
-          ...receivable,
-          tenant: receivable.tenantName,
-          property: receivable.propertyName,
-        })),
-      );
-      setPayables(
-        financialSummary.payables.map((payable) => ({
-          ...payable,
-          supplier: payable.personName,
-          value: payable.amount,
-        })),
-      );
-      setLastUpdatedAt(new Date());
-    } catch (error) {
-      setDashboardError(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível carregar os dados da Dashboard.",
-      );
-    } finally {
-      setIsDashboardLoading(false);
-    }
-  }, [financialPeriod, customStartDate, customEndDate]);
-
-  const exportToCSV = () => {
-    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
-    csvContent += "CONTRX - RELATÓRIO DO DASHBOARD\n";
-    csvContent += `Filtro de Período:;${getFinancialPeriodLabel(financialPeriod)}\n`;
-    if (financialPeriod === "Custom") {
-      csvContent += `Datas:;${customStartDate || "Início"} até ${customEndDate || "Fim"}\n`;
-    }
-    csvContent += `Data de Exportação:;${new Date().toLocaleDateString("pt-BR")} ${new Date().toLocaleTimeString("pt-BR")}\n\n`;
-
-    csvContent += "INDICADORES CHAVE\n";
-    csvContent += "Indicador;Valor;Detalhe\n";
-    csvContent += `Receita mensal prevista;"${formatCurrency(monthlyRevenue)}";"${formatCurrency(annualRevenueProjection)} projetado ao ano"\n`;
-    csvContent += `Taxa de ocupação;"${occupancyRate}%";"${rentedProperties} de ${totalProperties} bens/ativos alugados"\n`;
-    csvContent += `Contratos ativos;"${activeContracts}";"${finishedContracts} finalizado(s)"\n`;
-    csvContent += `A receber em aberto;"${formatCurrency(openReceivableTotal)}";"${formatCurrency(overdueReceivableTotal)} vencido(s)"\n`;
-    csvContent += `Recebido confirmado;"${formatCurrency(receivedTotal)}";"${receivables.filter((item) => item.status === "Paid").length} lancamento(s) pago(s)"\n`;
-    csvContent += `A pagar em aberto;"${formatCurrency(openPayableTotal)}";"${payables.filter((item) => item.status !== "Paid").length} lancamento(s) pendente(s)"\n`;
-    csvContent += `Potencial disponível;"${formatCurrency(availablePotentialRevenue)}";"${availableProperties} bem(ns) sem contrato"\n\n`;
-
-    csvContent += "CONTAS A RECEBER NO PERÍODO\n";
-    csvContent += "Inquilino;Imóvel;Vencimento;Valor;Status\n";
-    receivables.forEach((item) => {
-      const statusLabel = item.status === "Paid" ? "Recebido" : "Pendente";
-      csvContent += `"${item.tenantName}";"${item.propertyName || ""}";"${item.dueDate ? new Date(item.dueDate).toLocaleDateString("pt-BR") : ""}";"${formatCurrency(item.amount)}";"${statusLabel}"\n`;
-    });
-    csvContent += "\n";
-
-    csvContent += "CONTAS A PAGAR NO PERÍODO\n";
-    csvContent += "Descrição;Fornecedor;Vencimento;Valor;Status\n";
-    payables.forEach((item) => {
-      const statusLabel = item.status === "Paid" ? "Pago" : "Pendente";
-      csvContent += `"${item.description}";"${item.personName || ""}";"${item.dueDate ? new Date(item.dueDate).toLocaleDateString("pt-BR") : ""}";"${formatCurrency(item.amount)}";"${statusLabel}"\n`;
-    });
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `contrx_dashboard_${getFinancialPeriodLabel(financialPeriod).toLowerCase().replace(/ /g, "_")}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+    },
+    [companyId, financialPeriod, customStartDate, customEndDate],
+  );
 
   useEffect(() => {
-    if (!companyId) return;
+    loadData();
+  }, [loadData]);
 
-    loadDashboardData(companyId);
-  }, [companyId, loadDashboardData]);
-
+  // Tema
   useEffect(() => {
     function applyStoredTheme() {
       const storedThemeSettings = getCompanyStorageItem(
@@ -411,13 +272,7 @@ export default function DashboardPage() {
 
         setDashboardTheme(nextTheme);
       } catch {
-        setDashboardTheme(
-          legacyTheme === "graphite" || legacyTheme === "grafite"
-            ? "graphite"
-            : legacyTheme === "black" || legacyTheme === "dark"
-              ? "black"
-              : "light",
-        );
+        setDashboardTheme("light");
       }
     }
 
@@ -431,1262 +286,291 @@ export default function DashboardPage() {
     };
   }, [companyId]);
 
-  function refreshDashboardData() {
-    if (!companyId || isDashboardLoading) return;
+  const dismissOnboarding = () => {
+    if (!companyId) return;
+    setCompanyStorageItem(companyId, "contrx_onboarding_dismissed", "true");
+    setIsOnboardingDismissed(true);
+  };
 
-    loadDashboardData(companyId, true);
-  }
+  const metrics = dashboardData?.metrics;
 
-  const activeContractsList = useMemo(
-    () => contracts.filter((contract) => contract.status === "Active"),
-    [contracts],
-  );
+  const onboardingSteps = useMemo(() => {
+    const totalProps = metrics?.totalProperties || 0;
+    const activeConts = metrics?.activeContracts || 0;
+    const finishedConts = metrics?.finishedContracts || 0;
+    const totalConts = metrics?.totalContracts ?? (activeConts + finishedConts);
 
-  const totalProperties = properties.length;
-  const rentedProperties = properties.filter(
-    (property) => property.status === "Rented",
-  ).length;
-  const availableProperties = properties.filter(
-    (property) => property.status === "Available",
-  ).length;
-
-  const activeContracts = activeContractsList.length;
-  const finishedContracts = contracts.filter(
-    (contract) => contract.status === "Finished",
-  ).length;
-  const monthlyRevenue = activeContractsList.reduce(
-    (total, contract) => total + getContractValue(contract),
-    0,
-  );
-
-  const totalPotentialRevenue = properties.reduce(
-    (total, property) => total + Number(property.rentValue || 0),
-    0,
-  );
-
-  const availablePotentialRevenue = properties
-    .filter((property) => property.status === "Available")
-    .reduce((total, property) => total + Number(property.rentValue || 0), 0);
-
-  const occupancyRate =
-    totalProperties > 0
-      ? Math.round((rentedProperties / totalProperties) * 100)
-      : 0;
-
-  const vacancyRate = totalProperties > 0 ? 100 - occupancyRate : 0;
-
-  const revenueEfficiency =
-    totalPotentialRevenue > 0
-      ? Math.round((monthlyRevenue / totalPotentialRevenue) * 100)
-      : 0;
-
-  const averageTicket =
-    activeContracts > 0 ? Math.round(monthlyRevenue / activeContracts) : 0;
-
-  const annualRevenueProjection = monthlyRevenue * 12;
-  const openReceivableTotal = receivables
-    .filter((receivable) => receivable.status !== "Paid")
-    .reduce(
-      (total, receivable) =>
-        total + normalizeAmount(receivable.remainingAmount ?? receivable.amount),
-      0,
-    );
-  const receivedTotal = receivables
-    .filter((receivable) => receivable.status === "Paid")
-    .reduce(
-      (total, receivable) =>
-        total + normalizeAmount(receivable.paidAmount ?? receivable.amount),
-      0,
-    );
-  const openPayableTotal = payables
-    .filter((payable) => payable.status !== "Paid")
-    .reduce(
-      (total, payable) =>
-        total + normalizeAmount(payable.remainingAmount ?? payable.amount),
-      0,
-    );
-  const overdueReceivableTotal = receivables
-    .filter((receivable) => receivable.status === "Overdue")
-    .reduce(
-      (total, receivable) =>
-        total + normalizeAmount(receivable.remainingAmount ?? receivable.amount),
-      0,
-    );
-
-  const revenueChartData = useMemo<RevenueMonth[]>(() => {
-    return getLastSixMonths().map((monthDate) => {
-      const monthEnd = new Date(
-        monthDate.getFullYear(),
-        monthDate.getMonth() + 1,
-        0,
-        23,
-        59,
-        59,
-      );
-
-      const validContracts = contracts.filter((contract) => {
-        if (["Canceled", "Deleted", "Inactive"].includes(contract.status)) {
-          return false;
-        }
-
-        const startDate = parseDate(contract.startDate);
-
-        if (!startDate) {
-          return contract.status === "Active";
-        }
-
-        return startDate <= monthEnd;
-      });
-
-      return {
-        month: monthDate
-          .toLocaleDateString("pt-BR", { month: "short" })
-          .replace(".", ""),
-        expected: validContracts.reduce(
-          (total, contract) => total + getContractValue(contract),
-          0,
-        ),
-        activeContracts: validContracts.length,
-      };
-    });
-  }, [contracts]);
-
-  const dailyRevenueChartData = useMemo<RevenueMonth[]>(() => {
-    return getLastThirtyDays().map((dayDate) => {
-      const dayEnd = new Date(
-        dayDate.getFullYear(),
-        dayDate.getMonth(),
-        dayDate.getDate(),
-        23,
-        59,
-        59,
-      );
-
-      const validContracts = contracts.filter((contract) => {
-        if (["Canceled", "Deleted", "Inactive"].includes(contract.status)) {
-          return false;
-        }
-
-        const startDate = parseDate(contract.startDate);
-
-        if (!startDate) {
-          return contract.status === "Active";
-        }
-
-        return startDate <= dayEnd;
-      });
-
-      return {
-        month: dayDate.toLocaleDateString("pt-BR", {
-          day: "2-digit",
-          month: "2-digit",
-        }),
-        expected: validContracts.reduce(
-          (total, contract) => total + getContractValue(contract),
-          0,
-        ),
-        activeContracts: validContracts.length,
-      };
-    });
-  }, [contracts]);
-
-  const monthlyContractEvolutionData = useMemo<ContractEvolutionItem[]>(() => {
-    return getLastSixMonths().map((monthDate) => {
-      const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-      const monthEnd = new Date(
-        monthDate.getFullYear(),
-        monthDate.getMonth() + 1,
-        0,
-        23,
-        59,
-        59,
-      );
-
-      const createdContracts = contracts.filter((contract) => {
-        const startDate = parseDate(contract.startDate);
-        return startDate && startDate >= monthStart && startDate <= monthEnd;
-      });
-
-      const activeContractsInPeriod = contracts.filter((contract) => {
-        if (["Canceled", "Deleted", "Inactive"].includes(contract.status)) {
-          return false;
-        }
-
-        const startDate = parseDate(contract.startDate);
-
-        if (!startDate) {
-          return contract.status === "Active";
-        }
-
-        return startDate <= monthEnd;
-      });
-
-      return {
-        month: monthDate
-          .toLocaleDateString("pt-BR", { month: "short" })
-          .replace(".", ""),
-        createdContracts: createdContracts.length,
-        activeContracts: activeContractsInPeriod.length,
-      };
-    });
-  }, [contracts]);
-
-  const dailyContractEvolutionData = useMemo<ContractEvolutionItem[]>(() => {
-    return getLastThirtyDays().map((dayDate) => {
-      const dayStart = new Date(
-        dayDate.getFullYear(),
-        dayDate.getMonth(),
-        dayDate.getDate(),
-        0,
-        0,
-        0,
-      );
-      const dayEnd = new Date(
-        dayDate.getFullYear(),
-        dayDate.getMonth(),
-        dayDate.getDate(),
-        23,
-        59,
-        59,
-      );
-
-      const createdContracts = contracts.filter((contract) => {
-        const startDate = parseDate(contract.startDate);
-        return startDate && startDate >= dayStart && startDate <= dayEnd;
-      });
-
-      const activeContractsInPeriod = contracts.filter((contract) => {
-        if (["Canceled", "Deleted", "Inactive"].includes(contract.status)) {
-          return false;
-        }
-
-        const startDate = parseDate(contract.startDate);
-
-        if (!startDate) {
-          return contract.status === "Active";
-        }
-
-        return startDate <= dayEnd;
-      });
-
-      return {
-        month: dayDate.toLocaleDateString("pt-BR", {
-          day: "2-digit",
-          month: "2-digit",
-        }),
-        createdContracts: createdContracts.length,
-        activeContracts: activeContractsInPeriod.length,
-      };
-    });
-  }, [contracts]);
-
-  const selectedRevenueChartData =
-    revenueChartView === "month" ? revenueChartData : dailyRevenueChartData;
-
-  const selectedContractEvolutionData =
-    contractChartView === "month"
-      ? monthlyContractEvolutionData
-      : dailyContractEvolutionData;
-
-  const revenueChartDescription =
-    revenueChartView === "month"
-      ? "Receita prevista por mês com base nos contratos cadastrados. Não representa recebimento confirmado."
-      : "Projeção diária dos últimos 30 dias com base nos contratos ativos em cada data.";
-
-  const contractChartDescription =
-    contractChartView === "month"
-      ? "Contratos iniciados e contratos ativos nos últimos 6 meses."
-      : "Contratos iniciados e contratos ativos nos últimos 30 dias.";
-
-  const receivableMovements = useMemo(() => {
-    return getFinancialMovementsFromReceivables(receivables);
-  }, [receivables]);
-
-  const payableMovements = useMemo(() => {
-    return getFinancialMovementsFromPayables(payables);
-  }, [payables]);
-
-  const todayReceivableMovements = useMemo(
-    () =>
-      receivableMovements.filter(
-        (movement) => movement.status === "today" || movement.status === "overdue",
-      ),
-    [receivableMovements],
-  );
-
-  const upcomingReceivableMovements = useMemo(
-    () =>
-      receivableMovements
-        .filter((movement) => movement.status === "upcoming")
-        .slice(0, 5),
-    [receivableMovements],
-  );
-
-  const todayPayableMovements = useMemo(
-    () =>
-      payableMovements.filter(
-        (movement) => movement.status === "today" || movement.status === "overdue",
-      ),
-    [payableMovements],
-  );
-
-  const upcomingPayableMovements = useMemo(
-    () =>
-      payableMovements
-        .filter((movement) => movement.status === "upcoming")
-        .slice(0, 5),
-    [payableMovements],
-  );
-
-  const todayReceivableTotal = todayReceivableMovements.reduce(
-    (total, movement) => total + movement.amount,
-    0,
-  );
-
-  const todayPayableTotal = todayPayableMovements.reduce(
-    (total, movement) => total + movement.amount,
-    0,
-  );
-
-  const upcomingReceivableTotal = upcomingReceivableMovements.reduce(
-    (total, movement) => total + movement.amount,
-    0,
-  );
-
-  const upcomingPayableTotal = upcomingPayableMovements.reduce(
-    (total, movement) => total + movement.amount,
-    0,
-  );
-
-  /* eslint-disable react-hooks/preserve-manual-memoization */
-  const dashboardAlerts = useMemo<DashboardAlert[]>(() => {
-    const alerts: DashboardAlert[] = [];
-    const contractsWithoutValue = activeContractsList.filter(
-      (contract) => getContractValue(contract) <= 0,
-    ).length;
-
-    // Cálculo de contratos vencidos e a vencer nos próximos 30 dias
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const expiringContracts = contracts.filter((contract) => {
-      if (contract.status !== "Active" || !contract.endDate) return false;
-      const end = new Date(contract.endDate);
-      const diffTime = end.getTime() - today.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return diffDays >= 0 && diffDays <= 30;
-    }).length;
-
-    const expiredContracts = contracts.filter((contract) => {
-      if (contract.status !== "Active" || !contract.endDate) return false;
-      const end = new Date(contract.endDate);
-      const diffTime = end.getTime() - today.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return diffDays < 0;
-    }).length;
-
-    if (expiredContracts > 0) {
-      alerts.push({
-        id: "expired-contracts-alert",
-        title: `${expiredContracts} contrato(s) vencido(s)`,
-        description: "Contratos ativos cuja data de término já passou. Providencie a renovação ou encerramento.",
-        level: "critical",
-      });
-    }
-
-    if (expiringContracts > 0) {
-      alerts.push({
-        id: "expiring-contracts-alert",
-        title: `${expiringContracts} contrato(s) a vencer em 30 dias`,
-        description: "Contratos ativos perto da data de término. Agende a renovação ou contato.",
-        level: "warning",
-      });
-    }
-
-    if (totalProperties === 0) {
-      alerts.push({
-        id: "no-properties",
-        title: "Nenhum bem/ativo cadastrado",
+    return [
+      {
+        id: "company",
+        label: "Configurar dados da empresa",
         description:
-          "Cadastre bens/ativos para iniciar a gestão operacional e financeira.",
-        level: "critical",
-      });
-    }
-
-    if (availableProperties > 0) {
-      alerts.push({
-        id: "available-properties",
-        title: `${availableProperties} bem(ns)/ativo(s) disponível(is)`,
-        description: `${formatCurrency(availablePotentialRevenue)} em potencial mensal ainda sem contrato ativo.`,
-        level: "warning",
-      });
-    }
-
-    if (contractsWithoutValue > 0) {
-      alerts.push({
-        id: "contracts-without-value",
-        title: `${contractsWithoutValue} contrato(s) sem valor`,
-        description:
-          "Revise os contratos ativos para manter os indicadores financeiros corretos.",
-        level: "critical",
-      });
-    }
-
-    if (todayReceivableMovements.length > 0) {
-      alerts.push({
-        id: "receivables-today",
-        title: `${todayReceivableMovements.length} recebimento(s) para atenção`,
-        description: `${formatCurrency(todayReceivableTotal)} entre vencimentos de hoje e atrasados.`,
-        level: todayReceivableMovements.some((movement) => movement.status === "overdue")
-          ? "critical"
-          : "info",
-      });
-    }
-
-    if (todayPayableMovements.length > 0) {
-      alerts.push({
-        id: "payables-today",
-        title: `${todayPayableMovements.length} conta(s) a pagar para atenção`,
-        description: `${formatCurrency(todayPayableTotal)} entre vencimentos de hoje e atrasados.`,
-        level: todayPayableMovements.some((movement) => movement.status === "overdue")
-          ? "critical"
-          : "warning",
-      });
-    }
-
-    if (totalProperties > 0 && occupancyRate >= 90) {
-      alerts.push({
-        id: "high-occupation",
-        title: "Alta ocupação da carteira",
-        description:
-          "A carteira está performando bem. Avalie expansão de bens/ativos disponíveis.",
-        level: "success",
-      });
-    }
-
-    if (alerts.length === 0) {
-      alerts.push({
-        id: "healthy-operation",
-        title: "Operação estável",
-        description: "Nenhuma ação crítica identificada no momento.",
-        level: "success",
-      });
-    }
-
-    return alerts.slice(0, 6);
+          "Preencha a razão social, CNPJ e logo para emitir contratos e recibos.",
+        completed: hasCompanyConfigured,
+        href: "/configuracoes",
+      },
+      {
+        id: "property",
+        label: "Cadastrar seu primeiro Bem/Ativo",
+        description: "Cadastre imóveis, veículos ou equipamentos para gestão.",
+        completed: totalProps > 0,
+        href: "/imoveis",
+      },
+      {
+        id: "contract",
+        label: "Gerar seu primeiro Contrato",
+        description: "Vincule um cliente a um bem/ativo e configure as cobranças.",
+        completed: totalConts > 0 || activeConts > 0 || finishedConts > 0,
+        href: "/contratos",
+      },
+    ];
   }, [
-    activeContractsList,
-    availablePotentialRevenue,
-    availableProperties,
-    contracts,
-    occupancyRate,
-    todayPayableMovements,
-    todayPayableTotal,
-    todayReceivableMovements,
-    todayReceivableTotal,
-    totalProperties,
+    hasCompanyConfigured,
+    metrics?.totalProperties,
+    metrics?.activeContracts,
+    metrics?.finishedContracts,
+    metrics?.totalContracts,
   ]);
-  /* eslint-enable react-hooks/preserve-manual-memoization */
 
-  const steps = [
-    {
-      id: "company",
-      label: "Configurar dados da empresa",
-      description: "Preencha a razão social, CNPJ e logo para emitir contratos e recibos.",
-      completed: hasCompanyConfigured,
-      href: "/configuracoes",
-    },
-    {
-      id: "property",
-      label: "Cadastrar seu primeiro Bem/Ativo",
-      description: "Cadastre imóveis, veículos ou equipamentos para gestão.",
-      completed: totalProperties > 0,
-      href: "/imoveis",
-    },
-    {
-      id: "contract",
-      label: "Gerar seu primeiro Contrato",
-      description: "Vincule um cliente a um bem/ativo e configure as cobranças.",
-      completed: activeContracts > 0,
-      href: "/contratos",
-    },
-  ];
+  // Se o usuário já opera o sistema (já possui contratos históricos ou movimentação financeira/bens), ele não deve ver onboarding de primeiro uso
+  const totalPropsCount = metrics?.totalProperties || 0;
+  const totalContsCount =
+    metrics?.totalContracts ??
+    ((metrics?.activeContracts || 0) + (metrics?.finishedContracts || 0));
+  const hasFinancialActivity =
+    (metrics?.receivedTotal || 0) > 0 ||
+    (metrics?.openReceivableTotal || 0) > 0 ||
+    (metrics?.overdueReceivableTotal || 0) > 0;
+  const isEstablishedAccount =
+    totalContsCount > 0 || (totalPropsCount > 0 && hasFinancialActivity);
 
-  const completedStepsCount = steps.filter((step) => step.completed).length;
-  const isAllStepsCompleted = completedStepsCount === steps.length;
-  const showOnboarding = !isDashboardLoading && !isOnboardingDismissed && !isAllStepsCompleted;
+  const showOnboarding =
+    !isLoading &&
+    !isOnboardingDismissed &&
+    !isEstablishedAccount &&
+    onboardingSteps.some((s) => !s.completed);
+
+  const exportToCSV = () => {
+    if (!metrics) return;
+
+    let csv = "data:text/csv;charset=utf-8,\uFEFF";
+    csv += "CONTRX - RELATÓRIO DO DASHBOARD\n";
+    csv += `Filtro de Período:;${getPeriodLabel(financialPeriod)}\n`;
+    if (financialPeriod === "Custom") {
+      csv += `Datas:;${customStartDate || "Início"} até ${customEndDate || "Fim"}\n`;
+    }
+    csv += `Data de Exportação:;${new Date().toLocaleDateString("pt-BR")} ${new Date().toLocaleTimeString("pt-BR")}\n\n`;
+
+    csv += "INDICADORES CHAVE\n";
+    csv += "Indicador;Valor;Detalhe\n";
+    csv += `Receita mensal prevista;"${formatCurrency(metrics.monthlyRevenue)}";"${formatCurrency(metrics.annualRevenueProjection)} projetado ao ano"\n`;
+    csv += `Taxa de ocupação;"${metrics.occupancyRate}%";"${metrics.rentedProperties} de ${metrics.totalProperties} bens alugados"\n`;
+    csv += `Contratos ativos;"${metrics.activeContracts}";"${metrics.finishedContracts} finalizado(s)"\n`;
+    csv += `A receber em aberto;"${formatCurrency(metrics.openReceivableTotal)}";"${formatCurrency(metrics.overdueReceivableTotal)} vencido(s)"\n`;
+    csv += `Taxa de inadimplência;"${metrics.delinquencyRate}%";"Sobre total previsto no período"\n`;
+    csv += `Recebido confirmado;"${formatCurrency(metrics.receivedTotal)}";"Liquidado no período"\n`;
+    csv += `A pagar em aberto;"${formatCurrency(metrics.openPayableTotal)}";"${formatCurrency(metrics.overduePayableTotal)} vencido(s)"\n`;
+    csv += `Potencial disponível;"${formatCurrency(metrics.availablePotentialRevenue)}";"${metrics.availableProperties} bem(ns) vagos"\n\n`;
+
+    const encoded = encodeURI(csv);
+    const link = document.createElement("a");
+    link.setAttribute("href", encoded);
+    link.setAttribute(
+      "download",
+      `contrx_dashboard_${getPeriodLabel(financialPeriod).toLowerCase().replace(/ /g, "_")}.csv`,
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <>
-        <style>{contrxDashboardThemeStyle}</style>
-        <div data-contrx-theme={dashboardTheme} className="contrx-dashboard-page space-y-5">
-          <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
-                Dashboard
-              </h1>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-                Indicadores estratégicos para acompanhar ocupação, receita,
-                contratos e oportunidades da carteira de contratos.
-              </p>
+      <style>{contrxDashboardThemeStyle}</style>
+      <div
+        data-contrx-theme={dashboardTheme}
+        className="contrx-dashboard-page space-y-6"
+      >
+        {/* Top Header & Filtro no Padrão Bens/Ativos com Modo Privacidade */}
+        <DashboardHeader
+          financialPeriod={financialPeriod}
+          onPeriodChange={setFinancialPeriod}
+          customStartDate={customStartDate}
+          onCustomStartDateChange={setCustomStartDate}
+          customEndDate={customEndDate}
+          onCustomEndDateChange={setCustomEndDate}
+          lastUpdatedAt={lastUpdatedAt}
+          isLoading={isLoading}
+          onRefresh={() => loadData(true)}
+          onExportCSV={exportToCSV}
+          isPrivacyMode={isPrivacyMode}
+          onTogglePrivacyMode={togglePrivacyMode}
+        />
+
+        {error && (
+          <div className="flex flex-col gap-3 rounded-2xl border border-red-100 bg-red-50 p-5 text-sm font-bold text-red-700 shadow-sm sm:flex-row sm:items-center sm:justify-between dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300">
+            <div className="flex items-center gap-2">
+              <span>{error}</span>
             </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <select
-                value={financialPeriod}
-                onChange={(event) =>
-                  setFinancialPeriod(event.target.value as DashboardFinancialPeriod)
-                }
-                className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-black text-slate-600 shadow-sm outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                aria-label="Período financeiro da Dashboard"
-              >
-                <option value="CurrentMonth">Mês atual</option>
-                <option value="CurrentYear">Ano atual</option>
-                <option value="All">Todos</option>
-                <option value="Custom">Customizado</option>
-              </select>
-
-              {financialPeriod === "Custom" && (
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="date"
-                    value={customStartDate}
-                    onChange={(e) => setCustomStartDate(e.target.value)}
-                    className="h-11 rounded-md border border-slate-200 bg-white px-2 text-xs font-bold text-slate-600 shadow-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                    aria-label="Data inicial"
-                  />
-                  <span className="text-slate-400 text-xs font-bold">até</span>
-                  <input
-                    type="date"
-                    value={customEndDate}
-                    onChange={(e) => setCustomEndDate(e.target.value)}
-                    className="h-11 rounded-md border border-slate-200 bg-white px-2 text-xs font-bold text-slate-600 shadow-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
-                    aria-label="Data final"
-                  />
-                </div>
-              )}
-
-              <div className="flex h-11 items-center rounded-md border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 shadow-sm">
-                <span className="inline-flex items-center gap-2">
-                  <CalendarDays className="h-4 w-4 text-orange-500" />
-                  Hoje, {new Date().toLocaleDateString("pt-BR")}
-                </span>
-                {lastUpdatedAt && (
-                  <span className="ml-2 text-xs font-black text-orange-600">
-                    Atualizado {lastUpdatedAt.toLocaleTimeString("pt-BR", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                )}
-              </div>
-
-              <button
-                type="button"
-                onClick={exportToCSV}
-                disabled={isDashboardLoading}
-                className="h-11 rounded-md border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 hover:bg-slate-50 transition shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Exportar CSV
-              </button>
-
-              <button
-                type="button"
-                onClick={refreshDashboardData}
-                disabled={!companyId || isDashboardLoading}
-                className="h-11 rounded-md bg-orange-500 px-5 text-sm font-black text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isDashboardLoading ? "Atualizando..." : "Atualizar dados"}
-              </button>
-            </div>
-          </div>
-
-          {dashboardError && (
-            <div className="rounded-3xl border border-red-100 bg-red-50 p-5 text-sm font-bold text-red-700 shadow-sm">
-              {dashboardError}
-            </div>
-          )}
-
-          {!dashboardError && financialSummaryError && (
-            <div className="rounded-3xl border border-orange-100 bg-orange-50 p-5 text-sm font-bold text-orange-700 shadow-sm">
-              Resumo financeiro indisponivel no momento: {financialSummaryError}
-            </div>
-          )}
-
-          {showOnboarding && (
-            <div className="rounded-3xl border border-orange-200 bg-gradient-to-br from-orange-50/70 to-white p-5 shadow-sm md:p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <h2 className="flex items-center gap-2 text-lg font-black text-slate-950">
-                    <span>🎯 Primeiros Passos no Contrx</span>
-                    <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-black text-orange-700">
-                      {completedStepsCount} de {steps.length} concluído
-                    </span>
-                  </h2>
-                  <p className="text-sm font-semibold text-slate-500">
-                    Complete as etapas fundamentais para ativar e gerenciar seus contratos de forma profissional.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={dismissOnboarding}
-                  className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
-                  title="Ocultar painel"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              {/* Progress bar */}
-              <div className="mt-4 h-2 w-full rounded-full bg-slate-100 overflow-hidden">
-                <div
-                  className="h-full bg-orange-500 rounded-full transition-all duration-500"
-                  style={{ width: `${(completedStepsCount / steps.length) * 100}%` }}
-                />
-              </div>
-
-              {/* Steps checklist */}
-              <div className="mt-6 grid gap-4 md:grid-cols-3">
-                {steps.map((step, idx) => (
-                  <div
-                    key={step.id}
-                    className={`flex flex-col justify-between rounded-2xl border p-4 transition ${
-                      step.completed
-                        ? "border-emerald-100 bg-emerald-50/30"
-                        : "border-slate-200 bg-white hover:border-orange-200"
-                    }`}
-                  >
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        {step.completed ? (
-                          <CircleCheck className="h-5 w-5 shrink-0 text-emerald-600" />
-                        ) : (
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-300 text-xs font-bold text-slate-400">
-                            {idx + 1}
-                          </span>
-                        )}
-                        <h3 className={`text-sm font-black ${step.completed ? "text-slate-700 line-through" : "text-slate-900"}`}>
-                          {step.label}
-                        </h3>
-                      </div>
-                      <p className="text-xs font-semibold leading-5 text-slate-500">
-                        {step.description}
-                      </p>
-                    </div>
-
-                    {!step.completed && (
-                      <Link
-                        href={step.href}
-                        className="mt-4 inline-flex items-center gap-1 text-xs font-black text-orange-600 hover:text-orange-700 transition"
-                      >
-                        Começar etapa
-                        <ArrowRight className="h-3 w-3" />
-                      </Link>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <MetricCard
-              icon={<DollarSign className="h-5 w-5" />}
-              title="Receita mensal prevista"
-              value={formatCurrency(monthlyRevenue)}
-              detail={`${formatCurrency(annualRevenueProjection)} projetado ao ano`}
-              trend={`${revenueEfficiency}% da capacidade`}
-              isLoading={isDashboardLoading}
-            />
-
-            <MetricCard
-              icon={<ChartLine className="h-5 w-5" />}
-              title="Taxa de ocupação"
-              value={`${occupancyRate}%`}
-              detail={`${rentedProperties} de ${totalProperties} bens/ativos alugados`}
-              trend={`${vacancyRate}% disponível`}
-              isLoading={isDashboardLoading}
-            />
-
-            <MetricCard
-              icon={<FileText className="h-5 w-5" />}
-              title="Contratos ativos"
-              value={activeContracts}
-              detail={`${finishedContracts} finalizado(s)`}
-              trend={`${formatCurrency(averageTicket)} ticket médio`}
-              isLoading={isDashboardLoading}
-            />
-
-            <MetricCard
-              icon={<Home className="h-5 w-5" />}
-              title="A receber em aberto"
-              value={formatCurrency(openReceivableTotal)}
-              detail={`${formatCurrency(overdueReceivableTotal)} vencido(s)`}
-              trend="Financeiro real"
-              isLoading={isDashboardLoading}
-            />
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-3">
-            <FinancialSummaryCard
-              title="Recebido confirmado"
-              value={formatCurrency(receivedTotal)}
-              detail={`${receivables.filter((item) => item.status === "Paid").length} paga(s) no ${getFinancialPeriodLabel(financialPeriod).toLowerCase()}`}
-              tone="green"
-              isLoading={isDashboardLoading}
-            />
-            <FinancialSummaryCard
-              title="A pagar em aberto"
-              value={formatCurrency(openPayableTotal)}
-              detail={`${payables.filter((item) => item.status !== "Paid").length} pendente(s) no ${getFinancialPeriodLabel(financialPeriod).toLowerCase()}`}
-              tone="red"
-              isLoading={isDashboardLoading}
-            />
-            <FinancialSummaryCard
-              title="Potencial disponível"
-              value={formatCurrency(availablePotentialRevenue)}
-              detail={`${availableProperties} bem(ns)/ativo(s) sem contrato ativo`}
-              tone="slate"
-              isLoading={isDashboardLoading}
-            />
-          </div>
-
-          <div className="grid gap-6 xl:grid-cols-12">
-            {isDashboardLoading ? (
-              <div className="xl:col-span-8">
-                <ChartSkeleton />
-              </div>
-            ) : (
-              <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-8">
-                <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <h2 className="text-lg font-black text-slate-950">
-                      Evolução da receita contratada
-                    </h2>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {revenueChartDescription}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex rounded-full bg-slate-50 p-1">
-                      <button
-                        type="button"
-                        onClick={() => setRevenueChartView("month")}
-                        className={`rounded-full px-3 py-2 text-xs font-black transition ${
-                          revenueChartView === "month"
-                            ? "bg-orange-500 text-white shadow-sm"
-                            : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
-                        }`}
-                      >
-                        Mês
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setRevenueChartView("day")}
-                        className={`rounded-full px-3 py-2 text-xs font-black transition ${
-                          revenueChartView === "day"
-                            ? "bg-orange-500 text-white shadow-sm"
-                            : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
-                        }`}
-                      >
-                        Dia
-                      </button>
-                    </div>
-
-                    <ChartBadge label="Receita prevista" color="bg-orange-500" />
-                    <ChartBadge label="Contratos" color="bg-slate-400" />
-                  </div>
-                </div>
-
-                <div className="h-80 min-h-[320px] min-w-0">
-                  <ResponsiveContainer
-                    width="100%"
-                    height="100%"
-                    minWidth={0}
-                    minHeight={320}
-                  >
-                    <ComposedChart data={selectedRevenueChartData}>
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        vertical={false}
-                        stroke="#e2e8f0"
-                      />
-                      <XAxis dataKey="month" tickLine={false} axisLine={false} />
-                      <YAxis
-                        yAxisId="revenue"
-                        tickLine={false}
-                        axisLine={false}
-                        tickFormatter={(value) => compactCurrency(Number(value))}
-                      />
-                      <YAxis
-                        yAxisId="contracts"
-                        orientation="right"
-                        tickLine={false}
-                        axisLine={false}
-                        allowDecimals={false}
-                      />
-                      <Tooltip
-                        formatter={(value, name) => {
-                          if (name === "expected")
-                            return [formatCurrency(Number(value)), "Receita prevista"];
-                          return [Number(value), "Contratos"];
-                        }}
-                        labelFormatter={(label) =>
-                          `${revenueChartView === "month" ? "Mês" : "Dia"}: ${label}`
-                        }
-                      />
-                      <Bar
-                        yAxisId="revenue"
-                        dataKey="expected"
-                        radius={[12, 12, 0, 0]}
-                        fill={chartColors.orange}
-                        barSize={revenueChartView === "month" ? 44 : 18}
-                      />
-                      <Line
-                        yAxisId="contracts"
-                        type="monotone"
-                        dataKey="activeContracts"
-                        stroke={chartColors.slate}
-                        strokeWidth={3}
-                        dot={{ r: 4 }}
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-              </section>
-            )}
-
-            <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-4">
-              <h2 className="text-lg font-black text-slate-950">
-                Financeiro operacional
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Contas vencidas, vencendo hoje e próximos lançamentos no {getFinancialPeriodLabel(financialPeriod).toLowerCase()}.
-              </p>
-
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                <FinancialSummaryCard
-                  title="Receber atenção"
-                  value={formatCurrency(todayReceivableTotal)}
-                  detail={`${todayReceivableMovements.length} vencido(s)/hoje`}
-                  tone="orange"
-                />
-                <FinancialSummaryCard
-                  title="Pagar atenção"
-                  value={formatCurrency(todayPayableTotal)}
-                  detail={`${todayPayableMovements.length} vencido(s)/hoje`}
-                  tone="slate"
-                />
-                <FinancialSummaryCard
-                  title="Próx. recebimentos"
-                  value={formatCurrency(upcomingReceivableTotal)}
-                  detail={`${upcomingReceivableMovements.length} item(ns)`}
-                  tone="green"
-                />
-                <FinancialSummaryCard
-                  title="Próx. pagamentos"
-                  value={formatCurrency(upcomingPayableTotal)}
-                  detail={`${upcomingPayableMovements.length} item(ns)`}
-                  tone="red"
-                />
-              </div>
-
-              <div className="mt-5 space-y-3">
-                <FinancialMovementPreview
-                  title="Receber"
-                  href="/contas-receber"
-                  emptyMessage="Nenhuma conta a receber próxima."
-                  movements={[...todayReceivableMovements, ...upcomingReceivableMovements].slice(0, 4)}
-                />
-
-                <FinancialMovementPreview
-                  title="Pagar"
-                  href="/contas-pagar"
-                  emptyMessage="Nenhuma conta a pagar próxima."
-                  movements={[...todayPayableMovements, ...upcomingPayableMovements].slice(0, 4)}
-                />
-              </div>
-            </section>
-          </div>
-
-          <div className="grid gap-6 xl:grid-cols-12">
-            {isDashboardLoading ? (
-              <div className="xl:col-span-8">
-                <ChartSkeleton />
-              </div>
-            ) : (
-              <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-8">
-                <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <h2 className="text-lg font-black text-slate-950">
-                      Evolução de contratos
-                    </h2>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {contractChartDescription}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex rounded-full bg-slate-50 p-1">
-                      <button
-                        type="button"
-                        onClick={() => setContractChartView("month")}
-                        className={`rounded-full px-3 py-2 text-xs font-black transition ${
-                          contractChartView === "month"
-                            ? "bg-orange-500 text-white shadow-sm"
-                            : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
-                        }`}
-                      >
-                        Mês
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setContractChartView("day")}
-                        className={`rounded-full px-3 py-2 text-xs font-black transition ${
-                          contractChartView === "day"
-                            ? "bg-orange-500 text-white shadow-sm"
-                            : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
-                        }`}
-                      >
-                        Dia
-                      </button>
-                    </div>
-
-                    <ChartBadge label="Iniciados" color="bg-orange-500" />
-                    <ChartBadge label="Ativos" color="bg-slate-400" />
-                  </div>
-                </div>
-
-                <div className="h-72 min-h-[288px] min-w-0">
-                  <ResponsiveContainer
-                    width="100%"
-                    height="100%"
-                    minWidth={0}
-                    minHeight={288}
-                  >
-                    <ComposedChart data={selectedContractEvolutionData}>
-                      <CartesianGrid
-                        strokeDasharray="3 3"
-                        vertical={false}
-                        stroke="#e2e8f0"
-                      />
-                      <XAxis dataKey="month" tickLine={false} axisLine={false} />
-                      <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
-                      <Tooltip
-                        formatter={(value, name) => {
-                          if (name === "createdContracts")
-                            return [Number(value), "Iniciados"];
-                          return [Number(value), "Ativos"];
-                        }}
-                        labelFormatter={(label) =>
-                          `${contractChartView === "month" ? "Mês" : "Dia"}: ${label}`
-                        }
-                      />
-                      <Bar
-                        dataKey="createdContracts"
-                        radius={[12, 12, 0, 0]}
-                        fill={chartColors.orange}
-                        barSize={contractChartView === "month" ? 44 : 18}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="activeContracts"
-                        stroke={chartColors.slate}
-                        strokeWidth={3}
-                        dot={{ r: 4 }}
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-              </section>
-            )}
-
-            <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm xl:col-span-4">
-              <h2 className="text-lg font-black text-slate-950">
-                Central de atenção
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Pontos que merecem acompanhamento para melhorar a operação.
-              </p>
-
-              <div className="mt-5 space-y-3">
-                {dashboardAlerts.map((alert) => (
-                  <AlertCard key={alert.id} alert={alert} />
-                ))}
-              </div>
-            </section>
-          </div>
-        </div>
-      </>
-  );
-}
-
-type MetricCardProps = {
-  icon: ReactNode;
-  title: string;
-  value: string | number;
-  detail: string;
-  trend: string;
-  isLoading?: boolean;
-};
-
-function MetricCard({ icon, title, value, detail, trend, isLoading }: MetricCardProps) {
-  if (isLoading) {
-    return (
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm animate-pulse">
-        <div className="flex items-center justify-between gap-3">
-          <div className="h-10 w-10 shrink-0 rounded-md bg-slate-100" />
-          <div className="h-5 w-16 rounded-full bg-slate-100" />
-        </div>
-        <div className="mt-4 h-3.5 w-24 rounded bg-slate-100" />
-        <div className="mt-2 h-6 w-32 rounded bg-slate-100" />
-        <div className="mt-2 h-3.5 w-40 rounded bg-slate-100" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:shadow-md">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-orange-50 text-orange-600">
-          {icon}
-        </div>
-        <span className="truncate rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-black text-slate-500">
-          {trend}
-        </span>
-      </div>
-
-      <p className="mt-3 truncate text-xs font-bold text-slate-500">{title}</p>
-      <h3 className="mt-1 truncate text-xl font-black text-slate-950">{value}</h3>
-      <p className="mt-1 truncate text-xs font-bold text-orange-600">{detail}</p>
-    </div>
-  );
-}
-
-type AlertCardProps = {
-  alert: DashboardAlert;
-};
-
-function AlertCard({ alert }: AlertCardProps) {
-  const alertStyle = {
-    critical: "border-red-100 bg-red-50 text-red-700",
-    warning: "border-orange-100 bg-orange-50 text-orange-700",
-    info: "border-sky-100 bg-sky-50 text-sky-700",
-    success: "border-emerald-100 bg-emerald-50 text-emerald-700",
-  }[alert.level];
-
-  const Icon = {
-    critical: AlertTriangle,
-    warning: AlertTriangle,
-    info: Info,
-    success: CircleCheck,
-  }[alert.level];
-
-  return (
-    <div className={`rounded-2xl border p-4 ${alertStyle}`}>
-      <div className="flex gap-3">
-        <Icon className="mt-0.5 h-5 w-5 shrink-0" />
-        <div>
-          <p className="font-black">{alert.title}</p>
-          <p className="mt-1 text-sm opacity-80">{alert.description}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-type ChartBadgeProps = {
-  label: string;
-  color: string;
-};
-
-function ChartBadge({ label, color }: ChartBadgeProps) {
-  return (
-    <span className="flex items-center gap-2 rounded-full bg-slate-50 px-3 py-2 text-xs font-black text-slate-600">
-      <span className={`h-2.5 w-2.5 rounded-full ${color}`} />
-      {label}
-    </span>
-  );
-}
-
-type FinancialSummaryCardProps = {
-  title: string;
-  value: string;
-  detail: string;
-  tone: "orange" | "slate" | "green" | "red";
-  isLoading?: boolean;
-};
-
-function FinancialSummaryCard({ title, value, detail, tone, isLoading }: FinancialSummaryCardProps) {
-  const toneClassName = {
-    orange: "bg-orange-50 text-orange-700",
-    slate: "bg-slate-100 text-slate-700",
-    green: "bg-emerald-50 text-emerald-700",
-    red: "bg-red-50 text-red-700",
-  }[tone];
-
-  if (isLoading) {
-    return (
-      <div className="rounded-lg px-4 py-3.5 bg-slate-100 animate-pulse">
-        <div className="h-3 w-28 rounded bg-slate-200" />
-        <div className="mt-3 h-5.5 w-36 rounded bg-slate-200" />
-        <div className="mt-2 h-3 w-44 rounded bg-slate-200" />
-      </div>
-    );
-  }
-
-  return (
-    <div className={`rounded-lg px-4 py-3.5 ${toneClassName}`}>
-      <p className="text-xs font-black uppercase tracking-wide opacity-80">
-        {title}
-      </p>
-      <p className="mt-2 text-lg font-black">{value}</p>
-      <p className="mt-1 text-xs font-bold opacity-80">{detail}</p>
-    </div>
-  );
-}
-
-function ChartSkeleton() {
-  return (
-    <div className="rounded-3xl border border-orange-100 bg-white p-6 shadow-sm animate-pulse h-80 min-h-[320px]">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
-        <div className="space-y-2">
-          <div className="h-4 w-40 rounded bg-slate-200" />
-          <div className="h-3.5 w-64 rounded bg-slate-100" />
-        </div>
-        <div className="flex gap-2">
-          <div className="h-8 w-16 rounded-full bg-slate-100" />
-          <div className="h-8 w-24 rounded-full bg-slate-100" />
-        </div>
-      </div>
-      <div className="h-56 w-full flex items-end justify-between gap-4 pt-4">
-        <div className="h-[20%] w-full rounded bg-slate-100" />
-        <div className="h-[40%] w-full rounded bg-slate-100" />
-        <div className="h-[60%] w-full rounded bg-slate-100" />
-        <div className="h-[30%] w-full rounded bg-slate-100" />
-        <div className="h-[50%] w-full rounded bg-slate-100" />
-        <div className="h-[80%] w-full rounded bg-slate-100" />
-        <div className="h-[45%] w-full rounded bg-slate-100" />
-      </div>
-    </div>
-  );
-}
-
-type FinancialMovementPreviewProps = {
-  title: string;
-  href: string;
-  emptyMessage: string;
-  movements: FinancialMovement[];
-};
-
-function FinancialMovementPreview({
-  title,
-  href,
-  emptyMessage,
-  movements,
-}: FinancialMovementPreviewProps) {
-  return (
-    <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
-      <div className="flex items-center justify-between gap-3">
-        <Link
-          href={href}
-          className="rounded-xl px-2 py-1 text-sm font-black text-slate-800 transition hover:bg-white hover:text-orange-600"
-        >
-          {title}
-        </Link>
-        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-black text-slate-500">
-          {movements.length}
-        </span>
-      </div>
-
-      <div className="mt-3 space-y-2">
-        {movements.length === 0 ? (
-          <p className="text-xs font-semibold text-slate-500">{emptyMessage}</p>
-        ) : (
-          movements.map((movement) => (
-            <div
-              key={movement.id}
-              className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2"
+            <button
+              type="button"
+              onClick={() => loadData(true)}
+              className="inline-flex items-center justify-center gap-2 self-start rounded-xl bg-red-600 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:bg-red-700 focus:outline-none sm:self-auto"
             >
-              <div className="min-w-0">
-                <p className="truncate text-xs font-black text-slate-800">
-                  {movement.title}
-                </p>
-                <p className="truncate text-[11px] font-semibold text-slate-500">
-                  {movement.subtitle} · {formatDateLabel(movement.dueDate)}
-                </p>
-              </div>
-
-              <div className="text-right">
-                <p className="text-xs font-black text-slate-900">
-                  {formatCurrency(movement.amount)}
-                </p>
-                <p className={`text-[10px] font-black ${getFinancialStatusClassName(movement.status)}`}>
-                  {getFinancialStatusLabel(movement.status)}
-                </p>
-              </div>
-            </div>
-          ))
+              Tentar novamente
+            </button>
+          </div>
         )}
+
+        {showOnboarding && (
+          <OnboardingChecklist
+            steps={onboardingSteps}
+            onDismiss={dismissOnboarding}
+          />
+        )}
+
+        {/* 1º Escalão: 4 Cards Principais de Operação & Capacidade no Padrão AssetKpis */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MetricCard
+            icon={<DollarSign className="h-4 w-4" />}
+            title="Receita mensal prevista"
+            value={formatCurrency(metrics?.monthlyRevenue)}
+            detail={`${formatCurrency(metrics?.annualRevenueProjection)} projetado ao ano`}
+            trend={`${metrics?.revenueEfficiency ?? 0}% capacidade`}
+            isPrivacyMode={isPrivacyMode}
+            isCurrency
+            isLoading={isLoading}
+            bgClass="bg-orange-50 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400"
+          />
+
+          <MetricCard
+            icon={<ChartLine className="h-4 w-4" />}
+            title="Taxa de ocupação"
+            value={`${metrics?.occupancyRate ?? 0}%`}
+            detail={`${metrics?.rentedProperties ?? 0} de ${metrics?.totalProperties ?? 0} bens alugados`}
+            trend={`${metrics?.vacancyRate ?? 0}% vacância`}
+            isLoading={isLoading}
+            colorClass="text-emerald-700 dark:text-emerald-400"
+            bgClass="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
+            onClick={() => (window.location.href = "/imoveis")}
+          />
+
+          <MetricCard
+            icon={<FileText className="h-4 w-4" />}
+            title="Contratos ativos"
+            value={metrics?.activeContracts ?? 0}
+            detail={`${metrics?.finishedContracts ?? 0} finalizado(s)`}
+            trend={`${formatCurrency(metrics?.averageTicket)} ticket médio`}
+            isPrivacyMode={isPrivacyMode}
+            isLoading={isLoading}
+            colorClass="text-blue-700 dark:text-blue-400"
+            bgClass="bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400"
+            onClick={() => (window.location.href = "/contratos")}
+          />
+
+          <MetricCard
+            icon={<Home className="h-4 w-4" />}
+            title="A receber em aberto"
+            value={formatCurrency(metrics?.openReceivableTotal)}
+            detail={`${formatCurrency(metrics?.overdueReceivableTotal)} vencido(s)`}
+            trend={`${metrics?.delinquencyRate ?? 0}% inadimplência`}
+            isPrivacyMode={isPrivacyMode}
+            isCurrency
+            isLoading={isLoading}
+            colorClass="text-amber-700 dark:text-amber-400"
+            bgClass="bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
+            onClick={() => (window.location.href = "/contas-receber")}
+          />
+        </div>
+
+        {/* 2º Escalão: 3 Resumos Operacionais do Período */}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <FinancialSummaryCard
+            title="Recebido confirmado"
+            value={formatCurrency(metrics?.receivedTotal)}
+            detail={`Liquidado no ${getPeriodLabel(financialPeriod).toLowerCase()}`}
+            tone="green"
+            icon={<CheckCircle2 className="h-4 w-4" />}
+            isPrivacyMode={isPrivacyMode}
+            isLoading={isLoading}
+            onClick={() => (window.location.href = "/contas-receber")}
+          />
+          <FinancialSummaryCard
+            title="A pagar em aberto"
+            value={formatCurrency(metrics?.openPayableTotal)}
+            detail={`${formatCurrency(metrics?.overduePayableTotal)} vencido(s)`}
+            tone="red"
+            icon={<ArrowDownCircle className="h-4 w-4" />}
+            isPrivacyMode={isPrivacyMode}
+            isLoading={isLoading}
+            onClick={() => (window.location.href = "/contas-pagar")}
+          />
+          <FinancialSummaryCard
+            title="Potencial disponível"
+            value={formatCurrency(metrics?.availablePotentialRevenue)}
+            detail={`${metrics?.availableProperties ?? 0} bem(ns) vagos sem contrato`}
+            tone="slate"
+            icon={<Home className="h-4 w-4" />}
+            isPrivacyMode={isPrivacyMode}
+            isLoading={isLoading}
+            onClick={() => (window.location.href = "/imoveis")}
+          />
+        </div>
+
+        {/* Seção 1: Gráfico de Evolução de Receita + Financeiro Operacional */}
+        <div className="grid gap-6 xl:grid-cols-12">
+          <RevenueEvolutionChart
+            data={
+              revenueChartView === "month"
+                ? dashboardData?.charts.revenueEvolutionMonthly || []
+                : dashboardData?.charts.revenueEvolutionDaily || []
+            }
+            viewMode={revenueChartView}
+            onViewModeChange={setRevenueChartView}
+            isPrivacyMode={isPrivacyMode}
+            isLoading={isLoading}
+          />
+
+          <FinancialOperationsSection
+            todayReceivables={
+              dashboardData?.financialMovements.todayReceivables || []
+            }
+            todayPayables={
+              dashboardData?.financialMovements.todayPayables || []
+            }
+            upcomingReceivables={
+              dashboardData?.financialMovements.upcomingReceivables || []
+            }
+            upcomingPayables={
+              dashboardData?.financialMovements.upcomingPayables || []
+            }
+            periodLabel={getPeriodLabel(financialPeriod).toLowerCase()}
+            isPrivacyMode={isPrivacyMode}
+            isLoading={isLoading}
+          />
+        </div>
+
+        {/* Seção 2: Gráfico de Contratos + Central de Atenção Acionável */}
+        <div className="grid gap-6 xl:grid-cols-12">
+          <ContractEvolutionChart
+            data={
+              contractChartView === "month"
+                ? dashboardData?.charts.contractEvolutionMonthly || []
+                : dashboardData?.charts.contractEvolutionDaily || []
+            }
+            viewMode={contractChartView}
+            onViewModeChange={setContractChartView}
+            isLoading={isLoading}
+          />
+
+          <AlertsSection
+            alerts={dashboardData?.alerts || []}
+            isLoading={isLoading}
+          />
+        </div>
       </div>
-    </div>
+    </>
   );
-}
-
-function mapApiPropertyToDashboardProperty(
-  property: ApiProperty,
-  activePropertyIds: Set<string>,
-): Property {
-  const address = [
-    property.address,
-    property.number,
-    property.district,
-    property.city,
-    property.state,
-  ]
-    .filter(Boolean)
-    .join(", ");
-
-  return {
-    id: property.id,
-    name: property.title || "Bem/ativo sem nome",
-    address,
-    rentValue: Number(property.rentalValue || 0),
-    status: activePropertyIds.has(property.id) ? "Rented" : "Available",
-  };
-}
-
-function mapApiContractToDashboardContract(contract: ApiContract): Contract {
-  return {
-    id: contract.id,
-    propertyId: contract.propertyId,
-    tenantId: contract.tenantId,
-    startDate: contract.startDate,
-    endDate: contract.endDate,
-    rentValue: Number(contract.rentValue || 0),
-    status: mapApiContractStatusToDashboardStatus(contract.status),
-  };
-}
-
-function mapApiContractStatusToDashboardStatus(
-  status: ApiContract["status"],
-): ContractStatus {
-  const statusMap: Record<ApiContract["status"], ContractStatus> = {
-    ACTIVE: "Active",
-    INACTIVE: "Inactive",
-    CANCELED: "Canceled",
-    FINISHED: "Finished",
-    DELETED: "Deleted",
-  };
-
-  return statusMap[status] || "Inactive";
-}
-
-function getContractValue(contract: Contract) {
-  return Number(contract.value ?? contract.rentValue ?? 0);
 }
 
 function formatCurrency(value?: number) {
@@ -1696,235 +580,9 @@ function formatCurrency(value?: number) {
   });
 }
 
-function compactCurrency(value: number) {
-  if (value >= 1000) {
-    return `R$ ${(value / 1000).toLocaleString("pt-BR", {
-      maximumFractionDigits: 1,
-    })}k`;
-  }
-
-  return `R$ ${value}`;
-}
-
-function parseDate(value?: string) {
-  if (!value) return null;
-
-  const parsedDate = new Date(value);
-
-  if (Number.isNaN(parsedDate.getTime())) {
-    return null;
-  }
-
-  return parsedDate;
-}
-
-function getLastSixMonths() {
-  const currentDate = new Date();
-
-  return Array.from({ length: 6 }, (_, index) => {
-    return new Date(
-      currentDate.getFullYear(),
-      currentDate.getMonth() - 5 + index,
-      1,
-    );
-  });
-}
-
-function getLastThirtyDays() {
-  const currentDate = new Date();
-
-  return Array.from({ length: 30 }, (_, index) => {
-    return new Date(
-      currentDate.getFullYear(),
-      currentDate.getMonth(),
-      currentDate.getDate() - 29 + index,
-    );
-  });
-}
-
-function getFinancialSummaryFilters(
-  period: DashboardFinancialPeriod,
-  customStart?: string,
-  customEnd?: string
-) {
-  const today = new Date();
-
-  if (period === "Custom") {
-    return {
-      startDate: customStart || undefined,
-      endDate: customEnd || undefined,
-    };
-  }
-
-  if (period === "All") return {};
-
-  if (period === "CurrentYear") {
-    return {
-      startDate: getLocalDateValue(new Date(today.getFullYear(), 0, 1)),
-      endDate: getLocalDateValue(new Date(today.getFullYear(), 11, 31)),
-    };
-  }
-
-  return {
-    startDate: getLocalDateValue(
-      new Date(today.getFullYear(), today.getMonth(), 1),
-    ),
-    endDate: getLocalDateValue(
-      new Date(today.getFullYear(), today.getMonth() + 1, 0),
-    ),
-  };
-}
-
-function getFinancialPeriodLabel(period: DashboardFinancialPeriod) {
+function getPeriodLabel(period: DashboardFinancialPeriod) {
   if (period === "CurrentYear") return "ano atual";
   if (period === "All") return "período completo";
   if (period === "Custom") return "período personalizado";
-
   return "mês atual";
-}
-
-function getLocalDateValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
-
-function getStartOfToday() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  return today;
-}
-
-function getEndOfUpcomingRange(days = 7) {
-  const date = getStartOfToday();
-  date.setDate(date.getDate() + days);
-  date.setHours(23, 59, 59, 999);
-
-  return date;
-}
-
-function normalizeAmount(value?: number) {
-  return Number(value || 0);
-}
-
-function getFinancialMovementStatus(dueDateValue: string): FinancialMovement["status"] | null {
-  const dueDate = parseDate(dueDateValue);
-
-  if (!dueDate) return null;
-
-  const today = getStartOfToday();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const upcomingEnd = getEndOfUpcomingRange(7);
-
-  dueDate.setHours(0, 0, 0, 0);
-
-  if (dueDate < today) return "overdue";
-  if (dueDate >= today && dueDate < tomorrow) return "today";
-  if (dueDate <= upcomingEnd) return "upcoming";
-
-  return null;
-}
-
-function getFinancialMovementsFromReceivables(
-  receivables: FinancialReceivable[],
-) {
-  return receivables
-    .filter((charge) => charge.status !== "Paid")
-    .map((charge): FinancialMovement | null => {
-      const dueDate = charge.dueDate;
-      const status = getFinancialMovementStatus(dueDate);
-
-      if (!status) return null;
-
-      return {
-        id: String(charge.id),
-        title: charge.tenant || "Pessoa não informada",
-        subtitle: charge.property || "Sem bem/ativo vinculado",
-        dueDate,
-        amount: normalizeAmount(charge.amount),
-        status,
-      };
-    })
-    .filter((movement): movement is FinancialMovement => Boolean(movement))
-    .sort(sortFinancialMovements);
-}
-
-function getFinancialMovementsFromPayables(
-  payableCharges: FinancialPayable[],
-  paidIds: string[] = [],
-) {
-  return payableCharges
-    .filter((charge) => {
-      const isPaid =
-        paidIds.includes(String(charge.id)) ||
-        charge.status === "Paid";
-
-      return !isPaid;
-    })
-    .map((charge): FinancialMovement | null => {
-      const dueDate = charge.dueDate || "";
-      const status = getFinancialMovementStatus(dueDate);
-
-      if (!status) return null;
-
-      return {
-        id: String(charge.id),
-        title:
-          charge.supplier ||
-          charge.creditor ||
-          charge.description ||
-          "Conta a pagar",
-        subtitle: charge.category || charge.description || "Sem categoria",
-        dueDate,
-        amount: normalizeAmount(charge.amount ?? charge.value),
-        status,
-      };
-    })
-    .filter((movement): movement is FinancialMovement => Boolean(movement))
-    .sort(sortFinancialMovements);
-}
-
-function sortFinancialMovements(
-  firstMovement: FinancialMovement,
-  secondMovement: FinancialMovement,
-) {
-  const statusOrder: Record<FinancialMovement["status"], number> = {
-    overdue: 0,
-    today: 1,
-    upcoming: 2,
-  };
-
-  const firstDate = parseDate(firstMovement.dueDate)?.getTime() || 0;
-  const secondDate = parseDate(secondMovement.dueDate)?.getTime() || 0;
-
-  return (
-    statusOrder[firstMovement.status] - statusOrder[secondMovement.status] ||
-    firstDate - secondDate
-  );
-}
-
-function formatDateLabel(value: string) {
-  const date = parseDate(value);
-
-  if (!date) return "Sem vencimento";
-
-  return date.toLocaleDateString("pt-BR");
-}
-
-function getFinancialStatusLabel(status: FinancialMovement["status"]) {
-  if (status === "overdue") return "Atrasado";
-  if (status === "today") return "Hoje";
-
-  return "Próximo";
-}
-
-function getFinancialStatusClassName(status: FinancialMovement["status"]) {
-  if (status === "overdue") return "text-red-600";
-  if (status === "today") return "text-orange-600";
-
-  return "text-emerald-600";
 }

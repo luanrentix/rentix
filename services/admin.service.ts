@@ -174,3 +174,13 @@ export async function resetTestData(modules: ResetTestDataModule[]) {
     },
   );
 }
+
+export async function impersonateAdminUser(userId: string) {
+  return apiFetch<{
+    accessToken: string;
+    user: any;
+  }>(`/admin/usuarios/${userId}/impersonar`, {
+    method: 'POST',
+  });
+}
+

@@ -1,8497 +1,1267 @@
 "use client";
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { MouseEvent, ReactNode } from "react";
-import { Share2 } from "lucide-react";
-import QRCode from "qrcode";
+import { Plus, ArrowUpCircle, RefreshCw, Loader2, CheckSquare, Printer, ArrowRight, X, Calendar, FileText } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { PersonCreateModal } from "@/components/people/person-create-modal";
 import {
-  BankTransactionModal,
-  type BankTransactionInitialData,
-} from "@/components/bancos/bank-transaction-modal";
-import {
-  createReceivableAccount,
-  deleteReceivableAccount,
   getReceivableAccounts,
+  createReceivableAccount,
+  updateReceivableAccount,
+  deleteReceivableAccount,
   receiveAccount,
   receiveAccountsBatch,
-  replaceReceivedAccountPayment,
   reverseReceivedAccount,
   shareReceivableReport,
-  updateReceivableAccount,
-  type PaymentMethod as ApiPaymentMethod,
   type ReceivableAccount,
 } from "@/services/financial.service";
-import { getContracts, type Contract as ApiContract } from "@/services/contracts.service";
 import { getPeople, type Person } from "@/services/people.service";
 import { getProperties, type Property as ApiProperty } from "@/services/properties.service";
-import {
-  createScheduleItem,
-  getScheduleItems,
-} from "@/services/schedule.service";
-import {
-  getCachedCompanySettings,
-  getCachedPrintTemplates,
-  setCachedAppSettings,
-} from "@/services/settings-cache";
-import { getAppSettings } from "@/services/settings.service";
+import { getContracts, type Contract as ApiContract } from "@/services/contracts.service";
+import { getCachedCompanySettings } from "@/services/settings-cache";
 import {
   getCompanyStorageItem,
   removeCompanyStorageItem,
-  setCompanyStorageItem,
 } from "@/services/company-storage";
-import { openWhatsAppMessage } from "@/services/whatsapp.service";
 import {
-  generatePaymentCarnet as printPaymentCarnet,
-  openAccountsReceivableReport as printAccountsReceivableReport,
-  openContractPrintWindow as printContractPrintWindow,
-  generatePaymentReceiptBatch as printPaymentReceiptBatch,
-  generatePaymentReceipt as printPaymentReceipt,
-} from "./printing";
-import { useReceivableSelection } from "./hooks/useReceivableSelection";
-import { useReceivableFilters, type PeriodShortcut } from "./hooks/useReceivableFilters";
-import { useReceivableCalculations } from "./hooks/useReceivableCalculations";
-
-type ThemeMode = "light" | "black" | "graphite";
-
-function createLocalId(prefix: string) {
-  const randomId =
-    globalThis.crypto?.randomUUID?.() ||
-    Math.random().toString(36).slice(2, 12);
-
-  return `${prefix}-${randomId}`;
-}
-
-const LEGACY_SETTINGS_TEMPORARY_CONTRACT_CONTENT = `CONTRATO TEMPORÁRIO
-
-LOCADOR: {companyName}
-LOCATÁRIO: {personName}
-BEM/ATIVO: {propertyName}
-PERÍODO: {startDate} até {endDate}
-HORÁRIO: Entrada {entryTime} / Saída {exitTime}
-
-CLÁUSULAS E CONDIÇÕES:
-1. O presente contrato tem finalidade de locação temporária.
-2. O locatário declara estar ciente das regras de uso do bem/ativo.
-3. As informações financeiras e condições acordadas deverão constar no documento final.
-
-{contractDefaultNotes}
-
-{contractCity}, {currentDate}.
-
-__________________________________
-LOCADOR
-
-__________________________________
-LOCATÁRIO`;
-
-const DEFAULT_SETTINGS_TEMPORARY_CONTRACT_CONTENT = `INSTRUMENTO PARTICULAR DE CONTRATO DE LOCAÇÃO IMOBILIÁRIA TEMPORÁRIA
-
-I - LOCADOR:
-{landlordName}, pessoa jurídica de direito privado, inscrita no CPF/CNPJ nº {landlordDocument}, com endereço em {landlordAddress}, doravante denominada LOCADOR.
-E-mail: {companyEmail}
-Telefone: {companyPhone}
-
-II - LOCATÁRIO:
-{tenantName}, brasileiro(a), estado civil não informado, profissão não informada, inscrito(a) no CPF/CNPJ nº {tenantDocument}, Carteira de Identidade nº __________, residente e domiciliado(a) em {tenantAddress}, doravante denominado(a) LOCATÁRIO.
-E-mail: {tenantEmail}
-
-III - OBJETO DA LOCAÇÃO:
-{propertyName}, localizado em {propertyAddress}.
-
-IV - PRAZO DE VIGÊNCIA:
-O prazo de locação é de {contractDays} dia(s), com entrada (check-in) em {startDate} às {entryTime} e saída (check-out) em {endDate} às {exitTime}, sem prorrogação automática.
-
-V - ATIVIDADE OBRIGATÓRIA:
-Durante o período de locação, o locatário compromete-se a utilizar o imóvel exclusivamente para fins recreativos e de lazer, respeitando todas as normas legais e regulamentações aplicáveis. O locatário deverá zelar pela conservação do imóvel e de suas instalações, garantindo sua limpeza e manutenção adequadas. Qualquer dano causado durante o período de locação será de responsabilidade do locatário, que se compromete a ressarcir integralmente o locador pelos prejuízos decorrentes.
-
-VI - ALUGUEL PELO PERÍODO:
-Igual a {amount}.
-
-VII - PAGAMENTO DO ALUGUEL:
-Pela execução do objeto deste contrato, o LOCATÁRIO pagará ao LOCADOR o valor total de {amount}, conforme forma de pagamento acordada entre as partes.
-A liberação das chaves está condicionada à quitação integral de todas as parcelas.
-Parágrafo Segundo: O pagamento será efetuado por meio de [PIX/DINHEIRO/TRANSFERÊNCIA], conforme dados a serem informados pelo LOCADOR.
-
-VIII - CONDIÇÕES ESPECIAIS:
-Não há.
-
-Pelo presente instrumento, as partes acima identificadas e qualificadas têm entre si justas e acertadas o presente INSTRUMENTO PARTICULAR DE CONTRATO DE LOCAÇÃO, que se regerá pelas cláusulas e condições abaixo pactuadas.
-
-Cláusula Primeira - Da Vistoria e Conservação
-1.1. O imóvel é entregue em perfeitas condições de higiene e conservação.
-1.2. O LOCATÁRIO tem o prazo de 2 (duas) horas após a entrada para conferir o local e reportar qualquer dano preexistente por escrito, com fotos ou vídeos.
-1.3. Caso não haja manifestação no prazo acima, entende-se que o imóvel e seus utensílios foram recebidos em perfeito estado.
-1.4. O LOCATÁRIO deverá restituir o imóvel nas mesmas condições em que o recebeu, sob pena de arcar com os custos de reparo ou reposição de itens danificados.
-
-Cláusula Segunda - Do Objeto e Destinação
-2.1. O objeto deste contrato é a locação temporária do imóvel identificado neste instrumento.
-2.2. O imóvel destina-se exclusivamente para fins recreativos e de lazer, conforme detalhado no preâmbulo.
-2.3. É proibido ao LOCATÁRIO sublocar, ceder, emprestar ou transferir a locação a terceiros, total ou parcialmente, sem autorização prévia e por escrito do LOCADOR.
-2.4. Após o recebimento das chaves, o LOCATÁRIO assume a posse temporária e a responsabilidade total pela guarda e conservação do imóvel e seus bens.
-
-Cláusula Terceira - Da Utilização e Finalidade
-3.1. O imóvel deve ser utilizado exclusivamente para fins recreativos e de lazer.
-3.2. É proibida a realização de eventos com venda de ingressos, atividades comerciais ou festas abertas ao público sem autorização prévia por escrito do LOCADOR.
-
-Cláusula Quarta - Do Prazo e da Desocupação
-4.1. A locação é firmada por curto prazo, com início em {startDate} às {entryTime} e término em {endDate} às {exitTime}.
-4.2. Findo o prazo estipulado, o contrato se encerra automaticamente, devendo o LOCATÁRIO desocupar o imóvel e entregar as chaves, independente de aviso prévio.
-4.3. Caso o LOCATÁRIO deseje prorrogar a estadia, deverá consultar a disponibilidade e valores com o LOCADOR com antecedência, sendo necessária a formalização de novo ajuste por escrito.
-4.4. O atraso na desocupação do imóvel após o horário de término sujeitará o LOCATÁRIO à multa por hora excedente, sem prejuízo das demais penalidades.
-
-Cláusula Quinta - Do Valor e Pacote Escolhido
-5.1. O valor da locação temporária é de {amount}, referente ao período contratado.
-
-Cláusula Sexta - Das Obrigações e Regras de Convivência
-6.1. O LOCADOR deverá entregar o imóvel em bom estado de conservação e limpeza.
-6.2. O LOCATÁRIO deverá utilizar o imóvel apenas para os fins contratados, responsabilizando-se por danos ocorridos durante a locação, exceto desgaste natural de uso.
-6.3. O LOCATÁRIO deverá respeitar os limites de hóspedes e convidados definidos previamente pelas partes.
-6.4. Animais de estimação somente serão permitidos mediante autorização do LOCADOR, respondendo o LOCATÁRIO por higiene e eventuais danos.
-6.5. O LOCATÁRIO deve respeitar o sossego dos vizinhos, sendo proibidos ruídos excessivos, especialmente em horário noturno.
-
-Cláusula Sétima - Das Comunicações e Notificações
-7.1. As partes concordam que comunicações urgentes poderão ser realizadas por WhatsApp ou e-mail, utilizando os contatos fornecidos neste contrato.
-7.2. Para notificações formais, as partes elegem os endereços declarados neste instrumento.
-
-Cláusula Oitava - Da Ausência de Garantia e Condição de Acesso
-8.1. Esta locação é celebrada sem as modalidades de garantia previstas na Lei 8.245/91.
-8.2. O acesso ao imóvel e a entrega das chaves só ocorrerão mediante a quitação integral do valor total da locação e eventuais taxas acordadas.
-
-Cláusula Nona - Do Inadimplemento, Cancelamento e Multas
-9.1. O descumprimento de qualquer cláusula deste contrato sujeitará o infrator à multa de 20% sobre o valor total do contrato, sem prejuízo da responsabilidade por eventuais danos materiais comprovados.
-9.2. O atraso no pagamento sujeitará o LOCATÁRIO à multa moratória, juros e eventual cancelamento da reserva.
-9.3. Em caso de desistência por iniciativa do LOCATÁRIO após a assinatura, não haverá devolução de valor já pago, salvo acordo escrito entre as partes.
-
-Cláusula Décima - Da Rescisão
-10.1. O descumprimento de cláusula contratual autoriza a rescisão imediata do instrumento, sem prejuízo da cobrança de perdas e danos.
-10.2. Caso o LOCATÁRIO encerre a locação antes do horário previsto, não haverá reembolso proporcional do valor contratado.
-
-Cláusula Décima Primeira - Da Assinatura Eletrônica e Comunicações Digitais
-11.1. As partes reconhecem como válida a assinatura deste contrato em formato eletrônico, conforme legislação vigente.
-11.2. Os e-mails e números de WhatsApp informados são considerados canais oficiais de comunicação.
-
-Cláusula Décima Segunda - Foro
-12.1. As partes elegem o foro da comarca do local do imóvel para dirimir dúvidas ou litígios oriundos deste contrato, renunciando a qualquer outro, por mais privilegiado que seja.
-
-{contractCity}, {currentDate}.
-
-LOCADOR:
-__________________________________
-{landlordName}
-
-LOCATÁRIO:
-__________________________________
-{tenantName}
-
-TESTEMUNHA:
-__________________________________
-Nome: ______________________________
-CPF: ______________________________
-Email: ______________________________`;
-
-
-const LEGACY_SETTINGS_STANDARD_CONTRACT_CONTENT = `CONTRATO DE LOCAÇÃO RESIDENCIAL
-
-I - LOCADOR:
-{landlordName}, inscrito(a) no CPF/CNPJ nº {landlordDocument}, com endereço em {landlordAddress}, telefone {companyPhone}, e-mail {companyEmail}, a seguir denominado(a) LOCADOR.
-
-II - LOCATÁRIO:
-{tenantName}, inscrito(a) no CPF/CNPJ nº {tenantDocument}, residente e domiciliado(a) em {tenantAddress}, telefone {tenantPhone}, e-mail {tenantEmail}, a seguir denominado(a) LOCATÁRIO.
-
-CLÁUSULA PRIMEIRA - DO IMÓVEL E DO PRAZO
-O LOCADOR dá em locação ao LOCATÁRIO o imóvel denominado {propertyName}, localizado em {propertyAddress}, pelo prazo de {contractMonths} mês(es), com início em {startDate} e término em {endDate}. Ao receber o imóvel, o LOCATÁRIO declara tê-lo vistoriado e aceito nas condições em que se encontra, obrigando-se a devolvê-lo livre, desocupado e em perfeito estado de conservação, com contas de água, energia e demais encargos quitados.
-
-Parágrafo Primeiro - Antes do vencimento do prazo ajustado, o LOCADOR não poderá retomar o imóvel, salvo por infração contratual. Caso o LOCATÁRIO devolva o imóvel antes do prazo, ficará sujeito à multa contratual prevista neste instrumento.
-
-Parágrafo Segundo - Na devolução das chaves, o LOCATÁRIO deverá apresentar comprovantes de quitação das contas de água, energia e demais despesas relacionadas ao imóvel.
-
-CLÁUSULA SEGUNDA - DO ALUGUEL E FORMA DE PAGAMENTO
-O aluguel mensal será de {amount}, com vencimento conforme acordado entre as partes. O pagamento deverá ser realizado por meio de depósito, transferência, dinheiro ou Pix, utilizando a chave {pixKey}, salvo outra forma expressamente acordada.
-
-Parágrafo Primeiro - O atraso no pagamento autoriza a cobrança de multa, juros, correção monetária e demais despesas necessárias à cobrança, sem prejuízo da rescisão contratual.
-
-Parágrafo Segundo - Decorridos 30 (trinta) dias do vencimento sem pagamento, o débito poderá ser encaminhado para cobrança administrativa, extrajudicial ou judicial.
-
-CLÁUSULA TERCEIRA - DO REAJUSTE
-O valor do aluguel poderá ser reajustado ao final do prazo contratual ou em eventual renovação, mediante acordo entre as partes e observando a legislação aplicável.
-
-CLÁUSULA QUARTA - DA CONSERVAÇÃO E VISTORIA
-O LOCATÁRIO declara haver visitado e examinado o imóvel locado, obrigando-se a zelar por sua conservação, limpeza, instalações, pintura, telhado, portas, janelas, vidros, fechaduras, torneiras, instalações elétricas, hidráulicas e demais acessórios, devolvendo-o ao final da locação no mesmo estado em que recebeu, salvo desgaste natural de uso.
-
-Parágrafo Primeiro - Fica assegurado ao LOCADOR o direito de vistoriar o imóvel sempre que necessário, mediante aviso prévio ao LOCATÁRIO.
-
-Parágrafo Segundo - Qualquer alteração, reforma ou benfeitoria no imóvel dependerá de autorização prévia e por escrito do LOCADOR.
-
-CLÁUSULA QUINTA - DOS ENCARGOS
-Além do aluguel, competem ao LOCATÁRIO as despesas ordinárias de consumo de água, energia elétrica, esgoto, saneamento, taxa de lixo, condomínio quando houver e demais encargos relacionados ao uso do imóvel durante a vigência do contrato.
-
-Parágrafo Único - Caso o LOCADOR efetue o pagamento de qualquer despesa de responsabilidade do LOCATÁRIO, este deverá reembolsar integralmente o valor, acrescido de multa, juros e correção quando aplicáveis.
-
-CLÁUSULA SEXTA - DA DESTINAÇÃO DO IMÓVEL
-O imóvel objeto deste contrato destina-se exclusivamente para fim residencial, ficando o LOCATÁRIO proibido de alterar sua destinação, ceder, transferir, sublocar ou emprestar o imóvel, no todo ou em parte, sem autorização expressa do LOCADOR.
-
-CLÁUSULA SÉTIMA - DAS PROIBIÇÕES E RESPONSABILIDADES
-O LOCATÁRIO obriga-se a não depositar no imóvel materiais inflamáveis, explosivos, corrosivos ou quaisquer objetos que possam comprometer a segurança do imóvel, dos vizinhos ou de terceiros.
-
-CLÁUSULA OITAVA - DA INADIMPLÊNCIA E RESCISÃO
-O descumprimento de qualquer cláusula deste contrato poderá acarretar a rescisão da locação, cobrança dos valores devidos, perdas e danos, além das medidas judiciais cabíveis.
-
-CLÁUSULA NONA - DA MULTA CONTRATUAL
-Fica estipulada multa equivalente a 03 (três) meses de aluguel vigente na data da infração, na qual incorrerá a parte que infringir quaisquer cláusulas deste contrato, facultando à parte inocente considerar rescindida a locação.
-
-CLÁUSULA DÉCIMA - DO FORO
-As partes elegem o foro da comarca de {contractCity} para dirimir quaisquer dúvidas ou questões oriundas deste contrato, com renúncia de qualquer outro, por mais privilegiado que seja.
-
-{contractDefaultNotes}
-
-E assim, por estarem justas e convencionadas, as partes assinam o presente instrumento particular de CONTRATO DE LOCAÇÃO RESIDENCIAL, em 2 (duas) vias de igual teor, juntamente com as testemunhas abaixo.
-
-{contractCity}, {currentDate}.
-
-LOCADOR:
-__________________________________
-{landlordName}
-
-LOCATÁRIO:
-__________________________________
-{tenantName}
-
-TESTEMUNHA:
-__________________________________
-Nome: ______________________________
-CPF: ______________________________
-
-TESTEMUNHA:
-__________________________________
-Nome: ______________________________
-CPF: ______________________________`;
-
-const ORIGINAL_STANDARD_RESIDENTIAL_CONTRACT_TEMPLATE = `CONTRATO DE LOCAÇÃO RESIDENCIAL
-
-{landlordName}, inscrito(a) no CPF/CNPJ nº {landlordDocument}, telefone {companyPhone}, residente e domiciliado(a) em {landlordAddress}, a seguir denominado(a) LOCADOR, e de outro lado, {tenantName}, inscrito(a) no CPF/CNPJ nº {tenantDocument}, telefone {tenantPhone}, residente e domiciliado(a) em {tenantAddress}, denominado(a) LOCATÁRIO.
-
-CLÁUSULA PRIMEIRA - O LOCADOR dá em locação o imóvel situado em {propertyAddress}, denominado {propertyName}, pelo prazo de {contractMonths} mês(es), ao iniciar em {startDate} e para terminar em {endDate}, data em que o LOCATÁRIO, após vistoria do mesmo, o aceita nas condições em que se encontra, e se obriga a restituir o imóvel locado em perfeito estado de conservação, inteiramente livre e desocupado, com conta de luz, água e demais encargos pagos e desligados quando aplicável, sob pena de acrescentar-se a obrigação de fazer e a multa contratual prevista na CLÁUSULA DÉCIMA SEXTA.
-
-Parágrafo Primeiro - Antes do vencimento do prazo ajustado nesta cláusula, não poderá o LOCADOR retomar o imóvel, salvo se motivado por infração contratual do LOCATÁRIO. No caso de devolução do imóvel ao LOCADOR antes do prazo, deverá o LOCATÁRIO pagar a multa prevista na CLÁUSULA DÉCIMA SEXTA.
-
-Parágrafo Segundo - Quando da devolução das chaves ao final do contrato, o LOCATÁRIO deverá apresentar contas de água e luz pagas durante o tempo em que estiver no imóvel e, quando cabível, comprovar seu desligamento ou transferência.
-
-Parágrafo Terceiro - Na hipótese do LOCATÁRIO abandonar o imóvel, fica o LOCADOR autorizado a tomar as medidas necessárias para resguardar a posse, conservação e segurança do imóvel, evitando depredação ou invasão.
-
-Parágrafo Quarto - No caso de falecimento do LOCATÁRIO, ficarão sub-rogados nos seus direitos e obrigações o cônjuge ou companheiro e, sucessivamente, os herdeiros, nos termos da legislação aplicável.
-
-CLÁUSULA SEGUNDA - O valor mensal do aluguel será de {amount}, a ser pago pelo LOCATÁRIO ao LOCADOR até o dia {dueDay} de cada mês, por depósito bancário, transferência, dinheiro ou Pix, utilizando a chave {pixKey}, ou por outro meio formalmente acordado entre as partes.
-
-Parágrafo Primeiro - Decorrido o prazo de 30 (trinta) dias do vencimento, o débito poderá ser encaminhado para cobrança amigável ou judicial, ficando o LOCATÁRIO responsável pelos encargos, honorários, custas e demais despesas decorrentes da cobrança.
-
-Parágrafo Segundo - Os encargos constantes da CLÁUSULA SEXTA, incluindo taxa de lixo quando houver, deverão ser pagos juntamente com o aluguel ou diretamente aos órgãos responsáveis, conforme a natureza da cobrança.
-
-Parágrafo Terceiro - O não cumprimento das obrigações pecuniárias expressas neste contrato pelo LOCATÁRIO faculta ao LOCADOR adotar medidas de cobrança, inclusive protesto ou inclusão em cadastros de proteção ao crédito, quando legalmente permitido.
-
-CLÁUSULA TERCEIRA - O aluguel mensal pactuado na CLÁUSULA SEGUNDA poderá ser reajustado ao final do prazo contratual ou em eventual renovação, mediante acordo entre as partes e observada a legislação vigente.
-
-CLÁUSULA QUARTA - Se necessária a propositura de ação de despejo, consignação em pagamento de aluguéis ou acessórios da locação, cobranças, citações, intimações e notificações poderão ser realizadas pelas formas previstas em lei, inclusive correspondência com aviso de recebimento, quando admitido.
-
-CLÁUSULA QUINTA - O LOCATÁRIO declara haver visitado e examinado o imóvel locado, aceitando-o nas condições em que se encontra, obrigando-se a zelar por tudo o que nele houver e realizar, por sua conta, os reparos decorrentes do uso normal durante a locação, especialmente os relativos a limpeza, conservação, instalações elétricas, hidráulicas, pintura, telhado, vidraçaria, fechaduras, torneiras, pias, banheiros, ralos e demais acessórios.
-
-Parágrafo Primeiro - É assegurado ao LOCADOR o direito de vistoriar o imóvel sempre que julgar conveniente, mediante prévia comunicação ao LOCATÁRIO, respeitada a legislação aplicável.
-
-Parágrafo Segundo - O LOCATÁRIO deverá entregar imediatamente ao LOCADOR toda e qualquer correspondência, intimação, documento de cobrança, carnê ou comunicação relativa ao imóvel, ainda que dirigida ao LOCATÁRIO.
-
-Parágrafo Terceiro - Rescindida a contratação, amigável ou judicialmente, deverá o LOCATÁRIO entregar o imóvel em perfeito estado de conservação e limpeza, respondendo por danos comprovados mediante recibos, orçamentos ou documentos hábeis.
-
-Parágrafo Quarto - Fica expressamente proibida toda e qualquer alteração no imóvel sem prévia autorização por escrito do LOCADOR.
-
-CLÁUSULA SEXTA - Além do aluguel, compete ao LOCATÁRIO o pagamento das despesas ordinárias de consumo de água, energia elétrica, taxas de esgoto, saneamento, taxa de lixo, condomínio quando houver e demais encargos relacionados ao uso do imóvel. Cabe ao LOCATÁRIO solicitar contratação, transferência ou regularização dos serviços em seu nome quando aplicável, respondendo civil e criminalmente por uso irregular.
-
-Parágrafo Primeiro - As taxas e despesas ordinárias de condomínio que incidam ou venham a incidir sobre o imóvel serão pagas pelo LOCATÁRIO aos responsáveis pela cobrança, devendo apresentar comprovantes quando solicitado.
-
-Parágrafo Segundo - Na hipótese de os encargos serem pagos pelo LOCADOR por inadimplência do LOCATÁRIO, os respectivos valores serão reembolsados pelo LOCATÁRIO com multa, juros e correção monetária quando aplicáveis.
-
-Parágrafo Terceiro - O não pagamento dos encargos sob responsabilidade do LOCATÁRIO poderá dar ensejo à rescisão contratual, despejo e aplicação da multa prevista na CLÁUSULA DÉCIMA SEXTA.
-
-CLÁUSULA SÉTIMA - No ato da devolução do imóvel, o LOCATÁRIO deverá apresentar os comprovantes dos últimos pagamentos de água, energia elétrica e demais encargos, bem como comprovar o encerramento, transferência ou regularização dos serviços quando necessário.
-
-CLÁUSULA OITAVA - O LOCATÁRIO obriga-se a não depositar no imóvel materiais inflamáveis, explosivos, corrosivos ou quaisquer bens que possam causar risco ao imóvel, aos vizinhos ou a terceiros. Benfeitorias somente poderão ser realizadas com autorização prévia do LOCADOR, ficando incorporadas ao imóvel sem direito a retenção ou abatimento, salvo acordo escrito em sentido contrário.
-
-CLÁUSULA NONA - No caso de desapropriação do imóvel locado, ficará o LOCADOR desobrigado das cláusulas deste contrato, reservando-se ao LOCATÁRIO apenas os direitos que eventualmente lhe sejam assegurados pela autoridade competente.
-
-CLÁUSULA DÉCIMA - Nenhuma intimação ou exigência da Saúde Pública ou órgão público será motivo para o LOCATÁRIO abandonar o imóvel ou pedir rescisão contratual, salvo decisão ou vistoria oficial que comprove risco estrutural ou impossibilidade de uso do imóvel.
-
-CLÁUSULA DÉCIMA PRIMEIRA - Quaisquer tolerâncias ou concessões do LOCADOR para com o LOCATÁRIO, quando não manifestadas por escrito, não constituirão precedente invocável e não alterarão as obrigações contratuais.
-
-CLÁUSULA DÉCIMA SEGUNDA - O LOCADOR não responderá por danos sofridos pelo LOCATÁRIO em razão de vazamentos, chuvas, rompimento de canos, defeitos em esgoto ou fossa, incêndios, arrombamentos, roubos, furtos, caso fortuito ou força maior, salvo quando comprovada responsabilidade legal do LOCADOR.
-
-CLÁUSULA DÉCIMA TERCEIRA - O LOCATÁRIO não terá direito de reter o pagamento do aluguel ou de qualquer quantia devida ao LOCADOR sob alegação de não terem sido atendidas exigências ou solicitações, devendo eventuais controvérsias ser resolvidas pelos meios legais cabíveis.
-
-CLÁUSULA DÉCIMA QUARTA - O imóvel objeto do presente contrato destina-se exclusivamente para fim residencial, ficando o LOCATÁRIO proibido de mudar a destinação, ceder, transferir, sublocar ou emprestar o imóvel, no todo ou em parte, a qualquer título, sem autorização expressa do LOCADOR.
-
-Parágrafo Único - A ocupação do imóvel por pessoa não autorizada ou a permanência de terceiros após a saída do LOCATÁRIO caracterizará infração contratual grave, sujeitando o LOCATÁRIO à rescisão e à multa prevista na CLÁUSULA DÉCIMA SEXTA.
-
-CLÁUSULA DÉCIMA QUINTA - Em caso de venda do imóvel, o LOCATÁRIO será notificado acerca do direito de preferência previsto na Lei do Inquilinato. Não se manifestando no prazo legal, será considerado não interessado. Não efetuando a compra, o LOCATÁRIO autoriza o LOCADOR a mostrar o imóvel a interessados, mediante agendamento prévio.
-
-CLÁUSULA DÉCIMA SEXTA - Fica estipulada a multa equivalente a 03 (três) meses de aluguel vigente na data da ocorrência, na qual incorrerá a parte que infringir quaisquer cláusulas deste contrato, facultando à parte inocente considerar rescindida a locação, promover a cobrança dos valores devidos e tomar as medidas judiciais cabíveis.
-
-CLÁUSULA DÉCIMA SÉTIMA - Elegem as partes contratantes o foro da comarca de {contractCity}, para dirimir as questões oriundas da interpretação ou aplicação deste contrato, com exclusão de qualquer outro, por mais privilegiado que seja.
-
-{contractDefaultNotes}
-
-E assim, por estarem justas e convencionadas, as partes assinam o presente instrumento particular de CONTRATO DE LOCAÇÃO RESIDENCIAL, em 2 (duas) vias de igual teor, juntamente com as testemunhas abaixo.
-
-{contractCity}, {currentDate}.
-
-____________________________________
-LOCADOR: {landlordName}
-
-____________________________________
-LOCATÁRIO: {tenantName}
-
-____________________________________
-Testemunha:
-Nome: ______________________________
-CPF: ______________________________
-
-____________________________________
-Testemunha:
-Nome: ______________________________
-CPF: ______________________________`;
-
-const DEFAULT_ASSET_CONTRACT_TEMPLATE = `CONTRATO DE LOCAÇÃO DE BEM/ATIVO
-
-I - LOCADOR:
-{landlordName}, inscrito(a) no CPF/CNPJ nº {landlordDocument}, com endereço em {landlordAddress}, telefone {companyPhone}, e-mail {companyEmail}, a seguir denominado(a) LOCADOR.
-
-II - LOCATÁRIO:
-{tenantName}, inscrito(a) no CPF/CNPJ nº {tenantDocument}, residente e domiciliado(a) em {tenantAddress}, telefone {tenantPhone}, e-mail {tenantEmail}, a seguir denominado(a) LOCATÁRIO.
-
-CLÁUSULA PRIMEIRA - DO BEM/ATIVO E DO PRAZO
-O LOCADOR dá em locação ao LOCATÁRIO o bem/ativo denominado {propertyName}, classificado como {assetCategory}, pelo prazo de {contractMonths} mês(es), com início em {startDate} e término em {endDate}.
-
-Parágrafo Primeiro - O LOCATÁRIO declara ter recebido o bem/ativo em condições adequadas de uso, comprometendo-se a utilizá-lo exclusivamente para a finalidade contratada e a devolvê-lo ao final da locação no mesmo estado de conservação, salvo desgaste natural de uso.
-
-Parágrafo Segundo - Quando houver local de entrega, guarda ou operação informado, considera-se como referência: {propertyAddress}.
-
-CLÁUSULA SEGUNDA - DO VALOR E FORMA DE PAGAMENTO
-O valor da locação será de {amount}, com vencimento conforme acordado entre as partes. O pagamento poderá ser realizado por depósito, transferência, dinheiro ou Pix, utilizando a chave {pixKey}, salvo outra forma expressamente acordada.
-
-CLÁUSULA TERCEIRA - DA GUARDA, USO E CONSERVAÇÃO
-O LOCATÁRIO será responsável pela guarda, conservação, uso adequado e segurança do bem/ativo durante todo o período de locação, respondendo por perdas, danos, mau uso, extravio, furto, roubo ou avarias que não decorram de desgaste natural.
-
-CLÁUSULA QUARTA - DA MANUTENÇÃO E DEVOLUÇÃO
-O LOCATÁRIO deverá comunicar imediatamente ao LOCADOR qualquer defeito, dano, acidente, perda de desempenho ou necessidade de manutenção. A devolução deverá ocorrer na data final contratada, acompanhada de acessórios, documentos, peças, componentes ou itens entregues junto com o bem/ativo, quando houver.
-
-CLÁUSULA QUINTA - DAS PROIBIÇÕES
-É vedado ao LOCATÁRIO ceder, transferir, sublocar, emprestar, vender, modificar, desmontar ou alterar o bem/ativo sem autorização prévia e por escrito do LOCADOR.
-
-CLÁUSULA SEXTA - DA INADIMPLÊNCIA E RESCISÃO
-O descumprimento de qualquer obrigação contratual poderá acarretar rescisão, cobrança dos valores devidos, multa, perdas e danos, além das medidas administrativas, extrajudiciais ou judiciais cabíveis.
-
-CLÁUSULA SÉTIMA - DO FORO
-As partes elegem o foro da comarca de {contractCity} para dirimir dúvidas ou questões oriundas deste contrato, com renúncia de qualquer outro, por mais privilegiado que seja.
-
-{contractDefaultNotes}
-
-{contractCity}, {currentDate}.
-
-LOCADOR:
-__________________________________
-{landlordName}
-
-LOCATÁRIO:
-__________________________________
-{tenantName}
-
-TESTEMUNHA:
-__________________________________
-Nome: ______________________________
-CPF: ______________________________`;
-
-
-type Contract = {
-  id: string;
-  propertyId: string;
-  propertyName?: string;
-  tenantId: string;
-  tenantName?: string;
-  startDate: string;
-  endDate?: string;
-  value?: number | string;
-  amount?: number | string;
-  rentValue?: number | string;
-  monthlyValue?: number | string;
-  status: "Active" | "Finished" | "Inactive" | "Canceled" | "Deleted" | string;
-  isTemporaryRental?: boolean;
-  checkInTime?: string;
-  checkOutTime?: string;
-};
-
-type Property = {
-  id: string;
-  name: string;
-  assetCategory?: string | null;
-  ownerId?: string | null;
-  ownerName?: string | null;
-  managementMode?: string | null;
-  administrationFeePercentage?: number | null;
-  ownerPayoutDay?: number | null;
-  autoCreateOwnerPayable?: boolean | null;
-  zipCode?: string;
-  state?: string;
-  city?: string;
-  street?: string;
-  number?: string;
-  district?: string;
-  neighborhood?: string;
-  complement?: string;
-};
-
-type PersonType = "Individual" | "Company";
-
-type Tenant = {
-  id: string;
-  name: string;
-  personType?: PersonType;
-  cpf?: string;
-  phone?: string;
-  isTenant?: boolean;
-  zipCode?: string;
-  state?: string;
-  city?: string;
-  street?: string;
-  number?: string;
-  district?: string;
-  complement?: string;
-  document?: string;
-  email?: string;
-  neighborhood?: string;
-};
-
-type Charge = {
-  id: string;
-  contractId?: string | number | null;
-  tenantId?: string | null;
-  property: string;
-  tenant: string;
-  dueDate: string;
-  amount: number;
-  status: "Pending" | "Paid" | "Overdue";
-  paidAmount?: number;
-  remainingAmount?: number;
-  manual?: boolean;
-  issueDate?: string;
-  installmentNumber?: number;
-  installmentTotal?: number;
-  installmentGroupId?: string;
-  isDownPayment?: boolean;
-};
-
-type StatusFilter = "All" | "Pending" | "Paid" | "Overdue";
-type ReportDueFilter = "All" | "Overdue" | "DueToday" | "Upcoming" | "DateRange";
-type ChargeLaunchType = "single" | "installment";
-
-type ActionMenuPosition = {
-  top: number;
-  left: number;
-};
-
-type InstallmentPreview = {
-  id: string;
-  installmentNumber: number;
-  amount: string;
-  dueDate: string;
-  isDownPayment?: boolean;
-};
-
-type ReceivableFromContractPayload = {
-  contractId?: string;
-  tenantId: string;
-  tenantName?: string;
-  propertyId: string;
-  propertyName?: string;
-  amount: number;
-  monthlyAmount?: number;
-  totalAmount?: number;
-  issueDate: string;
-  dueDate: string;
-  endDate?: string;
-  installmentQuantity?: number;
-};
-
-type ContractSchedulePayload = {
-  id: string;
-  tenantId: string;
-  propertyId: string;
-  tenantName?: string;
-  propertyName?: string;
-  endDate?: string;
-};
-
-const MAX_INSTALLMENT_QUANTITY = 120;
-const RECEIVABLE_FROM_CONTRACT_STORAGE_KEY = "contrx_receivable_from_contract";
-const DEFAULT_RECEIVABLE_STATUS_FILTER: StatusFilter = "Pending";
-
-type PaymentMethod =
-  | "Cash"
-  | "Pix"
-  | "CreditCard"
-  | "DebitCard"
-  | "BankSlip"
-  | "BankTransfer"
-  | "Other";
-
-type PaymentAdjustmentMode = "amount" | "percentage";
-
-type PaymentAllocation = {
-  id: string;
-  method: PaymentMethod;
-  amount: number;
-};
-
-type PaymentEntry = {
-  id: string;
-  method: PaymentMethod;
-  amount: string;
-};
-
-type ChargePayment = {
-  id?: string;
-  chargeId: string;
-  paidAt: string;
-  method: PaymentMethod;
-  paymentItems?: PaymentAllocation[];
-  interest: number;
-  discount: number;
-  amountPaid: number;
-  note?: string;
-};
-
-type ReceiptPrintItem = {
-  charge: Charge;
-  paymentRecord: ChargePayment;
-};
-
-type PaymentMethodOption = {
-  value: PaymentMethod;
-  label: string;
-};
-
-const paymentMethodOptions: PaymentMethodOption[] = [
-  { value: "Cash", label: "Dinheiro" },
-  { value: "Pix", label: "Pix" },
-  { value: "CreditCard", label: "Cartão de crédito" },
-  { value: "DebitCard", label: "Cartão de débito" },
-  { value: "BankSlip", label: "Boleto bancário" },
-  { value: "BankTransfer", label: "Transferência bancária" },
-  { value: "Other", label: "Outros" },
-];
-
-function normalizeAmount(value: unknown) {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : 0;
-  }
-
-  if (typeof value === "string") {
-    const normalizedValue = value
-      .replace("R$", "")
-      .replace(/\./g, "")
-      .replace(",", ".")
-      .trim();
-
-    const parsedValue = Number(normalizedValue);
-
-    return Number.isFinite(parsedValue) ? parsedValue : 0;
-  }
-
-  return 0;
-}
-
-function roundMoney(value: number) {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
-
-function formatPercent(value: number) {
-  return `${roundMoney(value).toFixed(2).replace(".", ",")}%`;
-}
-
-function getLocalDateValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
-
-function addDaysToDate(dateValue: string, days: number) {
-  const date = new Date(`${dateValue}T00:00:00`);
-  date.setDate(date.getDate() + days);
-
-  return getLocalDateValue(date);
-}
-
-function formatAmountInput(value: number) {
-  return value.toFixed(2).replace(".", ",");
-}
-
-function getAmountInCents(value: unknown) {
-  return Math.round(normalizeAmount(value) * 100);
-}
-
-function formatCentsAsAmountInput(valueInCents: number) {
-  return formatAmountInput(valueInCents / 100);
-}
-
-function formatCurrencyInput(value: string) {
-  const digits = value.replace(/\D/g, "");
-
-  if (!digits) return "";
-
-  return formatAmountInput(Number(digits) / 100);
-}
-
-function distributeAmountInCents(totalInCents: number, quantity: number) {
-  if (quantity <= 0) return [];
-
-  const normalizedTotalInCents = Math.max(Math.round(totalInCents), 0);
-  const baseAmountInCents = Math.floor(normalizedTotalInCents / quantity);
-  let centsRemainder = normalizedTotalInCents - baseAmountInCents * quantity;
-
-  return Array.from({ length: quantity }, () => {
-    const extraCent = centsRemainder > 0 ? 1 : 0;
-
-    if (centsRemainder > 0) {
-      centsRemainder -= 1;
-    }
-
-    return baseAmountInCents + extraCent;
-  });
-}
-
-export default function AccountsReceivablePage() {
+  Charge,
+  formatCurrency,
+  StatusFilter,
+  PeriodShortcut,
+  PaymentMethod,
+  ChargeLaunchType,
+  Tenant,
+  Property,
+  Contract,
+  getStartOfCurrentMonth,
+  getEndOfCurrentMonth,
+  isDateInsideRange,
+  normalizeSearchText,
+  mapUiPaymentMethodToApi,
+  mapApiPaymentMethodToUi,
+} from "@/components/contas-receber/receivable-types";
+import { ReceivableKpis } from "@/components/contas-receber/receivable-kpis";
+import { ReceivableFilters } from "@/components/contas-receber/receivable-filters";
+import { ReceivableTable } from "@/components/contas-receber/receivable-table";
+import { ReceivableMobileCards } from "@/components/contas-receber/receivable-mobile-cards";
+import { ReceivablePaymentModal } from "@/components/contas-receber/modals/receivable-payment-modal";
+import { ReceivableBatchModal } from "@/components/contas-receber/modals/receivable-batch-modal";
+import { ReceivableFormModal } from "@/components/contas-receber/modals/receivable-form-modal";
+import { ReceivableDeleteModal } from "@/components/contas-receber/modals/receivable-delete-modal";
+import { ReceivableHistoryModal } from "@/components/contas-receber/modals/receivable-history-modal";
+import { PersonSelectModal } from "@/components/contas-receber/modals/person-select-modal";
+import { ReceivableShareModal } from "@/components/contas-receber/modals/receivable-share-modal";
+import { generatePaymentReceipt, generatePaymentCarnet } from "./printing";
+
+export default function ContasReceberPage() {
   const { user } = useAuth();
   const companyId = user?.companyId;
 
-  const [contracts, setContracts] = useState<Contract[]>([]);
-  const [properties, setProperties] = useState<Property[]>([]);
+  // Estados principais
+  const [charges, setCharges] = useState<Charge[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [paid, setPaid] = useState<string[]>([]);
-  const [paymentRecords, setPaymentRecords] = useState<ChargePayment[]>([]);
-  const [manualCharges, setManualCharges] = useState<Charge[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const {
-    getChargePayments,
-    getChargePayment,
-    getChargePaidAmount,
-    getChargeSettlementAmount,
-    getChargeRemainingAmount,
-  } = useReceivableCalculations(paymentRecords);
+  // Filtros e Seleção em Lote
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("Pending");
+  const [selectedTenantId, setSelectedTenantId] = useState("all");
+  const [selectedPropertyId, setSelectedPropertyId] = useState("all");
+  const [periodShortcut, setPeriodShortcut] = useState<PeriodShortcut>("CurrentMonth");
+  const [startDate, setStartDate] = useState(getStartOfCurrentMonth());
+  const [endDate, setEndDate] = useState(getEndOfCurrentMonth());
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const getContractAmount = useCallback((contract: Contract) => {
-    return normalizeAmount(
-      contract.value ??
-        contract.amount ??
-        contract.rentValue ??
-        contract.monthlyValue ??
-        0,
-    );
+  // Modais
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [isPersonFilterModalOpen, setIsPersonFilterModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shareModalCharge, setShareModalCharge] = useState<Charge | null>(null);
+  const [shareModalUrl, setShareModalUrl] = useState("");
+  const [shareModalExpiresAt, setShareModalExpiresAt] = useState<string | undefined>();
+  const [deleteModalMode, setDeleteModalMode] = useState<"delete" | "reversal">("delete");
+  const [selectedCharge, setSelectedCharge] = useState<Charge | null>(null);
+  const [contractPayload, setContractPayload] = useState<any>(null);
+  const [flowContractId, setFlowContractId] = useState<string | null>(null);
+  const [filterContractId, setFilterContractId] = useState<string | null>(null);
+  const [pendingContractCarnetFlow, setPendingContractCarnetFlow] = useState<{
+    contractId: string;
+    charges: Charge[];
+  } | null>(null);
+
+  // Mapear dados da API para o tipo de domínio Charge
+  function mapApiCharge(item: ReceivableAccount): Charge {
+    const rawPayments = item.payments || [];
+    const payments = rawPayments.map((p) => ({
+      id: p.id,
+      paidAt: p.paidAt,
+      method: mapApiPaymentMethodToUi(p.method),
+      interest: Number(p.interest || 0),
+      discount: Number(p.discount || 0),
+      amountPaid: Number(p.amountPaid || 0),
+      note: p.note || null,
+      paymentItems: Array.isArray((p as any).paymentItems)
+        ? (p as any).paymentItems.map((pi: any) => ({
+            method: mapApiPaymentMethodToUi(pi.method),
+            amount: Number(pi.amount || 0),
+          }))
+        : null,
+    }));
+
+    const amount = Number(item.amount || 0);
+    const paidSum = payments.reduce((sum, p) => sum + p.amountPaid, 0);
+    const discountSum = payments.reduce((sum, p) => sum + p.discount, 0);
+    const interestSum = payments.reduce((sum, p) => sum + p.interest, 0);
+    const totalSettled = paidSum + discountSum - interestSum;
+
+    const isPaid = totalSettled >= amount - 0.001 && amount > 0;
+    const isOverdue =
+      !isPaid &&
+      item.dueDate &&
+      item.dueDate.slice(0, 10) < new Date().toISOString().slice(0, 10);
+
+    const status = isPaid ? "Paid" : isOverdue ? "Overdue" : "Pending";
+
+    return {
+      id: item.id,
+      companyId: item.companyId,
+      contractId: item.contractId,
+      tenantId: item.tenantId,
+      propertyName: item.propertyName,
+      tenantName: item.tenantName,
+      issueDate: item.issueDate,
+      dueDate: item.dueDate,
+      amount,
+      status,
+      manual: item.manual,
+      installmentNumber: item.installmentNumber,
+      installmentTotal: item.installmentTotal,
+      installmentGroupId: item.installmentGroupId,
+      isDownPayment: item.isDownPayment,
+      payments,
+      tenant: item.tenant || null,
+    };
+  }
+
+  // Cálculos de saldo de cada cobrança
+  const getChargePaidAmount = useCallback((charge: Charge) => {
+    const payments = charge.payments || [];
+    const total = payments.reduce((sum, p) => sum + p.amountPaid, 0);
+    return total || (charge.status === "Paid" ? charge.amount : 0);
   }, []);
 
-  const automaticCharges = useMemo<Charge[]>(() => {
-    const today = new Date();
-    const manualContractIds = new Set(
-      manualCharges
-        .map((charge) => String(charge.contractId || ""))
-        .filter(Boolean),
+  const getChargeRemainingAmount = useCallback((charge: Charge) => {
+    if (charge.status === "Paid" && (!charge.payments || charge.payments.length === 0)) {
+      return 0;
+    }
+    const payments = charge.payments || [];
+    const settled = payments.reduce(
+      (sum, p) => sum + p.amountPaid + p.discount - p.interest,
+      0
     );
+    return Math.max(0, charge.amount - settled);
+  }, []);
 
-    return contracts
-      .filter((contract) => contract.status === "Active")
-      .filter((contract) => !manualContractIds.has(String(contract.id)))
-      .map((contract) => {
-        const property = properties.find(
-          (item) => item.id === contract.propertyId,
-        );
+  // Carregar dados
+  const loadData = useCallback(async (currentCompanyId: string) => {
+    try {
+      setErrorMessage("");
+      const [apiCharges, apiPeople, apiProperties, apiContracts] = await Promise.all([
+        getReceivableAccounts(currentCompanyId),
+        getPeople(currentCompanyId),
+        getProperties(currentCompanyId),
+        getContracts(currentCompanyId),
+      ]);
 
-        const tenant = tenants.find((item) => item.id === contract.tenantId);
-
-        const dueDate = new Date();
-        dueDate.setDate(new Date(contract.startDate).getDate());
-
-        const id = `${contract.id}-${dueDate.toISOString()}`;
-        const isPaid = paid.includes(id);
-
-        let status: Charge["status"] = "Pending";
-
-        if (isPaid) {
-          status = "Paid";
-        } else if (dueDate < today) {
-          status = "Overdue";
-        }
-
-        return {
-          id,
-          property: property?.name || "Bem/Ativo",
-          tenant: tenant?.name || "Inquilino",
-          dueDate: dueDate.toISOString(),
-          amount: getContractAmount(contract),
-          status,
-        };
-      });
-  }, [contracts, properties, tenants, paid, manualCharges, getContractAmount]);
-
-  const manualChargesWithStatus = useMemo<Charge[]>(() => {
-    const today = new Date();
-
-    return manualCharges.map((charge) => {
-      let status: Charge["status"] = "Pending";
-
-      if (paid.includes(charge.id)) {
-        status = "Paid";
-      } else if (new Date(charge.dueDate) < today) {
-        status = "Overdue";
-      }
-
-      return {
-        ...charge,
-        status,
-      };
-    });
-  }, [manualCharges, paid]);
-
-  const charges = useMemo<Charge[]>(() => {
-    const manualChargeIds = new Set(
-      manualChargesWithStatus.map((charge) => String(charge.id)),
-    );
-
-    const automaticChargesWithoutManualAdjustments = automaticCharges.filter(
-      (charge) => !manualChargeIds.has(String(charge.id)),
-    );
-
-    return [
-      ...automaticChargesWithoutManualAdjustments,
-      ...manualChargesWithStatus,
-    ];
-  }, [automaticCharges, manualChargesWithStatus]);
-
-  const {
-    statusFilter,
-    setStatusFilter,
-    selectedTenant,
-    setSelectedTenant,
-    focusedContractId,
-    setFocusedContractId,
-    search,
-    setSearch,
-    filterStartDate,
-    setFilterStartDate,
-    filterEndDate,
-    setFilterEndDate,
-    periodShortcut,
-    setPeriodShortcut,
-    updatePeriodShortcut,
-    filteredTenants,
-    filteredCharges,
-    totalReceivable,
-    totalPaid,
-    totalOverdue,
-  } = useReceivableFilters({
-    charges,
-    tenants,
-    getChargeRemainingAmount,
-    getChargePaidAmount,
-    getChargePayment,
-    initialStatusFilter: DEFAULT_RECEIVABLE_STATUS_FILTER,
-  });
-
-  const selectableChargeIds = useMemo(() => {
-    return filteredCharges.map((charge) => String(charge.id));
-  }, [filteredCharges]);
-
-  const {
-    selectedChargeIds,
-    setSelectedChargeIds,
-    toggleChargeSelection,
-    toggleAllVisibleChargeSelection,
-    clearChargeSelection,
-    allVisibleChargesSelected,
-  } = useReceivableSelection(selectableChargeIds);
-
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [autoOpenSearch, setAutoOpenSearch] = useState(true);
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isTenantCreateOpen, setIsTenantCreateOpen] = useState(false);
-  const [isChargeSaving, setIsChargeSaving] = useState(false);
-  const [processingConfirmation, setProcessingConfirmation] = useState<
-    "payment" | "delete" | "reversal" | "print" | null
-  >(null);
-
-
-  const [openActionMenuChargeId, setOpenActionMenuChargeId] = useState<string | null>(null);
-  const [actionMenuPosition, setActionMenuPosition] =
-    useState<ActionMenuPosition | null>(null);
-
-  const [formTenant, setFormTenant] = useState("");
-  const [formContractId, setFormContractId] = useState("");
-  const [formProperty, setFormProperty] = useState("");
-  const [formAmount, setFormAmount] = useState("");
-  const [formIssueDate, setFormIssueDate] = useState("");
-  const [formDueDate, setFormDueDate] = useState("");
-  const [formPaymentDate, setFormPaymentDate] = useState("");
-  const [formLaunchType, setFormLaunchType] =
-    useState<ChargeLaunchType>("single");
-  const [formFirstInstallmentAsDownPayment, setFormFirstInstallmentAsDownPayment] =
-    useState(false);
-  const [formInstallmentQuantity, setFormInstallmentQuantity] = useState("2");
-  const [installmentPreview, setInstallmentPreview] = useState<
-    InstallmentPreview[]
-  >([]);
-
-  const [chargeFormError, setChargeFormError] = useState("");
-  const [editingChargeId, setEditingChargeId] = useState<string | null>(null);
-  const [chargePendingDeletion, setChargePendingDeletion] =
-    useState<Charge | null>(null);
-  const [chargePendingPaymentReversal, setChargePendingPaymentReversal] =
-    useState<Charge | null>(null);
-  const [chargePendingPaymentReceipt, setChargePendingPaymentReceipt] =
-    useState<Charge | null>(null);
-  const [paymentBatchCharges, setPaymentBatchCharges] = useState<Charge[]>([]);
-  const [isPaymentConfirmationOpen, setIsPaymentConfirmationOpen] =
-    useState(false);
-  const [paymentInterest, setPaymentInterest] = useState("");
-  const [paymentDiscount, setPaymentDiscount] = useState("");
-  const [paymentInterestInput, setPaymentInterestInput] = useState("");
-  const [paymentDiscountInput, setPaymentDiscountInput] = useState("");
-  const [paymentInterestMode, setPaymentInterestMode] =
-    useState<PaymentAdjustmentMode>("amount");
-  const [paymentDiscountMode, setPaymentDiscountMode] =
-    useState<PaymentAdjustmentMode>("amount");
-  const [paymentFinalAmount, setPaymentFinalAmount] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("Cash");
-  const [paymentEntries, setPaymentEntries] = useState<PaymentEntry[]>([]);
-  const [paymentNote, setPaymentNote] = useState("");
-  const [paymentFormError, setPaymentFormError] = useState("");
-
-  // Estado para Lançamento Bancário automático ao receber via Pix / Transferência Bancária
-  const [isBankTransactionModalOpen, setIsBankTransactionModalOpen] = useState(false);
-  const [bankTransactionQueue, setBankTransactionQueue] = useState<BankTransactionInitialData[]>([]);
-
-  // Estado para mover e redimensionar o modal de recebimento
-  const [receiveModalPos, setReceiveModalPos] = useState<{ x: number; y: number } | null>(null);
-  const [receiveModalSize, setReceiveModalSize] = useState<{ width: number; height: number } | null>(null);
-  const [isDraggingReceiveModal, setIsDraggingReceiveModal] = useState(false);
-  const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [isResizingReceiveModal, setIsResizingReceiveModal] = useState(false);
-  const [resizeStartPos, setResizeStartPos] = useState<{ x: number; y: number; width: number; height: number }>({ x: 0, y: 0, width: 0, height: 0 });
-
-  // Estado para mover e redimensionar o modal de Nova Cobrança
-  const [createModalPos, setCreateModalPos] = useState<{ x: number; y: number } | null>(null);
-  const [createModalSize, setCreateModalSize] = useState<{ width: number; height: number } | null>(null);
-  const [isDraggingCreateModal, setIsDraggingCreateModal] = useState(false);
-  const [createDragStartPos, setCreateDragStartPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [isResizingCreateModal, setIsResizingCreateModal] = useState(false);
-  const [createResizeStartPos, setCreateResizeStartPos] = useState<{ x: number; y: number; width: number; height: number }>({ x: 0, y: 0, width: 0, height: 0 });
-
-  const [isReportOpen, setIsReportOpen] = useState(false);
-  const [reportTenantId, setReportTenantId] = useState("");
-  const [reportStatusFilter, setReportStatusFilter] =
-    useState<StatusFilter>("All");
-  const [reportDueFilter, setReportDueFilter] =
-    useState<ReportDueFilter>("All");
-  const [reportStartDate, setReportStartDate] = useState("");
-  const [reportEndDate, setReportEndDate] = useState("");
-  const [reportFormError, setReportFormError] = useState("");
-  const [themeMode, setThemeMode] = useState<ThemeMode>("light");
-  const [isBlackTheme, setIsBlackTheme] = useState(false);
-  const [pendingContractCarnetRequest, setPendingContractCarnetRequest] =
-    useState<{ contract: Contract; charges: Charge[] } | null>(null);
-  const [pendingContractPrintRequest, setPendingContractPrintRequest] =
-    useState<Contract | null>(null);
-  const [pendingContractScheduleNotice, setPendingContractScheduleNotice] =
-    useState<{
-      title: string;
-      description: string;
-      itemValue: string;
-    } | null>(null);
-  const [pendingContractScheduleCustomization, setPendingContractScheduleCustomization] =
-    useState<Contract | ContractSchedulePayload | null>(null);
-  const [scheduleRespName, setScheduleRespName] = useState("Administrativo");
-  const [scheduleTime, setScheduleTime] = useState("08:00");
-  const [scheduleReminder, setScheduleReminder] = useState("1 dia antes");
-  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
-  const [pendingDownPaymentFlow, setPendingDownPaymentFlow] =
-    useState<{
-      downPaymentChargeId: string;
-      contractId: string | null;
-      carnetCharges: Charge[];
-    } | null>(null);
+      setCharges(apiCharges.map(mapApiCharge));
+      setTenants(
+        apiPeople.map((p) => ({
+          id: p.id,
+          name: p.name,
+          document: p.document,
+          phone: p.phone,
+          email: p.email,
+        }))
+      );
+      setProperties(
+        apiProperties.map((prop) => ({
+          id: prop.id,
+          title: prop.title,
+          code: prop.code,
+        }))
+      );
+      setContracts(
+        apiContracts.map((c) => ({
+          id: c.id,
+          propertyId: c.propertyId,
+          propertyName: c.propertyName || undefined,
+          tenantId: c.tenantId,
+          tenantName: c.tenantName || undefined,
+          startDate: c.startDate,
+          endDate: c.endDate,
+          rentValue: Number(c.rentValue || 0),
+          status: c.status,
+        }))
+      );
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error ? err.message : "Erro ao carregar contas a receber."
+      );
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!companyId) return;
+    loadData(companyId);
+  }, [companyId, loadData]);
 
-    loadReceivablesFromBackend(companyId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId]);
-
-  async function loadReceivablesFromBackend(currentCompanyId: string) {
-    try {
-      const [apiCharges, apiContracts, apiProperties, apiPeople] = await Promise.all([
-        getReceivableAccounts(currentCompanyId),
-        getContracts(currentCompanyId),
-        getProperties(currentCompanyId),
-        getPeople(currentCompanyId),
-      ]);
-      const queryParams = new URLSearchParams(window.location.search);
-      const cameFromContract = queryParams.get("fromContract") === "1";
-      const contractIdFromQuery = queryParams.get("contractId");
-      const searchTermFromQuery = queryParams.get("searchTerm");
-
-      if (searchTermFromQuery) {
-        setSearch(searchTermFromQuery);
-        setIsSearchOpen(true);
-      };
-      const nextManualCharges = apiCharges.map(mapApiReceivableToCharge);
-      const nextContracts = apiContracts.map(mapApiContractToReceivableContract);
-      const nextTenants = apiPeople.map(mapApiPersonToReceivableTenant);
-      const nextPaid = nextManualCharges
-        .filter((charge) => charge.status === "Paid")
-        .map((charge) => charge.id);
-      const nextPaymentRecords = apiCharges.flatMap(mapApiReceivableToPayments);
-
-      setManualCharges(nextManualCharges);
-      setPaid(nextPaid);
-      setPaymentRecords(nextPaymentRecords);
-      setContracts(nextContracts);
-      setProperties(apiProperties.map(mapApiPropertyToReceivableProperty));
-      setTenants(nextTenants);
-
-
-
-
-
-      if (cameFromContract && contractIdFromQuery) {
-        setFocusedContractId(String(contractIdFromQuery));
-        setStatusFilter("All");
-
-        const linkedContract = nextContracts.find(
-          (contract) => String(contract.id) === String(contractIdFromQuery),
-        );
-        const linkedCharges = nextManualCharges
-          .filter(
-            (charge) =>
-              String(charge.contractId || "") === String(contractIdFromQuery) &&
-              !charge.isDownPayment,
-          )
-          .sort(
-            (firstCharge, secondCharge) =>
-              Number(firstCharge.installmentNumber || 0) -
-              Number(secondCharge.installmentNumber || 0),
-          );
-
-        if (linkedContract) {
-          const linkedTenant =
-            nextTenants.find(
-              (tenant) => String(tenant.id) === String(linkedContract.tenantId),
-            ) || null;
-
-          setSelectedTenant(linkedTenant);
-        }
-
-        const contractChargeData = getCompanyStorageItem(
-          currentCompanyId,
-          RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
-          RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
-        );
-
-        if (contractChargeData) {
-          try {
-            const parsedContractChargeData = JSON.parse(
-              contractChargeData,
-            ) as ReceivableFromContractPayload;
-
-            removeCompanyStorageItem(currentCompanyId, RECEIVABLE_FROM_CONTRACT_STORAGE_KEY);
-            openChargeFromContractPayload(parsedContractChargeData);
-          } catch {
-            removeCompanyStorageItem(currentCompanyId, RECEIVABLE_FROM_CONTRACT_STORAGE_KEY);
-          }
-        } else if (linkedCharges.length === 0) {
-          setFocusedContractId(String(contractIdFromQuery));
-        }
-      }
-    } catch (error) {
-      console.error("Não foi possível carregar contas a receber.", error);
-    }
-  }
-
+  // Suporte a abertura automática via contrato (?fromContract=1&contractId=...)
   useEffect(() => {
-    function applyStoredTheme() {
-      const storedThemeSettings = getCompanyStorageItem(
-        companyId,
-        "contrx_theme_settings",
-        "contrx_theme_settings",
-      );
-      const legacyTheme = getCompanyStorageItem(
-        companyId,
-        "contrx_theme",
-        "contrx_theme",
-      );
+    if (typeof window === "undefined" || !companyId || isLoading) return;
 
-      try {
-        const parsedThemeSettings = storedThemeSettings
-          ? (JSON.parse(storedThemeSettings) as { mode?: string })
-          : null;
-
-        const nextTheme =
-          parsedThemeSettings?.mode === "graphite" ||
-          legacyTheme === "graphite" ||
-          legacyTheme === "grafite"
-            ? "graphite"
-            : parsedThemeSettings?.mode === "black" ||
-                parsedThemeSettings?.mode === "dark" ||
-                legacyTheme === "black" ||
-                legacyTheme === "dark"
-              ? "black"
-              : "light";
-        const isDarkTheme = nextTheme !== "light";
-
-        document.documentElement.classList.toggle("dark", isDarkTheme);
-        document.body.classList.toggle("dark", isDarkTheme);
-        setThemeMode(nextTheme);
-        setIsBlackTheme(isDarkTheme);
-      } catch {
-        const nextTheme =
-          legacyTheme === "graphite" || legacyTheme === "grafite"
-            ? "graphite"
-            : legacyTheme === "black" || legacyTheme === "dark"
-              ? "black"
-              : "light";
-        const isDarkTheme = nextTheme !== "light";
-
-        document.documentElement.classList.toggle("dark", isDarkTheme);
-        document.body.classList.toggle("dark", isDarkTheme);
-        setThemeMode(nextTheme);
-        setIsBlackTheme(isDarkTheme);
-      }
-    }
-
-    applyStoredTheme();
-
-    window.addEventListener("storage", applyStoredTheme);
-    window.addEventListener("contrx-theme-change", applyStoredTheme);
-
-    return () => {
-      window.removeEventListener("storage", applyStoredTheme);
-      window.removeEventListener("contrx-theme-change", applyStoredTheme);
-    };
-  }, [companyId]);
-
-  const openChargeFromContractPayload = useCallback((payload: ReceivableFromContractPayload) => {
-    const normalizedInstallmentQuantity = Math.max(
-      Number(payload.installmentQuantity || 1),
-      1,
-    );
-    const monthlyAmount = normalizeAmount(payload.monthlyAmount ?? payload.amount);
-    const totalAmount = normalizeAmount(
-      payload.totalAmount ?? monthlyAmount * normalizedInstallmentQuantity,
-    );
-    const receivableAmount =
-      normalizedInstallmentQuantity > 1 ? totalAmount : monthlyAmount;
-
-    setFormTenant(String(payload.tenantId || ""));
-    setFormContractId(String(payload.contractId || ""));
-    setFormProperty(String(payload.propertyId || ""));
-    setFormAmount(formatAmountInput(receivableAmount));
-    setFormIssueDate(payload.issueDate || getLocalDateValue(new Date()));
-    setFormDueDate(payload.dueDate || getLocalDateValue(new Date()));
-    setFormPaymentDate("");
-    setFormLaunchType(normalizedInstallmentQuantity > 1 ? "installment" : "single");
-    setFormFirstInstallmentAsDownPayment(false);
-    setFormInstallmentQuantity(String(Math.max(normalizedInstallmentQuantity, 2)));
-    setEditingChargeId(null);
-    setChargeFormError("");
-    setInstallmentPreview([]);
-    setIsTenantCreateOpen(false);
-    setSelectedTenant(null);
-    setFocusedContractId(null);
-    setSearch("");
-    setIsSearchOpen(false);
-    setIsCreateOpen(true);
-  }, []);
-
-  useEffect(() => {
-    const c = null;
-    const p = null;
-    const t = null;
-    const paidData = null;
-    const manualData = null;
-    const paymentData = null;
-    const savedAutoOpenSearch = getCompanyStorageItem(
-      companyId,
-      "contrx_auto_open_search",
-      "contrx_auto_open_search",
-    );
-
-    if (c) setContracts(JSON.parse(c));
-    if (p) setProperties(JSON.parse(p));
-    if (t) setTenants(JSON.parse(t));
-    if (paidData) setPaid(JSON.parse(paidData));
-    if (manualData) setManualCharges(JSON.parse(manualData));
-    if (paymentData) setPaymentRecords(JSON.parse(paymentData));
-
-    setStatusFilter(DEFAULT_RECEIVABLE_STATUS_FILTER);
-
-    if (savedAutoOpenSearch !== null) {
-      const parsedAutoOpenSearch = JSON.parse(savedAutoOpenSearch) as boolean;
-
-      setAutoOpenSearch(parsedAutoOpenSearch);
-      setIsSearchOpen(parsedAutoOpenSearch);
-    } else {
-      setAutoOpenSearch(true);
-      setIsSearchOpen(true);
-    }
-
-    const contractChargeData = getCompanyStorageItem(
-      companyId,
-      RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
-      RECEIVABLE_FROM_CONTRACT_STORAGE_KEY,
-    );
     const queryParams = new URLSearchParams(window.location.search);
     const cameFromContract = queryParams.get("fromContract") === "1";
+    const contractIdFromQuery = queryParams.get("contractId");
+    const filterContractFromUrl = queryParams.get("filterContractId");
 
-    if (contractChargeData && !cameFromContract) {
-      try {
-        const parsedContractChargeData = JSON.parse(
-          contractChargeData,
-        ) as ReceivableFromContractPayload;
-
-        removeCompanyStorageItem(companyId, RECEIVABLE_FROM_CONTRACT_STORAGE_KEY);
-        openChargeFromContractPayload(parsedContractChargeData);
-        return;
-      } catch {
-        removeCompanyStorageItem(companyId, RECEIVABLE_FROM_CONTRACT_STORAGE_KEY);
-        return;
-      }
-    }
-  }, [companyId, openChargeFromContractPayload]);
-
-  useEffect(() => {
-    setCompanyStorageItem(
-      companyId,
-      "contrx_receivable_status_filter",
-      statusFilter,
-    );
-  }, [companyId, statusFilter]);
-
-
-
-  const openActionMenuCharge = useMemo(() => {
-    return openActionMenuChargeId
-      ? charges.find((charge) => String(charge.id) === String(openActionMenuChargeId)) || null
-      : null;
-  }, [charges, openActionMenuChargeId]);
-
-  function getFloatingActionMenuPosition(
-    buttonRect: DOMRect,
-    estimatedMenuHeight: number,
-  ) {
-    const menuWidth = 208;
-    const viewportPadding = 16;
-    const availableBottomSpace = window.innerHeight - buttonRect.bottom;
-    const top =
-      availableBottomSpace < estimatedMenuHeight + 20
-        ? Math.max(viewportPadding, buttonRect.top - estimatedMenuHeight - 8)
-        : buttonRect.bottom + 8;
-    const left = Math.min(
-      Math.max(viewportPadding, buttonRect.right - menuWidth),
-      window.innerWidth - menuWidth - viewportPadding,
-    );
-
-    return { top, left };
-  }
-
-  function handleToggleChargeActions(
-    charge: Charge,
-    event: MouseEvent<HTMLButtonElement>,
-  ) {
-    if (openActionMenuChargeId === charge.id) {
-      handleCloseChargeActions();
-      return;
+    if (filterContractFromUrl) {
+      setFilterContractId(filterContractFromUrl);
+      setStatusFilter("Pending");
+      setPeriodShortcut("All");
+      setStartDate("");
+      setEndDate("");
+      window.history.replaceState({}, "", window.location.pathname);
     }
 
-    const visibleActionCount =
-      3 +
-      (charge.status !== "Paid" ? 1 : 0) +
-      (getChargePayment(charge.id) ? 2 : 0) +
-      (charge.status === "Paid" ? 1 : 0);
-    const estimatedMenuHeight = Math.min(visibleActionCount * 48 + 16, 360);
+    if (cameFromContract && contractIdFromQuery) {
+      // Ajusta filtros para que a cobrança criada fique visível
+      setStatusFilter("All");
+      setPeriodShortcut("All");
+      setStartDate("");
+      setEndDate("");
+      setFlowContractId(contractIdFromQuery);
 
-    setActionMenuPosition(
-      getFloatingActionMenuPosition(
-        event.currentTarget.getBoundingClientRect(),
-        estimatedMenuHeight,
-      ),
-    );
-    setOpenActionMenuChargeId(charge.id);
-  }
-
-  function handleCloseChargeActions() {
-    setOpenActionMenuChargeId(null);
-    setActionMenuPosition(null);
-  }
-
-
-
-  useEffect(() => {
-    if (!openActionMenuChargeId) return;
-
-    function closeFloatingActionMenu() {
-      handleCloseChargeActions();
-    }
-
-    function handlePointerDown(event: PointerEvent) {
-      const target = event.target;
-
-      if (!(target instanceof Element)) {
-        closeFloatingActionMenu();
-        return;
-      }
-
-      if (
-        target.closest("[data-receivable-action-menu]") ||
-        target.closest("[data-receivable-action-trigger]")
-      ) {
-        return;
-      }
-
-      closeFloatingActionMenu();
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        closeFloatingActionMenu();
-      }
-    }
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("resize", closeFloatingActionMenu);
-    window.addEventListener("scroll", closeFloatingActionMenu, true);
-
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("resize", closeFloatingActionMenu);
-      window.removeEventListener("scroll", closeFloatingActionMenu, true);
-    };
-  }, [openActionMenuChargeId]);
-
-
-
-  useEffect(() => {
-    window.dispatchEvent(new Event("contrx-receivables-updated"));
-    window.dispatchEvent(new Event("contrx-accounts-receivable-updated"));
-    window.dispatchEvent(new Event("contrx-financial-updated"));
-  }, [charges, paymentRecords]);
-
-
-
-  useEffect(() => {
-    const availableChargeIds = new Set(charges.map((charge) => String(charge.id)));
-
-    setSelectedChargeIds((currentChargeIds) =>
-      currentChargeIds.filter((chargeId) => availableChargeIds.has(String(chargeId))),
-    );
-  }, [charges, setSelectedChargeIds]);
-
-  const selectedCharges = useMemo(() => {
-    const selectedIds = new Set(selectedChargeIds.map(String));
-    return filteredCharges.filter((charge) => selectedIds.has(String(charge.id)));
-  }, [filteredCharges, selectedChargeIds]);
-
-  const selectedPendingCharges = useMemo(() => {
-    return selectedCharges.filter((charge) => charge.status !== "Paid");
-  }, [selectedCharges]);
-
-  const selectedPaidCharges = useMemo(() => {
-    return selectedCharges.filter((charge) => Boolean(getChargePayment(charge.id)));
-  }, [selectedCharges, getChargePayment]);
-
-  const isEditingPaidCharge = editingChargeId
-    ? paid.includes(editingChargeId)
-    : false;
-
-  function formatCurrency(value: number) {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(Number.isFinite(value) ? value : 0);
-  }
-
-  function formatDate(date: string) {
-    return new Date(date).toLocaleDateString("pt-BR");
-  }
-
-  function getStatusLabel(status: Charge["status"]) {
-    if (status === "Paid") return "Pago";
-    if (status === "Overdue") return "Vencido";
-
-    return "Pendente";
-  }
-
-  function hasPartialPayment(charge: Charge) {
-    return charge.status !== "Paid" && getChargePaidAmount(charge) > 0;
-  }
-
-  function getChargeStatusLabel(charge: Charge) {
-    if (hasPartialPayment(charge)) return "Parcial";
-
-    return getStatusLabel(charge.status);
-  }
-
-  function getChargeTenant(charge: Charge) {
-    return tenants.find(
-      (tenant) =>
-        String(tenant.id) === String(charge.tenantId || "") ||
-        tenant.name.toLowerCase() === charge.tenant.toLowerCase(),
-    );
-  }
-
-  function getCompanyNameFromSettings(settings: Record<string, unknown> | null) {
-    const source =
-      settings?.company && typeof settings.company === "object" && !Array.isArray(settings.company)
-        ? (settings.company as Record<string, unknown>)
-        : settings;
-
-    return String(
-      source?.tradeName ||
-        source?.companyName ||
-        source?.name ||
-        source?.legalName ||
-        "Contrx",
-    );
-  }
-
-  async function getWhatsAppCompanyName() {
-    const cachedCompanySettings = getCachedCompanySettings();
-
-    if (cachedCompanySettings) {
-      return getCompanyNameFromSettings(cachedCompanySettings);
-    }
-
-    if (!companyId) return "Contrx";
-
-    try {
-      const settings = await getAppSettings(companyId);
-      setCachedAppSettings(settings);
-
-      return getCompanyNameFromSettings(settings.companySettings || null);
-    } catch {
-      return "Contrx";
-    }
-  }
-
-  async function sendChargeWhatsAppMessage(charge: Charge) {
-    const tenant = getChargeTenant(charge);
-    const tenantPhone = tenant?.phone || "";
-
-    if (!tenantPhone) {
-      window.alert("Este inquilino/pessoa nao possui telefone cadastrado.");
-      return;
-    }
-
-    const chargeAmount =
-      charge.status === "Paid"
-        ? getChargePaidAmount(charge)
-        : getChargeRemainingAmount(charge);
-    const installmentLabel =
-      charge.installmentNumber && charge.installmentTotal
-        ? ` (${charge.installmentNumber}/${charge.installmentTotal})`
-        : "";
-    const companyName = await getWhatsAppCompanyName();
-
-    openWhatsAppMessage({
-      phone: tenantPhone,
-      message: [
-        `Olá, ${charge.tenant}.`,
-        "",
-        `${companyName} informa sobre a cobrança${installmentLabel}:`,
-        `Bem/Ativo: ${charge.property || "Não informado"}`,
-        `Vencimento: ${formatDate(charge.dueDate)}`,
-        `Valor: ${formatCurrency(chargeAmount)}`,
-        `Status: ${getChargeStatusLabel(charge)}`,
-        "",
-        "Caso já tenha realizado o pagamento, por favor envie o comprovante por aqui.",
-      ].join("\n"),
-    });
-  }
-
-  function getStatusClassName(status: Charge["status"]) {
-    if (status === "Paid") {
-      return "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 ring-1 ring-emerald-200 dark:ring-emerald-900/60";
-    }
-
-    if (status === "Overdue") {
-      return "bg-red-50 dark:bg-red-950/30 text-red-700 ring-1 ring-red-200";
-    }
-
-    return "bg-amber-50 dark:bg-amber-950/30 text-amber-700 ring-1 ring-amber-200";
-  }
-
-  function getChargeStatusClassName(charge: Charge) {
-    if (hasPartialPayment(charge)) {
-      return "bg-sky-50 dark:bg-sky-950/30 text-sky-700 ring-1 ring-sky-200 dark:ring-sky-900/60";
-    }
-
-    return getStatusClassName(charge.status);
-  }
-
-  function getStatusFilterLabel(status: StatusFilter) {
-    if (status === "Pending") return "Pendente";
-    if (status === "Paid") return "Pago";
-    if (status === "Overdue") return "Vencido";
-
-    return "Todos";
-  }
-
-  function getReportDueFilterLabel(filter: ReportDueFilter) {
-    if (filter === "Overdue") return "Vencidas";
-    if (filter === "DueToday") return "Vencendo hoje";
-    if (filter === "Upcoming") return "A vencer";
-    if (filter === "DateRange") return "Por período";
-
-    return "Todos os vencimentos";
-  }
-
-  function getInstallmentsTotalInCents(installments: InstallmentPreview[]) {
-    return installments.reduce(
-      (total, installment) => total + getAmountInCents(installment.amount),
-      0,
-    );
-  }
-
-  function getPaymentMethodLabel(method: PaymentMethod) {
-    return (
-      paymentMethodOptions.find((option) => option.value === method)?.label ||
-      "Outros"
-    );
-  }
-
-  function calculatePaymentAmount(
-    charge: Charge,
-    interest: number,
-    discount: number,
-  ) {
-    return Math.max(getChargeRemainingAmount(charge) + interest - discount, 0);
-  }
-
-  function getPaymentAdjustmentAmountInput(
-    charge: Charge,
-    value: string,
-    mode: PaymentAdjustmentMode,
-  ) {
-    const normalizedValue = normalizeAmount(value);
-
-    if (normalizedValue <= 0) return "";
-
-    if (mode === "percentage") {
-      return formatAmountInput(
-        getChargeRemainingAmount(charge) * (normalizedValue / 100),
+      const contractChargeData = getCompanyStorageItem(
+        companyId,
+        "contrx_receivable_from_contract",
+        "contrx_receivable_from_contract"
       );
+
+      if (contractChargeData) {
+        try {
+          const parsed = JSON.parse(contractChargeData);
+          removeCompanyStorageItem(companyId, "contrx_receivable_from_contract");
+          setContractPayload(parsed);
+          setSelectedCharge(null);
+          setIsFormModalOpen(true);
+        } catch {
+          removeCompanyStorageItem(companyId, "contrx_receivable_from_contract");
+        }
+      } else {
+        const matchedContract = contracts.find((c) => String(c.id) === String(contractIdFromQuery));
+        if (matchedContract) {
+          const monthly = Number(matchedContract.rentValue || 0);
+          setContractPayload({
+            contractId: String(matchedContract.id),
+            tenantId: String(matchedContract.tenantId || ""),
+            tenantName: matchedContract.tenantName || "",
+            propertyId: String(matchedContract.propertyId || ""),
+            propertyName: matchedContract.propertyName || "",
+            amount: monthly,
+            monthlyAmount: monthly,
+            totalAmount: monthly,
+            issueDate: matchedContract.startDate,
+            dueDate: matchedContract.startDate,
+            endDate: matchedContract.endDate,
+            installmentQuantity: 1,
+          });
+          setSelectedCharge(null);
+          setIsFormModalOpen(true);
+        }
+      }
+
+      window.history.replaceState({}, "", window.location.pathname);
     }
+  }, [companyId, isLoading, contracts]);
 
-    return value;
-  }
+  // Alteração de atalho de período
+  function handlePeriodShortcutChange(nextShortcut: PeriodShortcut) {
+    setPeriodShortcut(nextShortcut);
+    const now = new Date();
 
-  function updatePaymentInterestInput(
-    charge: Charge,
-    value: string,
-    mode = paymentInterestMode,
-  ) {
-    const hasInterestValue = normalizeAmount(value) > 0;
-    const calculatedInterest = getPaymentAdjustmentAmountInput(charge, value, mode);
-    const calculatedDiscount = hasInterestValue
-      ? ""
-      : getPaymentAdjustmentAmountInput(
-          charge,
-          paymentDiscountInput,
-          paymentDiscountMode,
-        );
-
-    setPaymentFormError("");
-    setPaymentInterestInput(value);
-    setPaymentInterestMode(mode);
-    setPaymentInterest(calculatedInterest);
-
-    if (hasInterestValue) {
-      setPaymentDiscountInput("");
-      setPaymentDiscount("");
+    if (nextShortcut === "CurrentMonth") {
+      setStartDate(getStartOfCurrentMonth());
+      setEndDate(getEndOfCurrentMonth());
+    } else if (nextShortcut === "CurrentQuarter") {
+      const qMonth = Math.floor(now.getMonth() / 3) * 3;
+      setStartDate(new Date(now.getFullYear(), qMonth, 1).toISOString().slice(0, 10));
+      setEndDate(new Date(now.getFullYear(), qMonth + 3, 0).toISOString().slice(0, 10));
+    } else if (nextShortcut === "CurrentYear") {
+      setStartDate(new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10));
+      setEndDate(new Date(now.getFullYear(), 11, 31).toISOString().slice(0, 10));
+    } else if (nextShortcut === "All") {
+      setStartDate("");
+      setEndDate("");
     }
-
-    updatePaymentFinalAmountFromAdjustments(
-      charge,
-      calculatedInterest,
-      calculatedDiscount,
-    );
   }
 
-  function updatePaymentDiscountInput(
-    charge: Charge,
-    value: string,
-    mode = paymentDiscountMode,
-  ) {
-    const hasDiscountValue = normalizeAmount(value) > 0;
-    const calculatedInterest = hasDiscountValue
-      ? ""
-      : getPaymentAdjustmentAmountInput(
-          charge,
-          paymentInterestInput,
-          paymentInterestMode,
-        );
-    const calculatedDiscount = getPaymentAdjustmentAmountInput(charge, value, mode);
-
-    setPaymentFormError("");
-    setPaymentDiscountInput(value);
-    setPaymentDiscountMode(mode);
-    setPaymentDiscount(calculatedDiscount);
-
-    if (hasDiscountValue) {
-      setPaymentInterestInput("");
-      setPaymentInterest("");
-    }
-
-    updatePaymentFinalAmountFromAdjustments(
-      charge,
-      calculatedInterest,
-      calculatedDiscount,
-    );
+  function handleResetFilters() {
+    setSearch("");
+    setStatusFilter("Pending");
+    setSelectedTenantId("all");
+    setSelectedPropertyId("all");
+    handlePeriodShortcutChange("All");
+    setSelectedIds([]);
   }
 
-  function changePaymentInterestMode(charge: Charge, mode: PaymentAdjustmentMode) {
-    updatePaymentInterestInput(charge, paymentInterestInput, mode);
-  }
+  const hasActiveFilters =
+    Boolean(search) ||
+    statusFilter !== "Pending" ||
+    selectedTenantId !== "all" ||
+    selectedPropertyId !== "all" ||
+    periodShortcut !== "CurrentMonth";
 
-  function changePaymentDiscountMode(charge: Charge, mode: PaymentAdjustmentMode) {
-    updatePaymentDiscountInput(charge, paymentDiscountInput, mode);
-  }
-
-  function updatePaymentFinalAmountFromAdjustments(
-    charge: Charge,
-    interestValue: string,
-    discountValue: string,
-  ) {
-    const interest = normalizeAmount(interestValue);
-    const discount = normalizeAmount(discountValue);
-    const finalAmount = calculatePaymentAmount(charge, interest, discount);
-
-    const formattedFinalAmount = formatAmountInput(finalAmount);
-
-    setPaymentFinalAmount(formattedFinalAmount);
-    updatePaymentEntriesFromFinalAmount(formattedFinalAmount);
-  }
-
-  function updatePaymentAdjustmentsFromFinalAmount(
-    charge: Charge,
-    finalAmountValue: string,
-  ) {
-    const finalAmount = normalizeAmount(finalAmountValue);
-    const difference = finalAmount - getChargeRemainingAmount(charge);
-
-    if (!Number.isFinite(finalAmount) || finalAmount <= 0) {
-      setPaymentInterest("");
-      setPaymentDiscount("");
-      return;
-    }
-
-    if (difference > 0) {
-      const formattedDifference = formatAmountInput(difference);
-
-      setPaymentInterestMode("amount");
-      setPaymentDiscountMode("amount");
-      setPaymentInterestInput(formattedDifference);
-      setPaymentDiscountInput("");
-      setPaymentInterest(formattedDifference);
-      setPaymentDiscount("");
-      return;
-    }
-
-    setPaymentInterestInput("");
-    setPaymentDiscountInput("");
-    setPaymentInterest("");
-    setPaymentDiscount("");
-  }
-
-  function updatePaymentEntriesFromFinalAmount(finalAmount: string) {
-    setPaymentEntries((currentEntries) => {
-      if (currentEntries.length !== 1) return currentEntries;
-
-      return currentEntries.map((entry) => ({
-        ...entry,
-        amount: finalAmount,
-      }));
-    });
-  }
-
-  function addPaymentEntry() {
-    setPaymentFormError("");
-    setPaymentEntries((currentEntries) => [
-      ...currentEntries,
-      {
-        id: createLocalId("payment-entry"),
-        method: "Pix",
-        amount: "",
-      },
-    ]);
-  }
-
-  function removePaymentEntry(entryId: string) {
-    setPaymentFormError("");
-    setPaymentEntries((currentEntries) =>
-      currentEntries.length > 1
-        ? currentEntries.filter((entry) => entry.id !== entryId)
-        : currentEntries,
-    );
-  }
-
-  function updatePaymentEntryMethod(entryId: string, method: PaymentMethod) {
-    setPaymentFormError("");
-    setPaymentEntries((currentEntries) =>
-      currentEntries.map((entry) =>
-        entry.id === entryId ? { ...entry, method } : entry,
-      ),
-    );
-  }
-
-  function updatePaymentEntryAmount(entryId: string, amount: string) {
-    setPaymentFormError("");
-    setPaymentEntries((currentEntries) =>
-      currentEntries.map((entry) =>
-        entry.id === entryId
-          ? { ...entry, amount: formatCurrencyInput(amount) }
-          : entry,
-      ),
-    );
-  }
-
-  function normalizePaymentEntryAmount(entryId: string) {
-    setPaymentEntries((currentEntries) =>
-      currentEntries.map((entry) => {
-        if (entry.id !== entryId) return entry;
-
-        const amount = normalizeAmount(entry.amount);
-
-        return {
-          ...entry,
-          amount: amount > 0 ? formatAmountInput(amount) : "",
-        };
-      }),
-    );
-  }
-
-  function getPaymentEntriesTotal() {
-    return paymentEntries.reduce(
-      (total, entry) => total + normalizeAmount(entry.amount),
-      0,
-    );
-  }
-
-  function getPaymentEntriesDifference() {
-    return getPaymentEntriesTotal() - normalizeAmount(paymentFinalAmount);
-  }
-
-  function getPaymentEntriesBalanceLabel() {
-    const difference = getPaymentEntriesDifference();
-
-    if (difference > 0.01) {
-      return `Troco: ${formatCurrency(difference)}`;
-    }
-
-    if (difference < -0.01) {
-      return `Falta informar: ${formatCurrency(Math.abs(difference))}`;
-    }
-
-    return "Valores conferidos";
-  }
-
-  function getPaymentEntriesBalanceClassName() {
-    const difference = getPaymentEntriesDifference();
-
-    if (difference > 0.01) {
-      return isBlackTheme
-        ? "border-sky-900/60 bg-sky-950/30 text-sky-300"
-        : "border-sky-200 bg-sky-50 text-sky-700";
-    }
-
-    if (difference < -0.01) {
-      return isBlackTheme
-        ? "border-amber-900/60 bg-amber-950/30 text-amber-300"
-        : "border-amber-200 bg-amber-50 text-amber-700";
-    }
-
-    return isBlackTheme
-      ? "border-emerald-900/60 bg-emerald-950/30 text-emerald-300"
-      : "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  function getReceiptStatusLabel(charge: Charge) {
-    const dueDate = getStartOfDay(new Date(charge.dueDate));
-    const today = getStartOfDay(new Date());
-
-    if (charge.status === "Overdue" || dueDate < today) return "Vencida";
-    if (dueDate.getTime() === today.getTime()) return "Vence hoje";
-    if (charge.isDownPayment) return "Entrada";
-
-    return "Em aberto";
-  }
-
-  function getReceiptStatusClassName(charge: Charge) {
-    const statusLabel = getReceiptStatusLabel(charge);
-
-    if (statusLabel === "Vencida") {
-      return isBlackTheme
-        ? "border-red-900/60 bg-red-950/40 text-red-300"
-        : "border-red-200 bg-red-50 text-red-700";
-    }
-
-    if (statusLabel === "Vence hoje") {
-      return isBlackTheme
-        ? "border-amber-900/60 bg-amber-950/40 text-amber-300"
-        : "border-amber-200 bg-amber-50 text-amber-700";
-    }
-
-    if (statusLabel === "Entrada") {
-      return isBlackTheme
-        ? "border-sky-900/60 bg-sky-950/40 text-sky-300"
-        : "border-sky-200 bg-sky-50 text-sky-700";
-    }
-
-    return isBlackTheme
-      ? "border-emerald-900/60 bg-emerald-950/40 text-emerald-300"
-      : "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  function getDateInputValue(dateValue?: string) {
-    if (!dateValue) return "";
-
-    return getLocalDateValue(new Date(dateValue));
-  }
-
-  function getStartOfDay(date: Date) {
-    const normalizedDate = new Date(date);
-    normalizedDate.setHours(0, 0, 0, 0);
-
-    return normalizedDate;
-  }
-
-  function getEndOfDay(date: Date) {
-    const normalizedDate = new Date(date);
-    normalizedDate.setHours(23, 59, 59, 999);
-
-    return normalizedDate;
-  }
-
-  function openReportModal() {
-    setReportTenantId(selectedTenant ? String(selectedTenant.id) : "");
-    setReportStatusFilter(statusFilter);
-    setReportDueFilter("All");
-    setReportStartDate("");
-    setReportEndDate("");
-    setReportFormError("");
-    setIsReportOpen(true);
-  }
-
-  function closeReportModal() {
-    setIsReportOpen(false);
-    setReportFormError("");
-  }
-
-  function getReportFilteredCharges() {
-    const today = getStartOfDay(new Date());
-    const startDate = reportStartDate
-      ? getStartOfDay(new Date(`${reportStartDate}T00:00:00`))
-      : null;
-    const endDate = reportEndDate
-      ? getEndOfDay(new Date(`${reportEndDate}T00:00:00`))
-      : null;
-    const selectedReportTenant = tenants.find(
-      (tenant) => String(tenant.id) === String(reportTenantId),
-    );
-
+  // Filtragem de cobranças
+  const filteredCharges = useMemo(() => {
     return charges.filter((charge) => {
-      const dueDate = getStartOfDay(new Date(charge.dueDate));
-
-      if (
-        selectedReportTenant &&
-        String(charge.tenantId || "") !== String(selectedReportTenant.id) &&
-        charge.tenant.toLowerCase() !== selectedReportTenant.name.toLowerCase()
-      ) {
+      if (filterContractId && String(charge.contractId || "") !== String(filterContractId)) {
         return false;
       }
 
-      if (reportStatusFilter !== "All" && charge.status !== reportStatusFilter) {
+      if (statusFilter !== "All" && charge.status !== statusFilter) {
         return false;
       }
 
-      if (reportDueFilter === "Overdue" && charge.status !== "Overdue") {
-        return false;
-      }
-
-      if (reportDueFilter === "DueToday" && dueDate.getTime() !== today.getTime()) {
+      if (selectedTenantId !== "all" && charge.tenantId !== selectedTenantId) {
         return false;
       }
 
       if (
-        reportDueFilter === "Upcoming" &&
-        (dueDate < today || charge.status === "Paid")
+        selectedPropertyId !== "all" &&
+        !charge.propertyName.toLowerCase().includes(selectedPropertyId.toLowerCase())
       ) {
         return false;
       }
 
-      if (reportDueFilter === "DateRange") {
-        if (startDate && dueDate < startDate) return false;
-        if (endDate && dueDate > endDate) return false;
+      if (!isDateInsideRange(charge.dueDate, startDate, endDate)) {
+        return false;
+      }
+
+      if (search.trim()) {
+        const query = normalizeSearchText(search);
+        const tenant = normalizeSearchText(charge.tenantName);
+        const prop = normalizeSearchText(charge.propertyName);
+
+        const matches = tenant.includes(query) || prop.includes(query);
+        if (!matches) return false;
       }
 
       return true;
     });
-  }
+  }, [charges, statusFilter, selectedTenantId, selectedPropertyId, startDate, endDate, search, filterContractId]);
 
-  function getReportTotalAmount(reportCharges: Charge[]) {
-    return reportCharges.reduce(
-      (total, charge) =>
-        total +
-        (charge.status === "Paid"
-          ? getChargePaidAmount(charge)
-          : getChargeRemainingAmount(charge)),
-      0,
+  const selectedChargesList = useMemo(() => {
+    return charges.filter((c) => selectedIds.includes(c.id));
+  }, [charges, selectedIds]);
+
+  const shareModalTenantPhone = useMemo(() => {
+    if (!shareModalCharge) return "";
+    if (shareModalCharge.tenant?.phone) return shareModalCharge.tenant.phone;
+
+    const foundTenant =
+      (shareModalCharge.tenantId &&
+        tenants.find((t) => t.id === shareModalCharge.tenantId)) ||
+      tenants.find(
+        (t) =>
+          t.name.trim().toLowerCase() ===
+          shareModalCharge.tenantName.trim().toLowerCase()
+      );
+
+    return foundTenant?.phone || "";
+  }, [shareModalCharge, tenants]);
+
+  // Seleção em lote
+  function handleToggleSelect(id: string) {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
   }
 
-  function escapeHtml(value: string) {
-    return value
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-
-
-  function getCompanySettingsForCarnet() {
-    const defaultCompanySettings = {
-      companyName: "Contrx",
-      tradeName: "Contrx",
-      document: "",
-      phone: "",
-      email: "",
-      city: "",
-      pixKeyType: "",
-      pixKey: "",
-    };
-
-    try {
-      const cachedCompanySettings = getCachedCompanySettings();
-
-      if (!cachedCompanySettings) {
-        return defaultCompanySettings;
-      }
-
-      const source =
-        cachedCompanySettings.company &&
-        typeof cachedCompanySettings.company === "object" &&
-        !Array.isArray(cachedCompanySettings.company)
-          ? (cachedCompanySettings.company as Record<string, unknown>)
-          : (cachedCompanySettings as Record<string, unknown>);
-
-      return {
-        ...defaultCompanySettings,
-        ...source,
-        companyName: String(
-          source.companyName ||
-            source.tradeName ||
-            source.name ||
-            source.nomeFantasia ||
-            defaultCompanySettings.companyName,
-        ),
-        tradeName: String(
-          source.tradeName ||
-            source.companyName ||
-            source.name ||
-            source.nomeFantasia ||
-            defaultCompanySettings.tradeName,
-        ),
-        document: String(source.document || source.cnpj || source.cpfCnpj || ""),
-        phone: String(source.phone || source.companyPhone || source.whatsapp || ""),
-        email: String(source.email || source.companyEmail || ""),
-        city: String(source.city || source.cidade || "BRASIL"),
-        pixKeyType: String(source.pixKeyType || source.tipoChavePix || ""),
-        pixKey: String(source.pixKey || source.pix || source.chavePix || ""),
-      };
-    } catch {
-      return defaultCompanySettings;
-    }
-  }
-
-  function getPaymentBookletInstructions() {
-    const defaultInstructions = [
-      "1. Efetue o pagamento até a data de vencimento.",
-      "2. Após o vencimento, poderão ser aplicados multa e juros conforme contrato.",
-      "3. Guarde este comprovante para controle financeiro.",
-    ].join("\n");
-
-    try {
-      const parsedPrintTemplates = getCachedPrintTemplates() as {
-        paymentBooklet?: { content?: string };
-      } | null;
-
-      if (!parsedPrintTemplates) {
-        return defaultInstructions;
-      }
-
-      const templateContent = parsedPrintTemplates.paymentBooklet?.content || "";
-
-      return normalizePaymentBookletInstructions(templateContent) || defaultInstructions;
-    } catch {
-      return defaultInstructions;
-    }
-  }
-
-  function normalizePaymentBookletInstructions(content: string) {
-    const cleanContent = String(content || "").trim();
-
-    if (!cleanContent) {
-      return "";
-    }
-
-    return cleanContent;
-  }
-
-  function renderPaymentBookletTemplate(
-    templateContent: string,
-    templateData: Record<string, string>,
-  ) {
-    return Object.entries(templateData).reduce((content, [key, value]) => {
-      return content.replace(new RegExp(`{${key}}`, "g"), value);
-    }, templateContent);
-  }
-
-  function renderPaymentBookletInstructions(instructions: string) {
-    const instructionRows = instructions
-      .split("\n")
-      .map((instruction) => instruction.trim())
-      .filter(Boolean)
-      .map((instruction) => `<p>${escapeHtml(instruction)}</p>`)
-      .join("");
-
-    if (!instructionRows) {
-      return "";
-    }
-
-    return `<div class="instructions"><span>Instruções</span>${instructionRows}</div>`;
-  }
-
-  function removeTextAccents(value: string) {
-    return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  }
-
-  function sanitizePixText(value: string, maxLength: number) {
-    return removeTextAccents(value)
-      .replace(/[^a-zA-Z0-9 $%*+\-.\/]/g, "")
-      .trim()
-      .slice(0, maxLength);
-  }
-
-  function normalizePixKeyForPayload(value: string, pixKeyType: string) {
-    const cleanValue = value.trim();
-    const cleanPixKeyType = pixKeyType.toLowerCase();
-
-    if (cleanPixKeyType === "cpf" || cleanPixKeyType === "cnpj") {
-      return cleanValue.replace(/\D/g, "");
-    }
-
-    if (cleanPixKeyType === "phone") {
-      const digits = cleanValue.replace(/\D/g, "");
-
-      if (digits.startsWith("55")) {
-        return `+${digits}`;
-      }
-
-      if (digits.length === 10 || digits.length === 11) {
-        return `+55${digits}`;
-      }
-
-      return cleanValue;
-    }
-
-    if (cleanPixKeyType === "email") {
-      return cleanValue.toLowerCase();
-    }
-
-    return cleanValue;
-  }
-
-  function formatEmvField(id: string, value: string) {
-    const length = String(value.length).padStart(2, "0");
-
-    return `${id}${length}${value}`;
-  }
-
-  function buildPixMerchantAccountInfo(pixKey: string, description: string) {
-    const baseFields =
-      formatEmvField("00", "br.gov.bcb.pix") + formatEmvField("01", pixKey);
-    const maxMerchantAccountInfoLength = 99;
-    const availableDescriptionLength =
-      maxMerchantAccountInfoLength - baseFields.length - 4;
-
-    if (availableDescriptionLength <= 0) {
-      return baseFields;
-    }
-
-    const cleanDescription = sanitizePixText(
-      description,
-      Math.min(availableDescriptionLength, 72),
-    );
-
-    if (!cleanDescription) {
-      return baseFields;
-    }
-
-    return baseFields + formatEmvField("02", cleanDescription);
-  }
-
-  function calculatePixCrc16(payload: string) {
-    let crc = 0xffff;
-
-    for (let index = 0; index < payload.length; index += 1) {
-      crc ^= payload.charCodeAt(index) << 8;
-
-      for (let bit = 0; bit < 8; bit += 1) {
-        if ((crc & 0x8000) !== 0) {
-          crc = (crc << 1) ^ 0x1021;
-        } else {
-          crc <<= 1;
-        }
-
-        crc &= 0xffff;
-      }
-    }
-
-    return crc.toString(16).toUpperCase().padStart(4, "0");
-  }
-
-  function generatePixPayload(params: {
-    pixKey: string;
-    pixKeyType: string;
-    merchantName: string;
-    merchantCity: string;
-    amount: number;
-    txId: string;
-    description: string;
-  }) {
-    const pixKey = normalizePixKeyForPayload(params.pixKey, params.pixKeyType);
-
-    if (!pixKey) {
-      return "";
-    }
-
-    const merchantAccountInfo = buildPixMerchantAccountInfo(
-      pixKey,
-      params.description,
-    );
-    const merchantName = sanitizePixText(params.merchantName || "CONTRX", 25) || "CONTRX";
-    const merchantCity = sanitizePixText(params.merchantCity || "BRASIL", 15) || "BRASIL";
-
-    const additionalDataField = formatEmvField(
-      "05",
-      sanitizePixText(params.txId || "CONTRX", 25),
-    );
-
-    const amount = Number(params.amount || 0).toFixed(2);
-    const payloadWithoutCrc =
-      formatEmvField("00", "01") +
-      formatEmvField("26", merchantAccountInfo) +
-      formatEmvField("52", "0000") +
-      formatEmvField("53", "986") +
-      formatEmvField("54", amount) +
-      formatEmvField("58", "BR") +
-      formatEmvField("59", merchantName) +
-      formatEmvField("60", merchantCity) +
-      formatEmvField("62", additionalDataField) +
-      "6304";
-
-    return `${payloadWithoutCrc}${calculatePixCrc16(payloadWithoutCrc)}`;
-  }
-
-  async function getPixQrCodeDataUrl(pixPayload: string) {
-    try {
-      return await QRCode.toDataURL(pixPayload, {
-        errorCorrectionLevel: "M",
-        margin: 2,
-        width: 180,
-      });
-    } catch (error) {
-      console.warn("Nao foi possivel gerar QR Code Pix localmente.", error);
-      return "";
-    }
-  }
-
-  async function generatePaymentCarnet(carnetCharges: Charge[]) {
-    await printPaymentCarnet({
-      carnetCharges,
-      companySettings: getCompanySettingsForCarnet(),
-      paymentBookletInstructions: getPaymentBookletInstructions(),
-      renderPaymentBookletTemplate,
-      renderPaymentBookletInstructions,
-      setChargeFormError,
-    });
-  }
-
-  async function localGeneratePaymentCarnet(carnetCharges: Charge[]) {
-    if (carnetCharges.length === 0) return;
-
-    const printWindow = window.open(
-      "",
-      "_blank",
-      `toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=${window.screen.width},height=${window.screen.height}`,
-    );
-
-    if (!printWindow) {
-      setChargeFormError(
-        "As parcelas foram salvas, mas não foi possível abrir o carnê. Verifique se o navegador bloqueou pop-ups.",
-      );
-      return;
-    }
-
-    const companySettings = getCompanySettingsForCarnet();
-    const companyName =
-      companySettings.tradeName || companySettings.companyName || "Contrx";
-    const companyDocument = companySettings.document || "Não informado";
-    const companyPhone = companySettings.phone || "Não informado";
-    const companyEmail = companySettings.email || "Não informado";
-    const pixKeyType = companySettings.pixKeyType || "Pix";
-    const pixKey = companySettings.pixKey || "Não cadastrada";
-    const firstCharge = carnetCharges[0];
-    const paymentBookletInstructions = getPaymentBookletInstructions();
-    const totalAmount = carnetCharges.reduce(
-      (total, charge) => total + charge.amount,
-      0,
-    );
-
-    const rows = carnetCharges
-      .map(
-        (charge) => `
-          <tr>
-            <td>${charge.installmentNumber || 1}/${charge.installmentTotal || carnetCharges.length}</td>
-            <td>${escapeHtml(charge.tenant)}</td>
-            <td>${escapeHtml(charge.property)}</td>
-            <td>${formatDate(charge.dueDate)}</td>
-            <td>${formatCurrency(charge.amount)}</td>
-          </tr>
-        `,
-      )
-      .join("");
-
-    const vouchers = (
-      await Promise.all(
-        carnetCharges.map(async (charge) => {
-        const installmentLabel = `${charge.installmentNumber || 1}/${
-          charge.installmentTotal || carnetCharges.length
-        }`;
-        const pixPayload = generatePixPayload({
-          pixKey: companySettings.pixKey || "",
-          pixKeyType,
-          merchantName: companyName,
-          merchantCity: companySettings.city || "Brasil",
-          amount: charge.amount,
-          txId: `RX${String(charge.installmentGroupId || charge.id)
-            .replace(/[^a-zA-Z0-9]/g, "")
-            .slice(-18)}${String(charge.installmentNumber || 1).padStart(2, "0")}`,
-          description: `Aluguel ${installmentLabel} ${charge.tenant}`,
-        });
-        const pixQrCodeDataUrl = pixPayload ? await getPixQrCodeDataUrl(pixPayload) : "";
-        const paymentBookletContent = renderPaymentBookletTemplate(
-          paymentBookletInstructions,
-          {
-            companyName,
-            tradeName: companyName,
-            personName: charge.tenant,
-            tenantName: charge.tenant,
-            propertyName: charge.property,
-            contractNumber: String(charge.contractId || firstCharge.contractId || "SEM CONTRATO"),
-            installmentNumber: installmentLabel,
-            dueDate: formatDate(charge.dueDate),
-            amount: formatCurrency(charge.amount),
-            pixKey,
-            currentDate: new Date().toLocaleDateString("pt-BR"),
-          },
-        );
-
-        return `
-          <section class="voucher">
-            <div class="voucher-header">
-              <div>
-                <div class="brand">${escapeHtml(companyName)}</div>
-                <h2>Carnê de pagamento</h2>
-              </div>
-              <div class="installment-badge">
-                <span>Parcela</span>
-                <strong>${installmentLabel}</strong>
-              </div>
-            </div>
-
-            <div class="payer-card">
-              <div>
-                <span>Pagador</span>
-                <strong>${escapeHtml(charge.tenant)}</strong>
-              </div>
-              <div>
-                <span>Bem/Ativo</span>
-                <strong>${escapeHtml(charge.property)}</strong>
-              </div>
-            </div>
-
-            <div class="amount-strip">
-              <div>
-                <span>Vencimento</span>
-                <strong>${formatDate(charge.dueDate)}</strong>
-              </div>
-              <div>
-                <span>Valor</span>
-                <strong>${formatCurrency(charge.amount)}</strong>
-              </div>
-            </div>
-
-            <div class="pix-area">
-              <div class="pix-info">
-                <div class="pix-heading">
-                  <span>Pagamento via Pix</span>
-                  <strong>${escapeHtml(pixKey)}</strong>
-                  <small>Tipo da chave: ${escapeHtml(pixKeyType || "Não informado")}</small>
-                </div>
-                ${
-                  pixPayload
-                    ? `<div class="pix-copy"><span>Pix copia e cola</span><p>${escapeHtml(pixPayload)}</p></div>`
-                    : `<div class="pix-warning">Cadastre a chave Pix da empresa para gerar o QR Code automático.</div>`
-                }
-              </div>
-              ${
-                pixQrCodeDataUrl
-                  ? `<div class="pix-qr"><img src="${pixQrCodeDataUrl}" alt="QR Code Pix" /><span>QR Code Pix</span></div>`
-                  : pixPayload
-                    ? `<div class="pix-qr pix-qr-error"><span>QR Code indisponivel</span></div>`
-                  : ""
-              }
-            </div>
-
-            ${renderPaymentBookletInstructions(paymentBookletContent)}
-
-            <div class="voucher-footer">
-              <span>${escapeHtml(companyName)} · Documento: ${escapeHtml(companyDocument)}</span>
-              <span>Telefone: ${escapeHtml(companyPhone)} · E-mail: ${escapeHtml(companyEmail)}</span>
-            </div>
-          </section>
-        `;
-        }),
-      )
-    )
-      .join("");
-
-    printWindow.document.write(`
-      <!doctype html>
-      <html lang="pt-BR">
-        <head>
-          <meta charset="utf-8" />
-          <title>Carnê de Pagamento</title>
-          <link rel="preconnect" href="https://fonts.googleapis.com">
-          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-          <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
-          <style>
-            * { box-sizing: border-box; }
-            body { margin: 0; background: #eef2f7; color: #172033; font-family: 'Outfit', Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 10px; padding: 14px 24px; background: rgba(255, 255, 255, 0.97); border-bottom: 1px solid #d8dee8; backdrop-filter: blur(10px); }
-            .toolbar button { border: 0; border-radius: 8px; padding: 11px 18px; font-size: 12px; font-weight: 900; cursor: pointer; }
-            .print-button { background: #0f766e; color: #ffffff; }
-            .close-button { background: #f8fafc; color: #172033; border: 1px solid #cbd5e1 !important; }
-            @page { size: A4; margin: 7mm; }
-            .page { width: min(1080px, calc(100% - 28px)); margin: 14px auto; }
-            .voucher-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-            .summary { margin-bottom: 12px; border: 1px solid #cbd5e1; border-radius: 8px; background: #ffffff; padding: 16px; box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08); }
-            .summary-header { display: grid; grid-template-columns: 1fr auto; gap: 14px; border-bottom: 2px solid #172033; padding-bottom: 9px; }
-            .brand { color: #0f766e; font-size: 9.5px; font-weight: 900; letter-spacing: 0.14em; text-transform: uppercase; }
-            h1, h2 { margin: 5px 0 0; color: #172033; letter-spacing: 0; }
-            h1 { font-size: 22px; text-transform: uppercase; }
-            h2 { font-size: 14px; }
-            .summary p { margin: 5px 0 0; font-size: 11px; }
-            .summary-meta { color: #475569; font-size: 11px; line-height: 1.55; text-align: right; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            th { background: #172033; color: #ffffff; font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; }
-            th, td { border: 1px solid #d8dee8; padding: 5px 6px; font-size: 10px; text-align: left; }
-            tbody tr:nth-child(even) td { background: #f8fafc; }
-            .voucher { position: relative; overflow: hidden; break-inside: avoid; page-break-inside: avoid; border: 2px dashed #94a3b8; border-radius: 8px; background: #ffffff; padding: 12px; min-height: 286px; margin-bottom: 20px; }
-            .voucher::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: #0f766e; }
-            .voucher-header { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 10px; border-bottom: 1.5px solid #172033; padding: 0 0 8px 7px; }
-            .voucher-header h2 { text-transform: uppercase; }
-            .installment-badge { min-width: 74px; border: 1px solid #172033; background: #f8fafc; color: #172033; padding: 5px 8px; text-align: center; white-space: nowrap; }
-            .installment-badge span { display: block; color: #64748b; font-size: 7.5px; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase; }
-            .installment-badge strong { display: block; margin-top: 1px; font-size: 13px; line-height: 1; }
-            .payer-card { display: grid; grid-template-columns: 1fr; gap: 5px; margin: 8px 0 0 7px; padding: 8px 9px; border: 1px solid #d8dee8; background: #f8fafc; }
-            .payer-card span, .amount-strip span, .pix-heading span, .pix-copy span { display: block; color: #64748b; font-size: 7.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; }
-            .payer-card strong { display: block; margin-top: 2px; color: #172033; font-size: 10.5px; line-height: 1.2; text-transform: uppercase; }
-            .amount-strip { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 7px 0 0 7px; border: 1px solid #172033; background: #172033; }
-            .amount-strip div { background: #ffffff; padding: 7px 9px; }
-            .amount-strip div + div { border-left: 1px solid #172033; }
-            .amount-strip strong { display: block; margin-top: 2px; color: #172033; font-size: 14px; line-height: 1.1; }
-            .pix-area { display: grid; grid-template-columns: minmax(0, 1fr) 112px; gap: 8px; margin: 8px 0 0 7px; border: 1px solid #d8dee8; background: #ffffff; padding: 8px; }
-            .pix-info { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-            .pix-heading { display: grid; grid-template-columns: 1fr; gap: 2px; }
-            .pix-heading span { color: #0f766e; }
-            .pix-heading strong { display: block; color: #172033; font-size: 12px; line-height: 1.1; }
-            .pix-heading small { display: block; color: #64748b; font-size: 7.6px; font-weight: 800; }
-            .pix-copy { border: 1px dashed #a7b2c1; background: #f8fafc; padding: 6px; }
-            .pix-copy span { color: #0f766e; }
-            .pix-copy p { margin: 3px 0 0; color: #172033; font-family: "Courier New", monospace; font-size: 5.8px; line-height: 1.28; word-break: break-all; }
-            .pix-warning { border: 1px solid #fbbf24; background: #fffbeb; color: #92400e; padding: 6px; font-size: 8px; font-weight: 800; }
-            .pix-qr { display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f8fafc; padding: 6px; border: 1px solid #d8dee8; min-height: 124px; }
-            .pix-qr img { width: 98px; height: 98px; object-fit: contain; background: #ffffff; }
-            .pix-qr span { margin-top: 4px; color: #172033; font-size: 7.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; }
-            .instructions { margin: 8px 0 0 7px; border: 1px solid #d8dee8; border-left: 4px solid #0f766e; background: #ffffff; padding: 7px 8px; }
-            .instructions span { display: block; margin-bottom: 4px; color: #0f766e; font-size: 7.5px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; }
-            .instructions p { margin: 1px 0; color: #475569; font-size: 7.4px; line-height: 1.25; font-weight: 700; }
-            .voucher-footer { display: grid; grid-template-columns: 1fr; gap: 2px; margin: 7px 0 0 7px; border-top: 1px solid #d8dee8; padding-top: 5px; color: #64748b; font-size: 7.3px; font-weight: 700; }
-            @media print {
-              body { background: #ffffff; }
-              .toolbar { display: none !important; }
-              .page { width: 100%; margin: 0; padding: 0; }
-              .summary { box-shadow: none; border-radius: 0; }
-              .voucher { margin-bottom: 10px; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="toolbar">
-            <button class="print-button" type="button" onclick="window.print()">Imprimir carnê</button>
-            <button class="close-button" type="button" onclick="window.close()">Fechar</button>
-          </div>
-
-          <main class="page">
-            <section class="summary">
-              <div class="summary-header">
-                <div>
-                  <div class="brand">${escapeHtml(companyName)} · Financeiro</div>
-                  <h1>Carnê de Pagamento</h1>
-                  <p>Inquilino: <strong>${escapeHtml(firstCharge.tenant)}</strong></p>
-                  <p>Bem/Ativo: <strong>${escapeHtml(firstCharge.property)}</strong></p>
-                </div>
-                <div class="summary-meta">
-                  Parcelas: <strong>${carnetCharges.length}</strong><br />
-                  Total: <strong>${formatCurrency(totalAmount)}</strong><br />
-                  Gerado em: <strong>${new Date().toLocaleString("pt-BR")}</strong>
-                </div>
-              </div>
-
-              <table>
-                <thead>
-                  <tr>
-                    <th>Parcela</th>
-                    <th>Inquilino</th>
-                    <th>Bem/Ativo</th>
-                    <th>Vencimento</th>
-                    <th>Valor</th>
-                  </tr>
-                </thead>
-                <tbody>${rows}</tbody>
-              </table>
-            </section>
-
-            <div class="voucher-list">
-              ${vouchers}
-            </div>
-          </main>
-
-          <script>
-            window.onload = function () {
-              window.focus();
-              try {
-                window.moveTo(0, 0);
-                window.resizeTo(screen.availWidth, screen.availHeight);
-              } catch (error) {}
-            };
-          </script>
-        </body>
-      </html>
-    `);
-
-    printWindow.document.close();
-    printWindow.focus();
-
-    try {
-      printWindow.moveTo(0, 0);
-      printWindow.resizeTo(window.screen.availWidth, window.screen.availHeight);
-    } catch {}
-  }
-
-  function openAccountsReceivableReport(shouldPrint: boolean) {
-    if (reportDueFilter === "DateRange" && !reportStartDate && !reportEndDate) {
-      setReportFormError("Informe ao menos uma data inicial ou final para gerar relatório por período.");
-      return;
-    }
-    if (reportStartDate && reportEndDate && reportStartDate > reportEndDate) {
-      setReportFormError("A data inicial não pode ser maior que a data final.");
-      return;
-    }
-    const reportCharges = getReportFilteredCharges();
-    if (reportCharges.length === 0) {
-      setReportFormError("Nenhuma conta encontrada para os filtros informados.");
-      return;
-    }
-    printAccountsReceivableReport({
-      shouldPrint,
-      reportDueFilter,
-      reportStartDate,
-      reportEndDate,
-      reportTenantId,
-      reportStatusFilter,
-      reportCharges,
-      tenants,
-      getChargeRemainingAmount,
-      getChargePaidAmount,
-      getReportTotalAmount,
-      getPaymentMethodLabel,
-      getStatusLabel,
-      getStatusFilterLabel,
-      getReportDueFilterLabel,
-      paymentRecords,
-      setReportFormError,
-      onShare: async () => {
-        try {
-          const res = await shareReceivableReport({
-            tenantId: reportTenantId || undefined,
-            startDate: reportStartDate || undefined,
-            endDate: reportEndDate || undefined,
-            status: reportStatusFilter || undefined,
-            dueFilter: reportDueFilter || undefined,
-          });
-
-          const url = window.location.origin + "/relatorio-receber-compartilhado/" + res.id;
-
-          if (navigator.clipboard) {
-            await navigator.clipboard.writeText(url);
-            window.alert("Link do relatório gerado e copiado para a área de transferência! (Válido por 7 dias)");
-          } else {
-            window.alert(`Link gerado: ${url}`);
-          }
-          return url;
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : "Erro ao gerar link de compartilhamento.";
-          window.alert(msg);
-          throw err;
-        }
-      },
-    });
-  }
-
-  function localOpenAccountsReceivableReport(shouldPrint: boolean) {
-    setReportFormError("");
-
-    if (reportDueFilter === "DateRange" && !reportStartDate && !reportEndDate) {
-      setReportFormError(
-        "Informe ao menos uma data inicial ou final para gerar relatório por período.",
-      );
-      return;
-    }
-
-    if (reportStartDate && reportEndDate && reportStartDate > reportEndDate) {
-      setReportFormError("A data inicial não pode ser maior que a data final.");
-      return;
-    }
-
-    const reportCharges = getReportFilteredCharges();
-
-    if (reportCharges.length === 0) {
-      setReportFormError("Nenhuma conta encontrada para os filtros informados.");
-      return;
-    }
-
-    const selectedReportTenant = tenants.find(
-      (tenant) => String(tenant.id) === String(reportTenantId),
-    );
-    const pendingTotal = reportCharges
-      .filter((charge) => charge.status === "Pending")
-      .reduce((total, charge) => total + getChargeRemainingAmount(charge), 0);
-    const paidTotal = reportCharges
-      .filter((charge) => charge.status === "Paid")
-      .reduce((total, charge) => total + getChargePaidAmount(charge), 0);
-    const overdueTotal = reportCharges
-      .filter((charge) => charge.status === "Overdue")
-      .reduce((total, charge) => total + getChargeRemainingAmount(charge), 0);
-    const grandTotal = getReportTotalAmount(reportCharges);
-
-    const filterSummary = [
-      `Pessoa: ${selectedReportTenant?.name || "Todas"}`,
-      `Status: ${getStatusFilterLabel(reportStatusFilter)}`,
-      `Vencimento: ${getReportDueFilterLabel(reportDueFilter)}`,
-      reportDueFilter === "DateRange" && reportStartDate
-        ? `De: ${formatDate(`${reportStartDate}T00:00:00`)}`
-        : "",
-      reportDueFilter === "DateRange" && reportEndDate
-        ? `Até: ${formatDate(`${reportEndDate}T00:00:00`)}`
-        : "",
-    ]
-      .filter(Boolean)
-      .join(" · ");
-
-    const rows = reportCharges
-      .map((charge) => {
-        const payment = getChargePayment(charge.id);
-        const amount =
-          charge.status === "Paid"
-            ? getChargePaidAmount(charge)
-            : getChargeRemainingAmount(charge);
-        const paymentMethods = payment?.paymentItems?.length
-          ? payment.paymentItems
-              .map(
-                (item) =>
-                  `${getPaymentMethodLabel(item.method as PaymentMethod)} (${formatCurrency(item.amount)})`,
-              )
-              .join(", ")
-          : payment
-            ? getPaymentMethodLabel(payment.method as PaymentMethod)
-            : "-";
-
-        return `
-          <tr>
-            <td>${escapeHtml(charge.property)}</td>
-            <td>${escapeHtml(charge.tenant)}</td>
-            <td>${formatDate(charge.dueDate)}</td>
-            <td>${formatCurrency(amount)}</td>
-            <td>${getStatusLabel(charge.status)}</td>
-            <td>${payment?.paidAt ? formatDate(payment.paidAt) : "-"}</td>
-            <td>${escapeHtml(paymentMethods)}</td>
-          </tr>
-        `;
-      })
-      .join("");
-
-    const reportWindow = window.open("", "_blank", "width=1200,height=800");
-
-    if (!reportWindow) {
-      setReportFormError(
-        "Não foi possível abrir o relatório. Verifique se o navegador bloqueou pop-ups.",
-      );
-      return;
-    }
-
-    reportWindow.document.write(`
-      <!doctype html>
-      <html lang="pt-BR">
-        <head>
-          <meta charset="utf-8" />
-          <title>Relatório de Contas a Receber</title>
-          <style>
-            * { box-sizing: border-box; }
-            body { font-family: Arial, sans-serif; margin: 0; color: #0f172a; background: #f1f5f9; }
-            .report-toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 10px; padding: 14px 24px; background: rgba(255, 255, 255, 0.96); border-bottom: 1px solid #e2e8f0; backdrop-filter: blur(10px); }
-            .toolbar-button { border: 0; border-radius: 12px; padding: 11px 18px; font-size: 13px; font-weight: 800; cursor: pointer; transition: 0.2s ease; }
-            .toolbar-button.print { background: #059669; color: #ffffff; box-shadow: 0 8px 18px rgba(5, 150, 105, 0.2); }
-            .toolbar-button.print:hover { background: #047857; }
-            .toolbar-button.close { background: #e2e8f0; color: #0f172a; }
-            .toolbar-button.close:hover { background: #cbd5e1; }
-            .report-page { width: min(1180px, calc(100% - 48px)); margin: 28px auto; padding: 32px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 18px; box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12); }
-            .header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #e2e8f0; padding-bottom: 18px; }
-            .brand { font-size: 13px; font-weight: 700; color: #ea580c; text-transform: uppercase; letter-spacing: 0.08em; }
-            h1 { margin: 6px 0 0; font-size: 26px; }
-            .meta { margin-top: 8px; font-size: 12px; color: #64748b; line-height: 1.6; }
-            .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 22px 0; }
-            .card { border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px; background: #f8fafc; }
-            .card span { display: block; font-size: 11px; color: #64748b; font-weight: 700; text-transform: uppercase; }
-            .card strong { display: block; margin-top: 6px; font-size: 16px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-            th { background: #fff7ed; color: #0f172a; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
-            th, td { border: 1px solid #e2e8f0; padding: 9px; font-size: 12px; vertical-align: top; }
-            tr:nth-child(even) td { background: #f8fafc; }
-            .footer { margin-top: 24px; font-size: 11px; color: #64748b; text-align: center; }
-            @media print {
-              body { margin: 0; background: #ffffff; }
-              .no-print { display: none !important; }
-              .report-page { width: 100%; margin: 0; padding: 18px; border: 0; border-radius: 0; box-shadow: none; }
-              .summary { grid-template-columns: repeat(4, 1fr); }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="report-toolbar no-print">
-            <button class="toolbar-button print" type="button" onclick="window.print()">Imprimir</button>
-            <button class="toolbar-button close" type="button" onclick="window.close()">Fechar relatório</button>
-          </div>
-
-          <main class="report-page">
-          <div class="header">
-            <div>
-              <div class="brand">Contrx · Financeiro</div>
-              <h1>Relatório de Contas a Receber</h1>
-              <div class="meta">${escapeHtml(filterSummary)}</div>
-            </div>
-            <div class="meta">
-              Gerado em:<br />
-              <strong>${new Date().toLocaleString("pt-BR")}</strong>
-            </div>
-          </div>
-
-          <div class="summary">
-            <div class="card"><span>Quantidade</span><strong>${reportCharges.length}</strong></div>
-            <div class="card"><span>Total geral</span><strong>${formatCurrency(grandTotal)}</strong></div>
-            <div class="card"><span>Total pago</span><strong>${formatCurrency(paidTotal)}</strong></div>
-            <div class="card"><span>Total vencido</span><strong>${formatCurrency(overdueTotal)}</strong></div>
-          </div>
-
-          <div class="summary">
-            <div class="card"><span>Total pendente</span><strong>${formatCurrency(pendingTotal)}</strong></div>
-            <div class="card"><span>Status</span><strong>${getStatusFilterLabel(reportStatusFilter)}</strong></div>
-            <div class="card"><span>Vencimento</span><strong>${getReportDueFilterLabel(reportDueFilter)}</strong></div>
-            <div class="card"><span>Pessoa</span><strong>${escapeHtml(selectedReportTenant?.name || "Todas")}</strong></div>
-          </div>
-
-          <table>
-            <thead>
-              <tr>
-                <th>Bem/Ativo</th>
-                <th>Inquilino/Pessoa</th>
-                <th>Vencimento</th>
-                <th>Valor</th>
-                <th>Status</th>
-                <th>Pagamento</th>
-                <th>Forma de pagamento</th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
-
-          <div class="footer">Relatório gerado pelo módulo Contas a Receber do Contrx.</div>
-          </main>
-          ${
-            shouldPrint
-              ? `<script>
-            window.onload = function () {
-              window.focus();
-              window.print();
-            };
-          </script>`
-              : ""
-          }
-        </body>
-      </html>
-    `);
-    reportWindow.document.close();
-  }
-
-  function viewAccountsReceivableReport() {
-    openAccountsReceivableReport(false);
-  }
-
-  function generateAccountsReceivablePdf() {
-    openAccountsReceivableReport(true);
-  }
-
-  function openCreateModal() {
-    const today = new Date();
-    const dueDate = new Date();
-
-    dueDate.setDate(today.getDate() + 30);
-
-    resetCreateForm();
-    setFormIssueDate(getLocalDateValue(today));
-    setFormDueDate(getLocalDateValue(dueDate));
-    setEditingChargeId(null);
-    setIsChargeSaving(false);
-    setIsCreateOpen(true);
-  }
-
-  function openEditCharge(charge: Charge) {
-    const tenant = tenants.find(
-      (item) =>
-        String(item.id) === String(charge.tenantId || "") ||
-        item.name.toLowerCase() === charge.tenant.toLowerCase(),
-    );
-    const property = properties.find(
-      (item) => item.name.toLowerCase() === charge.property.toLowerCase(),
-    );
-
-    const paymentRecord = getChargePayment(charge.id);
-
-    setEditingChargeId(charge.id);
-    setFormContractId(String(charge.contractId || ""));
-    setFormTenant(tenant ? String(tenant.id) : "");
-    setFormProperty(property ? String(property.id) : "");
-    setFormAmount(formatAmountInput(charge.amount));
-    setFormIssueDate(
-      getDateInputValue(charge.issueDate) || getLocalDateValue(new Date()),
-    );
-    setFormDueDate(getDateInputValue(charge.dueDate));
-    setFormPaymentDate(
-      paymentRecord?.paidAt
-        ? getDateInputValue(paymentRecord.paidAt)
-        : getLocalDateValue(new Date()),
-    );
-    setFormLaunchType("single");
-    setFormFirstInstallmentAsDownPayment(false);
-    setFormInstallmentQuantity("2");
-    setInstallmentPreview([]);
-    setChargeFormError("");
-    setIsChargeSaving(false);
-    setIsCreateOpen(true);
-  }
-
-  function openReceivePaymentModal(charge: Charge, batchCharges: Charge[] = []) {
-    const normalizedBatchCharges = batchCharges.length > 0 ? batchCharges : [];
-    const remainingAmount = normalizedBatchCharges.length
-      ? normalizedBatchCharges.reduce(
-          (total, currentCharge) => total + getChargeRemainingAmount(currentCharge),
-          0,
-        )
-      : getChargeRemainingAmount(charge);
-
-    setChargePendingPaymentReceipt(charge);
-    setPaymentBatchCharges(normalizedBatchCharges);
-    setPaymentInterest("");
-    setPaymentDiscount("");
-    setPaymentInterestInput("");
-    setPaymentDiscountInput("");
-    setPaymentInterestMode("amount");
-    setPaymentDiscountMode("amount");
-    setPaymentFinalAmount(formatAmountInput(remainingAmount));
-    setFormPaymentDate(getLocalDateValue(new Date()));
-    setPaymentMethod("Cash");
-    setPaymentEntries([
-      {
-        id: createLocalId("payment-entry"),
-        method: "Cash",
-        amount: formatAmountInput(remainingAmount),
-      },
-    ]);
-    setPaymentNote("");
-    setPaymentFormError("");
-  }
-
-  function closeReceivePaymentModal() {
-    if (processingConfirmation) return;
-
-    setChargePendingPaymentReceipt(null);
-    setPaymentBatchCharges([]);
-    setIsPaymentConfirmationOpen(false);
-    setPaymentInterest("");
-    setPaymentDiscount("");
-    setPaymentInterestInput("");
-    setPaymentDiscountInput("");
-    setPaymentInterestMode("amount");
-    setPaymentDiscountMode("amount");
-    setPaymentFinalAmount("");
-    setFormPaymentDate("");
-    setPaymentMethod("Cash");
-    setPaymentEntries([]);
-    setPaymentNote("");
-    setPaymentFormError("");
-    setReceiveModalPos(null);
-    setReceiveModalSize(null);
-  }
-
-  function confirmReceivePayment() {
-    if (!chargePendingPaymentReceipt) return;
-
-    const interest = normalizeAmount(paymentInterest);
-    const discount = normalizeAmount(paymentDiscount);
-    const amountPaid = normalizeAmount(paymentFinalAmount);
-    const paymentEntriesTotal = getPaymentEntriesTotal();
-    const remainingAmount = paymentBatchCharges.length
-      ? paymentBatchCharges.reduce(
-          (total, charge) => total + getChargeRemainingAmount(charge),
-          0,
-        )
-      : getChargeRemainingAmount(chargePendingPaymentReceipt);
-    const maximumPaymentAmount = Math.max(remainingAmount + interest - discount, 0);
-
-    if (interest < 0 || discount < 0) {
-      setPaymentFormError(
-        "Informe juros e desconto com valores válidos para receber a cobrança.",
-      );
-      return;
-    }
-
-    if (amountPaid <= 0) {
-      setPaymentFormError("O valor final recebido precisa ser maior que zero.");
-      return;
-    }
-
-    if (!formPaymentDate) {
-      setPaymentFormError("Informe a data de recebimento da conta.");
-      return;
-    }
-
-    if (amountPaid - maximumPaymentAmount > 0.01) {
-      setPaymentFormError(
-        `O valor recebido não pode ser maior que ${formatCurrency(maximumPaymentAmount)} considerando juros e desconto.`,
-      );
-      return;
-    }
-
-    if (paymentEntries.length === 0) {
-      setPaymentFormError("Informe ao menos uma forma de pagamento.");
-      return;
-    }
-
-    const hasInvalidPaymentEntry = paymentEntries.some(
-      (entry) => normalizeAmount(entry.amount) <= 0,
-    );
-
-    if (hasInvalidPaymentEntry) {
-      setPaymentFormError(
-        "Informe valores válidos em todas as formas de pagamento.",
-      );
-      return;
-    }
-
-    if (Math.abs(paymentEntriesTotal - amountPaid) > 0.01) {
-      const difference = Math.abs(amountPaid - paymentEntriesTotal);
-
-      setPaymentFormError(
-        paymentEntriesTotal < amountPaid
-          ? `Falta informar ${formatCurrency(difference)} nas formas de pagamento.`
-          : `As formas de pagamento excedem o valor recebido em ${formatCurrency(difference)}.`,
-      );
-      return;
-    }
-
-    setPaymentFormError("");
-    setIsPaymentConfirmationOpen(true);
-  }
-
-  function closePaymentConfirmation() {
-    if (processingConfirmation) return;
-
-    setIsPaymentConfirmationOpen(false);
-  }
-
-  function getOwnerPayoutNotice(charge: Charge | null) {
-    if (!charge?.contractId) return null;
-
-    const contract = contracts.find(
-      (item) => String(item.id) === String(charge.contractId),
-    );
-    const property = contract
-      ? properties.find((item) => String(item.id) === String(contract.propertyId))
-      : properties.find(
-          (item) => item.name.toLowerCase() === charge.property.toLowerCase(),
-        );
-
-    if (
-      !property ||
-      property.managementMode !== "MANAGED" ||
-      property.autoCreateOwnerPayable === false ||
-      !property.ownerId
-    ) {
-      return null;
-    }
-
-    const receivedAmount = normalizeAmount(paymentFinalAmount);
-    const feePercent = normalizeAmount(property.administrationFeePercentage || 0);
-    const feeAmount = roundMoney((receivedAmount * feePercent) / 100);
-    const payoutAmount = roundMoney(receivedAmount - feeAmount);
-
-    if (receivedAmount <= 0 || payoutAmount <= 0) return null;
-
-    return {
-      ownerName: property.ownerName || "Proprietario nao informado",
-      propertyName: property.name || charge.property,
-      feePercent,
-      feeAmount,
-      payoutAmount,
-      payoutDay: property.ownerPayoutDay || null,
-    };
-  }
-
-  async function finishReceivePayment() {
-    if ((!chargePendingPaymentReceipt && paymentBatchCharges.length === 0) || processingConfirmation) return;
-
-    try {
-      setProcessingConfirmation("payment");
-
-      if (paymentBatchCharges.length > 1) {
-        await finishBatchReceivePayment();
-        return;
-      }
-
-      if (!chargePendingPaymentReceipt) return;
-
-      const interest = normalizeAmount(paymentInterest);
-      const discount = normalizeAmount(paymentDiscount);
-      const amountPaid = normalizeAmount(paymentFinalAmount);
-      const paidAt = formPaymentDate
-        ? new Date(`${formPaymentDate}T00:00:00`).toISOString()
-        : new Date().toISOString();
-
-      const paymentRecord: ChargePayment = {
-        chargeId: chargePendingPaymentReceipt.id,
-        paidAt,
-        method: paymentEntries[0]?.method || paymentMethod,
-        paymentItems: paymentEntries.map((entry) => ({
-          id: entry.id,
-          method: entry.method,
-          amount: normalizeAmount(entry.amount),
-        })),
-        interest,
-        discount,
-        amountPaid,
-        note: paymentNote.trim(),
-      };
-
-      let receivedAccount: ReceivableAccount | null = null;
-
-      if (companyId) {
-        try {
-          receivedAccount = await receiveAccount(chargePendingPaymentReceipt.id, {
-            paidAt: paymentRecord.paidAt,
-            method: mapUiPaymentMethodToApi(paymentRecord.method),
-            paymentItems: mapUiPaymentItemsToApi(paymentRecord.paymentItems || []),
-            interest,
-            discount,
-            amountPaid,
-            note: paymentRecord.note,
-          });
-        } catch (error) {
-          setPaymentFormError(
-            error instanceof Error
-              ? error.message
-              : "Não foi possível registrar o recebimento no backend.",
-          );
-          return;
-        }
-      }
-
-      if (receivedAccount) {
-        const receivedCharge = mapApiReceivableToCharge(receivedAccount);
-        const receivedPaymentRecords = mapApiReceivableToPayments(receivedAccount);
-
-        setManualCharges((currentCharges) => {
-          const chargeExists = currentCharges.some(
-            (charge) => String(charge.id) === String(receivedCharge.id),
-          );
-
-          return chargeExists
-            ? currentCharges.map((charge) =>
-                String(charge.id) === String(receivedCharge.id)
-                  ? receivedCharge
-                  : charge,
-              )
-            : [...currentCharges, receivedCharge];
-        });
-        setPaid((currentPaid) => {
-          const nextPaid = currentPaid.filter(
-            (paidChargeId) =>
-              String(paidChargeId) !== String(receivedCharge.id),
-          );
-
-          return receivedCharge.status === "Paid"
-            ? [...nextPaid, receivedCharge.id]
-            : nextPaid;
-        });
-        setPaymentRecords((currentPaymentRecords) => [
-          ...currentPaymentRecords.filter(
-            (currentPaymentRecord) =>
-              String(currentPaymentRecord.chargeId) !== String(receivedCharge.id),
-          ),
-          ...receivedPaymentRecords,
-        ]);
-      } else {
-        const nextSettlementAmount =
-          getChargeSettlementAmount(chargePendingPaymentReceipt) +
-          amountPaid +
-          discount -
-          interest;
-        const shouldMarkAsPaid =
-          nextSettlementAmount >= chargePendingPaymentReceipt.amount;
-
-        setPaid((currentPaid) => {
-          const nextPaid = currentPaid.filter(
-            (paidChargeId) =>
-              String(paidChargeId) !== String(chargePendingPaymentReceipt.id),
-          );
-
-          return shouldMarkAsPaid
-            ? [...nextPaid, chargePendingPaymentReceipt.id]
-            : nextPaid;
-        });
-        setPaymentRecords((currentPaymentRecords) => [
-          ...currentPaymentRecords,
-          paymentRecord,
-        ]);
-      }
-
-      const receivedFlowCharge = chargePendingPaymentReceipt;
-
-      // Identifica pagamentos bancários (Pix ou Transferência Bancária)
-      const validBankEntries = paymentEntries.filter(
-        (entry) =>
-          (entry.method === "Pix" || entry.method === "BankTransfer") &&
-          normalizeAmount(entry.amount) > 0
-      );
-      const isSingleBankMethod =
-        paymentEntries.length === 0 &&
-        (paymentMethod === "Pix" || paymentMethod === "BankTransfer");
-
-      const receiptDate = formPaymentDate || new Date().toISOString().slice(0, 10);
-      const tenantName = receivedFlowCharge.tenant || "CLIENTE";
-      const propertyName = receivedFlowCharge.property || "";
-      const docNum = receivedFlowCharge.installmentNumber
-        ? `PARC ${receivedFlowCharge.installmentNumber}/${receivedFlowCharge.installmentTotal || ""}`
-        : (receivedFlowCharge.contractId ? `CONTRATO #${receivedFlowCharge.contractId}` : "");
-
-      try {
-        generatePaymentReceipt(receivedFlowCharge, paymentRecord);
-      } catch {
-        // Ignora erros na janela de recibo para garantir o fechamento do modal
-      }
-      closeReceivePaymentModal();
-      await continueContractFlowAfterDownPayment(receivedFlowCharge);
-
-      let queue: BankTransactionInitialData[] = [];
-
-      if (validBankEntries.length > 0) {
-        queue = validBankEntries.map((entry, index) => {
-          const entryMethodLabel = entry.method === "Pix" ? "PIX" : "DEPÓSITO";
-          const partSuffix = validBankEntries.length > 1 ? ` (${index + 1}/${validBankEntries.length})` : "";
-          const entryAmount = normalizeAmount(entry.amount);
-          return {
-            type: "RECEITA" as const,
-            amount: entryAmount,
-            amountStr: formatCurrencyInput((entryAmount * 100).toFixed(0)),
-            date: receiptDate,
-            description: `RECEBIMENTO ${entryMethodLabel} - ${tenantName}${propertyName ? ` - ${propertyName}` : ""}${partSuffix}`.toUpperCase(),
-            documentNumber: docNum,
-            category: "RECEITAS",
-            reconciled: true,
-            referenceType: "RECEIVABLE",
-            referenceId: receivedFlowCharge.id,
-            queueIndex: index + 1,
-            queueTotal: validBankEntries.length,
-          };
-        });
-      } else if (isSingleBankMethod && amountPaid > 0) {
-        const methodLabel = paymentMethod === "Pix" ? "PIX" : "DEPÓSITO";
-        queue = [{
-          type: "RECEITA" as const,
-          amount: amountPaid,
-          amountStr: formatCurrencyInput((amountPaid * 100).toFixed(0)),
-          date: receiptDate,
-          description: `RECEBIMENTO ${methodLabel} - ${tenantName}${propertyName ? ` - ${propertyName}` : ""}`.toUpperCase(),
-          documentNumber: docNum,
-          category: "RECEITAS",
-          reconciled: true,
-          referenceType: "RECEIVABLE",
-          referenceId: receivedFlowCharge.id,
-          queueIndex: 1,
-          queueTotal: 1,
-        }];
-      }
-
-      if (queue.length > 0) {
-        setBankTransactionQueue(queue);
-        setIsBankTransactionModalOpen(true);
-      }
-    } finally {
-      setProcessingConfirmation(null);
-    }
-  }
-
-  function distributeBatchPaymentAmount(
-    chargesToReceive: Charge[],
-    totalAmount: number,
-  ) {
-    const normalizedTotalInCents = Math.max(Math.round(totalAmount * 100), 0);
-    const totalRemainingInCents = chargesToReceive.reduce(
-      (total, charge) => total + Math.round(getChargeRemainingAmount(charge) * 100),
-      0,
-    );
-
-    if (normalizedTotalInCents <= 0 || totalRemainingInCents <= 0) {
-      return chargesToReceive.map(() => 0);
-    }
-
-    let distributedInCents = 0;
-
-    return chargesToReceive.map((charge, index) => {
-      if (index === chargesToReceive.length - 1) {
-        return Math.max((normalizedTotalInCents - distributedInCents) / 100, 0);
-      }
-
-      const remainingInCents = Math.round(getChargeRemainingAmount(charge) * 100);
-      const shareInCents = Math.min(
-        remainingInCents,
-        Math.round((normalizedTotalInCents * remainingInCents) / totalRemainingInCents),
-      );
-
-      distributedInCents += shareInCents;
-
-      return shareInCents / 100;
-    });
-  }
-
-  async function finishBatchReceivePayment() {
-    try {
-      const chargesToReceive = paymentBatchCharges.filter(
-        (charge) => charge.status !== "Paid",
-      );
-
-      if (chargesToReceive.length === 0) {
-        setPaymentFormError("Selecione contas válidas para receber.");
-        return;
-      }
-
-      const amountPaid = normalizeAmount(paymentFinalAmount);
-      const interest = normalizeAmount(paymentInterest);
-      const discount = normalizeAmount(paymentDiscount);
-      const paidAt = formPaymentDate
-        ? new Date(`${formPaymentDate}T00:00:00`).toISOString()
-        : new Date().toISOString();
-      const amountDistribution = distributeBatchPaymentAmount(
-        chargesToReceive,
-        amountPaid,
-      );
-      const interestDistribution = distributeBatchPaymentAmount(
-        chargesToReceive,
-        interest,
-      );
-      const discountDistribution = distributeBatchPaymentAmount(
-        chargesToReceive,
-        discount,
-      );
-      const nextPaymentRecords: ChargePayment[] = [];
-      const nextReceivedCharges: Charge[] = [];
-
-      for (const [index, charge] of chargesToReceive.entries()) {
-        const distributedAmount = amountDistribution[index] || 0;
-        const distributedInterest = interestDistribution[index] || 0;
-        const distributedDiscount = discountDistribution[index] || 0;
-
-        const chargePaymentItems = paymentEntries
-          .map((entry) => {
-            const entryAmount = normalizeAmount(entry.amount);
-            if (entryAmount <= 0 || amountPaid <= 0) return null;
-            const itemRatio = distributedAmount / amountPaid;
-            const itemDistributedAmount = Math.round(entryAmount * itemRatio * 100) / 100;
-            if (itemDistributedAmount <= 0) return null;
-            return {
-              id: createLocalId("payment-entry"),
-              method: entry.method,
-              amount: itemDistributedAmount,
-            };
-          })
-          .filter((item): item is { id: string; method: PaymentMethod; amount: number } => item !== null);
-
-        const paymentRecord: ChargePayment = {
-          id: createLocalId("payment"),
-          chargeId: charge.id,
-          paidAt,
-          method: paymentEntries[0]?.method || paymentMethod,
-          paymentItems: chargePaymentItems.length > 0 ? chargePaymentItems : [
-            {
-              id: createLocalId("payment-entry"),
-              method: paymentEntries[0]?.method || paymentMethod,
-              amount: distributedAmount,
-            },
-          ],
-          interest: distributedInterest,
-          discount: distributedDiscount,
-          amountPaid: distributedAmount,
-          note: paymentNote.trim() || "Recebimento em lote",
-        };
-
-        nextPaymentRecords.push(paymentRecord);
-
-        if (!companyId) {
-          const nextSettlementAmount =
-            getChargeSettlementAmount(charge) +
-            distributedAmount +
-            distributedDiscount -
-            distributedInterest;
-          const shouldMarkAsPaid = nextSettlementAmount >= charge.amount;
-
-          nextReceivedCharges.push({
-            ...charge,
-            paidAmount: getChargePaidAmount(charge) + distributedAmount,
-            remainingAmount: Math.max(charge.amount - nextSettlementAmount, 0),
-            status: shouldMarkAsPaid ? "Paid" : "Pending",
-          });
-        }
-      }
-
-      if (nextPaymentRecords.length === 0) {
-        setPaymentFormError("Informe um valor válido para receber as contas selecionadas.");
-        return;
-      }
-
-      if (companyId) {
-        try {
-          const receivedAccounts = await receiveAccountsBatch(
-            nextPaymentRecords.map((paymentRecord) => ({
-              chargeId: paymentRecord.chargeId,
-              paidAt: paymentRecord.paidAt,
-              method: mapUiPaymentMethodToApi(paymentRecord.method),
-              paymentItems: mapUiPaymentItemsToApi(paymentRecord.paymentItems || []),
-              interest: paymentRecord.interest,
-              discount: paymentRecord.discount,
-              amountPaid: paymentRecord.amountPaid,
-              note: paymentRecord.note,
-            })),
-          );
-
-          nextReceivedCharges.push(...receivedAccounts.map(mapApiReceivableToCharge));
-          nextPaymentRecords.splice(
-            0,
-            nextPaymentRecords.length,
-            ...receivedAccounts.flatMap(mapApiReceivableToPayments),
-          );
-        } catch (error) {
-          setPaymentFormError(
-            error instanceof Error
-              ? error.message
-              : "Não foi possível registrar o recebimento em lote no backend.",
-          );
-          return;
-        }
-      }
-
-      setManualCharges((currentCharges) => {
-        const receivedById = new Map(
-          nextReceivedCharges.map((charge) => [String(charge.id), charge]),
-        );
-
-        const updatedCharges = currentCharges.map((charge) =>
-          receivedById.get(String(charge.id)) || charge,
-        );
-        const existingIds = new Set(updatedCharges.map((charge) => String(charge.id)));
-        const missingReceivedCharges = nextReceivedCharges.filter(
-          (charge) => !existingIds.has(String(charge.id)),
-        );
-
-        return [...updatedCharges, ...missingReceivedCharges];
-      });
-
-      setPaid((currentPaid) => {
-        const nextPaid = currentPaid.filter(
-          (paidChargeId) =>
-            !nextReceivedCharges.some(
-              (charge) => String(charge.id) === String(paidChargeId),
-            ),
-        );
-
-        return [
-          ...nextPaid,
-          ...nextReceivedCharges
-            .filter((charge) => charge.status === "Paid")
-            .map((charge) => charge.id),
-        ];
-      });
-
-      setPaymentRecords((currentPaymentRecords) => [
-        ...currentPaymentRecords,
-        ...nextPaymentRecords,
-      ]);
-
-      try {
-        generatePaymentReceiptBatch(
-          nextPaymentRecords.map((paymentRecord) => ({
-            charge:
-              nextReceivedCharges.find(
-                (charge) => String(charge.id) === String(paymentRecord.chargeId),
-              ) ||
-              chargesToReceive.find(
-                (charge) => String(charge.id) === String(paymentRecord.chargeId),
-              )!,
-            paymentRecord,
-          })),
-        );
-      } catch {
-        // Ignora erros ao abrir janela de recibo em lote
-      }
-
-      // Identifica pagamentos bancários (Pix ou Transferência Bancária)
-      const validBankEntries = paymentEntries.filter(
-        (entry) =>
-          (entry.method === "Pix" || entry.method === "BankTransfer") &&
-          normalizeAmount(entry.amount) > 0
-      );
-      const isSingleBankMethod =
-        paymentEntries.length === 0 &&
-        (paymentMethod === "Pix" || paymentMethod === "BankTransfer");
-
-      const receiptDate = formPaymentDate || new Date().toISOString().slice(0, 10);
-      const batchCount = chargesToReceive.length;
-      const batchRefIds = chargesToReceive.map((c) => String(c.id)).join(",");
-
-      clearChargeSelection();
-      closeReceivePaymentModal();
-
-      let queue: BankTransactionInitialData[] = [];
-
-      if (validBankEntries.length > 0) {
-        queue = validBankEntries.map((entry, index) => {
-          const entryMethodLabel = entry.method === "Pix" ? "PIX" : "DEPÓSITO";
-          const partSuffix = validBankEntries.length > 1 ? ` (${index + 1}/${validBankEntries.length})` : "";
-          const entryAmount = normalizeAmount(entry.amount);
-          return {
-            type: "RECEITA" as const,
-            amount: entryAmount,
-            amountStr: formatCurrencyInput((entryAmount * 100).toFixed(0)),
-            date: receiptDate,
-            description: `RECEBIMENTO ${entryMethodLabel} EM LOTE - ${batchCount} CONTA(S)${partSuffix}`.toUpperCase(),
-            documentNumber: "",
-            category: "RECEITAS",
-            reconciled: true,
-            referenceType: "RECEIVABLE",
-            referenceId: batchRefIds,
-            queueIndex: index + 1,
-            queueTotal: validBankEntries.length,
-          };
-        });
-      } else if (isSingleBankMethod && normalizeAmount(paymentFinalAmount) > 0) {
-        const methodLabel = paymentMethod === "Pix" ? "PIX" : "DEPÓSITO";
-        const finalAmt = normalizeAmount(paymentFinalAmount);
-        queue = [{
-          type: "RECEITA" as const,
-          amount: finalAmt,
-          amountStr: formatCurrencyInput((finalAmt * 100).toFixed(0)),
-          date: receiptDate,
-          description: `RECEBIMENTO ${methodLabel} EM LOTE - ${batchCount} CONTA(S)`.toUpperCase(),
-          documentNumber: "",
-          category: "RECEITAS",
-          reconciled: true,
-          referenceType: "RECEIVABLE",
-          referenceId: batchRefIds,
-          queueIndex: 1,
-          queueTotal: 1,
-        }];
-      }
-
-      if (queue.length > 0) {
-        setBankTransactionQueue(queue);
-        setIsBankTransactionModalOpen(true);
-      }
-    } catch (error) {
-      setPaymentFormError(
-        error instanceof Error ? error.message : "Erro ao processar recebimento em lote.",
-      );
-    }
-  }
-
-  function clearTenantFilter() {
-    setSelectedTenant(null);
-    setSearch("");
-    setIsSearchOpen(false);
-  }
-
-  function clearAllFilters() {
-    setSelectedTenant(null);
-    setSearch("");
-    setStatusFilter(DEFAULT_RECEIVABLE_STATUS_FILTER);
-    setFilterStartDate("");
-    setFilterEndDate("");
-    setPeriodShortcut("All");
-  }
-
-  function resetCreateForm() {
-    setFormTenant("");
-    setFormContractId("");
-    setFormProperty("");
-    setFormAmount("");
-    setFormIssueDate("");
-    setFormDueDate("");
-    setFormPaymentDate("");
-    setFormLaunchType("single");
-    setFormFirstInstallmentAsDownPayment(false);
-    setFormInstallmentQuantity("2");
-    setInstallmentPreview([]);
-    setChargeFormError("");
-    setIsTenantCreateOpen(false);
-  }
-
-  function closeCreateModal() {
-    resetCreateForm();
-    setEditingChargeId(null);
-    setIsCreateOpen(false);
-    setCreateModalPos(null);
-    setCreateModalSize(null);
-  }
-
-  function openDeleteChargeConfirmation() {
-    if (!editingChargeId) return;
-
-    const charge = manualCharges.find(
-      (item) => String(item.id) === String(editingChargeId),
-    );
-
-    if (!charge) {
-      setChargeFormError(
-        "Esta cobrança não pode ser excluída porque foi gerada automaticamente por contrato.",
-      );
-      return;
-    }
-
-    if (charge.contractId) {
-      setChargeFormError(
-        "Esta parcela pertence a um contrato e não pode ser excluída individualmente. Exclua ou cancele o contrato para remover as parcelas vinculadas.",
-      );
-      return;
-    }
-
-    setChargePendingDeletion(charge);
-  }
-
-  function closeDeleteChargeConfirmation() {
-    if (processingConfirmation) return;
-
-    setChargePendingDeletion(null);
-  }
-
-  function openPaymentReversalConfirmation(selectedCharge?: Charge) {
-    if (!selectedCharge && !editingChargeId) return;
-
-    const charge =
-      selectedCharge ||
-      charges.find((item) => String(item.id) === String(editingChargeId));
-
-    if (!charge || !getChargePayment(charge.id)) {
-      setChargeFormError(
-        "Esta cobrança não está marcada como paga para voltar para pagamento.",
-      );
-      return;
-    }
-
-    setChargePendingPaymentReversal(charge);
-  }
-
-  function closePaymentReversalConfirmation() {
-    if (processingConfirmation) return;
-
-    setChargePendingPaymentReversal(null);
-  }
-
-  async function confirmPaymentReversal() {
-    if (!chargePendingPaymentReversal || processingConfirmation) return;
-
-    setProcessingConfirmation("reversal");
-
-    let reversedAccount: ReceivableAccount | null = null;
-
-    if (companyId) {
-      try {
-        reversedAccount = await reverseReceivedAccount(
-          chargePendingPaymentReversal.id,
-        );
-      } catch (error) {
-        setChargeFormError(
-          error instanceof Error
-            ? error.message
-            : "Não foi possível estornar o recebimento no backend.",
-        );
-        setChargePendingPaymentReversal(null);
-        setProcessingConfirmation(null);
-        return;
-      }
-    }
-
-    if (reversedAccount) {
-      const reversedCharge = mapApiReceivableToCharge(reversedAccount);
-      const reversedPaymentRecords = mapApiReceivableToPayments(reversedAccount);
-
-      setManualCharges((currentCharges) =>
-        currentCharges.map((charge) =>
-          String(charge.id) === String(reversedCharge.id)
-            ? reversedCharge
-            : charge,
-        ),
-      );
-      setPaid((currentPaid) => {
-        const nextPaid = currentPaid.filter(
-          (paidChargeId) =>
-            String(paidChargeId) !== String(reversedCharge.id),
-        );
-
-        return reversedCharge.status === "Paid"
-          ? [...nextPaid, reversedCharge.id]
-          : nextPaid;
-      });
-      setPaymentRecords((currentPaymentRecords) => [
-        ...currentPaymentRecords.filter(
-          (paymentRecord) =>
-            String(paymentRecord.chargeId) !== String(reversedCharge.id),
-        ),
-        ...reversedPaymentRecords,
-      ]);
+  function handleToggleSelectAll() {
+    if (selectedIds.length === filteredCharges.length) {
+      setSelectedIds([]);
     } else {
-      const updatedPaid = paid.filter(
-        (paidChargeId) =>
-          String(paidChargeId) !== String(chargePendingPaymentReversal.id),
-      );
-      const updatedPaymentRecords = paymentRecords.filter(
-        (paymentRecord) =>
-          String(paymentRecord.chargeId) !==
-          String(chargePendingPaymentReversal.id),
-      );
-      const updatedManualCharges = manualCharges.map((charge) =>
-        String(charge.id) === String(chargePendingPaymentReversal.id)
-          ? {
-              ...charge,
-              status: "Pending" as const,
-              paidAmount: 0,
-              remainingAmount: charge.amount,
-            }
-          : charge,
-      );
-
-      setManualCharges(updatedManualCharges);
-      setPaid(updatedPaid);
-      setPaymentRecords(updatedPaymentRecords);
-    }
-    setChargePendingPaymentReversal(null);
-    setProcessingConfirmation(null);
-    closeCreateModal();
-  }
-
-  async function confirmDeleteCharge() {
-    if (!chargePendingDeletion || processingConfirmation) return;
-
-    setProcessingConfirmation("delete");
-
-    if (companyId) {
-      try {
-        await deleteReceivableAccount(chargePendingDeletion.id);
-      } catch (error) {
-        setChargeFormError(
-          error instanceof Error
-            ? error.message
-            : "Não foi possível excluir a cobrança no backend.",
-        );
-        setChargePendingDeletion(null);
-        setProcessingConfirmation(null);
-        return;
-      }
-    }
-
-    const updatedManualCharges = manualCharges.filter(
-      (charge) => String(charge.id) !== String(chargePendingDeletion.id),
-    );
-    const updatedPaid = paid.filter(
-      (paidChargeId) =>
-        String(paidChargeId) !== String(chargePendingDeletion.id),
-    );
-    const updatedPaymentRecords = paymentRecords.filter(
-      (paymentRecord) =>
-        String(paymentRecord.chargeId) !== String(chargePendingDeletion.id),
-    );
-
-    setManualCharges(updatedManualCharges);
-    setPaid(updatedPaid);
-    setPaymentRecords(updatedPaymentRecords);
-    setChargePendingDeletion(null);
-    setProcessingConfirmation(null);
-    closeCreateModal();
-  }
-
-  function openTenantCreateModal() {
-    setIsTenantCreateOpen(true);
-  }
-
-  function closeTenantCreateModal() {
-    setIsTenantCreateOpen(false);
-  }
-
-  function handleTenantCreated(apiPerson: Person) {
-    const newTenant = mapApiPersonToReceivableTenant(apiPerson);
-
-    setTenants((currentTenants) => {
-      const tenantAlreadyExists = currentTenants.some(
-        (tenant) => String(tenant.id) === String(newTenant.id),
-      );
-
-      return tenantAlreadyExists ? currentTenants : [...currentTenants, newTenant];
-    });
-    setFormTenant(newTenant.id);
-    setChargeFormError("");
-  }
-
-  const generateInstallmentPreview = useCallback(() => {
-    const totalAmountInCents = getAmountInCents(formAmount);
-    const quantity = Number(formInstallmentQuantity);
-
-    if (!formDueDate || totalAmountInCents <= 0 || !Number.isFinite(quantity)) {
-      setInstallmentPreview([]);
-      return;
-    }
-
-    const normalizedQuantity = Math.min(
-      MAX_INSTALLMENT_QUANTITY,
-      Math.max(2, Math.trunc(quantity)),
-    );
-    const installmentAmountsInCents = distributeAmountInCents(
-      totalAmountInCents,
-      normalizedQuantity,
-    );
-    const downPaymentDate = formIssueDate || getLocalDateValue(new Date());
-
-    const generatedInstallments = Array.from(
-      { length: normalizedQuantity },
-      (_, index) => {
-        const isDownPayment =
-          formFirstInstallmentAsDownPayment && index === 0;
-
-        return {
-          id: `preview-${index + 1}`,
-          installmentNumber: index + 1,
-          amount: formatCentsAsAmountInput(installmentAmountsInCents[index] || 0),
-          dueDate: isDownPayment
-            ? downPaymentDate
-            : addDaysToDate(
-                formDueDate,
-                formFirstInstallmentAsDownPayment
-                  ? Math.max(index - 1, 0) * 30
-                  : index * 30,
-              ),
-          isDownPayment,
-        };
-      },
-    );
-
-    setInstallmentPreview(generatedInstallments);
-  }, [
-    formAmount,
-    formDueDate,
-    formIssueDate,
-    formInstallmentQuantity,
-    formFirstInstallmentAsDownPayment,
-  ]);
-
-  useEffect(() => {
-    if (formLaunchType !== "installment") {
-      setInstallmentPreview([]);
-      return;
-    }
-
-    generateInstallmentPreview();
-  }, [formLaunchType, generateInstallmentPreview]);
-
-  function updateInstallmentAmount(id: string, amount: string) {
-    setChargeFormError("");
-
-    setInstallmentPreview((currentInstallments) => {
-      const totalAmountInCents = getAmountInCents(formAmount);
-      const changedInstallment = currentInstallments.find(
-        (installment) => installment.id === id,
-      );
-
-      if (!changedInstallment || totalAmountInCents <= 0) {
-        return currentInstallments.map((installment) =>
-          installment.id === id ? { ...installment, amount } : installment,
-        );
-      }
-
-      const changedAmountInCents = getAmountInCents(amount);
-      const otherInstallments = currentInstallments.filter(
-        (installment) => installment.id !== id,
-      );
-      const remainingAmountInCents = totalAmountInCents - changedAmountInCents;
-
-      if (remainingAmountInCents < 0) {
-        setChargeFormError(
-          "O valor informado ultrapassa o valor total da cobrança.",
-        );
-
-        return currentInstallments.map((installment) =>
-          installment.id === id ? { ...installment, amount } : installment,
-        );
-      }
-
-      if (otherInstallments.length === 0) {
-        return currentInstallments.map((installment) =>
-          installment.id === id ? { ...installment, amount } : installment,
-        );
-      }
-
-      const redistributedAmountsInCents = distributeAmountInCents(
-        remainingAmountInCents,
-        otherInstallments.length,
-      );
-      let redistributedIndex = 0;
-
-      return currentInstallments.map((installment) => {
-        if (installment.id === id) {
-          return {
-            ...installment,
-            amount,
-          };
-        }
-
-        const redistributedAmountInCents =
-          redistributedAmountsInCents[redistributedIndex] || 0;
-        redistributedIndex += 1;
-
-        return {
-          ...installment,
-          amount: formatCentsAsAmountInput(redistributedAmountInCents),
-        };
-      });
-    });
-  }
-
-  function updateInstallmentDueDate(id: string, dueDate: string) {
-    setInstallmentPreview((currentInstallments) =>
-      currentInstallments.map((installment) =>
-        installment.id === id ? { ...installment, dueDate } : installment,
-      ),
-    );
-  }
-
-  function getCarnetChargesFromCharge(charge: Charge) {
-    if (charge.installmentGroupId) {
-      const groupedCharges = charges
-        .filter(
-          (currentCharge) =>
-            String(currentCharge.installmentGroupId || "") ===
-            String(charge.installmentGroupId),
-        )
-        .sort(
-          (firstCharge, secondCharge) =>
-            Number(firstCharge.installmentNumber || 0) -
-            Number(secondCharge.installmentNumber || 0),
-        );
-
-      if (groupedCharges.length > 0) {
-        return groupedCharges;
-      }
-    }
-
-    return [
-      {
-        ...charge,
-        installmentNumber: charge.installmentNumber || 1,
-        installmentTotal: charge.installmentTotal || 1,
-        installmentGroupId: charge.installmentGroupId || charge.id,
-      },
-    ];
-  }
-
-  function getContractById(contractId: string | number | null | undefined) {
-    if (!contractId) return null;
-
-    return (
-      contracts.find((contract) => String(contract.id) === String(contractId)) || null
-    );
-  }
-
-  async function registerContractDueDateOnSchedule(
-    contract: Contract | ContractSchedulePayload,
-    customRespName?: string,
-    customTime?: string,
-    customReminder?: string,
-  ) {
-    if (!contract.endDate) return false;
-
-    const scheduleDate = getDateInputValue(contract.endDate);
-
-    if (!scheduleDate) return false;
-
-    const contractId = String(contract.id);
-    const scheduleMarker = `contract-due:${contractId}`;
-    const tenantName =
-      contract.tenantName ||
-      tenants.find((tenant) => String(tenant.id) === String(contract.tenantId))?.name ||
-      "Inquilino nao informado";
-    const propertyName =
-      contract.propertyName ||
-      properties.find((property) => String(property.id) === String(contract.propertyId))?.name ||
-      "Bem/ativo nao informado";
-
-    try {
-      const currentScheduleItems = await getScheduleItems();
-      const alreadyScheduled = currentScheduleItems.some((item) => {
-        return (
-          item.notes?.includes(scheduleMarker) ||
-          (item.type === "Contrato" &&
-            item.date.slice(0, 10) === scheduleDate &&
-            item.customerName === tenantName &&
-            item.propertyName === propertyName &&
-            item.title === "Vencimento de contrato")
-        );
-      });
-
-      if (alreadyScheduled) return true;
-
-      await createScheduleItem({
-        title: "Vencimento de contrato",
-        customerName: tenantName,
-        propertyName,
-        date: scheduleDate,
-        time: customTime || "08:00",
-        type: "Contrato",
-        status: "scheduled",
-        priority: "high",
-        responsibleName: customRespName || "Administrativo",
-        reminder: customReminder || "1 dia antes",
-        notes: [
-          `Contrato: ${contractId}`,
-          `Vencimento em ${formatDate(contract.endDate)}`,
-          scheduleMarker,
-        ].join("\n"),
-      });
-
-      return true;
-    } catch (error) {
-      console.warn("Nao foi possivel registrar o vencimento do contrato na agenda.", error);
-      return false;
+      setSelectedIds(filteredCharges.map((c) => c.id));
     }
   }
 
-  async function handleConfirmCustomSchedule() {
-    if (!pendingContractScheduleCustomization) return;
-    setIsSavingSchedule(true);
-    try {
-      const wasScheduleRegistered = await registerContractDueDateOnSchedule(
-        pendingContractScheduleCustomization,
-        scheduleRespName,
-        scheduleTime,
-        scheduleReminder,
-      );
-
-      setPendingContractScheduleCustomization(null);
-      setPendingContractScheduleNotice({
-        title: wasScheduleRegistered ? "Agenda criada" : "Agenda não criada",
-        description: wasScheduleRegistered
-          ? "O vencimento do contrato foi registrado na agenda de acordo com as suas preferências."
-          : "Não foi possível registrar o vencimento na agenda automaticamente.",
-        itemValue: pendingContractScheduleCustomization.propertyName || "Contrato vinculado",
-      });
-    } catch (error) {
-      console.error("Erro ao registrar agenda customizada:", error);
-    } finally {
-      setIsSavingSchedule(false);
-    }
+  // Ações de Modais
+  function handleOpenPayment(charge: Charge) {
+    setSelectedCharge(charge);
+    setIsPaymentModalOpen(true);
   }
 
-  function handleSkipCustomSchedule() {
-    const contractObj = pendingContractScheduleCustomization;
-    setPendingContractScheduleCustomization(null);
-    if (contractObj) {
-      setPendingContractScheduleNotice({
-        title: "Agenda não criada",
-        description: "Você optou por não criar o lembrete de vencimento na agenda.",
-        itemValue: contractObj.propertyName || "Contrato vinculado",
-      });
-    }
+  function handleOpenEdit(charge: Charge) {
+    setSelectedCharge(charge);
+    setIsFormModalOpen(true);
   }
 
-  function handleAfterContractCarnetGenerated(contractId: string | number | null | undefined) {
-    const linkedContract = getContractById(contractId);
-
-    if (linkedContract) {
-      setPendingContractPrintRequest(linkedContract);
-    }
+  function handleOpenCreate() {
+    setSelectedCharge(null);
+    setIsFormModalOpen(true);
   }
 
-  function continueContractFlowAfterReceivableChargesSaved(
-    contractId: string | number | null | undefined,
-    carnetCharges: Charge[],
-  ) {
-    const linkedContract = getContractById(contractId);
-
-    if (linkedContract && carnetCharges.length > 0) {
-      setPendingContractCarnetRequest({
-        contract: linkedContract,
-        charges: carnetCharges,
-      });
-      return;
-    }
-
-    if (carnetCharges.length > 0) {
-      void generatePaymentCarnet(carnetCharges);
-    }
-
-    handleAfterContractCarnetGenerated(contractId);
+  function handleOpenDelete(charge: Charge) {
+    setSelectedCharge(charge);
+    setDeleteModalMode("delete");
+    setIsDeleteModalOpen(true);
   }
 
-  async function continueContractFlowAfterDownPayment(
-    receivedCharge: Charge,
-  ) {
-    if (
-      !pendingDownPaymentFlow ||
-      String(pendingDownPaymentFlow.downPaymentChargeId) !== String(receivedCharge.id)
-    ) {
-      return;
-    }
-
-    const contractId = pendingDownPaymentFlow.contractId;
-    setPendingDownPaymentFlow(null);
-
-    if (pendingDownPaymentFlow.carnetCharges.length > 0) {
-      const linkedContract = getContractById(contractId);
-
-      if (linkedContract) {
-        setPendingContractCarnetRequest({
-          contract: linkedContract,
-          charges: pendingDownPaymentFlow.carnetCharges,
-        });
-        return;
-      }
-
-      void generatePaymentCarnet(pendingDownPaymentFlow.carnetCharges);
-    }
-
-    await handleAfterContractCarnetGenerated(contractId);
+  function handleOpenReversal(charge: Charge) {
+    setSelectedCharge(charge);
+    setDeleteModalMode("reversal");
+    setIsDeleteModalOpen(true);
   }
 
-  function redirectToContractsPage(targetContractId?: string | null) {
-    window.location.href = "/contratos";
+  function handleViewPayments(charge: Charge) {
+    setSelectedCharge(charge);
+    setIsHistoryModalOpen(true);
   }
 
-  function closeContractPrintQuestion() {
-    setPendingContractPrintRequest(null);
-  }
-
-  function closeContractScheduleNotice() {
-    setPendingContractScheduleNotice(null);
-    redirectToContractsPage(focusedContractId);
-  }
-
-  function closeContractCarnetQuestion() {
-    setPendingContractCarnetRequest(null);
-  }
-
-  function confirmContractCarnetQuestion() {
-    if (!pendingContractCarnetRequest) return;
-
-    void generatePaymentCarnet(pendingContractCarnetRequest.charges);
-    setPendingContractPrintRequest(pendingContractCarnetRequest.contract);
-    setPendingContractCarnetRequest(null);
-  }
-
-  async function confirmContractPrintQuestion() {
-    if (!pendingContractPrintRequest) return;
-
-    const contractToPrint = pendingContractPrintRequest;
-    const wasContractPrintOpened = openContractPrintWindow(contractToPrint);
-
-    if (!wasContractPrintOpened) return;
-
-    setPendingContractPrintRequest(null);
-    setPendingContractScheduleCustomization(contractToPrint);
-  }
-
-  function getContractPrintCompanySettings() {
-    const defaultCompanySettings = {
-      companyName: "Contrx",
-      tradeName: "Contrx",
-      legalName: "",
-      document: "",
-      phone: "",
-      email: "",
-      city: "",
-      state: "",
-      street: "",
-      number: "",
-      neighborhood: "",
-      complement: "",
-      zipCode: "",
-      pixKey: "",
-      contractCity: "",
-      contractDefaultNotes: "",
-    };
-
-    const cachedCompanySettings = getCachedCompanySettings();
-
-    if (cachedCompanySettings) {
-      try {
-        const source =
-          typeof cachedCompanySettings.company === "object" && cachedCompanySettings.company !== null
-            ? (cachedCompanySettings.company as Record<string, unknown>)
-            : cachedCompanySettings;
-
-        return {
-          ...defaultCompanySettings,
-          companyName: String(
-            source.companyName ||
-              source.tradeName ||
-              source.name ||
-              source.nomeFantasia ||
-              defaultCompanySettings.companyName,
-          ),
-          tradeName: String(
-            source.tradeName ||
-              source.companyName ||
-              source.name ||
-              source.nomeFantasia ||
-              defaultCompanySettings.tradeName,
-          ),
-          legalName: String(source.legalName || source.razaoSocial || source.businessName || ""),
-          document: String(source.document || source.cnpj || source.cpfCnpj || ""),
-          phone: String(source.phone || source.companyPhone || source.whatsapp || ""),
-          email: String(source.email || source.companyEmail || ""),
-          city: String(source.city || source.cidade || ""),
-          state: String(source.state || source.uf || ""),
-          street: String(source.street || source.logradouro || source.address || ""),
-          number: String(source.number || source.numero || ""),
-          neighborhood: String(source.neighborhood || source.bairro || ""),
-          complement: String(source.complement || source.complemento || ""),
-          zipCode: String(source.zipCode || source.cep || ""),
-          pixKey: String(source.pixKey || source.pix || ""),
-          contractCity: String(source.contractCity || source.cityForContract || ""),
-          contractDefaultNotes: String(source.contractDefaultNotes || source.defaultContractNotes || ""),
-        };
-      } catch {
-        return defaultCompanySettings;
-      }
-    }
-
-    return defaultCompanySettings;
-  }
-
-  function formatContractPrintAddress(address: {
-    street?: string;
-    number?: string;
-    district?: string;
-    neighborhood?: string;
-    city?: string;
-    state?: string;
-    zipCode?: string;
-    complement?: string;
+  // Operações de API
+  async function handleConfirmPayment(data: {
+    amountPaid: number;
+    interest: number;
+    discount: number;
+    method: PaymentMethod;
+    paidAt: string;
+    note?: string;
+    bankAccountId?: string | null;
+    paymentItems?: Array<{
+      method: PaymentMethod;
+      amount: number;
+    }>;
   }) {
-    return [
-      address.street,
-      address.number ? `nº ${address.number}` : "",
-      address.complement,
-      address.neighborhood || address.district
-        ? `Bairro: ${address.neighborhood || address.district}`
-        : "",
-      address.city && address.state ? `${address.city}/${address.state}` : address.city || address.state,
-      address.zipCode ? `CEP ${address.zipCode}` : "",
-    ]
-      .filter(Boolean)
-      .join(", ");
-  }
-
-  function getContractDurationInMonthsForPrint(startDateValue: string, endDateValue?: string) {
-    const startDate = normalizeContractDateInput(startDateValue);
-    const endDate = normalizeContractDateInput(endDateValue);
-
-    if (!startDate || !endDate) return 1;
-
-    const start = new Date(`${startDate}T00:00:00`);
-    const end = new Date(`${endDate}T00:00:00`);
-
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
-      return 1;
-    }
-
-    const monthDifference =
-      (end.getFullYear() - start.getFullYear()) * 12 +
-      (end.getMonth() - start.getMonth()) +
-      1;
-
-    return Math.max(monthDifference, 1);
-  }
-
-  function getConfiguredTemporaryContractTemplateContentForReceivable() {
-    try {
-      const parsedTemplates = getCachedPrintTemplates();
-
-      if (!parsedTemplates) return null;
-      const temporaryContractTemplate = parsedTemplates.temporaryContract;
-      const legacyContractTemplate = parsedTemplates.contract;
-      let templateContent = "";
-
-      if (
-        temporaryContractTemplate &&
-        typeof temporaryContractTemplate === "object" &&
-        !Array.isArray(temporaryContractTemplate) &&
-        typeof (temporaryContractTemplate as { content?: unknown }).content === "string"
-      ) {
-        templateContent = (temporaryContractTemplate as { content: string }).content;
-      }
-
-      if (!templateContent && typeof legacyContractTemplate === "string") {
-        templateContent = legacyContractTemplate;
-      }
-
-      const cleanTemplateContent = templateContent.trim();
-
-      if (!cleanTemplateContent) return null;
-
-      if (
-        cleanTemplateContent === DEFAULT_SETTINGS_TEMPORARY_CONTRACT_CONTENT.trim() ||
-        cleanTemplateContent === LEGACY_SETTINGS_TEMPORARY_CONTRACT_CONTENT.trim()
-      ) {
-        return null;
-      }
-
-      return templateContent;
-    } catch {
-      return null;
-    }
-  }
-
-  function normalizeContractTemplateContent(value: string) {
-    return String(value || "")
-      .replace(/\r\n/g, "\n")
-      .replace(/[ \t]+/g, " ")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim();
-  }
-
-  function getConfiguredStandardContractTemplateContentForReceivable() {
-    try {
-      const parsedTemplates = getCachedPrintTemplates();
-
-      if (!parsedTemplates) return null;
-      const standardContractTemplate = parsedTemplates.standardContract;
-      let templateContent = "";
-
-      if (
-        standardContractTemplate &&
-        typeof standardContractTemplate === "object" &&
-        !Array.isArray(standardContractTemplate) &&
-        typeof (standardContractTemplate as { content?: unknown }).content === "string"
-      ) {
-        templateContent = (standardContractTemplate as { content: string }).content;
-      }
-
-      const cleanTemplateContent = templateContent.trim();
-
-      if (!cleanTemplateContent) return null;
-
-      const normalizedTemplateContent = normalizeContractTemplateContent(cleanTemplateContent);
-      const normalizedLegacyTemplateContent = normalizeContractTemplateContent(LEGACY_SETTINGS_STANDARD_CONTRACT_CONTENT);
-      const normalizedOriginalTemplateContent = normalizeContractTemplateContent(ORIGINAL_STANDARD_RESIDENTIAL_CONTRACT_TEMPLATE);
-
-      if (
-        normalizedTemplateContent === normalizedLegacyTemplateContent ||
-        normalizedTemplateContent === normalizedOriginalTemplateContent
-      ) {
-        return null;
-      }
-
-      return templateContent;
-    } catch {
-      return null;
-    }
-  }
-
-  function getConfiguredAssetContractTemplateContentForReceivable() {
-    try {
-      const parsedTemplates = getCachedPrintTemplates();
-
-      if (!parsedTemplates) return null;
-      const assetContractTemplate = (parsedTemplates as { assetContract?: unknown }).assetContract;
-      let templateContent = "";
-
-      if (
-        assetContractTemplate &&
-        typeof assetContractTemplate === "object" &&
-        !Array.isArray(assetContractTemplate) &&
-        typeof (assetContractTemplate as { content?: unknown }).content === "string"
-      ) {
-        templateContent = (assetContractTemplate as { content: string }).content;
-      }
-
-      const cleanTemplateContent = templateContent.trim();
-
-      if (!cleanTemplateContent) return null;
-
-      if (normalizeContractTemplateContent(cleanTemplateContent) === normalizeContractTemplateContent(DEFAULT_ASSET_CONTRACT_TEMPLATE)) {
-        return null;
-      }
-
-      return templateContent;
-    } catch {
-      return null;
-    }
-  }
-
-  function renderContractPrintTemplate(templateContent: string, templateData: Record<string, string>) {
-    return Object.entries(templateData).reduce((renderedContent, [key, value]) => {
-      return renderedContent.replace(new RegExp(`{${key}}`, "g"), value);
-    }, templateContent);
-  }
-
-  function buildConfiguredContractPrintHtml(
-    templateContent: string,
-    templateData: Record<string, string>,
-    contractId = ""
-  ) {
-    const cid = String(contractId || "");
-    const key = `contrx_custom_contract_content_${cid}`;
-
-    let initialContent = "";
-    if (cid) {
-      const saved = getCompanyStorageItem(companyId, key, key) || localStorage.getItem(key);
-      if (saved) {
-        initialContent = saved;
-      }
-    }
-
-    if (!initialContent) {
-      initialContent = renderContractPrintTemplate(templateContent, templateData);
-    }
-
-    return `<!doctype html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Contrato</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
-  <style>
-    @page { size: A4; margin: 0; }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: #eef2f7; color: #111827; font-family: 'Outfit', Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding: 14px 18px; background: #ffffff; border-bottom: 1px solid #e5e7eb; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-    .toolbar button { border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 800; font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s ease; }
-    .print-button { background: #f97316; color: #ffffff; }
-    .print-button:hover { background: #ea580c; }
-    .save-button { background: #10b981; color: #ffffff; }
-    .save-button:hover { background: #059669; }
-    .edit-button { background: #2563eb; color: #ffffff; }
-    .edit-button:hover { background: #1d4ed8; }
-    .close-button { background: #f1f5f9; color: #334155; }
-    .close-button:hover { background: #e2e8f0; }
-    .toast-msg { position: fixed; bottom: 24px; right: 24px; z-index: 9999; background: #10b981; color: #ffffff; padding: 14px 20px; border-radius: 14px; font-weight: 800; font-size: 14px; box-shadow: 0 10px 25px rgba(16,185,129,0.3); display: none; }
-    .page { width: 210mm; min-height: 297mm; margin: 18px auto; background: #ffffff; box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12); border-radius: 8px; }
-    .page-inner { padding: 18mm; }
-    .content { white-space: pre-wrap; font-size: 12.5px; line-height: 1.65; font-weight: 600; outline: none; border: 2px transparent dashed; padding: 4px; border-radius: 6px; }
-    .content:focus { border-color: #3b82f6; background-color: #faf5ff; }
-    @media print {
-      body { background: #ffffff; }
-      .toolbar, .toast-msg { display: none !important; }
-      .page { width: 210mm; min-height: 297mm; margin: 0; box-shadow: none; border-radius: 0; }
-      .page-inner { padding: 18mm; }
-      .content { border: none !important; background: transparent !important; }
-    }
-  </style>
-</head>
-<body>
-  <div class="toolbar">
-    <button class="close-button" type="button" onclick="window.close()">Fechar</button>
-    <button id="toggleEditSaveBtn" class="edit-button" type="button" onclick="handleToggleEditSave()">Editar Minuta</button>
-    <button class="print-button" type="button" onclick="window.print()">Imprimir contrato</button>
-  </div>
-
-  <div id="toast" class="toast-msg">✅ Edição salva com sucesso especificamente para este contrato!</div>
-
-  <main class="page">
-    <div class="page-inner">
-      <div class="content" contenteditable="false" spellcheck="false">${escapeHtml(initialContent)}</div>
-    </div>
-  </main>
-
-  <script>
-    function showToast(msg) {
-      var toast = document.getElementById('toast');
-      if (toast) {
-        toast.textContent = msg;
-        toast.style.display = 'block';
-        setTimeout(function() { toast.style.display = 'none'; }, 3500);
-      }
-    }
-
-    function handleToggleEditSave() {
-      var btn = document.getElementById('toggleEditSaveBtn');
-      var contentEl = document.querySelector('.content');
-      if (!btn || !contentEl) return;
-
-      var isEditing = btn.getAttribute('data-editing') === 'true';
-
-      if (!isEditing) {
-        btn.setAttribute('data-editing', 'true');
-        btn.textContent = 'Salvar Edição';
-        btn.className = 'save-button';
-        contentEl.setAttribute('contenteditable', 'true');
-        contentEl.focus();
-      } else {
-        var editedContent = contentEl.innerHTML || contentEl.textContent || '';
-        var cid = '${cid}';
-        if (cid) {
-          var key = 'contrx_custom_contract_content_' + cid;
-          try {
-            localStorage.setItem(key, editedContent);
-          } catch(e) {}
-          if (window.opener) {
-            try {
-              window.opener.postMessage({ type: 'SAVE_CONTRACT_CUSTOM_CONTENT', contractId: cid, content: editedContent }, '*');
-            } catch(e) {}
-          }
-        }
-        btn.setAttribute('data-editing', 'false');
-        btn.textContent = 'Editar Minuta';
-        btn.className = 'edit-button';
-        contentEl.setAttribute('contenteditable', 'false');
-        showToast('✅ Edição salva com sucesso especificamente para este contrato!');
-      }
-    }
-  </script>
-</body>
-</html>`;
-  }
-
-  function formatDocumentForContractPrint(value: string) {
-    const digits = String(value || "").replace(/\D/g, "");
-
-    if (digits.length > 11) {
-      return digits
-        .slice(0, 14)
-        .replace(/^(\d{2})(\d)/, "$1.$2")
-        .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
-        .replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3/$4")
-        .replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/, "$1.$2.$3/$4-$5");
-    }
-
-    return digits
-      .slice(0, 11)
-      .replace(/^(\d{3})(\d)/, "$1.$2")
-      .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
-      .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3-$4");
-  }
-
-  function getContractDurationInDaysForPrint(startDateValue: string, endDateValue?: string) {
-    const startDate = normalizeContractDateInput(startDateValue);
-    const endDate = normalizeContractDateInput(endDateValue);
-
-    if (!startDate || !endDate) return 1;
-
-    const start = new Date(`${startDate}T00:00:00`);
-    const end = new Date(`${endDate}T00:00:00`);
-
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 1;
-
-    const millisecondsPerDay = 1000 * 60 * 60 * 24;
-
-    return Math.max(Math.floor((end.getTime() - start.getTime()) / millisecondsPerDay) + 1, 1);
-  }
-
-  function getContractRentDueDayForPrint(startDateValue: string) {
-    const startDate = normalizeContractDateInput(startDateValue);
-
-    if (!startDate) return "____";
-
-    const [, , day] = startDate.split("-");
-
-    return day || "____";
-  }
-
-  function normalizeContractDateInput(value?: string) {
-    if (!value) return "";
-
-    if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
-      return value.slice(0, 10);
-    }
-
-    const parsedDate = new Date(value);
-
-    if (Number.isNaN(parsedDate.getTime())) return "";
-
-    const year = parsedDate.getFullYear();
-    const month = String(parsedDate.getMonth() + 1).padStart(2, "0");
-    const day = String(parsedDate.getDate()).padStart(2, "0");
-
-    return `${year}-${month}-${day}`;
-  }
-
-  function formatContractDateForTemplate(value?: string) {
-    const normalizedDate = normalizeContractDateInput(value);
-
-    if (!normalizedDate) return "-";
-
-    const [year, month, day] = normalizedDate.split("-");
-
-    return `${day}/${month}/${year}`;
-  }
-
-  function getContractPrintHtml(contract: Contract) {
-    const property = properties.find((item) => String(item.id) === String(contract.propertyId));
-    const tenant = tenants.find((item) => String(item.id) === String(contract.tenantId)) as
-      | (Tenant & { document?: string; email?: string; neighborhood?: string })
-      | undefined;
-    const companySettings = getContractPrintCompanySettings();
-    const landlordName =
-      companySettings.legalName ||
-      companySettings.companyName ||
-      companySettings.tradeName ||
-      "LOCADOR NÃO INFORMADO";
-    const landlordDocument = formatDocumentForContractPrint(companySettings.document || "");
-    const tenantName = contract.tenantName || tenant?.name || "LOCATÁRIO NÃO INFORMADO";
-    const tenantDocument = formatDocumentForContractPrint(tenant?.cpf || tenant?.document || "");
-    const propertyName = contract.propertyName || property?.name || "BEM/ATIVO NÃO INFORMADO";
-    const assetCategory = property ? getAssetCategoryLabel(property.assetCategory) : "Bem/Ativo";
-    const propertyAddress = formatContractPrintAddress(property || {});
-    const isRealEstateContract = !property || property.assetCategory === "PROPERTY";
-    const locationText =
-      companySettings.contractCity ||
-      (property?.city && property?.state
-        ? `${property.city}/${property.state}`
-        : companySettings.city && companySettings.state
-          ? `${companySettings.city}/${companySettings.state}`
-          : "______/__");
-    const monthlyAmount = formatCurrency(getContractAmount(contract));
-    const templateData: Record<string, string> = {
-      companyName: landlordName,
-      tradeName: companySettings.tradeName || companySettings.companyName || landlordName,
-      landlordName,
-      landlordDocument: landlordDocument || "não informado",
-      landlordAddress: formatContractPrintAddress(companySettings) || "endereço não informado",
-      companyEmail: companySettings.email || "não informado",
-      companyPhone: companySettings.phone || "não informado",
-      personName: tenantName,
-      tenantName,
-      tenantDocument: tenantDocument || "não informado",
-      tenantAddress: formatContractPrintAddress(tenant || {}) || "endereço não informado",
-      tenantPhone: tenant?.phone || "não informado",
-      tenantEmail: tenant?.email || "não informado",
-      propertyName,
-      assetCategory,
-      propertyAddress: propertyAddress || "endereço não informado",
-      startDate: formatContractDateForTemplate(contract.startDate),
-      endDate: formatContractDateForTemplate(contract.endDate),
-      entryTime: contract.isTemporaryRental ? contract.checkInTime || "____:____" : "",
-      exitTime: contract.isTemporaryRental ? contract.checkOutTime || "____:____" : "",
-      checkInTime: contract.isTemporaryRental ? contract.checkInTime || "____:____" : "",
-      checkOutTime: contract.isTemporaryRental ? contract.checkOutTime || "____:____" : "",
-      contractDays: String(getContractDurationInDaysForPrint(contract.startDate, contract.endDate)),
-      contractMonths: String(getContractDurationInMonthsForPrint(contract.startDate, contract.endDate)),
-      amount: monthlyAmount,
-      rentValue: monthlyAmount,
-      monthlyAmount,
-      penaltyAmount: formatCurrency(getContractAmount(contract) * 3),
-      dueDay: String(getContractRentDueDayForPrint(contract.startDate)),
-      pixKey: companySettings.pixKey || "não informado",
-      contractCity: locationText,
-      currentDate: new Date().toLocaleDateString("pt-BR", {
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-      }),
-      contractDefaultNotes: companySettings.contractDefaultNotes || "",
-    };
-
-    const templateContent = !isRealEstateContract
-      ? getConfiguredAssetContractTemplateContentForReceivable() || DEFAULT_ASSET_CONTRACT_TEMPLATE
-      : contract.isTemporaryRental
-        ? getConfiguredTemporaryContractTemplateContentForReceivable() || DEFAULT_SETTINGS_TEMPORARY_CONTRACT_CONTENT
-        : getConfiguredStandardContractTemplateContentForReceivable() || ORIGINAL_STANDARD_RESIDENTIAL_CONTRACT_TEMPLATE;
-
-    return buildConfiguredContractPrintHtml(templateContent, templateData, contract.id);
-  }
-
-  function openContractPrintWindow(contract: Contract) {
-    const printWindow = window.open(
-      "",
-      "_blank",
-      `toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=${window.screen.width},height=${window.screen.height}`,
-    );
-
-    if (!printWindow) {
-      setChargeFormError(
-        "Não foi possível abrir o contrato. Verifique se o navegador bloqueou pop-ups.",
-      );
-      return false;
-    }
-
-    printWindow.document.write(getContractPrintHtml(contract));
-    printWindow.document.close();
-    printWindow.focus();
-
-    try {
-      printWindow.moveTo(0, 0);
-      printWindow.resizeTo(window.screen.availWidth, window.screen.availHeight);
-    } catch {}
-
-    return true;
-  }
-
-
-  function reprintPaymentCarnet(charge: Charge) {
-    const carnetCharges = getCarnetChargesFromCharge(charge).filter(
-      (currentCharge) => !currentCharge.isDownPayment,
-    );
-
-    void generatePaymentCarnet(carnetCharges);
-  }
-
-  function reprintPaymentReceipt(charge: Charge) {
-    const paymentRecord = getChargePayment(charge.id);
-
-    if (!paymentRecord) {
-      setPaymentFormError(
-        "Não existe recibo salvo para esta cobrança. Confirme o recebimento antes de reimprimir.",
-      );
-      return;
-    }
-
-    generatePaymentReceipt(charge, paymentRecord);
-  }
-
-  function printSelectedCarnets() {
-    const carnetCharges = selectedCharges.filter(
-      (charge) => !charge.isDownPayment,
-    );
-
-    if (carnetCharges.length === 0) {
-      window.alert("Selecione ao menos uma cobrança para imprimir o carnê.");
-      return;
-    }
-
-    void generatePaymentCarnet(carnetCharges);
-  }
-
-  function printSelectedReceipts() {
-    const receiptItems = selectedCharges
-      .map((charge) => {
-        const paymentRecord = getChargePayment(charge.id);
-
-        return paymentRecord ? { charge, paymentRecord } : null;
-      })
-      .filter((item): item is ReceiptPrintItem => Boolean(item));
-
-    if (receiptItems.length === 0) {
-      window.alert("Selecione contas já recebidas para imprimir recibos.");
-      return;
-    }
-
-    if (receiptItems.length === 1) {
-      generatePaymentReceipt(receiptItems[0].charge, receiptItems[0].paymentRecord);
-      return;
-    }
-
-    generatePaymentReceiptBatch(receiptItems);
-  }
-
-  function receiveSelectedCharges() {
-    const chargesToReceive = selectedPendingCharges;
-
-    if (chargesToReceive.length === 0) {
-      window.alert("Selecione contas pendentes ou vencidas para receber.");
-      return;
-    }
-
-    openReceivePaymentModal(chargesToReceive[0], chargesToReceive);
-  }
-
-  function generatePaymentReceiptBatch(receiptItems: any[]) {
-    printPaymentReceiptBatch({
-      receiptItems,
-      companySettings: getCompanySettingsForCarnet(),
-      getPaymentMethodLabel,
-      setPaymentFormError,
-    });
-  }
-
-  function localGeneratePaymentReceiptBatch(receiptItems: ReceiptPrintItem[]) {
-    if (receiptItems.length === 0) return;
-
-    const receiptWindow = window.open(
-      "",
-      "_blank",
-      `toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=${window.screen.width},height=${window.screen.height}`,
-    );
-
-    if (!receiptWindow) {
-      setPaymentFormError(
-        "Não foi possível abrir os recibos. Verifique se o navegador bloqueou pop-ups.",
-      );
-      return;
-    }
-
-    receiptWindow.document.open();
-
-    const companySettings = getCompanySettingsForCarnet();
-    const companyName =
-      companySettings.tradeName || companySettings.companyName || "Contrx";
-    const companyDocument = companySettings.document || "Não informado";
-    const companyPhone = companySettings.phone || "Não informado";
-    const companyEmail = companySettings.email || "Não informado";
-    const receipts = receiptItems
-      .map(({ charge, paymentRecord }) => {
-        const receiptNumber = String(paymentRecord.chargeId)
-          .replace(/[^a-zA-Z0-9]/g, "")
-          .slice(-8)
-          .toUpperCase();
-        const paymentMethods = paymentRecord.paymentItems?.length
-          ? paymentRecord.paymentItems
-              .map(
-                (paymentItem) =>
-                  `${getPaymentMethodLabel(paymentItem.method)} - ${formatCurrency(paymentItem.amount)}`,
-              )
-              .join(", ")
-          : getPaymentMethodLabel(paymentRecord.method);
-        const chargeLabel = charge.isDownPayment
-          ? "Entrada"
-          : charge.installmentNumber && charge.installmentTotal
-            ? `Parcela ${charge.installmentNumber}/${charge.installmentTotal}`
-            : "Cobrança";
-        const receiptDateTime = new Date(paymentRecord.paidAt).toLocaleString("pt-BR");
-        const receiptObservation = paymentRecord.note?.trim() || "";
-
-        return `
-          <section class="receipt">
-            <header class="top">
-              <div>
-                <h1 class="title">Recibo</h1>
-                <div class="subtitle">Comprovante de recebimento</div>
-              </div>
-              <div class="number">
-                Nº <strong>${escapeHtml(receiptNumber || "CONTRX")}</strong><br />
-                Emitido em: <strong>${escapeHtml(receiptDateTime)}</strong>
-              </div>
-            </header>
-
-            <div class="reference">
-              <div><span>Recebimento</span><strong>${formatDate(paymentRecord.paidAt)}</strong></div>
-              <div><span>Referência</span><strong>${escapeHtml(chargeLabel)}</strong></div>
-              <div><span>Vencimento</span><strong>${formatDate(charge.dueDate)}</strong></div>
-            </div>
-
-            <div class="amount-grid">
-              <div class="amount-card highlight"><span>Valor original</span><strong>${formatCurrency(charge.amount)}</strong></div>
-              <div class="amount-card"><span>Juros</span><strong>${formatCurrency(paymentRecord.interest)}</strong></div>
-              <div class="amount-card discount"><span>Desconto</span><strong>${formatCurrency(paymentRecord.discount)}</strong></div>
-            </div>
-
-            <div class="total-box">
-              <div><span>Total recebido</span><strong>${formatCurrency(paymentRecord.amountPaid)}</strong></div>
-              <div class="confirmed">Pagamento confirmado</div>
-            </div>
-
-            <div class="payment-box">
-              <div class="payment-row"><span>Forma(s) de pagamento</span><strong>${escapeHtml(paymentMethods)}</strong></div>
-              <div class="payment-row"><span>Pagador</span><strong>${escapeHtml(charge.tenant)}</strong></div>
-              <div class="payment-row"><span>Referência</span><strong>${escapeHtml(charge.property)}</strong></div>
-              ${receiptObservation ? `<div class="payment-row"><span>Observação</span><strong>${escapeHtml(receiptObservation)}</strong></div>` : ""}
-            </div>
-
-            <p class="declaration">
-              Declaramos o recebimento do valor acima descrito, referente à cobrança indicada neste comprovante.
-              Este recibo é válido após a confirmação do pagamento.
-            </p>
-
-            <div class="signature-area">
-              <div class="signature">${escapeHtml(companyName)}<small>Recebedor</small></div>
-              <div class="signature">Assinatura / Conferência<small>Pagador</small></div>
-            </div>
-
-            <div class="footer">
-              ${escapeHtml(companyName)} · Documento: ${escapeHtml(companyDocument)} · Telefone: ${escapeHtml(companyPhone)} · E-mail: ${escapeHtml(companyEmail)}
-            </div>
-          </section>
-        `;
-      })
-      .join("");
-
-    receiptWindow.document.write(`
-      <!doctype html>
-      <html lang="pt-BR">
-        <head>
-          <meta charset="utf-8" />
-          <title>Recibos de Recebimento</title>
-          <link rel="preconnect" href="https://fonts.googleapis.com">
-          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-          <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
-          <style>
-            * { box-sizing: border-box; }
-            body { margin: 0; background: #eef2f7; color: #111827; font-family: 'Outfit', Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 10px; padding: 12px 18px; background: rgba(255,255,255,.97); border-bottom: 1px solid #d1d5db; }
-            .toolbar button { border: 0; border-radius: 8px; padding: 10px 16px; font-size: 12px; font-weight: 800; cursor: pointer; }
-            .print-button { background: #f97316; color: #ffffff; }
-            .close-button { background: #f3f4f6; color: #111827; border: 1px solid #d1d5db !important; }
-            .page { width: 184mm; margin: 16px auto; }
-            .receipt { position: relative; background: #ffffff; border: 1px solid #cbd5e1; border-top: 5px solid #f97316; padding: 10mm; box-shadow: 0 18px 34px rgba(15,23,42,.14); break-inside: avoid; page-break-inside: avoid; margin-bottom: 12px; }
-            .receipt::before { display: none; }
-            .top { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: start; border-bottom: 1px solid #d9e0ea; padding-bottom: 8mm; }
-            .title { margin: 0; font-size: 28px; line-height: 1; font-weight: 900; letter-spacing: 0; text-transform: uppercase; }
-            .subtitle { margin-top: 5px; color: #c2410c; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .1em; }
-            .number { min-width: 165px; border: 1px solid #d9e0ea; background: #f8fafc; padding: 12px 14px; text-align: right; font-size: 10px; line-height: 1.55; }
-            .number strong { font-size: 12px; }
-            .reference { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 8mm 0 0; }
-            .reference div { border: 1px solid #d9e0ea; background: #f8fafc; padding: 10px 11px; }
-            .reference span, .amount-card span { display: block; color: #6b7280; font-size: 9px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-            .reference strong { display: block; margin-top: 5px; font-size: 12px; line-height: 1.25; }
-            .amount-grid { display: grid; grid-template-columns: 1.35fr 1fr 1fr; gap: 8px; margin-top: 8px; overflow: visible; border: 0; }
-            .amount-card { min-height: 58px; padding: 11px 12px; border: 1px solid #d9e0ea; }
-            .amount-card:last-child { border-right: 1px solid #d9e0ea; }
-            .amount-card strong { display: block; margin-top: 5px; font-size: 16px; line-height: 1.15; }
-            .amount-card.highlight { background: #fff7ed; border-color: #fed7aa; }
-            .amount-card.highlight strong { font-size: 22px; }
-            .amount-card.discount strong { color: #b91c1c; }
-            .total-box { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; margin-top: 8px; border: 1px solid #0f172a; background: #0f172a; color: #ffffff; padding: 13px 15px; }
-            .total-box span { display: block; color: #fed7aa; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-            .total-box strong { display: block; margin-top: 3px; font-size: 25px; line-height: 1; font-weight: 900; }
-            .confirmed { border: 1px solid #bbf7d0; background: #f0fdf4; color: #166534; padding: 8px 11px; font-size: 10px; font-weight: 900; white-space: nowrap; text-transform: uppercase; letter-spacing: .04em; }
-            .payment-box { margin-top: 8px; border: 1px solid #d9e0ea; }
-            .payment-row { display: grid; grid-template-columns: 170px 1fr; border-bottom: 1px solid #e5eaf1; }
-            .payment-row:last-child { border-bottom: 0; }
-            .payment-row span, .payment-row strong { padding: 6px 8px; font-size: 10.5px; }
-            .payment-row span { background: #f8fafc; font-weight: 900; border-right: 1px solid #e5eaf1; text-transform: uppercase; letter-spacing: .04em; }
-            .payment-row strong { text-align: right; font-weight: 800; }
-            .declaration { margin: 7mm 0 0; color: #334155; font-size: 10px; line-height: 1.55; font-weight: 700; }
-            .signature-area { display: grid; grid-template-columns: 1fr 1fr; gap: 22mm; margin-top: 13mm; }
-            .signature { border-top: 1px solid #111827; padding-top: 5px; text-align: center; font-size: 10px; font-weight: 800; }
-            .signature small { display: block; margin-top: 3px; color: #4b5563; font-weight: 700; }
-            .footer { margin-top: 7mm; border-top: 1px solid #d9e0ea; padding-top: 4mm; color: #64748b; font-size: 8.5px; line-height: 1.35; text-align: center; }
-            @page { size: A4 portrait; margin: 10mm; }
-            @media print {
-              body { background: #ffffff; }
-              .toolbar { display: none !important; }
-              .page { width: 100%; margin: 0; }
-              .receipt { width: 100%; border: 1px solid #cbd5e1; border-top: 5px solid #f97316; box-shadow: none; padding: 9mm; margin-bottom: 0; }
-              .receipt + .receipt { margin-top: 8mm; page-break-before: always; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="toolbar">
-            <button class="print-button" type="button" id="print-receipt-button">Imprimir recibos</button>
-            <button class="close-button" type="button" onclick="window.close()">Fechar</button>
-          </div>
-          <main class="page">${receipts}</main>
-          <script>
-            document.getElementById("print-receipt-button").addEventListener("click", function () {
-              window.print();
-            });
-          </script>
-        </body>
-      </html>
-    `);
-
-    receiptWindow.document.close();
-  }
-
-  function generatePaymentReceipt(charge: Charge, paymentRecord: any) {
-    printPaymentReceipt({
-      charge,
-      paymentRecord,
-      companySettings: getCompanySettingsForCarnet(),
-      getPaymentMethodLabel,
-      setPaymentFormError,
-    });
-  }
-
-  function localGeneratePaymentReceipt(charge: Charge, paymentRecord: ChargePayment) {
-    const receiptWindow = window.open(
-      "",
-      "_blank",
-      `toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=${window.screen.width},height=${window.screen.height}`,
-    );
-
-    if (!receiptWindow) {
-      setPaymentFormError(
-        "O recebimento foi salvo, mas não foi possível abrir o recibo. Verifique se o navegador bloqueou pop-ups.",
-      );
-      return;
-    }
-
-    receiptWindow.document.open();
-
-    const companySettings = getCompanySettingsForCarnet();
-    const companyName =
-      companySettings.tradeName || companySettings.companyName || "Contrx";
-    const companyDocument = companySettings.document || "Não informado";
-    const companyPhone = companySettings.phone || "Não informado";
-    const companyEmail = companySettings.email || "Não informado";
-    const receiptNumber = String(paymentRecord.chargeId)
-      .replace(/[^a-zA-Z0-9]/g, "")
-      .slice(-8)
-      .toUpperCase();
-    const paymentMethods = paymentRecord.paymentItems?.length
-      ? paymentRecord.paymentItems
-          .map(
-            (paymentItem) =>
-              `${getPaymentMethodLabel(paymentItem.method)} - ${formatCurrency(paymentItem.amount)}`,
-          )
-          .join(", ")
-      : getPaymentMethodLabel(paymentRecord.method);
-    const chargeLabel = charge.isDownPayment
-      ? "Entrada"
-      : charge.installmentNumber && charge.installmentTotal
-        ? `Parcela ${charge.installmentNumber}/${charge.installmentTotal}`
-        : "Cobrança";
-    const receiptDateTime = new Date(paymentRecord.paidAt).toLocaleString("pt-BR");
-    const receiptDate = formatDate(paymentRecord.paidAt);
-    const receiptObservation = paymentRecord.note?.trim() || "-";
-    const hasObservation = receiptObservation !== "-";
-
-    receiptWindow.document.write(`
-      <!doctype html>
-      <html lang="pt-BR">
-        <head>
-          <meta charset="utf-8" />
-          <title>Recibo de Recebimento</title>
-          <link rel="preconnect" href="https://fonts.googleapis.com">
-          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-          <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
-          <style>
-            * { box-sizing: border-box; }
-            body { margin: 0; background: #eef2f7; color: #111827; font-family: 'Outfit', Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .toolbar { position: sticky; top: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 10px; padding: 12px 18px; background: rgba(255,255,255,.97); border-bottom: 1px solid #d1d5db; }
-            .toolbar button { border: 0; border-radius: 8px; padding: 10px 16px; font-size: 12px; font-weight: 800; cursor: pointer; }
-            .print-button { background: #f97316; color: #ffffff; }
-            .close-button { background: #f3f4f6; color: #111827; border: 1px solid #d1d5db !important; }
-            .page { width: 184mm; margin: 16px auto; }
-            .receipt { position: relative; background: #ffffff; border: 1px solid #cbd5e1; border-top: 5px solid #f97316; padding: 10mm; box-shadow: 0 18px 34px rgba(15,23,42,.14); break-inside: avoid; page-break-inside: avoid; }
-            .receipt::before { display: none; }
-            .top { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: start; border-bottom: 1px solid #d9e0ea; padding-bottom: 8mm; }
-            .title { margin: 0; font-size: 28px; line-height: 1; font-weight: 900; letter-spacing: 0; text-transform: uppercase; }
-            .subtitle { margin-top: 5px; color: #c2410c; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .1em; }
-            .number { min-width: 165px; border: 1px solid #d9e0ea; background: #f8fafc; padding: 12px 14px; text-align: right; font-size: 10px; line-height: 1.55; }
-            .number strong { font-size: 12px; }
-            .reference { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 8mm 0 0; }
-            .reference div { border: 1px solid #d9e0ea; background: #f8fafc; padding: 10px 11px; }
-            .reference span { display: block; color: #6b7280; font-size: 9px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-            .reference strong { display: block; margin-top: 5px; font-size: 12px; line-height: 1.25; }
-            .amount-grid { display: grid; grid-template-columns: 1.35fr 1fr 1fr; gap: 8px; margin-top: 8px; overflow: visible; border: 0; }
-            .amount-card { min-height: 58px; padding: 11px 12px; border: 1px solid #d9e0ea; }
-            .amount-card:last-child { border-right: 1px solid #d9e0ea; }
-            .amount-card span { display: block; color: #4b5563; font-size: 9px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-            .amount-card strong { display: block; margin-top: 5px; font-size: 16px; line-height: 1.15; }
-            .amount-card.highlight { background: #fff7ed; border-color: #fed7aa; }
-            .amount-card.highlight strong { font-size: 22px; }
-            .amount-card.discount strong { color: #b91c1c; }
-            .total-box { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; margin-top: 8px; border: 1px solid #0f172a; background: #0f172a; color: #ffffff; padding: 13px 15px; }
-            .total-box span { display: block; color: #fed7aa; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-            .total-box strong { display: block; margin-top: 3px; font-size: 25px; line-height: 1; font-weight: 900; }
-            .confirmed { border: 1px solid #bbf7d0; background: #f0fdf4; color: #166534; padding: 8px 11px; font-size: 10px; font-weight: 900; white-space: nowrap; text-transform: uppercase; letter-spacing: .04em; }
-            .payment-box { margin-top: 8px; border: 1px solid #d9e0ea; }
-            .payment-row { display: grid; grid-template-columns: 170px 1fr; border-bottom: 1px solid #e5eaf1; }
-            .payment-row:last-child { border-bottom: 0; }
-            .payment-row span, .payment-row strong { padding: 6px 8px; font-size: 10.5px; }
-            .payment-row span { background: #f8fafc; font-weight: 900; border-right: 1px solid #e5eaf1; text-transform: uppercase; letter-spacing: .04em; }
-            .payment-row strong { text-align: right; font-weight: 800; }
-            .declaration { margin: 7mm 0 0; color: #334155; font-size: 10px; line-height: 1.55; font-weight: 700; }
-            .signature-area { display: grid; grid-template-columns: 1fr 1fr; gap: 22mm; margin-top: 13mm; }
-            .signature { border-top: 1px solid #111827; padding-top: 5px; text-align: center; font-size: 10px; font-weight: 800; }
-            .signature small { display: block; margin-top: 3px; color: #4b5563; font-weight: 700; }
-            .footer { margin-top: 7mm; border-top: 1px solid #d9e0ea; padding-top: 4mm; color: #64748b; font-size: 8.5px; line-height: 1.35; text-align: center; }
-            @page { size: A4 portrait; margin: 10mm; }
-            @media print {
-              body { background: #ffffff; }
-              .toolbar { display: none !important; }
-              .page { width: 100%; margin: 0; }
-              .receipt { width: 100%; border: 1px solid #cbd5e1; border-top: 5px solid #f97316; box-shadow: none; padding: 9mm; }
-              .receipt + .receipt { margin-top: 8mm; page-break-before: always; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="toolbar">
-            <button class="print-button" type="button" id="print-receipt-button">Imprimir recibo</button>
-            <button class="close-button" type="button" onclick="window.close()">Fechar</button>
-          </div>
-
-          <main class="page">
-            <section class="receipt">
-              <header class="top">
-                <div>
-                  <h1 class="title">Recibo</h1>
-                  <div class="subtitle">Comprovante de recebimento</div>
-                </div>
-                <div class="number">
-                  Nº <strong>${escapeHtml(receiptNumber || "CONTRX")}</strong><br />
-                  Emitido em: <strong>${escapeHtml(receiptDateTime)}</strong>
-                </div>
-              </header>
-
-              <div class="reference">
-                <div>
-                  <span>Recebimento</span>
-                  <strong>${escapeHtml(receiptDate)}</strong>
-                </div>
-                <div>
-                  <span>Referência</span>
-                  <strong>${escapeHtml(chargeLabel)}</strong>
-                </div>
-                <div>
-                  <span>Vencimento</span>
-                  <strong>${formatDate(charge.dueDate)}</strong>
-                </div>
-              </div>
-
-              <div class="amount-grid">
-                <div class="amount-card highlight">
-                  <span>Valor original</span>
-                  <strong>${formatCurrency(charge.amount)}</strong>
-                </div>
-                <div class="amount-card">
-                  <span>Juros</span>
-                  <strong>${formatCurrency(paymentRecord.interest)}</strong>
-                </div>
-                <div class="amount-card discount">
-                  <span>Desconto</span>
-                  <strong>${formatCurrency(paymentRecord.discount)}</strong>
-                </div>
-              </div>
-
-              <div class="total-box">
-                <div>
-                  <span>Total recebido</span>
-                  <strong>${formatCurrency(paymentRecord.amountPaid)}</strong>
-                </div>
-                <div class="confirmed">Pagamento confirmado</div>
-              </div>
-
-              <div class="payment-box">
-                <div class="payment-row"><span>Forma(s) de pagamento</span><strong>${escapeHtml(paymentMethods)}</strong></div>
-                <div class="payment-row"><span>Pagador</span><strong>${escapeHtml(charge.tenant)}</strong></div>
-                <div class="payment-row"><span>Referência</span><strong>${escapeHtml(charge.property)}</strong></div>
-                ${hasObservation ? `<div class="payment-row"><span>Observação</span><strong>${escapeHtml(receiptObservation)}</strong></div>` : ""}
-              </div>
-
-              <p class="declaration">
-                Declaramos o recebimento do valor acima descrito, referente à cobrança indicada neste comprovante.
-                Este recibo é válido após a confirmação do pagamento.
-              </p>
-
-              <div class="signature-area">
-                <div class="signature">
-                  ${escapeHtml(companyName)}
-                  <small>Recebedor</small>
-                </div>
-                <div class="signature">
-                  Assinatura / Conferência
-                  <small>Pagador</small>
-                </div>
-              </div>
-
-              <div class="footer">
-                ${escapeHtml(companyName)} · Documento: ${escapeHtml(companyDocument)} · Telefone: ${escapeHtml(companyPhone)} · E-mail: ${escapeHtml(companyEmail)}
-              </div>
-            </section>
-          </main>
-
-          <script>
-            document.getElementById("print-receipt-button").addEventListener("click", function () {
-              window.print();
-            });
-          </script>
-        </body>
-      </html>
-    `);
-
-    receiptWindow.document.close();
-  }
-
-  async function saveManualCharge() {
-    if (isChargeSaving) return;
-
-    setIsChargeSaving(true);
-
-    try {
-      await saveManualChargeTransaction();
-    } finally {
-      setIsChargeSaving(false);
-    }
-  }
-
-  async function saveManualChargeTransaction() {
-    setChargeFormError("");
-
-    const normalizedAmount = normalizeAmount(formAmount);
-
-    if (isEditingPaidCharge) {
-      if (!editingChargeId) return;
-
-      if (!formPaymentDate) {
-        setChargeFormError(
-          "Informe a data de pagamento para salvar os ajustes.",
-        );
-        return;
-      }
-
-      const currentPaymentRecord = getChargePayment(editingChargeId);
-      const currentCharge = charges.find(
-        (charge) => String(charge.id) === String(editingChargeId),
-      );
-
-      const updatedPaymentRecord: ChargePayment = {
-        chargeId: editingChargeId,
-        paidAt: new Date(`${formPaymentDate}T00:00:00`).toISOString(),
-        method: (currentPaymentRecord?.method || "Cash") as PaymentMethod,
-        interest: currentPaymentRecord?.interest || 0,
-        discount: currentPaymentRecord?.discount || 0,
-        amountPaid:
-          currentPaymentRecord?.amountPaid || currentCharge?.amount || 0,
-        note: currentPaymentRecord?.note || "",
-      };
-
-      const updatedPaymentRecords = [
-        ...paymentRecords.filter(
-          (paymentRecord) =>
-            String(paymentRecord.chargeId) !== String(editingChargeId),
-        ),
-        updatedPaymentRecord,
-      ];
-
-      if (companyId) {
-        try {
-          await replaceReceivedAccountPayment(editingChargeId, {
-            paidAt: updatedPaymentRecord.paidAt,
-            method: mapUiPaymentMethodToApi(updatedPaymentRecord.method),
-            paymentItems: updatedPaymentRecord.paymentItems
-              ? mapUiPaymentItemsToApi(updatedPaymentRecord.paymentItems)
-              : undefined,
-            interest: updatedPaymentRecord.interest,
-            discount: updatedPaymentRecord.discount,
-            amountPaid: updatedPaymentRecord.amountPaid,
-            note: updatedPaymentRecord.note,
-          });
-        } catch (error) {
-          setChargeFormError(
-            error instanceof Error
-              ? error.message
-              : "Não foi possível atualizar o recebimento no backend.",
-          );
-          return;
-        }
-      }
-
-      setPaymentRecords(updatedPaymentRecords);
-
-      closeCreateModal();
-      return;
-    }
-
-    if (!formTenant) {
-      setChargeFormError(
-        "Selecione um inquilino/pessoa para salvar a cobrança.",
-      );
-      return;
-    }
-
-    if (normalizedAmount <= 0) {
-      setChargeFormError(
-        "Informe um valor total válido para salvar a cobrança.",
-      );
-      return;
-    }
-
-    if (!formIssueDate) {
-      setChargeFormError(
-        "Informe a data de lançamento para salvar a cobrança.",
-      );
-      return;
-    }
-
-    if (!formDueDate) {
-      setChargeFormError(
-        "Informe o primeiro vencimento para salvar a cobrança.",
-      );
-      return;
-    }
-
-    const tenant = tenants.find((item) => String(item.id) === formTenant);
-    const property = properties.find(
-      (item) => String(item.id) === formProperty,
-    );
-
-    if (!tenant) {
-      setChargeFormError(
-        "Inquilino/pessoa não encontrado. Selecione novamente.",
-      );
-      return;
-    }
-
-    const chargeProperty = property?.name || "Sem bem/ativo vinculado";
-    const issueDate = new Date(`${formIssueDate}T00:00:00`).toISOString();
-
-    if (formLaunchType === "single") {
-      const savedCharge: Charge = {
-        id: editingChargeId || createLocalId("manual"),
-        contractId: formContractId || null,
-        tenantId: tenant.id,
-        property: chargeProperty,
-        tenant: tenant.name,
-        dueDate: new Date(`${formDueDate}T00:00:00`).toISOString(),
-        issueDate,
-        amount: normalizedAmount,
-        status: "Pending",
-        manual: true,
-      };
-
-      const alreadyExists = manualCharges.some(
-        (charge) => String(charge.id) === String(savedCharge.id),
-      );
-
-      if (companyId) {
-        try {
-          const apiCharge = alreadyExists
-            ? await updateReceivableAccount(savedCharge.id, {
-                contractId: formContractId || null,
-                tenantId: tenant.id,
-                property: chargeProperty,
-                tenant: tenant.name,
-                dueDate: formDueDate,
-                issueDate: formIssueDate,
-                amount: normalizedAmount,
-                manual: true,
-              })
-            : await createReceivableAccount({
-                contractId: formContractId || null,
-                tenantId: tenant.id,
-                property: chargeProperty,
-                tenant: tenant.name,
-                dueDate: formDueDate,
-                issueDate: formIssueDate,
-                amount: normalizedAmount,
-                manual: true,
-              });
-
-          savedCharge.id = apiCharge.id;
-        } catch (error) {
-          setChargeFormError(
-            error instanceof Error
-              ? error.message
-              : "Não foi possível salvar a cobrança no backend.",
-          );
-          return;
-        }
-      }
-
-      const updatedManualCharges = alreadyExists
-        ? manualCharges.map((charge) =>
-            String(charge.id) === String(savedCharge.id) ? savedCharge : charge,
-          )
-        : [...manualCharges, savedCharge];
-
-      setManualCharges(updatedManualCharges);
-
-      const carnetCharges = [
-        {
-          ...savedCharge,
-          installmentNumber: 1,
-          installmentTotal: 1,
-          installmentGroupId: savedCharge.id,
-        },
-      ];
-
-      closeCreateModal();
-      continueContractFlowAfterReceivableChargesSaved(
-        savedCharge.contractId,
-        carnetCharges,
-      );
-      return;
-    }
-
-    if (installmentPreview.length === 0) {
-      setChargeFormError(
-        "Gere ao menos uma parcela válida para salvar a cobrança.",
-      );
-      return;
-    }
-
-    const hasInvalidInstallment = installmentPreview.some(
-      (installment) =>
-        normalizeAmount(installment.amount) <= 0 || !installment.dueDate,
-    );
-
-    if (hasInvalidInstallment) {
-      setChargeFormError(
-        "Revise os valores e vencimentos das parcelas antes de salvar.",
-      );
-      return;
-    }
-
-    const installmentTotalInCents = getInstallmentsTotalInCents(installmentPreview);
-    const chargeTotalInCents = getAmountInCents(formAmount);
-
-    if (installmentTotalInCents !== chargeTotalInCents) {
-      setChargeFormError(
-        `A soma das parcelas precisa fechar exatamente o valor total da cobrança. Diferença: ${formatCurrency(
-          Math.abs(installmentTotalInCents - chargeTotalInCents) / 100,
-        )}.`,
-      );
-      return;
-    }
-
-    const installmentGroupId = createLocalId("installment");
-
-    const newCharges: Charge[] = installmentPreview.map((installment) => ({
-      id: `${installmentGroupId}-${installment.installmentNumber}`,
-      contractId: formContractId || null,
-      tenantId: tenant.id,
-      property: chargeProperty,
-      tenant: tenant.name,
-      dueDate: new Date(`${installment.dueDate}T00:00:00`).toISOString(),
-      issueDate,
-      amount: normalizeAmount(installment.amount),
-      status: "Pending",
-      manual: true,
-      installmentNumber: installment.installmentNumber,
-      installmentTotal: installmentPreview.length,
-      installmentGroupId,
-      isDownPayment: Boolean(installment.isDownPayment),
+    if (!selectedCharge || !companyId) return;
+
+    const apiPaymentItems = data.paymentItems?.map((item) => ({
+      method: mapUiPaymentMethodToApi(item.method),
+      amount: item.amount,
     }));
 
-    if (companyId) {
-      try {
-        const apiCharges = await Promise.all(
-          newCharges.map((charge) =>
-            createReceivableAccount({
-              contractId: formContractId || null,
-              tenantId: tenant.id,
-              property: charge.property,
-              tenant: charge.tenant,
-              dueDate: getDateInputValue(charge.dueDate),
-              issueDate: formIssueDate,
-              amount: charge.amount,
-              manual: true,
-              installmentNumber: charge.installmentNumber,
-              installmentTotal: charge.installmentTotal,
-              installmentGroupId: charge.installmentGroupId,
-              isDownPayment: charge.isDownPayment,
-            }),
+    await receiveAccount(selectedCharge.id, {
+      amountPaid: data.amountPaid,
+      interest: data.interest,
+      discount: data.discount,
+      method: mapUiPaymentMethodToApi(data.method),
+      paidAt: data.paidAt,
+      note: data.note,
+      bankAccountId: data.bankAccountId,
+      paymentItems:
+        apiPaymentItems && apiPaymentItems.length > 0 ? apiPaymentItems : undefined,
+    });
+
+    await loadData(companyId);
+
+    // Se estiver no fluxo de contrato, atualiza o status da parcela paga no carnê
+    if (pendingContractCarnetFlow) {
+      setPendingContractCarnetFlow((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          charges: prev.charges.map((c) =>
+            c.id === selectedCharge.id
+              ? {
+                  ...c,
+                  status: "Paid" as const,
+                  payments: [
+                    {
+                      id: `pay_${Date.now()}`,
+                      paidAt: data.paidAt,
+                      method: data.method,
+                      interest: data.interest,
+                      discount: data.discount,
+                      amountPaid: data.amountPaid,
+                      note: data.note || null,
+                      paymentItems: data.paymentItems || null,
+                    },
+                  ],
+                }
+              : c
           ),
-        );
-
-        apiCharges.forEach((apiCharge, index) => {
-          newCharges[index].id = apiCharge.id;
-        });
-      } catch (error) {
-        setChargeFormError(
-          error instanceof Error
-            ? error.message
-            : "Não foi possível salvar as parcelas no backend.",
-        );
-        return;
-      }
-    }
-
-    const updatedManualCharges = [...manualCharges, ...newCharges];
-
-    setManualCharges(updatedManualCharges);
-
-    const downPaymentCharge = newCharges.find((charge) => charge.isDownPayment);
-
-    const carnetCharges = newCharges.filter((charge) => !charge.isDownPayment);
-
-    closeCreateModal();
-
-    if (downPaymentCharge) {
-      setPendingDownPaymentFlow({
-        downPaymentChargeId: String(downPaymentCharge.id),
-        contractId: formContractId || null,
-        carnetCharges,
+        };
       });
-      window.setTimeout(() => {
-        openReceivePaymentModal(downPaymentCharge);
-      }, 0);
-      return;
     }
-
-    if (carnetCharges.length > 0) {
-      continueContractFlowAfterReceivableChargesSaved(
-        formContractId,
-        carnetCharges,
-      );
-      return;
-    }
-
-    handleAfterContractCarnetGenerated(formContractId);
   }
 
-  const paymentModalCharges =
-    paymentBatchCharges.length > 0
-      ? paymentBatchCharges
-      : chargePendingPaymentReceipt
-        ? [chargePendingPaymentReceipt]
-        : [];
-  const isBatchPayment = paymentModalCharges.length > 1;
-  const paymentModalOriginalAmount = paymentModalCharges.reduce(
-    (total, charge) => total + charge.amount,
-    0,
-  );
-  const paymentModalRemainingAmount = paymentModalCharges.reduce(
-    (total, charge) => total + getChargeRemainingAmount(charge),
-    0,
-  );
-  const paymentModalReferenceCharge = chargePendingPaymentReceipt
-    ? {
-        ...chargePendingPaymentReceipt,
-        amount: paymentModalRemainingAmount,
-        remainingAmount: paymentModalRemainingAmount,
-      }
-    : null;
-  const paymentModalFinalAmount = normalizeAmount(paymentFinalAmount);
-  const paymentModalBalanceAfterPayment = Math.max(
-    paymentModalRemainingAmount - paymentModalFinalAmount,
-    0,
-  );
-  const ownerPayoutNotice =
-    !isBatchPayment && chargePendingPaymentReceipt
-      ? getOwnerPayoutNotice(chargePendingPaymentReceipt)
-      : null;
-  const accountsReceivableThemeClass =
-    themeMode === "graphite"
-      ? "contrx-accounts-receivable-page-graphite"
-      : isBlackTheme
-        ? "contrx-accounts-receivable-page-black"
-        : "contrx-accounts-receivable-page-light";
-
-  return (
-    <>
-      <style jsx global>{`
-        .contrx-accounts-receivable-page-light {
-          color: #0f172a;
-        }
-
-        .contrx-accounts-receivable-page-light .bg-white,
-        .contrx-accounts-receivable-page-light [class*="dark:bg-slate"],
-        .contrx-accounts-receivable-page-light [class*="dark:from-slate"],
-        .contrx-accounts-receivable-page-light [class*="dark:to-slate"] {
-          background-color: #ffffff !important;
-          background-image: none !important;
-        }
-
-        .contrx-accounts-receivable-page-light .bg-slate-50,
-        .contrx-accounts-receivable-page-light .bg-slate-100 {
-          background-color: #f8fafc !important;
-        }
-
-        .contrx-accounts-receivable-page-light .bg-orange-50,
-        .contrx-accounts-receivable-page-light .bg-orange-100 {
-          background-color: var(--primary-bg-light, #fff7ed) !important;
-        }
-
-        .contrx-accounts-receivable-page-light .bg-red-50,
-        .contrx-accounts-receivable-page-light .bg-red-100 {
-          background-color: #fef2f2 !important;
-        }
-
-        .contrx-accounts-receivable-page-light .bg-emerald-50,
-        .contrx-accounts-receivable-page-light .bg-emerald-100 {
-          background-color: #ecfdf5 !important;
-        }
-
-        .contrx-accounts-receivable-page-light .bg-amber-50,
-        .contrx-accounts-receivable-page-light .bg-amber-100 {
-          background-color: #fffbeb !important;
-        }
-
-        .contrx-accounts-receivable-page-light .text-slate-950,
-        .contrx-accounts-receivable-page-light .text-slate-900,
-        .contrx-accounts-receivable-page-light .text-slate-800,
-        .contrx-accounts-receivable-page-light .text-slate-700,
-        .contrx-accounts-receivable-page-light [class*="dark:text-slate-100"],
-        .contrx-accounts-receivable-page-light [class*="dark:text-white"] {
-          color: #0f172a !important;
-        }
-
-        .contrx-accounts-receivable-page-light .text-slate-600,
-        .contrx-accounts-receivable-page-light .text-slate-500,
-        .contrx-accounts-receivable-page-light .text-slate-400,
-        .contrx-accounts-receivable-page-light [class*="dark:text-slate-300"],
-        .contrx-accounts-receivable-page-light [class*="dark:text-slate-400"],
-        .contrx-accounts-receivable-page-light [class*="dark:text-slate-500"] {
-          color: #475569 !important;
-        }
-
-        .contrx-accounts-receivable-page-light .text-orange-600,
-        .contrx-accounts-receivable-page-light .text-orange-700 {
-          color: var(--primary-hover, #ea580c) !important;
-        }
-
-        .contrx-accounts-receivable-page-light .text-red-600,
-        .contrx-accounts-receivable-page-light .text-red-700 {
-          color: #dc2626 !important;
-        }
-
-        .contrx-accounts-receivable-page-light .text-emerald-600,
-        .contrx-accounts-receivable-page-light .text-emerald-700 {
-          color: #047857 !important;
-        }
-
-        .contrx-accounts-receivable-page-light .border-slate-100,
-        .contrx-accounts-receivable-page-light .border-slate-200,
-        .contrx-accounts-receivable-page-light .border-slate-300,
-        .contrx-accounts-receivable-page-light [class*="dark:border-slate"] {
-          border-color: #e2e8f0 !important;
-        }
-
-        .contrx-accounts-receivable-page-light .border-orange-100,
-        .contrx-accounts-receivable-page-light .border-orange-200,
-        .contrx-accounts-receivable-page-light [class*="dark:border-orange"] {
-          border-color: var(--primary-border-light, #fed7aa) !important;
-        }
-
-        .contrx-accounts-receivable-page-light input,
-        .contrx-accounts-receivable-page-light select,
-        .contrx-accounts-receivable-page-light textarea {
-          background-color: #ffffff !important;
-          border-color: #cbd5e1 !important;
-          color: #0f172a !important;
-          color-scheme: light !important;
-        }
-
-        .contrx-accounts-receivable-page-light input::placeholder,
-        .contrx-accounts-receivable-page-light textarea::placeholder {
-          color: #94a3b8 !important;
-        }
-
-        .contrx-accounts-receivable-page-light table,
-        .contrx-accounts-receivable-page-light tbody,
-        .contrx-accounts-receivable-page-light tbody tr {
-          background-color: #ffffff !important;
-        }
-
-        .contrx-accounts-receivable-page-light thead {
-          background-color: var(--primary-bg-light, #fff7ed) !important;
-        }
-
-        .contrx-accounts-receivable-page-light tbody tr:hover {
-          background-color: #f8fafc !important;
-        }
-
-        .contrx-accounts-receivable-page-light .shadow-sm,
-        .contrx-accounts-receivable-page-light .shadow-md,
-        .contrx-accounts-receivable-page-light .shadow-2xl {
-          box-shadow: 0 18px 45px rgba(15, 23, 42, 0.10) !important;
-        }
-
-        .dark .contrx-accounts-receivable-page-black {
-          color: #f8fafc;
-        }
-
-        .dark .contrx-accounts-receivable-page-black .bg-white {
-          background-color: #0f172a !important;
-        }
-
-        .dark .contrx-accounts-receivable-page-black .bg-slate-50,
-        .dark .contrx-accounts-receivable-page-black .bg-slate-100 {
-          background-color: #111827 !important;
-        }
-
-        .dark .contrx-accounts-receivable-page-black .bg-orange-50,
-        .dark .contrx-accounts-receivable-page-black .bg-orange-100 {
-          background-color: color-mix(in srgb, var(--primary-color) 14%, transparent) !important;
-        }
-
-        .dark .contrx-accounts-receivable-page-black .bg-red-50,
-        .dark .contrx-accounts-receivable-page-black .bg-red-100 {
-          background-color: rgba(239, 68, 68, 0.12) !important;
-        }
-
-        .dark .contrx-accounts-receivable-page-black .bg-emerald-50,
-        .dark .contrx-accounts-receivable-page-black .bg-emerald-100 {
-          background-color: rgba(16, 185, 129, 0.12) !important;
-        }
-
-        .dark .contrx-accounts-receivable-page-black .bg-amber-50,
-        .dark .contrx-accounts-receivable-page-black .bg-amber-100 {
-          background-color: rgba(245, 158, 11, 0.14) !important;
-        }
-
-        .dark .contrx-accounts-receivable-page-black .text-slate-950,
-        .dark .contrx-accounts-receivable-page-black .text-slate-900,
-        .dark .contrx-accounts-receivable-page-black .text-slate-800,
-        .dark .contrx-accounts-receivable-page-black .text-slate-700 {
-          color: #f8fafc !important;
-        }
-
-        .dark .contrx-accounts-receivable-page-black .text-slate-600,
-        .dark .contrx-accounts-receivable-page-black .text-slate-500,
-        .dark .contrx-accounts-receivable-page-black .text-slate-400 {
-          color: #cbd5e1 !important;
-        }
-
-        .dark .contrx-accounts-receivable-page-black .border-orange-100,
-        .dark .contrx-accounts-receivable-page-black .border-orange-200,
-        .dark .contrx-accounts-receivable-page-black .border-red-100,
-        .dark .contrx-accounts-receivable-page-black .border-red-200,
-        .dark .contrx-accounts-receivable-page-black .border-emerald-200,
-        .dark .contrx-accounts-receivable-page-black .border-slate-100,
-        .dark .contrx-accounts-receivable-page-black .border-slate-200,
-        .dark .contrx-accounts-receivable-page-black .border-slate-300 {
-          border-color: #334155 !important;
-        }
-
-        .dark .contrx-accounts-receivable-page-black input,
-        .dark .contrx-accounts-receivable-page-black select,
-        .dark .contrx-accounts-receivable-page-black textarea {
-          background-color: #020617 !important;
-          border-color: #334155 !important;
-          color: #f8fafc !important;
-          color-scheme: dark !important;
-        }
-
-        .dark .contrx-accounts-receivable-page-black input::placeholder,
-        .dark .contrx-accounts-receivable-page-black textarea::placeholder {
-          color: #64748b !important;
-        }
-
-        .dark .contrx-accounts-receivable-page-black table,
-        .dark .contrx-accounts-receivable-page-black tbody,
-        .dark .contrx-accounts-receivable-page-black tbody tr {
-          background-color: #0f172a !important;
-        }
-
-        .dark .contrx-accounts-receivable-page-black thead {
-          background-color: color-mix(in srgb, var(--primary-color) 15%, transparent) !important;
-        }
-
-        .dark .contrx-accounts-receivable-page-black tbody tr:hover {
-          background-color: #1e293b !important;
-        }
-
-
-        /* Contrx explicit theme override - Accounts Receivable
-           Keeps this screen independent from a stale global .dark class. */
-        .contrx-accounts-receivable-page-light,
-        .contrx-accounts-receivable-page-light * {
-          color-scheme: light !important;
-        }
-
-        .contrx-accounts-receivable-page-light .bg-white,
-        .contrx-accounts-receivable-page-light .dark\:bg-white {
-          background-color: #ffffff !important;
-        }
-
-        .contrx-accounts-receivable-page-light .bg-slate-50,
-        .contrx-accounts-receivable-page-light .dark\:bg-slate-50 {
-          background-color: #f8fafc !important;
-        }
-
-        .contrx-accounts-receivable-page-light .bg-slate-100,
-        .contrx-accounts-receivable-page-light .dark\:bg-slate-100 {
-          background-color: #f1f5f9 !important;
-        }
-
-        .contrx-accounts-receivable-page-light .bg-slate-800,
-        .contrx-accounts-receivable-page-light .bg-slate-900,
-        .contrx-accounts-receivable-page-light .bg-slate-950,
-        .contrx-accounts-receivable-page-light .dark\:bg-slate-700,
-        .contrx-accounts-receivable-page-light .dark\:bg-slate-800,
-        .contrx-accounts-receivable-page-light .dark\:bg-slate-900,
-        .contrx-accounts-receivable-page-light .dark\:bg-slate-950 {
-          background-color: #ffffff !important;
-        }
-
-        .contrx-accounts-receivable-page-light .bg-gradient-to-r {
-          background-image: linear-gradient(to right, #ecfdf5, #ffffff) !important;
-        }
-
-        .contrx-accounts-receivable-page-light .bg-orange-50,
-        .contrx-accounts-receivable-page-light .dark\:bg-orange-950\/30,
-        .contrx-accounts-receivable-page-light .dark\:bg-orange-900\/40 {
-          background-color: var(--primary-bg-light, #fff7ed) !important;
-        }
-
-        .contrx-accounts-receivable-page-light .bg-emerald-50,
-        .contrx-accounts-receivable-page-light .dark\:bg-emerald-950\/30 {
-          background-color: #ecfdf5 !important;
-        }
-
-        .contrx-accounts-receivable-page-light .bg-red-50,
-        .contrx-accounts-receivable-page-light .dark\:bg-red-950\/30 {
-          background-color: #fef2f2 !important;
-        }
-
-        .contrx-accounts-receivable-page-light .bg-amber-50,
-        .contrx-accounts-receivable-page-light .dark\:bg-amber-950\/30 {
-          background-color: #fffbeb !important;
-        }
-
-        .contrx-accounts-receivable-page-light .text-white,
-        .contrx-accounts-receivable-page-light .text-slate-100,
-        .contrx-accounts-receivable-page-light .dark\:text-white,
-        .contrx-accounts-receivable-page-light .dark\:text-slate-100 {
-          color: #0f172a !important;
-        }
-
-        .contrx-accounts-receivable-page-light .text-slate-950,
-        .contrx-accounts-receivable-page-light .text-slate-900,
-        .contrx-accounts-receivable-page-light .text-slate-800,
-        .contrx-accounts-receivable-page-light .text-slate-700,
-        .contrx-accounts-receivable-page-light .dark\:text-slate-100,
-        .contrx-accounts-receivable-page-light .dark\:text-slate-200 {
-          color: #0f172a !important;
-        }
-
-        .contrx-accounts-receivable-page-light .text-slate-600,
-        .contrx-accounts-receivable-page-light .text-slate-500,
-        .contrx-accounts-receivable-page-light .text-slate-400,
-        .contrx-accounts-receivable-page-light .dark\:text-slate-300,
-        .contrx-accounts-receivable-page-light .dark\:text-slate-400,
-        .contrx-accounts-receivable-page-light .dark\:text-slate-500 {
-          color: #64748b !important;
-        }
-
-        .contrx-accounts-receivable-page-light .text-orange-600,
-        .contrx-accounts-receivable-page-light .text-orange-700,
-        .contrx-accounts-receivable-page-light .dark\:text-orange-300,
-        .contrx-accounts-receivable-page-light .dark\:text-orange-400 {
-          color: var(--primary-hover, #ea580c) !important;
-        }
-
-        .contrx-accounts-receivable-page-light .text-emerald-700,
-        .contrx-accounts-receivable-page-light .dark\:text-emerald-300 {
-          color: #047857 !important;
-        }
-
-        .contrx-accounts-receivable-page-light .text-red-600,
-        .contrx-accounts-receivable-page-light .text-red-700,
-        .contrx-accounts-receivable-page-light .dark\:text-red-300 {
-          color: #dc2626 !important;
-        }
-
-        .contrx-accounts-receivable-page-light .border-slate-100,
-        .contrx-accounts-receivable-page-light .border-slate-200,
-        .contrx-accounts-receivable-page-light .border-slate-300,
-        .contrx-accounts-receivable-page-light .border-slate-700,
-        .contrx-accounts-receivable-page-light .dark\:border-slate-700 {
-          border-color: #e2e8f0 !important;
-        }
-
-        .contrx-accounts-receivable-page-light .ring-slate-100,
-        .contrx-accounts-receivable-page-light .ring-slate-200,
-        .contrx-accounts-receivable-page-light .ring-slate-700,
-        .contrx-accounts-receivable-page-light .dark\:ring-slate-700 {
-          --tw-ring-color: #e2e8f0 !important;
-        }
-
-        .contrx-accounts-receivable-page-light input,
-        .contrx-accounts-receivable-page-light select,
-        .contrx-accounts-receivable-page-light textarea {
-          background-color: #ffffff !important;
-          border-color: #cbd5e1 !important;
-          color: #0f172a !important;
-          color-scheme: light !important;
-        }
-
-        .contrx-accounts-receivable-page-light input::placeholder,
-        .contrx-accounts-receivable-page-light textarea::placeholder {
-          color: #94a3b8 !important;
-        }
-
-        .contrx-accounts-receivable-page-light table,
-        .contrx-accounts-receivable-page-light tbody,
-        .contrx-accounts-receivable-page-light tbody tr,
-        .contrx-accounts-receivable-page-light .dark\:bg-slate-800 {
-          background-color: #ffffff !important;
-        }
-
-        .contrx-accounts-receivable-page-light thead,
-        .contrx-accounts-receivable-page-light .bg-orange-50 {
-          background-color: var(--primary-bg-light, #fff7ed) !important;
-        }
-
-        .contrx-accounts-receivable-page-light tbody tr:hover,
-        .contrx-accounts-receivable-page-light .hover\:bg-slate-50:hover,
-        .contrx-accounts-receivable-page-light .dark\:hover\:bg-slate-800:hover,
-        .contrx-accounts-receivable-page-light .dark\:hover\:bg-slate-700:hover {
-          background-color: #f8fafc !important;
-        }
-
-        .contrx-accounts-receivable-page-light .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
-        .contrx-accounts-receivable-page-light .dark\:divide-slate-700 > :not([hidden]) ~ :not([hidden]) {
-          border-color: #e2e8f0 !important;
-        }
-
-        .contrx-accounts-receivable-page-light .shadow-sm,
-        .contrx-accounts-receivable-page-light .shadow-md,
-        .contrx-accounts-receivable-page-light .shadow-lg,
-        .contrx-accounts-receivable-page-light .shadow-xl,
-        .contrx-accounts-receivable-page-light .shadow-2xl {
-          box-shadow: 0 18px 45px rgba(15, 23, 42, 0.10) !important;
-        }
-
-        .contrx-accounts-receivable-page-light .bg-emerald-600,
-        .contrx-accounts-receivable-page-light .bg-orange-500,
-        .contrx-accounts-receivable-page-light .bg-red-500 {
-          color: #ffffff !important;
-        }
-
-        .contrx-accounts-receivable-page-black,
-        .contrx-accounts-receivable-page-black * {
-          color-scheme: dark !important;
-        }
-
-        .contrx-accounts-receivable-page-black .bg-white,
-        .contrx-accounts-receivable-page-black .bg-slate-50,
-        .contrx-accounts-receivable-page-black .bg-slate-100 {
-          background-color: #0f172a !important;
-        }
-
-        .contrx-accounts-receivable-page-black .bg-gradient-to-r {
-          background-image: linear-gradient(to right, #0f172a, #111827) !important;
-        }
-
-        .contrx-accounts-receivable-page-black .text-slate-950,
-        .contrx-accounts-receivable-page-black .text-slate-900,
-        .contrx-accounts-receivable-page-black .text-slate-800,
-        .contrx-accounts-receivable-page-black .text-slate-700 {
-          color: #f8fafc !important;
-        }
-
-        .contrx-accounts-receivable-page-black .text-slate-600,
-        .contrx-accounts-receivable-page-black .text-slate-500,
-        .contrx-accounts-receivable-page-black .text-slate-400 {
-          color: #cbd5e1 !important;
-        }
-
-        .contrx-accounts-receivable-page-black input,
-        .contrx-accounts-receivable-page-black select,
-        .contrx-accounts-receivable-page-black textarea {
-          background-color: #020617 !important;
-          border-color: #334155 !important;
-          color: #f8fafc !important;
-          color-scheme: dark !important;
-        }
-
-
-        .contrx-accounts-receivable-page-light .bg-slate-900,
-        .contrx-accounts-receivable-page-light .bg-emerald-600,
-        .contrx-accounts-receivable-page-light .bg-orange-500,
-        .contrx-accounts-receivable-page-light .bg-red-600,
-        .contrx-accounts-receivable-page-light .bg-red-500,
-        .contrx-accounts-receivable-page-light .bg-amber-600 {
-          color: #ffffff !important;
-        }
-
-        .contrx-accounts-receivable-page-light .bg-slate-900.text-white,
-        .contrx-accounts-receivable-page-light button.bg-slate-900,
-        .contrx-accounts-receivable-page-light button.bg-emerald-600,
-        .contrx-accounts-receivable-page-light button.bg-orange-500,
-        .contrx-accounts-receivable-page-light button.bg-red-600 {
-          color: #ffffff !important;
-        }
-
-        .contrx-accounts-receivable-page-light .bg-slate-900:not(button):not(.text-white) {
-          background-color: #ffffff !important;
-        }
-
-        .contrx-accounts-receivable-page-light .bg-gradient-to-r.from-slate-50,
-        .contrx-accounts-receivable-page-light .bg-gradient-to-r.from-emerald-50,
-        .contrx-accounts-receivable-page-light .bg-gradient-to-r.from-orange-50 {
-          background-image: linear-gradient(to right, #f8fafc, #ffffff) !important;
-        }
-
-        .contrx-accounts-receivable-page-black .bg-slate-900,
-        .contrx-accounts-receivable-page-black .dark\:bg-slate-900,
-        .contrx-accounts-receivable-page-black .dark\:bg-slate-800 {
-          background-color: #0f172a !important;
-        }
-
-        .contrx-accounts-receivable-page-black .bg-slate-50,
-        .contrx-accounts-receivable-page-black .bg-slate-100,
-        .contrx-accounts-receivable-page-black .bg-white {
-          background-color: #0f172a !important;
-        }
-
-        .contrx-accounts-receivable-page-black .bg-gradient-to-r {
-          background-image: linear-gradient(to right, #0f172a, #111827) !important;
-        }
-
-        .contrx-accounts-receivable-page-graphite,
-        .contrx-accounts-receivable-page-graphite * {
-          color-scheme: dark;
-        }
-
-        .contrx-accounts-receivable-page-graphite .bg-slate-900,
-        .contrx-accounts-receivable-page-graphite .dark\:bg-slate-900,
-        .contrx-accounts-receivable-page-graphite .dark\:bg-slate-800,
-        .contrx-accounts-receivable-page-graphite .bg-slate-50,
-        .contrx-accounts-receivable-page-graphite .bg-slate-100,
-        .contrx-accounts-receivable-page-graphite .bg-white {
-          background-color: #0d1b2e !important;
-        }
-
-        .contrx-accounts-receivable-page-graphite .bg-gradient-to-r {
-          background-image: linear-gradient(to right, #0d1b2e, #162a44) !important;
-        }
-
-        .contrx-accounts-receivable-page-graphite .text-slate-950,
-        .contrx-accounts-receivable-page-graphite .text-slate-900,
-        .contrx-accounts-receivable-page-graphite .text-slate-800,
-        .contrx-accounts-receivable-page-graphite .text-slate-700 {
-          color: #f8fafc !important;
-        }
-
-        .contrx-accounts-receivable-page-graphite .text-slate-600,
-        .contrx-accounts-receivable-page-graphite .text-slate-500,
-        .contrx-accounts-receivable-page-graphite .text-slate-400 {
-          color: #b6c6dc !important;
-        }
-
-        .contrx-accounts-receivable-page-graphite input,
-        .contrx-accounts-receivable-page-graphite select,
-        .contrx-accounts-receivable-page-graphite textarea {
-          background-color: #07111f !important;
-          border-color: #24405f !important;
-          color: #f8fafc !important;
-          color-scheme: dark !important;
-        }
-
-      `}</style>
-
-      <div
-        data-contrx-theme={themeMode}
-        className={`${accountsReceivableThemeClass} space-y-5`}
-      >
-        <div>
-          <p className="text-sm font-semibold text-orange-600">Financeiro</p>
-
-          <h1 className="mt-1 text-2xl font-black text-slate-900 dark:text-slate-100 sm:text-3xl">
-            Contas a Receber
-          </h1>
-
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
-            Acompanhe cobranças geradas automaticamente pelos contratos ativos.
-          </p>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-4">
-          <Card
-            title="Total a Receber"
-            value={formatCurrency(totalReceivable)}
-          />
-          <Card
-            title="Total Recebido"
-            value={formatCurrency(totalPaid)}
-            green
-          />
-          <Card
-            title="Total Vencido"
-            value={formatCurrency(totalOverdue)}
-            red
-          />
-          <Card title="Cobranças" value={filteredCharges.length} />
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-          <div className="flex flex-col justify-between gap-3 xl:flex-row xl:items-center">
-            <div>
-              <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">
-                Filtros Financeiros
-              </h2>
-
-              <p className={`mt-1 text-sm leading-6 ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
-                Refine a visualização sem alterar os dados originais.
-              </p>
-            </div>
-
-            {/* Filtro de Datas por Vencimento */}
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-slate-50 dark:bg-slate-800/90 p-1.5 border border-slate-200 dark:border-slate-700">
-                <select
-                  value={periodShortcut}
-                  onChange={(e) => updatePeriodShortcut(e.target.value as PeriodShortcut)}
-                  className="h-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-orange-500 cursor-pointer shadow-sm"
-                >
-                  <option value="All">Todo o Período</option>
-                  <option value="CurrentMonth">Mês Atual</option>
-                  <option value="NextMonth">Próximo Mês</option>
-                  <option value="CurrentQuarter">Trimestre Atual</option>
-                  <option value="CurrentYear">Ano Atual</option>
-                </select>
-
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="date"
-                    value={filterStartDate}
-                    onChange={(e) => {
-                      setFilterStartDate(e.target.value);
-                      setPeriodShortcut("Custom");
-                    }}
-                    className="h-10 w-36 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-orange-500 shadow-sm"
-                    title={statusFilter === "Paid" ? "Data inicial de pagamento" : "Data inicial de vencimento"}
-                  />
-                  <span className="text-xs font-bold text-slate-400">até</span>
-                  <input
-                    type="date"
-                    value={filterEndDate}
-                    onChange={(e) => {
-                      setFilterEndDate(e.target.value);
-                      setPeriodShortcut("Custom");
-                    }}
-                    className="h-10 w-36 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-orange-500 shadow-sm"
-                    title={statusFilter === "Paid" ? "Data final de pagamento" : "Data final de vencimento"}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {(["All", "Pending", "Paid", "Overdue"] as StatusFilter[]).map(
-                (status) => (
-                  <button
-                    key={status}
-                    onClick={() => setStatusFilter(status)}
-                    className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
-                      statusFilter === status
-                        ? "bg-orange-500 text-white shadow-sm"
-                        : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-                    }`}
-                  >
-                    {getStatusFilterLabel(status)}
-                  </button>
-                ),
-              )}
-
-              <button
-                onClick={clearAllFilters}
-                className="rounded-xl bg-white dark:bg-slate-900 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 shadow-sm ring-1 ring-slate-200 dark:ring-slate-700 transition hover:bg-slate-100 dark:hover:bg-slate-700 dark:bg-slate-800"
-              >
-                Limpar filtros
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {(selectedTenant || statusFilter !== DEFAULT_RECEIVABLE_STATUS_FILTER || filterStartDate || filterEndDate) && (
-          <div className="flex flex-col justify-between gap-3 rounded-2xl border border-orange-200 dark:border-orange-900/60 bg-orange-50 dark:bg-orange-950/30 p-4 md:flex-row md:items-center">
-            <div>
-              <p className="text-sm font-bold text-orange-700">
-                Filtro aplicado
-              </p>
-
-              <p className="text-sm text-slate-700 dark:text-slate-300">
-                {selectedTenant ? (
-                  <>
-                    Inquilino: <strong>{selectedTenant.name}</strong>
-                  </>
-                ) : (
-                  "Todos os inquilinos"
-                )}{" "}
-                · Status: <strong>{getStatusFilterLabel(statusFilter)}</strong>
-                {(filterStartDate || filterEndDate) && (
-                  <>
-                    {" "}· {statusFilter === "Paid" ? "Pagamento" : "Vencimento"}: <strong>{filterStartDate ? new Date(`${filterStartDate}T00:00:00`).toLocaleDateString("pt-BR") : "Início"}</strong> até <strong>{filterEndDate ? new Date(`${filterEndDate}T00:00:00`).toLocaleDateString("pt-BR") : "Fim"}</strong>
-                  </>
-                )}
-                .
-              </p>
-            </div>
-
-            <button
-              onClick={clearAllFilters}
-              className="rounded-xl bg-white dark:bg-slate-900 px-4 py-2 text-sm font-bold text-orange-600 shadow-sm ring-1 ring-orange-200 dark:ring-orange-900/60 transition hover:bg-orange-100 dark:hover:bg-orange-900/50 dark:bg-orange-900/40"
-            >
-              Remover filtros
-            </button>
-          </div>
-        )}
-
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-          <div className="border-b border-slate-200 p-4 dark:border-slate-700">
-            <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-              <div>
-                <h2 className="text-lg font-black text-slate-900 dark:text-slate-100">
-                  Lista de Contas a Receber
-                </h2>
-
-                <p className={`mt-1 text-sm leading-6 ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
-                  Visualize os recebimentos pendentes, pagos e vencidos.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={openCreateModal}
-                  className="rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
-                >
-                  Nova cobrança
-                </button>
-
-                <button
-                  onClick={openReportModal}
-                  className="rounded-xl bg-[#0f172a] px-5 py-2.5 text-sm font-bold text-[#ffffff] shadow-sm transition hover:bg-[#1e293b]"
-                >
-                  Relatório PDF
-                </button>
-
-                <button
-                  onClick={() => setIsSearchOpen(true)}
-                  className="rounded-xl bg-white px-5 py-2.5 text-sm font-bold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700"
-                >
-                  Buscar Por Pessoa
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {selectedCharges.length > 0 && (
-            <div className="border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-700 dark:bg-slate-800">
-              <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-                <div>
-                  <p className="text-sm font-black text-slate-900 dark:text-slate-100">
-                    {selectedCharges.length} conta(s) selecionada(s)
-                  </p>
-                  <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                    Pendentes para receber: {selectedPendingCharges.length} · Com recibo: {selectedPaidCharges.length}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={receiveSelectedCharges}
-                    disabled={selectedPendingCharges.length === 0}
-                    className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
-                  >
-                    Receber selecionadas
-                  </button>
-                  <button
-                    type="button"
-                    onClick={printSelectedCarnets}
-                    className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-orange-600"
-                  >
-                    Imprimir carnês
-                  </button>
-                  <button
-                    type="button"
-                    onClick={printSelectedReceipts}
-                    disabled={selectedPaidCharges.length === 0}
-                    className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
-                  >
-                    Imprimir recibos
-                  </button>
-                  <button
-                    type="button"
-                    onClick={clearChargeSelection}
-                    className="rounded-xl bg-white px-4 py-2 text-sm font-black text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700 dark:hover:bg-slate-700"
-                  >
-                    Limpar seleção
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="hidden lg:block overflow-x-auto">
-            <table className="w-full min-w-[980px]">
-              <thead className="bg-orange-50 dark:bg-orange-950/30">
-                <tr>
-                  <th className="w-12 px-5 py-4 text-left">
-                    <input
-                      type="checkbox"
-                      checked={allVisibleChargesSelected}
-                      onChange={toggleAllVisibleChargeSelection}
-                      aria-label="Selecionar todas as contas visíveis"
-                      className="h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
-                    />
-                  </th>
-
-                  <th className="px-5 py-4 text-left text-sm font-black text-slate-900 dark:text-slate-100">
-                    Bem/Ativo
-                  </th>
-
-                  <th className="px-5 py-4 text-left text-sm font-black text-slate-900 dark:text-slate-100">
-                    Inquilino
-                  </th>
-
-                  <th className="px-5 py-4 text-center text-sm font-black text-slate-900 dark:text-slate-100">
-                    Vencimento
-                  </th>
-
-                  {statusFilter === "Paid" && (
-                    <th className="px-5 py-4 text-center text-sm font-black text-emerald-700 dark:text-emerald-400">
-                      Data de Pagamento
-                    </th>
-                  )}
-
-                  <th className="px-5 py-4 text-center text-sm font-black text-slate-900 dark:text-slate-100">
-                    Valor
-                  </th>
-
-                  <th className="px-5 py-4 text-center text-sm font-black text-slate-900 dark:text-slate-100">
-                    Status
-                  </th>
-
-                  <th className="px-5 py-4 text-center text-sm font-black text-slate-900 dark:text-slate-100">
-                    Ação
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {filteredCharges.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={statusFilter === "Paid" ? 8 : 7}
-                      className="px-5 py-10 text-center text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500"
-                    >
-                      Nenhuma conta a receber encontrada.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredCharges.map((charge) => (
-                    <tr
-                      key={charge.id}
-                      className="border-t border-slate-100 dark:border-slate-700 transition hover:bg-slate-50 dark:hover:bg-slate-800 dark:bg-slate-800"
-                    >
-                      <td className="px-5 py-4">
-                        <input
-                          type="checkbox"
-                          checked={selectedChargeIds.includes(String(charge.id))}
-                          onChange={() => toggleChargeSelection(String(charge.id))}
-                          aria-label={`Selecionar conta de ${charge.tenant}`}
-                          className="h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
-                        />
-                      </td>
-
-                      <td className="px-5 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
-                        {charge.property}
-                      </td>
-
-                      <td className="px-5 py-4 text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500">
-                        {charge.tenant}
-                        {charge.installmentNumber &&
-                          charge.installmentTotal && (
-                            <span className="ml-2 rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-1 text-xs font-bold text-slate-600 dark:text-slate-400 dark:text-slate-500">
-                              {charge.installmentNumber}/
-                              {charge.installmentTotal}
-                            </span>
-                          )}
-                      </td>
-
-                      <td className="px-5 py-4 text-center text-sm text-slate-600 dark:text-slate-400 dark:text-slate-500">
-                        {formatDate(charge.dueDate)}
-                      </td>
-
-                      {statusFilter === "Paid" && (
-                        <td className="px-5 py-4 text-center text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                          {(() => {
-                            const p = getChargePayment(charge.id);
-                            return p?.paidAt ? formatDate(p.paidAt) : "-";
-                          })()}
-                        </td>
-                      )}
-
-                      <td className="px-5 py-4 text-center text-sm font-bold text-slate-900 dark:text-slate-100">
-                        <span className="block">
-                          {formatCurrency(
-                            charge.status === "Paid"
-                              ? getChargePaidAmount(charge)
-                              : getChargeRemainingAmount(charge),
-                          )}
-                        </span>
-                        {hasPartialPayment(charge) && (
-                          <span className="mt-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">
-                            Recebido {formatCurrency(getChargePaidAmount(charge))}
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="px-5 py-4 text-center">
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${getChargeStatusClassName(
-                            charge,
-                          )}`}
-                        >
-                          {getChargeStatusLabel(charge)}
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4 text-center">
-                        <div className="relative inline-flex justify-center">
-                          <button
-                            type="button"
-                            onClick={(event) => handleToggleChargeActions(charge, event)}
-                            data-receivable-action-trigger
-                            aria-expanded={openActionMenuChargeId === charge.id}
-                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-800 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
-                          >
-                            Ações
-                            <span className="text-xs">▼</span>
-                          </button>
-
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Vista Mobile */}
-          <div className="space-y-4 p-4 lg:hidden">
-            {filteredCharges.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-900">
-                Nenhuma conta a receber encontrada.
-              </div>
-            ) : (
-              filteredCharges.map((charge) => (
-                <div
-                  key={charge.id}
-                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3 dark:border-slate-700 dark:bg-slate-900"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedChargeIds.includes(String(charge.id))}
-                        onChange={() => toggleChargeSelection(String(charge.id))}
-                        aria-label={`Selecionar conta de ${charge.tenant}`}
-                        className="h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
-                      />
-                      <div>
-                        <h4 className="text-sm font-black uppercase text-slate-900 dark:text-slate-100">
-                          {charge.property || "Sem bem/ativo"}
-                        </h4>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          Inquilino: <span className="font-bold">{charge.tenant}</span>
-                        </p>
-                      </div>
-                    </div>
-                    <span
-                      className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase ${getChargeStatusClassName(
-                        charge,
-                      )}`}
-                    >
-                      {getChargeStatusLabel(charge)}
-                    </span>
-                  </div>
-
-                  <div className="text-xs space-y-1.5 text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-3">
-                    {charge.installmentNumber && charge.installmentTotal && (
-                      <p>
-                        <span className="font-bold text-slate-400">Parcela:</span> {charge.installmentNumber}/{charge.installmentTotal}
-                      </p>
-                    )}
-                    
-                    <div className="flex items-center justify-between pt-2">
-                      <div>
-                        <p className="text-[10px] text-slate-400 font-black uppercase">Vencimento</p>
-                        <p className="font-bold text-slate-700 dark:text-slate-300 mt-0.5">
-                          {formatDate(charge.dueDate)}
-                        </p>
-                        {statusFilter === "Paid" && (() => {
-                          const p = getChargePayment(charge.id);
-                          return p?.paidAt ? (
-                            <div className="mt-1.5">
-                              <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-black uppercase">Pagamento</p>
-                              <p className="font-bold text-emerald-600 dark:text-emerald-400">
-                                {formatDate(p.paidAt)}
-                              </p>
-                            </div>
-                          ) : null;
-                        })()}
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-slate-400 font-black uppercase text-right">Valor</p>
-                        <p className="text-sm font-black text-slate-950 dark:text-slate-100 mt-0.5">
-                          {formatCurrency(
-                            charge.status === "Paid"
-                              ? getChargePaidAmount(charge)
-                              : getChargeRemainingAmount(charge),
-                          )}
-                        </p>
-                        {hasPartialPayment(charge) && (
-                          <span className="mt-0.5 block text-[10px] font-bold text-slate-500 text-right">
-                            Recebido: {formatCurrency(getChargePaidAmount(charge))}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-end border-t border-slate-100 dark:border-slate-800 pt-3">
-                    <button
-                      type="button"
-                      onClick={(event) => handleToggleChargeActions(charge, event)}
-                      data-receivable-action-trigger
-                      aria-expanded={openActionMenuChargeId === charge.id}
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
-                    >
-                      Ações
-                      <span className="text-[10px]">▼</span>
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-
-      {openActionMenuCharge && actionMenuPosition && (
-        <div
-          data-receivable-action-menu
-          className="fixed z-[90] max-h-[calc(100vh-32px)] w-52 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1 text-left shadow-2xl ring-1 ring-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:ring-slate-700"
-          style={{ top: actionMenuPosition.top, left: actionMenuPosition.left }}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              handleCloseChargeActions();
-              openEditCharge(openActionMenuCharge);
-            }}
-            className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
-          >
-            Editar
-          </button>
-
-          {openActionMenuCharge.status !== "Paid" && (
-            <button
-              type="button"
-              onClick={() => {
-                handleCloseChargeActions();
-                openReceivePaymentModal(openActionMenuCharge);
-              }}
-              className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-orange-700 transition hover:bg-orange-50 dark:text-orange-300 dark:hover:bg-orange-950/30"
-            >
-              Receber
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={() => {
-              handleCloseChargeActions();
-              sendChargeWhatsAppMessage(openActionMenuCharge);
-            }}
-            className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-emerald-700 transition hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
-          >
-            Enviar WhatsApp
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              handleCloseChargeActions();
-              reprintPaymentCarnet(openActionMenuCharge);
-            }}
-            className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-emerald-700 transition hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
-          >
-            Reimprimir carne
-          </button>
-
-          {getChargePayment(openActionMenuCharge.id) && (
-            <button
-              type="button"
-              onClick={() => {
-                handleCloseChargeActions();
-                reprintPaymentReceipt(openActionMenuCharge);
-              }}
-              className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              Reimprimir recibo
-            </button>
-          )}
-
-          {getChargePayment(openActionMenuCharge.id) && (
-            <button
-              type="button"
-              onClick={() => {
-                handleCloseChargeActions();
-                openPaymentReversalConfirmation(openActionMenuCharge);
-              }}
-              className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-red-700 transition hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/30"
-            >
-              Estornar recebimentos
-            </button>
-          )}
-
-          {openActionMenuCharge.status === "Paid" && (
-            <button
-              type="button"
-              onClick={() => {
-                handleCloseChargeActions();
-                openEditCharge(openActionMenuCharge);
-              }}
-              className="block w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-amber-700 transition hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/30"
-            >
-              Ajustar pagamento
-            </button>
-          )}
-        </div>
-      )}
-
-      {isReportOpen && (
-        <div className={`fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm ${accountsReceivableThemeClass}`}>
-          <div
-            className={`flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl shadow-2xl ring-1 ${
-              isBlackTheme
-                ? "bg-[#0f172a] ring-[#334155]"
-                : "bg-[#ffffff] ring-[#dbe4ef]"
-            }`}
-          >
-            <div
-              className={`border-b p-6 ${
-                isBlackTheme
-                  ? "border-[#334155] bg-[#111827]"
-                  : "border-[#e2e8f0] bg-[#ffffff]"
-              }`}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div
-                    className={`flex h-12 w-12 items-center justify-center rounded-2xl text-xl shadow-lg ${
-                      isBlackTheme
-                        ? "bg-[#020617] shadow-black/30"
-                        : "bg-[#f8fafc] shadow-slate-200/70 ring-1 ring-[#e2e8f0]"
-                    }`}
-                  >
-                    📄
-                  </div>
-
-                  <div>
-                    <h2 className={`text-xl font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
-                      Relatório de contas a receber
-                    </h2>
-
-                    <p className={`mt-1 text-sm leading-6 ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
-                      Visualize o relatório na tela ou gere um PDF com filtros por pessoa,
-                      status, vencidas, a vencer ou período.
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={closeReportModal}
-                  className={`flex h-10 w-10 items-center justify-center rounded-xl shadow-sm ring-1 transition ${
-                    isBlackTheme
-                      ? "bg-[#1e293b] text-[#cbd5e1] ring-[#334155] hover:bg-[#334155] hover:text-[#ffffff]"
-                      : "bg-[#ffffff] text-[#64748b] ring-[#dbe4ef] hover:bg-[#f8fafc] hover:text-[#0f172a]"
-                  }`}
-                  aria-label="Fechar relatório"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-
-            <div className={`flex-1 space-y-5 overflow-x-hidden overflow-y-auto p-6 ${isBlackTheme ? "bg-[#0f172a]" : "bg-[#ffffff]"}`}>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                    Pessoa/Inquilino
-                  </label>
-
-                  <select
-                    value={reportTenantId}
-                    onChange={(event) => {
-                      setReportFormError("");
-                      setReportTenantId(event.target.value);
-                    }}
-                    className={`h-12 w-full rounded-xl border px-4 text-sm outline-none transition focus:ring-4 ${
-                      isBlackTheme
-                        ? "border-[#334155] bg-[#020617] text-[#f8fafc] focus:border-[#64748b] focus:ring-[#334155]/40"
-                        : "border-[#dbe4ef] bg-[#ffffff] text-[#0f172a] focus:border-[#0f172a] focus:ring-[#e2e8f0]"
-                    }`}
-                  >
-                    <option value="">Todas as pessoas</option>
-                    {tenants.map((tenant) => (
-                      <option key={tenant.id} value={tenant.id}>
-                        {tenant.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                    Status
-                  </label>
-
-                  <select
-                    value={reportStatusFilter}
-                    onChange={(event) => {
-                      setReportFormError("");
-                      setReportStatusFilter(event.target.value as StatusFilter);
-                    }}
-                    className={`h-12 w-full rounded-xl border px-4 text-sm outline-none transition focus:ring-4 ${
-                      isBlackTheme
-                        ? "border-[#334155] bg-[#020617] text-[#f8fafc] focus:border-[#64748b] focus:ring-[#334155]/40"
-                        : "border-[#dbe4ef] bg-[#ffffff] text-[#0f172a] focus:border-[#0f172a] focus:ring-[#e2e8f0]"
-                    }`}
-                  >
-                    <option value="All">Todos</option>
-                    <option value="Pending">Pendente</option>
-                    <option value="Paid">Pago</option>
-                    <option value="Overdue">Vencido</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                  Filtro de vencimento
-                </label>
-
-                <div className="grid gap-3 md:grid-cols-5">
-                  {([
-                    "All",
-                    "Overdue",
-                    "DueToday",
-                    "Upcoming",
-                    "DateRange",
-                  ] as ReportDueFilter[]).map((filter) => (
-                    <button
-                      key={filter}
-                      type="button"
-                      onClick={() => {
-                        setReportFormError("");
-                        setReportDueFilter(filter);
-                      }}
-                      className={`rounded-2xl border px-3 py-3 text-sm font-bold transition ${
-                        reportDueFilter === filter
-                          ? "border-[#0f172a] bg-[#0f172a] text-[#ffffff] shadow-sm"
-                          : isBlackTheme
-                            ? "border-[#334155] bg-[#020617] text-[#cbd5e1] hover:bg-[#1e293b]"
-                            : "border-[#dbe4ef] bg-[#ffffff] text-[#475569] hover:bg-[#f8fafc] hover:text-[#0f172a]"
-                      }`}
-                    >
-                      {getReportDueFilterLabel(filter)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {reportDueFilter === "DateRange" && (
-                <div
-                  className={`grid gap-4 rounded-2xl border p-4 md:grid-cols-2 ${
-                    isBlackTheme
-                      ? "border-[#334155] bg-[#111827]"
-                      : "border-[#dbe4ef] bg-[#f8fafc]"
-                  }`}
-                >
-                  <div>
-                    <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                      Data inicial
-                    </label>
-
-                    <input
-                      type="date"
-                      value={reportStartDate}
-                      onChange={(event) => {
-                        setReportFormError("");
-                        setReportStartDate(event.target.value);
-                      }}
-                      className={`h-12 w-full rounded-xl border px-4 text-sm outline-none transition focus:ring-4 ${
-                      isBlackTheme
-                        ? "border-[#334155] bg-[#020617] text-[#f8fafc] focus:border-[#64748b] focus:ring-[#334155]/40"
-                        : "border-[#dbe4ef] bg-[#ffffff] text-[#0f172a] focus:border-[#0f172a] focus:ring-[#e2e8f0]"
-                    }`}
-                    />
-                  </div>
-
-                  <div>
-                    <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                      Data final
-                    </label>
-
-                    <input
-                      type="date"
-                      value={reportEndDate}
-                      onChange={(event) => {
-                        setReportFormError("");
-                        setReportEndDate(event.target.value);
-                      }}
-                      className={`h-12 w-full rounded-xl border px-4 text-sm outline-none transition focus:ring-4 ${
-                      isBlackTheme
-                        ? "border-[#334155] bg-[#020617] text-[#f8fafc] focus:border-[#64748b] focus:ring-[#334155]/40"
-                        : "border-[#dbe4ef] bg-[#ffffff] text-[#0f172a] focus:border-[#0f172a] focus:ring-[#e2e8f0]"
-                    }`}
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div
-                className={`rounded-2xl border p-4 ${
-                  isBlackTheme
-                    ? "border-[#334155] bg-[#111827]"
-                    : "border-[#dbe4ef] bg-[#ffffff]"
-                }`}
-              >
-                <p className={`text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
-                  Prévia do relatório
-                </p>
-
-                <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  <div
-                    className={`rounded-xl p-4 ring-1 ${
-                      isBlackTheme ? "bg-[#020617] ring-[#334155]" : "bg-[#ffffff] ring-[#dbe4ef]"
-                    }`}
-                  >
-                    <p className={`text-xs font-bold uppercase ${isBlackTheme ? "text-[#94a3b8]" : "text-[#64748b]"}`}>
-                      Registros
-                    </p>
-                    <p className={`mt-1 text-xl font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
-                      {getReportFilteredCharges().length}
-                    </p>
-                  </div>
-
-                  <div
-                    className={`rounded-xl p-4 ring-1 ${
-                      isBlackTheme ? "bg-[#020617] ring-[#334155]" : "bg-[#ffffff] ring-[#dbe4ef]"
-                    }`}
-                  >
-                    <p className={`text-xs font-bold uppercase ${isBlackTheme ? "text-[#94a3b8]" : "text-[#64748b]"}`}>
-                      Total filtrado
-                    </p>
-                    <p className={`mt-1 text-xl font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
-                      {formatCurrency(getReportTotalAmount(getReportFilteredCharges()))}
-                    </p>
-                  </div>
-
-                  <div
-                    className={`rounded-xl p-4 ring-1 ${
-                      isBlackTheme ? "bg-[#020617] ring-[#334155]" : "bg-[#ffffff] ring-[#dbe4ef]"
-                    }`}
-                  >
-                    <p className={`text-xs font-bold uppercase ${isBlackTheme ? "text-[#94a3b8]" : "text-[#64748b]"}`}>
-                      Tipo
-                    </p>
-                    <p className={`mt-1 text-sm font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
-                      {getReportDueFilterLabel(reportDueFilter)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {reportFormError && (
-                <div className={`rounded-2xl border px-4 py-3 text-sm font-bold ${isBlackTheme ? "border-red-900/60 bg-red-950/30 text-red-300" : "border-red-200 bg-red-50 text-red-700"}`}>
-                  {reportFormError}
-                </div>
-              )}
-            </div>
-
-            <div
-              className={`flex flex-col-reverse gap-3 border-t p-5 md:flex-row md:justify-end ${
-                isBlackTheme
-                  ? "border-[#334155] bg-[#0f172a]"
-                  : "border-[#e2e8f0] bg-[#ffffff]"
-              }`}
-            >
-              <button
-                type="button"
-                onClick={closeReportModal}
-                className={`rounded-xl px-5 py-3 text-sm font-bold transition ${
-                  isBlackTheme
-                    ? "bg-[#1e293b] text-[#cbd5e1] hover:bg-[#334155]"
-                    : "bg-[#f1f5f9] text-[#475569] hover:bg-[#e2e8f0]"
-                }`}
-              >
-                Cancelar
-              </button>
-
-              <button
-                type="button"
-                onClick={viewAccountsReceivableReport}
-                className={`rounded-xl px-5 py-3 text-sm font-bold shadow-sm ring-1 transition ${
-                  isBlackTheme
-                    ? "bg-[#020617] text-[#f8fafc] ring-[#334155] hover:bg-[#1e293b]"
-                    : "bg-[#f8fafc] text-[#334155] ring-[#dbe4ef] hover:bg-[#e2e8f0]"
-                }`}
-              >
-                Visualizar relatório
-              </button>
-
-              <button
-                type="button"
-                onClick={generateAccountsReceivablePdf}
-                className="rounded-xl bg-[#0f172a] px-5 py-3 text-sm font-bold text-[#ffffff] shadow-sm transition hover:bg-[#1e293b]"
-              >
-                Gerar PDF
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isSearchOpen && (
-        <div className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm ${accountsReceivableThemeClass}`}>
-          <div className="w-full max-w-xl overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700">
-            <div className="border-b border-slate-100 dark:border-slate-700 bg-gradient-to-r from-orange-50 to-white dark:from-orange-950/40 dark:to-slate-900 p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-50 dark:bg-orange-950/300 text-xl shadow-lg shadow-orange-500/20">
-                    🔎
-                  </div>
-
-                  <div>
-                    <h2 className={`text-xl font-black ${isBlackTheme ? "text-[#f8fafc]" : "text-[#0f172a]"}`}>
-                      Buscar por Inquilino
-                    </h2>
-
-                    <p className={`mt-1 text-sm leading-6 ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#64748b]"}`}>
-                      Selecione um inquilino para visualizar somente as contas
-                      dele.
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={clearTenantFilter}
-                  className={`flex h-10 w-10 items-center justify-center rounded-xl shadow-sm ring-1 transition ${
-                    isBlackTheme
-                      ? "bg-[#1e293b] text-[#cbd5e1] ring-[#334155] hover:bg-[#334155] hover:text-[#ffffff]"
-                      : "bg-[#ffffff] text-[#64748b] ring-[#dbe4ef] hover:bg-[#f8fafc] hover:text-[#0f172a]"
-                  }`}
-                  aria-label="Fechar busca"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-
-            <div className={`flex-1 space-y-5 overflow-x-hidden overflow-y-auto p-6 ${isBlackTheme ? "bg-[#0f172a]" : "bg-[#ffffff]"}`}>
-              <div>
-                <label className={`mb-2 block text-sm font-bold ${isBlackTheme ? "text-[#cbd5e1]" : "text-[#475569]"}`}>
-                  Nome do inquilino
-                </label>
-
-                <input
-                  placeholder="Digite para buscar..."
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  className="h-12 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 text-sm text-slate-900 dark:text-slate-100 outline-none transition placeholder:text-slate-400 dark:placeholder:text-slate-500 dark:text-slate-500 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 dark:ring-orange-900/50"
-                />
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2">
-                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-                  {filteredTenants.length === 0 ? (
-                    <div className="rounded-xl bg-white dark:bg-slate-900 p-5 text-center text-sm text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                      Nenhum inquilino encontrado.
-                    </div>
-                  ) : (
-                    filteredTenants.map((tenant) => (
-                      <button
-                        key={tenant.id}
-                        onClick={() => {
-                          setSelectedTenant(tenant);
-                          setIsSearchOpen(false);
-                        }}
-                        className="flex w-full items-center justify-between rounded-xl bg-white dark:bg-slate-900 px-4 py-3 text-left shadow-sm ring-1 ring-slate-100 dark:ring-slate-700 transition hover:bg-orange-50 dark:hover:bg-orange-950/40 dark:bg-orange-950/30 hover:ring-orange-200 dark:ring-orange-900/60"
-                      >
-                        <div>
-                          <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                            {tenant.name}
-                          </p>
-
-                          <p className="text-xs text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                            Clique para filtrar as contas
-                          </p>
-                        </div>
-
-                        <span className="rounded-full bg-orange-100 dark:bg-orange-900/40 px-3 py-1 text-xs font-bold text-orange-700">
-                          Selecionar
-                        </span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-3 transition hover:bg-slate-100 dark:hover:bg-slate-700 dark:bg-slate-800">
-                <input
-                  type="checkbox"
-                  checked={autoOpenSearch}
-                  onChange={(event) => {
-                    const value = event.target.checked;
-
-                    setAutoOpenSearch(value);
-                    setCompanyStorageItem(
-                      companyId,
-                      "contrx_auto_open_search",
-                      JSON.stringify(value),
-                    );
-                  }}
-                  className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-orange-500"
-                />
-
-                <span>
-                  <span className="block text-sm font-black text-slate-800 dark:text-slate-200">
-                    Abrir busca automaticamente ao entrar na tela
-                  </span>
-
-                  <span className="mt-1 block text-xs font-semibold text-slate-500 dark:text-slate-400 dark:text-slate-500">
-                    Desmarque esta opção para não abrir a busca toda vez que
-                    acessar Contas a Receber.
-                  </span>
-                </span>
-              </label>
-
-              <div className="flex flex-col-reverse gap-3 border-t border-slate-100 dark:border-slate-700 pt-5 md:flex-row md:justify-end">
-                <button
-                  onClick={clearTenantFilter}
-                  className={`rounded-xl px-5 py-3 text-sm font-bold transition ${
-                  isBlackTheme
-                    ? "bg-[#1e293b] text-[#cbd5e1] hover:bg-[#334155]"
-                    : "bg-[#f1f5f9] text-[#475569] hover:bg-[#e2e8f0]"
-                }`}
-                >
-                  Ver todas as contas
-                </button>
-
-                <button
-                  onClick={() => setIsSearchOpen(false)}
-                  className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-600"
-                >
-                  Fechar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isCreateOpen && (
-        <div
-          className={`fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-4 ${accountsReceivableThemeClass}`}
-          onMouseMove={(e) => {
-            if (isDraggingCreateModal) {
-              setCreateModalPos({
-                x: e.clientX - createDragStartPos.x,
-                y: e.clientY - createDragStartPos.y,
-              });
-            } else if (isResizingCreateModal) {
-              const newWidth = Math.max(500, createResizeStartPos.width + (e.clientX - createResizeStartPos.x));
-              const newHeight = Math.max(400, createResizeStartPos.height + (e.clientY - createResizeStartPos.y));
-              setCreateModalSize({ width: newWidth, height: newHeight });
-            }
-          }}
-          onMouseUp={() => {
-            setIsDraggingCreateModal(false);
-            setIsResizingCreateModal(false);
-          }}
-        >
-          <div
-            style={{
-              transform: createModalPos ? `translate(${createModalPos.x}px, ${createModalPos.y}px)` : undefined,
-              width: createModalSize ? `${createModalSize.width}px` : undefined,
-              height: createModalSize ? `${createModalSize.height}px` : undefined,
-            }}
-            className="contrx-modal-panel relative flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900"
-          >
-            {/* Header Arrastável */}
-            <div
-              onMouseDown={(e) => {
-                if ((e.target as HTMLElement).closest("button")) return;
-                setIsDraggingCreateModal(true);
-                setCreateDragStartPos({
-                  x: e.clientX - (createModalPos?.x || 0),
-                  y: e.clientY - (createModalPos?.y || 0),
-                });
-              }}
-              className="flex cursor-grab items-center justify-between border-b border-slate-100 bg-slate-50/80 px-6 py-4 dark:border-slate-800 dark:bg-slate-900/80 active:cursor-grabbing select-none"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-orange-500 text-base font-black text-white shadow-md shadow-orange-200 dark:shadow-none">
-                  💰
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                    {editingChargeId ? "Editar cobrança" : "Nova cobrança"}
-                  </h2>
-                  <p className="text-xs font-normal text-slate-500 dark:text-slate-400">
-                    {editingChargeId
-                      ? "Ajuste os dados da conta a receber selecionada."
-                      : "Cadastre uma conta a receber avulsa, única ou parcelada."}
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={closeCreateModal}
-                className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-200/60 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white"
-                aria-label="Fechar cadastro"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Conteúdo com rolagem interna limpa */}
-            <div className="flex-1 space-y-5 overflow-y-auto p-6 text-slate-900 dark:text-slate-100">
-              
-              {/* Seleção do Tipo de Lançamento */}
-              {!editingChargeId && (
-                <div>
-                  <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Tipo de lançamento
-                  </label>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setChargeFormError("");
-                        setFormLaunchType("single");
-                      }}
-                      className={`rounded-2xl border p-4 text-left transition ${
-                        formLaunchType === "single"
-                          ? "border-orange-500 bg-orange-50/60 ring-2 ring-orange-200 dark:border-orange-500 dark:bg-orange-950/30 dark:ring-orange-900/60"
-                          : "border-slate-200/80 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/60"
-                      }`}
-                    >
-                      <p className="text-sm font-bold text-slate-900 dark:text-white">
-                        Conta única
-                      </p>
-                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                        Lançamento avulso com apenas um vencimento.
-                      </p>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setChargeFormError("");
-                        setFormLaunchType("installment");
-                      }}
-                      className={`rounded-2xl border p-4 text-left transition ${
-                        formLaunchType === "installment"
-                          ? "border-orange-500 bg-orange-50/60 ring-2 ring-orange-200 dark:border-orange-500 dark:bg-orange-950/30 dark:ring-orange-900/60"
-                          : "border-slate-200/80 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/60"
-                      }`}
-                    >
-                      <p className="text-sm font-bold text-slate-900 dark:text-white">
-                        Sequência de parcelas
-                      </p>
-                      <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                        Divide o valor total em parcelas editáveis.
-                      </p>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Seção Inquilino / Pessoa */}
-              <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                  <div className="flex-1 min-w-0">
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      Inquilino / Pessoa <span className="text-red-500">*</span>
-                    </label>
-
-                    <select
-                      value={formTenant}
-                      disabled={isEditingPaidCharge}
-                      onChange={(event) => {
-                        setChargeFormError("");
-                        setFormTenant(event.target.value);
-                      }}
-                      className={`h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white ${
-                        isEditingPaidCharge ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400" : ""
-                      }`}
-                    >
-                      <option value="">Selecione o inquilino/pessoa</option>
-                      {tenants.map((tenant) => (
-                        <option key={tenant.id} value={tenant.id}>
-                          {tenant.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {!isEditingPaidCharge && (
-                    <button
-                      type="button"
-                      onClick={openTenantCreateModal}
-                      className="h-10 shrink-0 rounded-xl bg-orange-500 px-4 text-xs font-bold text-white shadow-sm transition hover:bg-orange-600 dark:bg-orange-500 dark:hover:bg-orange-600"
-                    >
-                      + Nova pessoa
-                    </button>
-                  )}
-                </div>
-
-                <p className="mt-2 text-[11px] font-normal text-slate-400">
-                  {isEditingPaidCharge
-                    ? "Cobrança paga não permite alteração de inquilino/pessoa."
-                    : "Cadastre pessoas rapidamente ou selecione um cliente existente."}
-                </p>
-              </div>
-
-              {/* Seção Imóvel e Valores */}
-              <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <div className="sm:col-span-2 lg:col-span-1">
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      Imóvel / Ativo <span className="text-slate-400 font-normal">(opcional)</span>
-                    </label>
-                    <select
-                      value={formProperty}
-                      disabled={isEditingPaidCharge}
-                      onChange={(event) => {
-                        setChargeFormError("");
-                        setFormProperty(event.target.value);
-                      }}
-                      className={`h-10 w-full rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white ${
-                        isEditingPaidCharge ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400" : ""
-                      }`}
-                    >
-                      <option value="">Sem bem/ativo vinculado</option>
-                      {properties.map((property) => (
-                        <option key={property.id} value={property.id}>
-                          {property.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      Valor total <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
-                        R$
-                      </span>
-                      <input
-                        inputMode="decimal"
-                        placeholder="0,00"
-                        value={formAmount}
-                        disabled={isEditingPaidCharge}
-                        onChange={(event) => {
-                          setChargeFormError("");
-                          setFormAmount(formatCurrencyInput(event.target.value));
-                        }}
-                        onBlur={() => {
-                          const amount = normalizeAmount(formAmount);
-                          setFormAmount(amount > 0 ? formatAmountInput(amount) : "");
-                        }}
-                        className={`h-10 w-full rounded-xl border border-slate-200 px-3 pl-9 text-xs font-bold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white ${
-                          isEditingPaidCharge ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400" : ""
-                        }`}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      Data de lançamento <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={formIssueDate}
-                      disabled={isEditingPaidCharge}
-                      onChange={(event) => {
-                        setChargeFormError("");
-                        setFormIssueDate(event.target.value);
-                      }}
-                      className={`h-10 w-full rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white ${
-                        isEditingPaidCharge ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400" : ""
-                      }`}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      Primeiro vencimento <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={formDueDate}
-                      disabled={isEditingPaidCharge}
-                      onChange={(event) => {
-                        setChargeFormError("");
-                        setFormDueDate(event.target.value);
-                      }}
-                      className={`h-10 w-full rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white ${
-                        isEditingPaidCharge ? "cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400" : ""
-                      }`}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Se for cobrança já paga */}
-              {isEditingPaidCharge && (
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
-                  <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Data de pagamento
-                  </label>
-                  <input
-                    type="date"
-                    value={formPaymentDate}
-                    onChange={(event) => {
-                      setChargeFormError("");
-                      setFormPaymentDate(event.target.value);
-                    }}
-                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white sm:max-w-xs"
-                  />
-                  <p className="mt-1.5 text-[11px] font-normal text-slate-500">
-                    Para cobrança paga, somente a data de pagamento pode ser ajustada.
-                  </p>
-                </div>
-              )}
-
-              {/* Configuração de Parcelamento se "installment" */}
-              {!editingChargeId && formLaunchType === "installment" && (
-                <div className="space-y-4 rounded-2xl border border-orange-100 bg-orange-50/40 p-5 dark:border-orange-900/40 dark:bg-orange-950/20">
-                  <div className="grid gap-4 sm:grid-cols-[200px_1fr] sm:items-start">
-                    <div className="space-y-3">
-                      <div>
-                        <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                          Quantidade de parcelas <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="number"
-                          min={2}
-                          max={MAX_INSTALLMENT_QUANTITY}
-                          value={formInstallmentQuantity}
-                          onChange={(event) => {
-                            setChargeFormError("");
-                            const nextQuantity = Number(event.target.value);
-                            if (!event.target.value || !Number.isFinite(nextQuantity)) {
-                              setFormInstallmentQuantity(event.target.value);
-                              return;
-                            }
-                            setFormInstallmentQuantity(
-                              String(
-                                Math.min(
-                                  MAX_INSTALLMENT_QUANTITY,
-                                  Math.max(2, Math.trunc(nextQuantity)),
-                                ),
-                              ),
-                            );
-                          }}
-                          className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                        />
-                        <p className="mt-1 text-[11px] font-normal text-slate-500">
-                          Máximo de {MAX_INSTALLMENT_QUANTITY} parcelas.
-                        </p>
-                      </div>
-
-                      <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 bg-white p-3 transition hover:border-orange-300 dark:border-slate-700 dark:bg-slate-800">
-                        <input
-                          type="checkbox"
-                          checked={formFirstInstallmentAsDownPayment}
-                          onChange={(event) => {
-                            setChargeFormError("");
-                            setFormFirstInstallmentAsDownPayment(event.target.checked);
-                          }}
-                          className="mt-0.5 h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
-                        />
-                        <div>
-                          <span className="block text-xs font-bold text-slate-900 dark:text-white">
-                            Primeira parcela como entrada
-                          </span>
-                          <span className="text-[11px] font-normal text-slate-500">
-                            Usa a data de lançamento para quitar imediatamente.
-                          </span>
-                        </div>
-                      </label>
-                    </div>
-
-                    <div className="rounded-xl border border-orange-100 bg-white p-4 text-xs font-medium text-slate-600 dark:border-orange-900/40 dark:bg-slate-900 dark:text-slate-300">
-                      O sistema calcula as parcelas em valores iguais e gera os vencimentos a cada 30 dias a partir da primeira data.
-                    </div>
-                  </div>
-
-                  {/* Pré-visualização da tabela de parcelas */}
-                  {installmentPreview.length > 0 && (
-                    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-                      <div className="hidden grid-cols-[80px_1fr_1fr] bg-slate-50 px-4 py-2 text-[11px] font-bold uppercase text-slate-400 dark:bg-slate-800 md:grid">
-                        <span>Parcela</span>
-                        <span>Valor</span>
-                        <span>Vencimento</span>
-                      </div>
-
-                      <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {installmentPreview.map((installment) => (
-                          <div
-                            key={installment.id}
-                            className="grid gap-2 p-3 text-xs md:grid-cols-[80px_1fr_1fr] md:items-center"
-                          >
-                            <div className="font-bold text-slate-900 dark:text-white">
-                              {installment.isDownPayment ? (
-                                <span className="rounded-md bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-700 dark:bg-orange-950/40 dark:text-orange-300">
-                                  Entrada
-                                </span>
-                              ) : (
-                                `${installment.installmentNumber}/${installmentPreview.length}`
-                              )}
-                            </div>
-
-                            <input
-                              value={installment.amount}
-                              onChange={(event) =>
-                                updateInstallmentAmount(
-                                  installment.id,
-                                  event.target.value,
-                                )
-                              }
-                              className="h-9 w-full rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                            />
-
-                            <input
-                              type="date"
-                              value={installment.dueDate}
-                              onChange={(event) =>
-                                updateInstallmentDueDate(
-                                  installment.id,
-                                  event.target.value,
-                                )
-                              }
-                              className="h-9 w-full rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {chargeFormError && (
-                <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
-                  {chargeFormError}
-                </div>
-              )}
-            </div>
-
-            {/* Rodapé com botões de ação */}
-            <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/80 px-6 py-4 dark:border-slate-800 dark:bg-slate-900/80">
-              <div>
-                {editingChargeId && !isEditingPaidCharge && !formContractId && (
-                  <button
-                    type="button"
-                    onClick={openDeleteChargeConfirmation}
-                    className="rounded-xl bg-red-50 px-4 py-2 text-xs font-bold text-red-600 transition hover:bg-red-100 dark:bg-red-950/40 dark:text-red-300"
-                  >
-                    Excluir cobrança
-                  </button>
-                )}
-                {editingChargeId && isEditingPaidCharge && (
-                  <button
-                    type="button"
-                    disabled={isChargeSaving}
-                    onClick={() => openPaymentReversalConfirmation()}
-                    className="rounded-xl bg-amber-50 px-4 py-2 text-xs font-bold text-amber-700 transition hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300"
-                  >
-                    Estornar recebimento
-                  </button>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                {!isEditingPaidCharge && (
-                  <button
-                    type="button"
-                    disabled={isChargeSaving}
-                    onClick={closeCreateModal}
-                    className="rounded-xl bg-slate-200/80 px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                  >
-                    Cancelar
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  disabled={isChargeSaving}
-                  onClick={saveManualCharge}
-                  className="rounded-xl bg-orange-500 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-orange-200 transition hover:bg-orange-600 dark:shadow-none disabled:opacity-60"
-                >
-                  {isChargeSaving
-                    ? "Salvando..."
-                    : editingChargeId
-                      ? "Salvar ajustes"
-                      : "Salvar cobrança"}
-                </button>
-              </div>
-            </div>
-
-            {/* Handle visual de redimensionamento */}
-            <div
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                setIsResizingCreateModal(true);
-                const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
-                setCreateResizeStartPos({
-                  x: e.clientX,
-                  y: e.clientY,
-                  width: rect.width,
-                  height: rect.height,
-                });
-              }}
-              className="absolute bottom-0 right-0 h-4 w-4 cursor-se-resize select-none"
-              title="Arraste para redimensionar o modal"
-            >
-              <svg className="h-4 w-4 text-slate-300 dark:text-slate-600" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M14 14H10V12H14V14ZM14 10H12V8H14V10ZM10 14H8V12H10V14Z" />
-              </svg>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {chargePendingPaymentReceipt && (
-        <div
-          className={`fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-4 ${accountsReceivableThemeClass}`}
-          onMouseMove={(e) => {
-            if (isDraggingReceiveModal) {
-              setReceiveModalPos({
-                x: e.clientX - dragStartPos.x,
-                y: e.clientY - dragStartPos.y,
-              });
-            } else if (isResizingReceiveModal) {
-              const newWidth = Math.max(500, resizeStartPos.width + (e.clientX - resizeStartPos.x));
-              const newHeight = Math.max(400, resizeStartPos.height + (e.clientY - resizeStartPos.y));
-              setReceiveModalSize({ width: newWidth, height: newHeight });
-            }
-          }}
-          onMouseUp={() => {
-            setIsDraggingReceiveModal(false);
-            setIsResizingReceiveModal(false);
-          }}
-        >
-          <div
-            style={{
-              transform: receiveModalPos ? `translate(${receiveModalPos.x}px, ${receiveModalPos.y}px)` : undefined,
-              width: receiveModalSize ? `${receiveModalSize.width}px` : undefined,
-              height: receiveModalSize ? `${receiveModalSize.height}px` : undefined,
-            }}
-            className="contrx-modal-panel relative flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-emerald-100 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900"
-          >
-            {/* Header Arrastável */}
-            <div
-              onMouseDown={(e) => {
-                // Impede iniciar drag se clicar no botão de fechar
-                if ((e.target as HTMLElement).closest("button")) return;
-                setIsDraggingReceiveModal(true);
-                setDragStartPos({
-                  x: e.clientX - (receiveModalPos?.x || 0),
-                  y: e.clientY - (receiveModalPos?.y || 0),
-                });
-              }}
-              className="flex cursor-grab items-center justify-between border-b border-slate-100 bg-slate-50/80 px-6 py-4 dark:border-slate-800 dark:bg-slate-900/80 active:cursor-grabbing select-none"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-500 text-sm font-black text-white shadow-md shadow-emerald-200 dark:shadow-none">
-                  R$
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                      {isBatchPayment ? "Receber cobranças selecionadas" : "Receber cobrança"}
-                    </h2>
-                    <span
-                      className={`inline-flex rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${getReceiptStatusClassName(
-                        paymentModalReferenceCharge || chargePendingPaymentReceipt,
-                      )}`}
-                    >
-                      {isBatchPayment
-                        ? `${paymentModalCharges.length} contas`
-                        : getReceiptStatusLabel(chargePendingPaymentReceipt)}
-                    </span>
-                  </div>
-                  <p className="text-xs font-normal text-slate-500 dark:text-slate-400">
-                    Confira os dados do recebimento, forme o pagamento e finalize.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={closeReceivePaymentModal}
-                className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-200/60 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white"
-                aria-label="Fechar recebimento"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Conteúdo com rolagem interna limpa */}
-            <div className="flex-1 space-y-5 overflow-y-auto p-6 text-slate-900 dark:text-slate-100">
-              
-              {/* Card Resumo do Cliente & Vencimento */}
-              <div className="grid gap-3 rounded-2xl border border-slate-100 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-900/50 sm:grid-cols-3">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Inquilino / Cliente
-                  </span>
-                  <p className="mt-0.5 truncate text-sm font-bold text-slate-900 dark:text-white">
-                    {isBatchPayment ? "Vários selecionados" : chargePendingPaymentReceipt.tenant}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Imóvel / Ativo
-                  </span>
-                  <p className="mt-0.5 truncate text-sm font-bold text-slate-900 dark:text-white">
-                    {isBatchPayment ? "Vários bens/ativos" : chargePendingPaymentReceipt.property || "Não informado"}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Vencimento Original
-                  </span>
-                  <p className="mt-0.5 text-sm font-bold text-slate-900 dark:text-white">
-                    {isBatchPayment ? "Vários vencimentos" : formatDate(chargePendingPaymentReceipt.dueDate)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Grid 4 Indicadores Financeiros Rápidos */}
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Valor Original
-                  </p>
-                  <p className="mt-1 text-base font-black text-slate-900 dark:text-white">
-                    {formatCurrency(paymentModalOriginalAmount)}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Saldo Em Aberto
-                  </p>
-                  <p className="mt-1 text-base font-black text-slate-900 dark:text-white">
-                    {formatCurrency(paymentModalRemainingAmount)}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/60 p-3.5 shadow-sm dark:border-emerald-900/40 dark:bg-emerald-950/20">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-                    Valor Recebendo
-                  </p>
-                  <p className="mt-1 text-base font-black text-emerald-700 dark:text-emerald-300">
-                    {formatCurrency(paymentModalFinalAmount)}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Saldo Restante
-                  </p>
-                  <p className="mt-1 text-base font-black text-slate-900 dark:text-white">
-                    {formatCurrency(paymentModalBalanceAfterPayment)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Aviso Repasse se houver */}
-              {ownerPayoutNotice && (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
-                  <p className="text-xs font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400">
-                    Repasse ao Proprietário Activo ({ownerPayoutNotice.ownerName})
-                  </p>
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs font-semibold sm:grid-cols-4">
-                    <p>Recebido: <strong>{formatCurrency(paymentModalFinalAmount)}</strong></p>
-                    <p>Taxa: <strong>{formatCurrency(ownerPayoutNotice.feeAmount)} ({formatPercent(ownerPayoutNotice.feePercent)})</strong></p>
-                    <p>Repasse: <strong>{formatCurrency(ownerPayoutNotice.payoutAmount)}</strong></p>
-                    <p>Vencimento: <strong>{ownerPayoutNotice.payoutDay ? `dia ${ownerPayoutNotice.payoutDay}` : "no recebimento"}</strong></p>
-                  </div>
-                </div>
-              )}
-
-              {/* Seção 1: Ajustes Financeiros (Data, Juros, Desconto, Valor Final) */}
-              <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">
-                  Valores do Recebimento
-                </h3>
-
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 items-end">
-                  <div>
-                    <div className="mb-1.5 flex h-6 items-center">
-                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        Data do recebimento
-                      </label>
-                    </div>
-                    <input
-                      type="date"
-                      value={formPaymentDate}
-                      onChange={(event) => {
-                        setPaymentFormError("");
-                        setFormPaymentDate(event.target.value);
-                      }}
-                      className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="mb-1.5 flex h-6 items-center justify-between">
-                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        Juros / Multa
-                      </label>
-                      <div className="flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
-                        <button
-                          type="button"
-                          onClick={() => changePaymentInterestMode(paymentModalReferenceCharge || chargePendingPaymentReceipt, "amount")}
-                          className={`rounded-md px-2 py-0.5 text-[11px] font-bold transition ${
-                            paymentInterestMode === "amount"
-                              ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white"
-                              : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-                          }`}
-                        >
-                          R$
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => changePaymentInterestMode(paymentModalReferenceCharge || chargePendingPaymentReceipt, "percentage")}
-                          className={`rounded-md px-2 py-0.5 text-[11px] font-bold transition ${
-                            paymentInterestMode === "percentage"
-                              ? "bg-emerald-500 text-white shadow-sm"
-                              : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-                          }`}
-                        >
-                          %
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="relative flex items-center">
-                      <span className="pointer-events-none absolute left-3 text-xs font-bold text-slate-400">
-                        {paymentInterestMode === "percentage" ? "%" : "R$"}
-                      </span>
-                      <input
-                        placeholder="0,00"
-                        value={paymentInterestInput}
-                        onChange={(event) =>
-                          updatePaymentInterestInput(
-                            paymentModalReferenceCharge || chargePendingPaymentReceipt,
-                            event.target.value,
-                          )
-                        }
-                        className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-8 pr-3 text-xs font-bold text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white placeholder:text-slate-400"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="mb-1.5 flex h-6 items-center justify-between">
-                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        Desconto
-                      </label>
-                      <div className="flex rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800">
-                        <button
-                          type="button"
-                          onClick={() => changePaymentDiscountMode(paymentModalReferenceCharge || chargePendingPaymentReceipt, "amount")}
-                          className={`rounded-md px-2 py-0.5 text-[11px] font-bold transition ${
-                            paymentDiscountMode === "amount"
-                              ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white"
-                              : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-                          }`}
-                        >
-                          R$
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => changePaymentDiscountMode(paymentModalReferenceCharge || chargePendingPaymentReceipt, "percentage")}
-                          className={`rounded-md px-2 py-0.5 text-[11px] font-bold transition ${
-                            paymentDiscountMode === "percentage"
-                              ? "bg-emerald-500 text-white shadow-sm"
-                              : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-                          }`}
-                        >
-                          %
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="relative flex items-center">
-                      <span className="pointer-events-none absolute left-3 text-xs font-bold text-slate-400">
-                        {paymentDiscountMode === "percentage" ? "%" : "R$"}
-                      </span>
-                      <input
-                        placeholder="0,00"
-                        value={paymentDiscountInput}
-                        onChange={(event) =>
-                          updatePaymentDiscountInput(
-                            paymentModalReferenceCharge || chargePendingPaymentReceipt,
-                            event.target.value,
-                          )
-                        }
-                        className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-8 pr-3 text-xs font-bold text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-800 dark:text-white placeholder:text-slate-400"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="mb-1.5 flex h-6 items-center">
-                      <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        Valor Final Recebido
-                      </label>
-                    </div>
-                    <div className="relative flex items-center">
-                      <span className="pointer-events-none absolute left-3 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                        R$
-                      </span>
-                      <input
-                        placeholder="0,00"
-                        value={paymentFinalAmount}
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          setPaymentFormError("");
-                          const formattedValue = formatCurrencyInput(value);
-                          setPaymentFinalAmount(formattedValue);
-                          updatePaymentEntriesFromFinalAmount(formattedValue);
-
-                          if (paymentModalReferenceCharge) {
-                            updatePaymentAdjustmentsFromFinalAmount(
-                              paymentModalReferenceCharge,
-                              formattedValue,
-                            );
-                          }
-                        }}
-                        onBlur={() => {
-                          const amount = normalizeAmount(paymentFinalAmount);
-                          const formattedAmount = amount > 0 ? formatAmountInput(amount) : "";
-                          setPaymentFinalAmount(formattedAmount);
-                          updatePaymentEntriesFromFinalAmount(formattedAmount);
-                        }}
-                        className="h-10 w-full rounded-xl border border-emerald-300 bg-emerald-50/40 pl-8 pr-3 text-xs font-bold text-emerald-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 dark:border-emerald-800 dark:bg-slate-800 dark:text-emerald-300 placeholder:text-emerald-400"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Seção 2: Formas de Pagamento */}
-              <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                      Formas de Pagamento
-                    </h3>
-                    <p className="text-xs font-normal text-slate-500 dark:text-slate-400">
-                      Divida em múltiplos meios caso o cliente pague parcial em Pix, dinheiro, etc.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={addPaymentEntry}
-                    className="rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-                  >
-                    + Adicionar Forma
-                  </button>
-                </div>
-
-                <div className="space-y-2.5">
-                  {paymentEntries.map((entry, index) => (
-                    <div
-                      key={entry.id}
-                      className="flex flex-col gap-2.5 rounded-xl border border-slate-100 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-950/40 sm:flex-row sm:items-center"
-                    >
-                      <div className="flex-1">
-                        <label className="mb-1 block text-[11px] font-semibold text-slate-500">
-                          Forma #{index + 1}
-                        </label>
-                        <select
-                          value={entry.method}
-                          onChange={(event) =>
-                            updatePaymentEntryMethod(
-                              entry.id,
-                              event.target.value as PaymentMethod,
-                            )
-                          }
-                          className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                        >
-                          {paymentMethodOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="w-full sm:w-40">
-                        <label className="mb-1 block text-[11px] font-semibold text-slate-500">
-                          Valor
-                        </label>
-                        <input
-                          placeholder="Ex: 500,00"
-                          value={entry.amount}
-                          onChange={(event) =>
-                            updatePaymentEntryAmount(entry.id, event.target.value)
-                          }
-                          onBlur={() => normalizePaymentEntryAmount(entry.id)}
-                          className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                        />
-                      </div>
-
-                      {paymentEntries.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removePaymentEntry(entry.id)}
-                          className="self-end rounded-lg p-2 text-xs font-semibold text-red-500 transition hover:bg-red-50 sm:self-center"
-                        >
-                          Remover
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Status da soma das formas de pagamento */}
-                <div className="mt-3 flex items-center justify-between text-xs font-bold">
-                  <span className="text-slate-500">
-                    Total informado: <strong className="text-slate-900 dark:text-white">{formatCurrency(getPaymentEntriesTotal())}</strong>
-                  </span>
-                  <span className={`rounded-md px-2 py-0.5 ${getPaymentEntriesBalanceClassName()}`}>
-                    {getPaymentEntriesBalanceLabel()}
-                  </span>
-                </div>
-              </div>
-
-              {/* Observação opcional */}
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  Observações de recebimento <span className="text-slate-400 font-normal">(opcional)</span>
-                </label>
-                <input
-                  placeholder="Ex: Pago via Pix + saldo restante em dinheiro"
-                  value={paymentNote}
-                  onChange={(event) => setPaymentNote(event.target.value)}
-                  className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                />
-              </div>
-
-              {paymentFormError && (
-                <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs font-bold text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
-                  {paymentFormError}
-                </div>
-              )}
-            </div>
-
-            {/* Rodapé com botões de ação */}
-            <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/80 px-6 py-4 dark:border-slate-800 dark:bg-slate-900/80">
-              <div className="text-xs">
-                <span className="text-slate-500">Total a receber agora: </span>
-                <strong className="text-sm font-black text-emerald-600 dark:text-emerald-400">
-                  {formatCurrency(paymentModalFinalAmount)}
-                </strong>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={closeReceivePaymentModal}
-                  disabled={Boolean(processingConfirmation)}
-                  className="rounded-xl bg-slate-200/80 px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  type="button"
-                  onClick={confirmReceivePayment}
-                  disabled={Boolean(processingConfirmation)}
-                  className="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-200 transition hover:bg-emerald-700 dark:shadow-none"
-                >
-                  {processingConfirmation ? "Confirmando..." : "Confirmar recebimento"}
-                </button>
-              </div>
-            </div>
-
-            {/* Handle visual de redimensionamento no canto inferior direito */}
-            <div
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                setIsResizingReceiveModal(true);
-                const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
-                setResizeStartPos({
-                  x: e.clientX,
-                  y: e.clientY,
-                  width: rect.width,
-                  height: rect.height,
-                });
-              }}
-              className="absolute bottom-0 right-0 h-4 w-4 cursor-se-resize select-none"
-              title="Arraste para redimensionar o modal"
-            >
-              <svg className="h-4 w-4 text-slate-300 dark:text-slate-600" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M14 14H10V12H14V14ZM14 10H12V8H14V10ZM10 14H8V12H10V14Z" />
-              </svg>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isPaymentConfirmationOpen && chargePendingPaymentReceipt && (
-        <ConfirmationModal
-          icon="OK"
-          title="Confirmar recebimento?"
-          description="Confira os dados antes de concluir. Se o valor for menor que o saldo, a cobrança ficará parcialmente recebida."
-          itemLabel={isBatchPayment ? "Contas selecionadas" : "Cobrança selecionada"}
-          itemValue={
-            isBatchPayment
-              ? `${paymentModalCharges.length} contas`
-              : chargePendingPaymentReceipt.tenant
-          }
-          details={
-            <>
-              <p>
-                Bem/Ativo:{" "}
-                {isBatchPayment
-                  ? "Vários bens/ativos"
-                  : chargePendingPaymentReceipt.property}
-              </p>
-              <p>
-                Vencimento:{" "}
-                {isBatchPayment
-                  ? "Conforme contas selecionadas"
-                  : formatDate(chargePendingPaymentReceipt.dueDate)}
-              </p>
-              <p>Data do recebimento: {formatDate(`${formPaymentDate}T00:00:00`)}</p>
-              <p>Valor original: {formatCurrency(paymentModalOriginalAmount)}</p>
-              <p>Saldo em aberto: {formatCurrency(paymentModalRemainingAmount)}</p>
-              <p>Juros: {formatCurrency(normalizeAmount(paymentInterest))}</p>
-              <p>Desconto: {formatCurrency(normalizeAmount(paymentDiscount))}</p>
-              <p>Valor final: {formatCurrency(normalizeAmount(paymentFinalAmount))}</p>
-              <div>
-                <p className="font-black text-slate-950 dark:text-white">
-                  Formas de pagamento:
-                </p>
-                <div className="mt-2 space-y-1">
-                  {paymentEntries.map((entry) => (
-                    <p key={entry.id}>
-                      {getPaymentMethodLabel(entry.method)} - {formatCurrency(normalizeAmount(entry.amount))}
-                    </p>
-                  ))}
-                </div>
-              </div>
-              {paymentNote.trim() && <p>Observação: {paymentNote.trim()}</p>}
-            </>
-          }
-          error={paymentFormError}
-          confirmLabel="Confirmar recebimento"
-          cancelLabel="Conferir novamente"
-          tone="emerald"
-          onCancel={closePaymentConfirmation}
-          onConfirm={finishReceivePayment}
-          isProcessing={processingConfirmation === "payment"}
-          processingLabel="Registrando recebimento..."
-          isBlackTheme={isBlackTheme}
-          themeClass={accountsReceivableThemeClass}
-        />
-      )}
-
-      {chargePendingDeletion && (
-        <ConfirmationModal
-          icon="!"
-          title="Excluir cobrança?"
-          description="Esta ação removerá a cobrança selecionada do contas a receber."
-          itemLabel="Cobrança"
-          itemValue={chargePendingDeletion.tenant}
-          details={
-            <>
-              <p>Bem/Ativo: {chargePendingDeletion.property}</p>
-              <p>Vencimento: {formatDate(chargePendingDeletion.dueDate)}</p>
-              <p>Valor: {formatCurrency(chargePendingDeletion.amount)}</p>
-            </>
-          }
-          confirmLabel="Excluir cobrança"
-          danger
-          onCancel={closeDeleteChargeConfirmation}
-          onConfirm={confirmDeleteCharge}
-          isProcessing={processingConfirmation === "delete"}
-          processingLabel="Excluindo..."
-          isBlackTheme={isBlackTheme}
-          themeClass={accountsReceivableThemeClass}
-          zIndex="z-[70]"
-        />
-      )}
-
-      {chargePendingPaymentReversal && (
-        <ConfirmationModal
-          icon="↩"
-          title="Voltar cobrança para pagamento?"
-          description="O registro de pagamento será removido e a cobrança voltará para pendente ou vencida, conforme a data de vencimento."
-          itemLabel="Cobrança selecionada"
-          itemValue={chargePendingPaymentReversal.tenant}
-          details={
-            <>
-              <p>Bem/Ativo: {chargePendingPaymentReversal.property}</p>
-              <p>Vencimento: {formatDate(chargePendingPaymentReversal.dueDate)}</p>
-              <p>Valor: {formatCurrency(chargePendingPaymentReversal.amount)}</p>
-            </>
-          }
-          confirmLabel="Voltar para pagamento"
-          tone="amber"
-          onCancel={closePaymentReversalConfirmation}
-          onConfirm={confirmPaymentReversal}
-          isProcessing={processingConfirmation === "reversal"}
-          processingLabel="Estornando..."
-          isBlackTheme={isBlackTheme}
-          themeClass={accountsReceivableThemeClass}
-          zIndex="z-[70]"
-        />
-      )}
-
-      {pendingContractCarnetRequest && (
-        <ConfirmationModal
-          icon="DOC"
-          title="Imprimir carnê agora?"
-          description="As parcelas deste contrato já existem no contas a receber. Imprima o carnê antes de seguir para o contrato."
-          itemLabel="Contrato vinculado"
-          itemValue={pendingContractCarnetRequest.contract.propertyName || "Não informado"}
-          details={
-            <>
-              <p>Inquilino: {pendingContractCarnetRequest.contract.tenantName || "Não informado"}</p>
-              <p>Parcelas: {pendingContractCarnetRequest.charges.length}</p>
-              <p>
-                Total:{" "}
-                {formatCurrency(
-                  pendingContractCarnetRequest.charges.reduce(
-                    (total, charge) => total + charge.amount,
-                    0,
-                  ),
-                )}
-              </p>
-            </>
-          }
-          confirmLabel="Imprimir carnê"
-          cancelLabel="Ver contas"
-          tone="orange"
-          onCancel={closeContractCarnetQuestion}
-          onConfirm={confirmContractCarnetQuestion}
-          isBlackTheme={isBlackTheme}
-          themeClass={accountsReceivableThemeClass}
-          zIndex="z-[90]"
-        />
-      )}
-
-      {pendingContractPrintRequest && (
-        <ConfirmationModal
-          icon="DOC"
-          title="Imprimir contrato agora?"
-          description="O carnê foi gerado. Agora abra o contrato vinculado para impressão; depois disso o vencimento será registrado na agenda."
-          itemLabel="Contrato vinculado"
-          itemValue={
-            pendingContractPrintRequest.propertyName ||
-            properties.find((property) => String(property.id) === String(pendingContractPrintRequest.propertyId))?.name ||
-            "Não informado"
-          }
-          details={
-            <>
-              <p>
-                Inquilino:{" "}
-                {pendingContractPrintRequest.tenantName ||
-                  tenants.find((tenant) => String(tenant.id) === String(pendingContractPrintRequest.tenantId))?.name ||
-                  "Não informado"}
-              </p>
-              <p>
-                Tipo:{" "}
-                {pendingContractPrintRequest.isTemporaryRental
-                  ? "Contrato temporário"
-                  : "Contrato padrão"}
-              </p>
-              <p>Início: {formatContractDateForTemplate(pendingContractPrintRequest.startDate)}</p>
-              <p>Fim: {formatContractDateForTemplate(pendingContractPrintRequest.endDate)}</p>
-            </>
-          }
-          confirmLabel="Imprimir contrato"
-          cancelLabel="Imprimir depois"
-          tone="orange"
-          onCancel={closeContractPrintQuestion}
-          onConfirm={confirmContractPrintQuestion}
-          isBlackTheme={isBlackTheme}
-          themeClass={accountsReceivableThemeClass}
-          zIndex="z-[90]"
-        />
-      )}
-
-      {pendingContractScheduleCustomization && (
-        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-lg rounded-[2.5rem] border border-orange-100 bg-white p-8 shadow-2xl dark:border-slate-800 dark:bg-slate-900 transition-all transform scale-100">
-            <div className="text-center">
-              <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-50 dark:bg-orange-950/40 text-2xl shadow-md animate-bounce" role="img" aria-label="Calendário">
-                📅
-              </span>
-              <h3 className="mt-4 text-xl font-black text-slate-950 dark:text-white">Personalizar Lembrete de Vencimento</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-                Defina como deseja ser notificado sobre o vencimento do contrato do imóvel{" "}
-                <span className="font-extrabold text-slate-800 dark:text-slate-200">
-                  {pendingContractScheduleCustomization.propertyName}
-                </span>.
-              </p>
-            </div>
-
-            <div className="mt-6 space-y-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Responsável pelo Acompanhamento</label>
-                <input
-                  type="text"
-                  value={scheduleRespName}
-                  onChange={(e) => setScheduleRespName(e.target.value)}
-                  className="h-12 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Horário do Alerta</label>
-                  <input
-                    type="time"
-                    value={scheduleTime}
-                    onChange={(e) => setScheduleTime(e.target.value)}
-                    className="h-12 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Quando Notificar</label>
-                  <select
-                    value={scheduleReminder}
-                    onChange={(e) => setScheduleReminder(e.target.value)}
-                    className="h-12 w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 text-sm font-semibold text-slate-700 dark:text-slate-300 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                  >
-                    <option value="No dia">No dia do vencimento</option>
-                    <option value="1 dia antes">1 dia antes</option>
-                    <option value="2 dias antes">2 dias antes</option>
-                    <option value="3 dias antes">3 dias antes</option>
-                    <option value="4 dias antes">4 dias antes</option>
-                    <option value="5 dias antes">5 dias antes</option>
-                    <option value="6 dias antes">6 dias antes</option>
-                    <option value="1 semana antes">1 semana antes (7 dias antes)</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={handleSkipCustomSchedule}
-                disabled={isSavingSchedule}
-                className="rounded-2xl border border-slate-200 dark:border-slate-700 px-6 py-3 text-sm font-black text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50"
-              >Pular</button>
-              <button
-                type="button"
-                onClick={handleConfirmCustomSchedule}
-                disabled={isSavingSchedule}
-                className="rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-black text-white hover:bg-emerald-700 dark:bg-emerald-700 dark:hover:bg-emerald-600 shadow-md hover:shadow-emerald-500/10 transition disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {isSavingSchedule ? (
-                  <>
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
-                    Salvando...
-                  </>
-                ) : "Confirmar e Agendar"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {pendingContractScheduleNotice && (
-        <ConfirmationModal
-          icon="OK"
-          title={pendingContractScheduleNotice.title}
-          description={pendingContractScheduleNotice.description}
-          itemLabel="Contrato vinculado"
-          itemValue={pendingContractScheduleNotice.itemValue}
-          confirmLabel="Voltar para contratos"
-          cancelLabel="Fechar"
-          tone="emerald"
-          onCancel={closeContractScheduleNotice}
-          onConfirm={closeContractScheduleNotice}
-          isBlackTheme={isBlackTheme}
-          themeClass={accountsReceivableThemeClass}
-          zIndex="z-[95]"
-        />
-      )}
-
-      <PersonCreateModal
-        open={isTenantCreateOpen}
-        companyId={companyId}
-        people={tenants.map((tenant) => ({
-          id: tenant.id,
-          document: tenant.document || tenant.cpf || "",
-        }))}
-        onClose={closeTenantCreateModal}
-        onCreated={handleTenantCreated}
-      />
-
-      <BankTransactionModal
-        key={bankTransactionQueue[0] ? `${bankTransactionQueue[0].description}-${bankTransactionQueue.length}` : "bank-modal"}
-        isOpen={isBankTransactionModalOpen && bankTransactionQueue.length > 0}
-        onClose={() => {
-          setIsBankTransactionModalOpen(false);
-          setBankTransactionQueue([]);
-        }}
-        onSuccess={() => {
-          setBankTransactionQueue((prev) => {
-            const nextQueue = prev.slice(1);
-            if (nextQueue.length === 0) {
-              setIsBankTransactionModalOpen(false);
-            }
-            return nextQueue;
-          });
-        }}
-        initialData={bankTransactionQueue[0]}
-      />
-    </>
-  );
-}
-
-function mapApiReceivableToCharge(account: ReceivableAccount): Charge {
-  const amount = normalizeApiAmount(account.amount);
-  const paidAmount = getReceivablePaidAmount(account);
-  const settlementAmount = getReceivableSettlementAmount(account);
-  const remainingAmount = Math.max(amount - settlementAmount, 0);
-
-  return {
-    id: account.id,
-    contractId: account.contractId || null,
-    tenantId: account.tenantId || null,
-    property: account.propertyName,
-    tenant: account.tenantName,
-    dueDate: account.dueDate,
-    amount,
-    status: account.status === "PAID" ? "Paid" : "Pending",
-    paidAmount,
-    remainingAmount,
-    manual: account.manual,
-    issueDate: account.issueDate || undefined,
-    installmentNumber: account.installmentNumber || undefined,
-    installmentTotal: account.installmentTotal || undefined,
-    installmentGroupId: account.installmentGroupId || undefined,
-    isDownPayment: account.isDownPayment,
-  };
-}
-
-function mapApiReceivableToPayments(account: ReceivableAccount): ChargePayment[] {
-  return (account.payments || []).map((payment) => ({
-    id: payment.id,
-    chargeId: account.id,
-    paidAt: payment.paidAt,
-    method: mapApiPaymentMethodToUi(payment.method),
-    paymentItems: mapApiPaymentItemsToUi(payment.paymentItems),
-    interest: normalizeApiAmount(payment.interest),
-    discount: normalizeApiAmount(payment.discount),
-    amountPaid: normalizeApiAmount(payment.amountPaid),
-    note: payment.note || "",
-  }));
-}
-
-function getReceivablePaidAmount(account: ReceivableAccount) {
-  return (account.payments || []).reduce(
-    (total, payment) => total + normalizeApiAmount(payment.amountPaid),
-    0,
-  );
-}
-
-function getReceivableSettlementAmount(account: ReceivableAccount) {
-  return (account.payments || []).reduce(
-    (total, payment) =>
-      total +
-      normalizeApiAmount(payment.amountPaid) +
-      normalizeApiAmount(payment.discount) -
-      normalizeApiAmount(payment.interest),
-    0,
-  );
-}
-
-function mapApiContractToReceivableContract(contract: ApiContract): Contract {
-  return {
-    id: contract.id,
-    propertyId: contract.propertyId,
-    propertyName: contract.propertyName || contract.property?.title || "",
-    tenantId: contract.tenantId,
-    tenantName: contract.tenantName || contract.tenant?.name || "",
-    startDate: normalizeApiDateForReceivableContract(contract.startDate),
-    endDate: normalizeApiDateForReceivableContract(contract.endDate),
-    rentValue: contract.rentValue,
-    status: contract.status,
-    isTemporaryRental: contract.isTemporaryRental,
-    checkInTime: contract.checkInTime || undefined,
-    checkOutTime: contract.checkOutTime || undefined,
-  };
-}
-
-function normalizeApiDateForReceivableContract(value?: string | null) {
-  if (!value) return "";
-
-  if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
-    return value.slice(0, 10);
-  }
-
-  const parsedDate = new Date(value);
-
-  if (Number.isNaN(parsedDate.getTime())) return "";
-
-  const year = parsedDate.getFullYear();
-  const month = String(parsedDate.getMonth() + 1).padStart(2, "0");
-  const day = String(parsedDate.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-}
-
-function mapApiPropertyToReceivableProperty(property: ApiProperty): Property {
-  return {
-    id: property.id,
-    name: property.title,
-    assetCategory: property.assetCategory || "PROPERTY",
-    ownerId: property.ownerId || null,
-    ownerName: property.owner?.name || null,
-    managementMode: property.managementMode || "OWNED",
-    administrationFeePercentage: property.administrationFeePercentage
-      ? Number(property.administrationFeePercentage)
-      : 0,
-    ownerPayoutDay: property.ownerPayoutDay || null,
-    autoCreateOwnerPayable: property.autoCreateOwnerPayable !== false,
-    zipCode: property.zipCode || "",
-    state: property.state || "",
-    city: property.city || "",
-    street: property.address || "",
-    number: property.number || "",
-    district: property.district || "",
-    neighborhood: property.district || "",
-    complement: property.complement || "",
-  };
-}
-
-function getAssetCategoryLabel(value?: string | null) {
-  const labels: Record<string, string> = {
-    PROPERTY: "Imóvel",
-    EQUIPMENT: "Equipamento",
-    MACHINE: "Máquina",
-    VEHICLE: "Veículo",
-    TOOL: "Ferramenta",
-    OTHER: "Outro bem",
-  };
-
-  return labels[String(value || "OTHER")] || "Outro bem";
-}
-
-function mapApiPersonToReceivableTenant(person: Person): Tenant {
-  return {
-    id: person.id,
-    name: person.name,
-    personType: person.type === "COMPANY" ? "Company" : "Individual",
-    cpf: person.document,
-    document: person.document,
-    phone: person.phone || "",
-    isTenant: person.isTenant !== false,
-    state: person.state || "",
-    city: person.city || "",
-    street: person.address || "",
-  };
-}
-
-function mapUiPaymentMethodToApi(method: PaymentMethod): ApiPaymentMethod {
-  const methodMap: Record<PaymentMethod, ApiPaymentMethod> = {
-    Cash: "CASH",
-    Pix: "PIX",
-    CreditCard: "CREDIT_CARD",
-    DebitCard: "DEBIT_CARD",
-    BankSlip: "BANK_SLIP",
-    BankTransfer: "BANK_TRANSFER",
-    Other: "OTHER",
-  };
-
-  return methodMap[method];
-}
-
-function mapApiPaymentMethodToUi(method: ApiPaymentMethod): PaymentMethod {
-  const methodMap: Record<ApiPaymentMethod, PaymentMethod> = {
-    CASH: "Cash",
-    PIX: "Pix",
-    CREDIT_CARD: "CreditCard",
-    DEBIT_CARD: "DebitCard",
-    BANK_SLIP: "BankSlip",
-    BANK_TRANSFER: "BankTransfer",
-    OTHER: "Other",
-  };
-
-  return methodMap[method];
-}
-
-function mapUiPaymentItemsToApi(items: PaymentAllocation[]) {
-  return items.map((item) => ({
-    ...item,
-    method: mapUiPaymentMethodToApi(item.method),
-  }));
-}
-
-function mapApiPaymentItemsToUi(items: unknown): PaymentAllocation[] | undefined {
-  if (!Array.isArray(items)) {
-    return undefined;
-  }
-
-  return items
-    .map((item, index) => {
-      if (!item || typeof item !== "object") {
-        return null;
-      }
-
-      const record = item as {
-        id?: unknown;
-        method?: unknown;
-        amount?: unknown;
-      };
-
-      if (typeof record.method !== "string") {
-        return null;
-      }
-
+  async function handleConfirmBatchPayment(data: {
+    method: PaymentMethod;
+    paidAt: string;
+    bankAccountId?: string | null;
+  }) {
+    if (!companyId || selectedIds.length === 0) return;
+
+    const payload = selectedIds.map((id) => {
+      const ch = charges.find((c) => c.id === id);
+      const rem = ch ? getChargeRemainingAmount(ch) : 0;
       return {
-        id: typeof record.id === "string" ? record.id : `payment-item-${index}`,
-        method: mapApiPaymentMethodToUi(record.method as ApiPaymentMethod),
-        amount: normalizeApiAmount(record.amount),
+        chargeId: id,
+        amountPaid: rem,
+        method: mapUiPaymentMethodToApi(data.method),
+        paidAt: data.paidAt,
+        bankAccountId: data.bankAccountId,
       };
-    })
-    .filter((item): item is PaymentAllocation => item !== null);
-}
+    });
 
-function normalizeApiAmount(value: unknown) {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : 0;
+    await receiveAccountsBatch(payload);
+    setSelectedIds([]);
+    await loadData(companyId);
   }
 
-  if (typeof value === "string") {
-    const parsedValue = Number(value);
+  async function handleSaveCharge(payload: {
+    tenantId?: string | null;
+    property: string;
+    tenant: string;
+    contractId?: string | null;
+    amount: number;
+    issueDate?: string | null;
+    dueDate: string;
+    launchType: ChargeLaunchType;
+    installmentsCount?: number;
+    downPaymentAmount?: number;
+    installments?: Array<{
+      installmentNumber?: number;
+      installmentTotal?: number;
+      amount: number;
+      dueDate: string;
+      isDownPayment?: boolean;
+    }>;
+  }) {
+    if (!companyId) return;
 
-    return Number.isFinite(parsedValue) ? parsedValue : 0;
+    const createdCharges: Charge[] = [];
+
+    if (selectedCharge) {
+      await updateReceivableAccount(selectedCharge.id, {
+        tenantId: payload.tenantId,
+        tenant: payload.tenant,
+        property: payload.property,
+        contractId: payload.contractId,
+        amount: payload.amount,
+        issueDate: payload.issueDate,
+        dueDate: payload.dueDate,
+      });
+    } else if (payload.installments && payload.installments.length > 0) {
+      // Salva parcelas customizadas e editadas individualmente pelo usuário no grid
+      const groupId = `grp_${Date.now()}`;
+      for (const inst of payload.installments) {
+        const created = await createReceivableAccount({
+          tenantId: payload.tenantId,
+          tenant: payload.tenant,
+          property: payload.property,
+          contractId: payload.contractId,
+          amount: inst.amount,
+          issueDate: payload.issueDate,
+          dueDate: inst.dueDate,
+          installmentNumber: inst.installmentNumber,
+          installmentTotal: inst.installmentTotal,
+          installmentGroupId: groupId,
+          isDownPayment: inst.isDownPayment,
+        });
+        if (created) {
+          createdCharges.push(mapApiCharge(created));
+        }
+      }
+    } else {
+      if (payload.launchType === "single") {
+        const created = await createReceivableAccount({
+          tenantId: payload.tenantId,
+          tenant: payload.tenant,
+          property: payload.property,
+          contractId: payload.contractId,
+          amount: payload.amount,
+          issueDate: payload.issueDate,
+          dueDate: payload.dueDate,
+        });
+        if (created) {
+          createdCharges.push(mapApiCharge(created));
+        }
+      } else if (payload.launchType === "installments") {
+        const count = payload.installmentsCount || 2;
+        const groupId = `grp_${Date.now()}`;
+        const installmentAmount = Number((payload.amount / count).toFixed(2));
+        const [yStr, mStr, dStr] = payload.dueDate.split("-");
+        let curYear = Number(yStr);
+        let curMonth = Number(mStr);
+        const curDay = Number(dStr);
+
+        for (let i = 1; i <= count; i++) {
+          const installmentDate = new Date(curYear, curMonth - 1, curDay)
+            .toISOString()
+            .slice(0, 10);
+
+          const created = await createReceivableAccount({
+            tenantId: payload.tenantId,
+            tenant: payload.tenant,
+            property: payload.property,
+            contractId: payload.contractId,
+            amount: installmentAmount,
+            issueDate: payload.issueDate,
+            dueDate: installmentDate,
+            installmentNumber: i,
+            installmentTotal: count,
+            installmentGroupId: groupId,
+          });
+          if (created) {
+            createdCharges.push(mapApiCharge(created));
+          }
+
+          curMonth += 1;
+          if (curMonth > 12) {
+            curMonth = 1;
+            curYear += 1;
+          }
+        }
+      } else if (payload.launchType === "downPaymentPlusInstallments") {
+        const downPayment = payload.downPaymentAmount || 0;
+        const remainingBalance = payload.amount - downPayment;
+        const count = payload.installmentsCount || 2;
+        const groupId = `grp_${Date.now()}`;
+
+        // Cria o sinal
+        const createdDp = await createReceivableAccount({
+          tenantId: payload.tenantId,
+          tenant: payload.tenant,
+          property: payload.property,
+          contractId: payload.contractId,
+          amount: downPayment,
+          issueDate: payload.issueDate,
+          dueDate: payload.dueDate,
+          installmentNumber: 1,
+          installmentTotal: count + 1,
+          isDownPayment: true,
+          installmentGroupId: groupId,
+        });
+        if (createdDp) {
+          createdCharges.push(mapApiCharge(createdDp));
+        }
+
+        // Cria as parcelas do saldo
+        const installmentAmount = Number((remainingBalance / count).toFixed(2));
+        const [yStr, mStr, dStr] = payload.dueDate.split("-");
+        let curYear = Number(yStr);
+        let curMonth = Number(mStr) + 1;
+        const curDay = Number(dStr);
+
+        for (let i = 1; i <= count; i++) {
+          if (curMonth > 12) {
+            curMonth = 1;
+            curYear += 1;
+          }
+          const installmentDate = new Date(curYear, curMonth - 1, curDay)
+            .toISOString()
+            .slice(0, 10);
+
+          const created = await createReceivableAccount({
+            tenantId: payload.tenantId,
+            tenant: payload.tenant,
+            property: payload.property,
+            contractId: payload.contractId,
+            amount: installmentAmount,
+            issueDate: payload.issueDate,
+            dueDate: installmentDate,
+            installmentNumber: i + 1,
+            installmentTotal: count + 1,
+            installmentGroupId: groupId,
+          });
+          if (created) {
+            createdCharges.push(mapApiCharge(created));
+          }
+
+          curMonth += 1;
+        }
+      }
+    }
+
+    await loadData(companyId);
+
+    // Se estiver no fluxo de contrato:
+    const savedSessionFlowId =
+      typeof window !== "undefined"
+        ? sessionStorage.getItem("contrx_active_contract_flow_id")
+        : null;
+    const activeContractId =
+      flowContractId ||
+      (payload.contractId ? String(payload.contractId) : null) ||
+      savedSessionFlowId;
+
+    if (activeContractId && createdCharges.length > 0) {
+      setIsFormModalOpen(false);
+      setFlowContractId(null);
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("contrx_active_contract_flow_id", activeContractId);
+      }
+
+      // Localiza a parcela de entrada/sinal
+      const downPaymentCharge = createdCharges.find((c) => c.isDownPayment);
+
+      setPendingContractCarnetFlow({
+        contractId: activeContractId,
+        charges: createdCharges,
+      });
+
+      if (downPaymentCharge) {
+        // Tendo entrada, abre imediatamente a janela de abatimento / recebimento da parcela de entrada!
+        setSelectedCharge(downPaymentCharge);
+        setIsPaymentModalOpen(true);
+      }
+    } else {
+      setIsFormModalOpen(false);
+      setSelectedCharge(null);
+    }
   }
 
-  return 0;
-}
+  async function handleConfirmDeleteOrReversal() {
+    if (!selectedCharge || !companyId) return;
 
-function Card({
-  title,
-  value,
-  green,
-  red,
-}: {
-  title: string;
-  value: ReactNode;
-  green?: boolean;
-  red?: boolean;
-}) {
+    if (deleteModalMode === "delete") {
+      await deleteReceivableAccount(selectedCharge.id);
+    } else {
+      await reverseReceivedAccount(selectedCharge.id);
+    }
+
+    await loadData(companyId);
+  }
+
+  function handlePrintReceipt(charge: Charge) {
+    const lastPayment = charge.payments && charge.payments.length > 0
+      ? charge.payments[0]
+      : null;
+
+    if (!lastPayment) return;
+
+    const companySettings = getCachedCompanySettings() || {};
+    generatePaymentReceipt({
+      charge: {
+        id: charge.id,
+        property: charge.propertyName,
+        tenant: charge.tenantName,
+        amount: charge.amount,
+        dueDate: charge.dueDate,
+        status: charge.status,
+      },
+      paymentRecord: {
+        chargeId: charge.id,
+        paidAt: lastPayment.paidAt,
+        method: lastPayment.method,
+        amountPaid: lastPayment.amountPaid,
+        interest: lastPayment.interest,
+        discount: lastPayment.discount,
+        note: lastPayment.note || undefined,
+      },
+      companySettings,
+      getPaymentMethodLabel: (m) => m,
+      setPaymentFormError: (msg) => alert(msg),
+    });
+  }
+
+  function handlePrintCarnet(charge: Charge) {
+    const companySettings = getCachedCompanySettings() || {};
+    const relatedCharges = charge.installmentGroupId
+      ? charges.filter((c) => c.installmentGroupId === charge.installmentGroupId)
+      : [charge];
+
+    generatePaymentCarnet({
+      charges: relatedCharges.map((c) => ({
+        id: c.id,
+        property: c.propertyName,
+        tenant: c.tenantName,
+        amount: c.amount,
+        dueDate: c.dueDate,
+        status: c.status,
+        installmentNumber: c.installmentNumber || undefined,
+        installmentTotal: c.installmentTotal || undefined,
+      })),
+      companySettings,
+      setChargeFormError: (msg) => alert(msg),
+    });
+  }
+
+  async function handleShareReport(charge: Charge) {
+    try {
+      const res = await shareReceivableReport({
+        tenantId: charge.tenantId || undefined,
+        startDate,
+        endDate,
+      });
+
+      const url = `${window.location.origin}/relatorio-receber-compartilhado/${res.id}`;
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch {
+        // Ignora caso permissão de clipboard seja bloqueada
+      }
+
+      setShareModalCharge(charge);
+      setShareModalUrl(url);
+      setShareModalExpiresAt((res as any)?.expiresAt);
+      setIsShareModalOpen(true);
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error
+          ? err.message
+          : "Não foi possível gerar o link de cobrança compartilhado."
+      );
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex h-96 flex-col items-center justify-center gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+        <p className="text-sm font-bold text-slate-500">
+          Carregando contas a receber...
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-      <p className="truncate text-xs font-bold text-slate-500 dark:text-slate-400">{title}</p>
-
-      <h2
-        className={`mt-1 truncate text-xl font-black ${
-          green ? "text-emerald-600" : red ? "text-red-600" : "text-slate-900 dark:text-slate-100"
-        }`}
-      >
-        {value}
-      </h2>
-    </div>
-  );
-}
-
-function ConfirmationModal({
-  icon,
-  title,
-  description,
-  itemLabel,
-  itemValue,
-  details,
-  error,
-  confirmLabel,
-  cancelLabel = "Cancelar",
-  danger,
-  tone = "orange",
-  onCancel,
-  onConfirm,
-  isProcessing = false,
-  processingLabel = "Processando...",
-  isBlackTheme,
-  themeClass,
-  zIndex = "z-[80]",
-}: {
-  icon: string;
-  title: string;
-  description: string;
-  itemLabel: string;
-  itemValue: string;
-  details?: ReactNode;
-  error?: string;
-  confirmLabel: string;
-  cancelLabel?: string;
-  danger?: boolean;
-  tone?: "orange" | "emerald" | "amber";
-  onCancel: () => void;
-  onConfirm: () => void;
-  isProcessing?: boolean;
-  processingLabel?: string;
-  isBlackTheme?: boolean;
-  themeClass?: string;
-  zIndex?: string;
-}) {
-  const toneClass =
-    tone === "emerald"
-      ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 shadow-emerald-500/10"
-      : tone === "amber"
-        ? "bg-amber-50 dark:bg-amber-950/30 text-amber-600 shadow-amber-500/10"
-        : "bg-orange-50 dark:bg-orange-950/30 text-orange-600 shadow-orange-500/10";
-  const confirmClass = danger
-    ? "bg-red-600 hover:bg-red-700"
-    : tone === "emerald"
-      ? "bg-emerald-600 hover:bg-emerald-700"
-      : tone === "amber"
-        ? "bg-amber-600 hover:bg-amber-700"
-        : "bg-orange-500 hover:bg-orange-600";
-
-  return (
-    <div className={`fixed inset-0 ${zIndex} flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm ${themeClass ?? (isBlackTheme ? "contrx-accounts-receivable-page-black" : "contrx-accounts-receivable-page-light")}`}>
-      <div className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
-        <div className="p-6 text-center">
-          <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-2xl text-2xl shadow-lg ${danger ? "bg-red-50 text-red-600 shadow-red-500/10 dark:bg-red-950/30" : toneClass}`}>
-            {icon}
+    <div className="space-y-6">
+      {/* Cabeçalho */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white sm:text-3xl">
+              Contas a Receber
+            </h1>
+            <button
+              type="button"
+              onClick={() => {
+                if (companyId) {
+                  setIsRefreshing(true);
+                  loadData(companyId);
+                }
+              }}
+              disabled={isRefreshing}
+              className="rounded-xl border border-slate-200 p-1.5 text-slate-400 hover:text-slate-600 dark:border-slate-800 dark:hover:text-slate-200"
+              title="Recarregar cobranças"
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${isRefreshing ? "animate-spin text-emerald-600" : ""}`}
+              />
+            </button>
           </div>
-
-          <h2 className="mt-4 text-xl font-black text-slate-900 dark:text-slate-100">
-            {title}
-          </h2>
-
-          <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-            {description}
+          <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+            Acompanhe recebíveis de locações, carnês, baixas em lote e repasses no padrão Contrx.
           </p>
-
-          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left dark:border-slate-700 dark:bg-slate-800">
-            <p className="text-xs font-bold uppercase text-slate-500 dark:text-slate-400">
-              {itemLabel}
-            </p>
-            <p className="mt-1 text-xs font-black text-slate-900 dark:text-slate-100">
-              {itemValue}
-            </p>
-            {details && (
-              <div className="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
-                {details}
-              </div>
-            )}
-            {error && (
-              <div className="mt-3 rounded-2xl border border-red-100 bg-red-50 p-3 text-xs font-bold text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300">
-                {error}
-              </div>
-            )}
-          </div>
         </div>
 
-        <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-white p-5 dark:border-slate-800 dark:bg-slate-900 md:flex-row md:justify-end">
+        <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={onCancel}
-            disabled={isProcessing}
-            className="rounded-xl bg-slate-100 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+            onClick={handleOpenCreate}
+            className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-xs font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 active:scale-95"
           >
-            {cancelLabel}
-          </button>
-
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={isProcessing}
-            className={`rounded-xl px-5 py-3 text-sm font-bold text-white shadow-sm transition disabled:cursor-not-allowed disabled:opacity-70 ${confirmClass}`}
-          >
-            {isProcessing ? processingLabel : confirmLabel}
+            <Plus className="h-4 w-4" />
+            Nova Cobrança
           </button>
         </div>
       </div>
+
+      {errorMessage && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs font-bold text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300">
+          {errorMessage}
+        </div>
+      )}
+
+      {/* KPIs Interativos no Topo (Padrão Bens/Ativos) */}
+      <ReceivableKpis
+        charges={charges}
+        selectedFilter={statusFilter}
+        onSelectFilter={setStatusFilter}
+        getChargeRemainingAmount={getChargeRemainingAmount}
+        getChargePaidAmount={getChargePaidAmount}
+      />
+
+      {/* Card de Busca e Filtros Rápidos (Container rounded-3xl) */}
+      <ReceivableFilters
+        search={search}
+        onSearchChange={setSearch}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        selectedTenantId={selectedTenantId}
+        onTenantChange={setSelectedTenantId}
+        selectedPropertyId={selectedPropertyId}
+        onPropertyChange={setSelectedPropertyId}
+        periodShortcut={periodShortcut}
+        onPeriodShortcutChange={handlePeriodShortcutChange}
+        startDate={startDate}
+        onStartDateChange={setStartDate}
+        endDate={endDate}
+        onEndDateChange={setEndDate}
+        tenants={tenants}
+        properties={properties}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        selectedCount={selectedIds.length}
+        onOpenBatchReceipt={() => setIsBatchModalOpen(true)}
+        onResetFilters={handleResetFilters}
+        hasActiveFilters={hasActiveFilters}
+        onOpenPersonSelectModal={() => setIsPersonFilterModalOpen(true)}
+      />
+
+      {/* Banner de Filtragem de Parcelas por Contrato (para finalização / abatimento) */}
+      {filterContractId && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-amber-50 border border-amber-200 p-4 text-xs font-bold text-amber-900 shadow-sm animate-in fade-in">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xl">⚠️</span>
+            <div>
+              <p className="font-black text-amber-950">
+                Filtrando parcelas em aberto deste contrato para abatimento
+              </p>
+              <p className="text-[11px] text-amber-800/80 font-semibold mt-0.5">
+                Realize o recebimento ou baixa das parcelas pendentes abaixo para liberar o encerramento do contrato.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setFilterContractId(null);
+              handleResetFilters();
+            }}
+            className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-xl bg-white border border-amber-300 px-3.5 py-2 text-xs font-black text-amber-900 hover:bg-amber-100 transition shadow-sm shrink-0"
+          >
+            Limpar filtro e ver todas as contas
+          </button>
+        </div>
+      )}
+
+      {/* Visualização de Tabela Desktop vs Cards Mobile */}
+      {viewMode === "table" ? (
+        <>
+          <div className="hidden lg:block">
+            <ReceivableTable
+              charges={filteredCharges}
+              tenants={tenants}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
+              onToggleSelectAll={handleToggleSelectAll}
+              onOpenPaymentModal={handleOpenPayment}
+              onOpenEditModal={handleOpenEdit}
+              onOpenDeleteModal={handleOpenDelete}
+              onOpenReversalModal={handleOpenReversal}
+              onPrintReceipt={handlePrintReceipt}
+              onPrintCarnet={handlePrintCarnet}
+              onShareReport={handleShareReport}
+              onViewPayments={handleViewPayments}
+              getChargeRemainingAmount={getChargeRemainingAmount}
+              getChargePaidAmount={getChargePaidAmount}
+            />
+          </div>
+          <div className="block lg:hidden">
+            <ReceivableMobileCards
+              charges={filteredCharges}
+              tenants={tenants}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
+              onOpenPaymentModal={handleOpenPayment}
+              onOpenEditModal={handleOpenEdit}
+              onOpenDeleteModal={handleOpenDelete}
+              onShareReport={handleShareReport}
+              getChargeRemainingAmount={getChargeRemainingAmount}
+              getChargePaidAmount={getChargePaidAmount}
+            />
+          </div>
+        </>
+      ) : (
+        <ReceivableMobileCards
+          charges={filteredCharges}
+          tenants={tenants}
+          selectedIds={selectedIds}
+          onToggleSelect={handleToggleSelect}
+          onOpenPaymentModal={handleOpenPayment}
+          onOpenEditModal={handleOpenEdit}
+          onOpenDeleteModal={handleOpenDelete}
+          onShareReport={handleShareReport}
+          getChargeRemainingAmount={getChargeRemainingAmount}
+          getChargePaidAmount={getChargePaidAmount}
+        />
+      )}
+
+      {/* Modais */}
+      <ReceivablePaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => {
+          setIsPaymentModalOpen(false);
+          setSelectedCharge(null);
+        }}
+        charge={selectedCharge}
+        remainingAmount={
+          selectedCharge ? getChargeRemainingAmount(selectedCharge) : 0
+        }
+        onConfirmPayment={handleConfirmPayment}
+      />
+
+      <ReceivableBatchModal
+        isOpen={isBatchModalOpen}
+        onClose={() => setIsBatchModalOpen(false)}
+        selectedCharges={selectedChargesList}
+        getChargeRemainingAmount={getChargeRemainingAmount}
+        onConfirmBatch={handleConfirmBatchPayment}
+      />
+
+      <ReceivableFormModal
+        isOpen={isFormModalOpen}
+        onClose={() => {
+          setIsFormModalOpen(false);
+          setSelectedCharge(null);
+          setContractPayload(null);
+        }}
+        editingCharge={selectedCharge}
+        initialContractPayload={contractPayload}
+        tenants={tenants}
+        properties={properties}
+        contracts={contracts}
+        onSave={async (payload) => {
+          await handleSaveCharge(payload);
+          setContractPayload(null);
+        }}
+      />
+
+      <ReceivableDeleteModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setSelectedCharge(null);
+        }}
+        charge={selectedCharge}
+        mode={deleteModalMode}
+        onConfirm={handleConfirmDeleteOrReversal}
+      />
+
+      <ReceivableHistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => {
+          setIsHistoryModalOpen(false);
+          setSelectedCharge(null);
+        }}
+        charge={selectedCharge}
+      />
+
+      <PersonSelectModal
+        isOpen={isPersonFilterModalOpen}
+        onClose={() => setIsPersonFilterModalOpen(false)}
+        tenants={tenants}
+        selectedTenantId={selectedTenantId}
+        companyId={companyId}
+        onSelectTenant={(t) => {
+          setSelectedTenantId(t ? t.id : "all");
+        }}
+        onPersonCreated={(newPerson) => {
+          setTenants((prev) => [newPerson, ...prev]);
+        }}
+      />
+
+      <ReceivableShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => {
+          setIsShareModalOpen(false);
+          setShareModalCharge(null);
+          setShareModalUrl("");
+        }}
+        charge={shareModalCharge}
+        shareUrl={shareModalUrl}
+        expiresAt={shareModalExpiresAt}
+        tenantPhone={shareModalTenantPhone}
+        tenants={tenants}
+      />
+
+      {/* Modal de Impressão de Carnê do Fluxo de Contrato (Etapa 4 de 5) */}
+      {pendingContractCarnetFlow && !isPaymentModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+            {/* Header com Badge */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
+                  <Printer className="h-6 w-6" />
+                </div>
+                <div>
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-400 mb-1">
+                    Etapa 4 de 5 · Carnê de Pagamento
+                  </div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
+                    Parcelas geradas com sucesso!
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const targetContractId = pendingContractCarnetFlow.contractId;
+                  setPendingContractCarnetFlow(null);
+                  window.location.href = `/agenda?fromContract=1&contractId=${encodeURIComponent(targetContractId)}`;
+                }}
+                className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Conteúdo / Resumo */}
+            <div className="py-5 space-y-4">
+              {(() => {
+                const paidDp = pendingContractCarnetFlow.charges.find(
+                  (c) => c.isDownPayment && c.status === "Paid"
+                );
+                if (!paidDp) return null;
+                return (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-3.5 text-xs font-bold text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">✅</span>
+                      <span>
+                        Sinal de entrada ({formatCurrency(paidDp.amount)}) abatido com sucesso!
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handlePrintReceipt(paidDp)}
+                      className="inline-flex items-center gap-1 rounded-xl bg-emerald-600 px-3 py-1.5 text-[11px] font-black text-white hover:bg-emerald-700 transition shadow-sm"
+                    >
+                      <FileText className="h-3 w-3" />
+                      Recibo do Sinal
+                    </button>
+                  </div>
+                );
+              })()}
+
+              {(() => {
+                const isDownPaymentPaid = pendingContractCarnetFlow.charges.some(
+                  (c) => c.isDownPayment && c.status === "Paid"
+                );
+                const remainingCharges = pendingContractCarnetFlow.charges.filter(
+                  (c) => c.status !== "Paid" && !c.isDownPayment
+                );
+
+                return (
+                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                    {isDownPaymentPaid ? (
+                      <>
+                        Foram geradas <strong>{pendingContractCarnetFlow.charges.length} parcelas</strong> para este contrato.
+                        O sinal de entrada já foi abatido, restando <strong>{remainingCharges.length} demais parcela(s)</strong> a receber.
+                        Deseja imprimir o carnê com as parcelas restantes agora antes de prosseguir para o agendamento?
+                      </>
+                    ) : (
+                      <>
+                        Foram geradas <strong>{pendingContractCarnetFlow.charges.length} parcela(s)</strong> para este contrato.
+                        Deseja imprimir o carnê de cobrança com os códigos Pix agora antes de prosseguir para o agendamento?
+                      </>
+                    )}
+                  </p>
+                );
+              })()}
+
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+                <div className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300">
+                  🗓️ Próxima Etapa no Fluxo:
+                </div>
+                <div className="text-xs text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">
+                  Após imprimir ou avançar, abriremos automaticamente o formulário de <strong>Agendamento (Vencimento de Contrato)</strong> com as informações preenchidas para controle.
+                </div>
+              </div>
+            </div>
+
+            {/* Botões de Ação */}
+            <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+              {(() => {
+                const isDownPaymentPaid = pendingContractCarnetFlow.charges.some(
+                  (c) => c.isDownPayment && c.status === "Paid"
+                );
+                const remainingCharges = pendingContractCarnetFlow.charges.filter(
+                  (c) => c.status !== "Paid" && !c.isDownPayment
+                );
+                const printableList =
+                  isDownPaymentPaid && remainingCharges.length > 0
+                    ? remainingCharges
+                    : pendingContractCarnetFlow.charges;
+
+                return (
+                  <>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const targetContractId = pendingContractCarnetFlow.contractId;
+                        const companySettings = getCachedCompanySettings() || {};
+                        
+                        // Executa impressão do carnê com as demais parcelas restantes
+                        await generatePaymentCarnet({
+                          charges: printableList.map((c) => ({
+                            id: c.id,
+                            contractId: targetContractId,
+                            property: c.propertyName,
+                            tenant: c.tenantName,
+                            amount: c.amount,
+                            dueDate: c.dueDate,
+                            status: c.status,
+                            installmentNumber: c.installmentNumber || undefined,
+                            installmentTotal: c.installmentTotal || undefined,
+                            installmentGroupId: c.installmentGroupId || undefined,
+                            isDownPayment: c.isDownPayment,
+                          })),
+                          companySettings,
+                          setChargeFormError: (msg) => alert(msg),
+                        });
+
+                        // Avança para a Agenda
+                        if (typeof window !== "undefined") {
+                          sessionStorage.removeItem("contrx_active_contract_flow_id");
+                        }
+                        setPendingContractCarnetFlow(null);
+                        window.location.href = `/agenda?fromContract=1&contractId=${encodeURIComponent(targetContractId)}`;
+                      }}
+                      className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-xs font-black text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 active:scale-95"
+                    >
+                      <Printer className="h-4 w-4" />
+                      {isDownPaymentPaid && remainingCharges.length > 0
+                        ? `Imprimir Carnê (${remainingCharges.length} demais parcelas) e Avançar`
+                        : `Imprimir Carnê e Avançar`}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const targetContractId = pendingContractCarnetFlow.contractId;
+                        if (typeof window !== "undefined") {
+                          sessionStorage.removeItem("contrx_active_contract_flow_id");
+                        }
+                        setPendingContractCarnetFlow(null);
+                        window.location.href = `/agenda?fromContract=1&contractId=${encodeURIComponent(targetContractId)}`;
+                      }}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                    >
+                      Pular Impressão e Avançar
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

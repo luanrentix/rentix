@@ -170,7 +170,6 @@ describe('ContratosService', () => {
 
     expect(tx.contract.create).toHaveBeenCalled();
     expect(tx.contaReceber.create).not.toHaveBeenCalled();
-    expect(tx.scheduleItem.create).toHaveBeenCalled();
   });
 
   it('permite contrato temporario do mesmo bem quando o periodo nao conflita', async () => {
@@ -280,14 +279,129 @@ describe('ContratosService', () => {
         status: {
           in: [ContractStatus.ACTIVE],
         },
-        endDate: {
-          gte: new Date('2026-06-10T00:00:00'),
-        },
-        isTemporaryRental: false,
+        OR: [
+          {
+            endDate: {
+              gte: expect.any(Date),
+            },
+            isTemporaryRental: false,
+          },
+          {
+            startDate: { lte: new Date('2026-12-01T00:00:00') },
+            endDate: { gte: new Date('2026-09-01T00:00:00') },
+          },
+        ],
       },
     });
     expect(tx.contract.create).toHaveBeenCalled();
     expect(tx.contaReceber.create).not.toHaveBeenCalled();
+  });
+
+  it('permite múltiplos contratos sem sobreposição de datas para bens que não são imóveis (ex: maquinário, veículo, equipamento)', async () => {
+    const contractFindFirst = jest.fn().mockResolvedValue(null);
+    const { service, tx } = createService({
+      company: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'company-1' }),
+      },
+      property: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'property-machine',
+          companyId: 'company-1',
+          isActive: true,
+          assetCategory: 'MACHINERY',
+        }),
+      },
+      person: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'tenant-1',
+          companyId: 'company-1',
+          status: 'ACTIVE',
+        }),
+      },
+      contract: {
+        findFirst: contractFindFirst,
+      },
+    } as Partial<PrismaService>);
+
+    await service.create(
+      {
+        propertyId: 'property-machine',
+        tenantId: 'tenant-1',
+        propertyName: 'Escavadeira CAT',
+        tenantName: 'Construtora Alfa',
+        startDate: '2026-10-01',
+        endDate: '2026-10-15',
+        rentValue: 5000,
+        status: ContractStatus.ACTIVE,
+        isTemporaryRental: false,
+      },
+      'company-1',
+    );
+
+    expect(contractFindFirst).toHaveBeenCalledWith({
+      where: {
+        companyId: 'company-1',
+        propertyId: 'property-machine',
+        status: {
+          in: [ContractStatus.ACTIVE],
+        },
+        startDate: { lte: new Date('2026-10-15T00:00:00') },
+        endDate: { gte: new Date('2026-10-01T00:00:00') },
+      },
+    });
+    expect(tx.contract.create).toHaveBeenCalled();
+  });
+
+  it('bloqueia contrato para bem que não é imóvel quando o período conflitar com contrato ativo existente', async () => {
+    const { service } = createService({
+      company: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'company-1' }),
+      },
+      property: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'property-machine',
+          companyId: 'company-1',
+          isActive: true,
+          assetCategory: 'MACHINERY',
+        }),
+      },
+      person: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'tenant-1',
+          companyId: 'company-1',
+          status: 'ACTIVE',
+        }),
+      },
+      contract: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'contract-existing',
+          startDate: new Date('2026-10-05T00:00:00'),
+          endDate: new Date('2026-10-20T00:00:00'),
+          status: ContractStatus.ACTIVE,
+        }),
+      },
+    } as Partial<PrismaService>);
+
+    await expect(
+      service.create(
+        {
+          propertyId: 'property-machine',
+          tenantId: 'tenant-1',
+          propertyName: 'Escavadeira CAT',
+          tenantName: 'Construtora Alfa',
+          startDate: '2026-10-01',
+          endDate: '2026-10-10',
+          rentValue: 5000,
+          status: ContractStatus.ACTIVE,
+          isTemporaryRental: false,
+        },
+        'company-1',
+      ),
+    ).rejects.toThrow(
+      new BadRequestException(
+        'Este bem/ativo ja possui contrato ativo nesse periodo.',
+      ),
+    );
   });
 
   it('bloqueia contrato temporario do mesmo bem quando o periodo conflita', async () => {

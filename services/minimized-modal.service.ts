@@ -6,12 +6,13 @@ export type MinimizedModalMode = "create" | "edit";
 
 export type MinimizedModalState<TDraft = unknown> = {
   tool: MinimizedModalTool;
-  href: string;
-  title: string;
-  subtitle: string;
-  mode: MinimizedModalMode;
+  href?: string;
+  route?: string;
+  title?: string;
+  subtitle?: string;
+  mode?: MinimizedModalMode;
   draft?: TDraft;
-  updatedAt: number;
+  updatedAt?: number;
 };
 
 export const MINIMIZED_MODAL_STORAGE_KEY = "contrx_minimized_modal";
@@ -43,8 +44,17 @@ export function setMinimizedModalState<TDraft = unknown>(state: MinimizedModalSt
     return;
   }
 
-  window.localStorage.setItem(MINIMIZED_MODAL_STORAGE_KEY, JSON.stringify(state));
-  window.dispatchEvent(new CustomEvent(MINIMIZED_MODAL_CHANGE_EVENT, { detail: state }));
+  const payload: MinimizedModalState<TDraft> = {
+    href: state.href || state.route || "/dashboard",
+    title: state.title || "Rascunho",
+    subtitle: state.subtitle || "",
+    mode: state.mode || "create",
+    updatedAt: state.updatedAt || Date.now(),
+    ...state,
+  };
+
+  window.localStorage.setItem(MINIMIZED_MODAL_STORAGE_KEY, JSON.stringify(payload));
+  window.dispatchEvent(new CustomEvent(MINIMIZED_MODAL_CHANGE_EVENT, { detail: payload }));
 }
 
 export function clearMinimizedModalState(tool?: MinimizedModalTool) {

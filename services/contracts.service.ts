@@ -96,7 +96,7 @@ export type CreateContractDto = {
 
 export type UpdateContractDto = Partial<CreateContractDto>;
 
-export async function getContracts(companyId: string) {
+export async function getContracts(companyId?: string) {
   void companyId;
   return apiFetch<Contract[]>('/contratos');
 }
@@ -157,6 +157,35 @@ export async function renewContract(
 export async function deleteContract(id: string) {
   return apiFetch<Contract>(`/contratos/${id}`, {
     method: 'DELETE',
+  });
+}
+
+export type SharedContractResponse = {
+  contract: any;
+  company: {
+    id: string;
+    tradeName?: string;
+    companyName?: string;
+    document?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+  };
+  expiresAt: string;
+};
+
+export async function shareContract(id: string) {
+  return apiFetch<{ id: string; expiresAt: string }>(`/contratos/${id}/compartilhar`, {
+    method: 'POST',
+  });
+}
+
+export async function getSharedContract(id: string) {
+  return apiFetch<SharedContractResponse>(`/contratos-publicos/${id}`, {
+    auth: false,
   });
 }
 

@@ -14,6 +14,13 @@ export class ImoveisService {
   constructor(private readonly prisma: PrismaService) {}
 
   private readonly propertyManagementModes = new Set(['OWNED', 'MANAGED']);
+  private readonly assetOperationalStatuses = new Set([
+    'AVAILABLE',
+    'RENTED',
+    'MAINTENANCE',
+    'RESERVED',
+    'INACTIVE',
+  ]);
 
   async create(createPropertyDto: CriarImovelDto, companyId: string) {
     const data = this.normalizePropertyData(createPropertyDto);
@@ -61,6 +68,9 @@ export class ImoveisService {
           data.rentalValue !== undefined && data.rentalValue !== null
             ? new Prisma.Decimal(data.rentalValue)
             : null,
+        operationalStatus: this.normalizeOperationalStatus(
+          data.operationalStatus,
+        ),
         managementMode: this.normalizeManagementMode(data.managementMode),
         administrationFeePercentage:
           data.administrationFeePercentage !== undefined &&
@@ -73,8 +83,8 @@ export class ImoveisService {
         zipCode: data.zipCode || null,
         city: data.city || null,
         state: data.state || null,
-        address: data.address || null,
-        district: data.district || null,
+        address: data.address || data.street || null,
+        district: data.district || data.neighborhood || null,
         number: data.number || null,
         complement: data.complement || null,
 
@@ -96,6 +106,51 @@ export class ImoveisService {
   async findAll(companyId?: string) {
     if (!companyId) {
       throw new BadRequestException('O companyId é obrigatório.');
+    }
+
+    try {
+      if (this.prisma.contract?.findMany && this.prisma.property?.updateMany) {
+        const activeContracts = await this.prisma.contract.findMany({
+          where: {
+            companyId,
+            status: ContractStatus.ACTIVE,
+          },
+          select: { propertyId: true },
+        });
+
+        const activePropertyIds = activeContracts
+          .map((c) => c.propertyId)
+          .filter(Boolean);
+
+        // Se um imóvel ativo está como RENTED mas não possui contrato ativo, reverte para AVAILABLE
+        await this.prisma.property.updateMany({
+          where: {
+            companyId,
+            isActive: true,
+            operationalStatus: 'RENTED',
+            id: { notIn: activePropertyIds },
+          },
+          data: {
+            operationalStatus: 'AVAILABLE',
+          },
+        });
+
+        // Se um imóvel possui contrato ativo mas está como AVAILABLE, atualiza para RENTED
+        if (activePropertyIds.length > 0) {
+          await this.prisma.property.updateMany({
+            where: {
+              companyId,
+              operationalStatus: 'AVAILABLE',
+              id: { in: activePropertyIds },
+            },
+            data: {
+              operationalStatus: 'RENTED',
+            },
+          });
+        }
+      }
+    } catch {
+      // Ignora falhas de sincronização para não bloquear a listagem
     }
 
     return this.prisma.property.findMany({
@@ -159,6 +214,22 @@ export class ImoveisService {
 
     this.validateManagedPropertyData(nextManagementMode, nextOwnerId);
 
+    if (data.isActive === false && property.isActive) {
+      const activeContract = await this.prisma.contract.findFirst({
+        where: {
+          companyId,
+          propertyId: id,
+          status: ContractStatus.ACTIVE,
+        },
+      });
+
+      if (activeContract) {
+        throw new BadRequestException(
+          'Bem/ativo com contrato ativo não pode ser inativado.',
+        );
+      }
+    }
+
     return this.prisma.property.update({
       where: { id },
       data: {
@@ -200,6 +271,10 @@ export class ImoveisService {
           data.rentalValue !== undefined && data.rentalValue !== null
             ? new Prisma.Decimal(data.rentalValue)
             : property.rentalValue,
+        operationalStatus:
+          data.operationalStatus !== undefined
+            ? this.normalizeOperationalStatus(data.operationalStatus)
+            : property.operationalStatus,
         managementMode: nextManagementMode,
         administrationFeePercentage:
           data.administrationFeePercentage !== undefined
@@ -219,11 +294,17 @@ export class ImoveisService {
         city: data.city !== undefined ? data.city || null : property.city,
         state: data.state !== undefined ? data.state || null : property.state,
         address:
-          data.address !== undefined ? data.address || null : property.address,
+          data.address !== undefined
+            ? data.address || null
+            : data.street !== undefined
+              ? data.street || null
+              : property.address,
         district:
           data.district !== undefined
             ? data.district || null
-            : property.district,
+            : data.neighborhood !== undefined
+              ? data.neighborhood || null
+              : property.district,
         number:
           data.number !== undefined ? data.number || null : property.number,
         complement:
@@ -261,36 +342,88 @@ export class ImoveisService {
       throw new NotFoundException('Bem/ativo não encontrado.');
     }
 
-    const activeContract = await this.prisma.contract.findFirst({
-      where: {
-        companyId,
-        propertyId: id,
-        status: ContractStatus.ACTIVE,
-      },
-    });
+    await this.ensurePropertyHasNoMovements(id, companyId);
 
-    if (activeContract) {
+    await this.prisma.scheduleItem
+      .updateMany({
+        where: { companyId, propertyId: id },
+        data: { propertyId: null },
+      })
+      .catch(() => null);
+
+    await this.prisma.systemFile
+      .deleteMany({
+        where: {
+          companyId,
+          entityType: 'PROPERTY',
+          entityId: id,
+        },
+      })
+      .catch(() => null);
+
+    return this.prisma.property.delete({
+      where: { id },
+    });
+  }
+
+  private async ensurePropertyHasNoMovements(id: string, companyId: string) {
+    const [
+      contractsCount,
+      receivableAccountsCount,
+      payableAccountsCount,
+      movementsCount,
+    ] = await this.prisma.$transaction([
+      this.prisma.contract.count({
+        where: {
+          companyId,
+          propertyId: id,
+        },
+      }),
+      this.prisma.contaReceber.count({
+        where: {
+          companyId,
+          contract: {
+            propertyId: id,
+          },
+        },
+      }),
+      this.prisma.contaPagar.count({
+        where: {
+          companyId,
+          propertyId: id,
+        },
+      }),
+      this.prisma.propertyMovement.count({
+        where: {
+          companyId,
+          propertyId: id,
+        },
+      }),
+    ]);
+
+    const movementCount =
+      contractsCount +
+      receivableAccountsCount +
+      payableAccountsCount +
+      movementsCount;
+
+    if (movementCount > 0) {
       throw new BadRequestException(
-        'Bem/ativo com contrato ativo não pode ser inativado.',
+        'Este bem/ativo possui movimentação no sistema e não pode ser excluído. Utilize a inativação para preservar o histórico.',
       );
     }
-
-    return this.prisma.property.update({
-      where: { id },
-      data: {
-        isActive: false,
-      },
-      include: {
-        owner: true,
-        company: true,
-      },
-    });
   }
 
   private normalizePropertyData<
     TData extends CriarImovelDto | AtualizarImovelDto,
   >(data: TData) {
     const { photos, ...rest } = data as any;
+    if (rest.street && !rest.address) {
+      rest.address = rest.street;
+    }
+    if (rest.neighborhood && !rest.district) {
+      rest.district = rest.neighborhood;
+    }
     const normalized = uppercaseFields(rest, [
       'title',
       'code',
@@ -337,5 +470,16 @@ export class ImoveisService {
         'Informe o proprietario para imoveis administrados por imobiliaria.',
       );
     }
+  }
+
+  private normalizeOperationalStatus(value?: string | null) {
+    if (!value) return 'AVAILABLE';
+    const status = String(value).toUpperCase();
+    if (!this.assetOperationalStatuses.has(status)) {
+      throw new BadRequestException(
+        'Status operacional do bem/ativo invalido.',
+      );
+    }
+    return status;
   }
 }

@@ -41,13 +41,19 @@ function getConfiguredCompanyPhone(settings: unknown) {
   return getStringValue(settings, 'phone');
 }
 
+import { randomUUID } from 'crypto';
+import { JwtService } from '@nestjs/jwt';
+
 function toPrismaJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
+  ) {}
 
   async getResumo() {
     const [
@@ -138,6 +144,80 @@ export class AdminService {
         },
       };
     });
+  }
+
+  async impersonateUser(currentUserId: string, targetUserId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+      include: {
+        company: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(
+        'Usuário não encontrado para personificação.',
+      );
+    }
+
+    const sessionId = randomUUID();
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        activeSessionId: sessionId,
+      },
+    });
+
+    const accessState = getCompanyAccessState(user.company);
+
+    const token = await this.jwtService.signAsync({
+      sub: user.id,
+      email: user.email,
+      companyId: user.companyId,
+      role: user.role,
+      sessionId,
+      isImpersonated: true,
+      impersonatedBy: currentUserId,
+    });
+
+    await this.prisma.commercialHistory.create({
+      data: {
+        companyId: user.companyId,
+        userId: currentUserId,
+        action: 'IMPERSONATE',
+        description: `Acesso via personificação ao usuário ${user.name} (${user.email}).`,
+        metadata: toPrismaJson({
+          targetUserId: user.id,
+          operatorUserId: currentUserId,
+          timestamp: new Date().toISOString(),
+        }),
+      },
+    });
+
+    return {
+      accessToken: token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        companyId: user.companyId,
+        role: user.role,
+        permissions: user.permissions,
+        companyIsActive: user.company.isActive,
+        subscriptionStatus: user.company.subscriptionStatus,
+        trialStartsAt: user.company.trialStartsAt,
+        trialEndsAt: user.company.trialEndsAt,
+        trialExtendedUntil: user.company.trialExtendedUntil,
+        trialAccessEndsAt: accessState.endsAt,
+        trialDaysRemaining:
+          accessState.daysRemaining === null
+            ? null
+            : Math.max(0, accessState.daysRemaining),
+        subscriptionEndsAt: user.company.subscriptionEndsAt,
+        accessState,
+        isImpersonated: true,
+      },
+    };
   }
 
   async findCompanies() {

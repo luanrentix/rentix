@@ -1,459 +1,338 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ArrowLeft, MessageSquare, Plus, Send, Clock, User, Building, Shield } from "lucide-react";
+import { useEffect, useState, useMemo, useCallback } from "react";
+import {
+  MessageSquare,
+  Plus,
+  RefreshCw,
+  AlertCircle,
+  CheckCircle2,
+  X,
+  Loader2,
+  LifeBuoy,
+} from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { getChamados, criarChamado, clienteAcaoChamado, type SupportTicket } from "@/services/chamados.service";
-import { getCompanyStorageItem } from "@/services/company-storage";
-import { useSupportTickets } from "./hooks/useSupportTickets";
-import { useSupportForm } from "./hooks/useSupportForm";
-
-function parseMessageWithAttachment(messageText: string) {
-  const attachmentRegex = /--- ATTACHMENT: (.*?) \| (.*?) ---/;
-  const match = messageText.match(attachmentRegex);
-
-  if (match) {
-    const cleanMessage = messageText.replace(attachmentRegex, "").trim();
-    const fileName = match[1];
-    const base64 = match[2];
-    
-    return {
-      message: cleanMessage,
-      attachment: {
-        name: fileName,
-        content: base64,
-        isImage: base64.startsWith("data:image/"),
-      }
-    };
-  }
-
-  return {
-    message: messageText,
-    attachment: null,
-  };
-}
+import {
+  getChamados,
+  clienteAcaoChamado,
+  type SupportTicket,
+} from "@/services/chamados.service";
+import { SuporteKpis } from "@/components/suporte/suporte-kpis";
+import { SuporteFilters } from "@/components/suporte/suporte-filters";
+import { SuporteCards } from "@/components/suporte/suporte-cards";
+import { SuporteTable } from "@/components/suporte/suporte-table";
+import { SuporteDetailModal } from "@/components/suporte/suporte-detail-modal";
+import { SuporteCreateModal } from "@/components/suporte/suporte-create-modal";
+import type {
+  TicketStatusFilter,
+  TicketSortOption,
+} from "@/components/suporte/suporte-types";
 
 export default function SuportePage() {
-  const { user } = useAuth();
-  const companyId = user?.companyId;
-  const [themeMode, setThemeMode] = useState("light");
-  const [view, setView] = useState<"list" | "new">("list");
+  const { user, isLoading: isAuthLoading } = useAuth();
+
+  // Estados de Dados
+  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+
+  // Estados de Filtros e Visualização
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<TicketStatusFilter>("ALL");
+  const [sortOption, setSortOption] = useState<TicketSortOption>("recent");
+  const [viewMode, setViewMode] = useState<"table" | "cards">("cards");
+
+  // Modais
+  const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  const loadData = useCallback(async () => {
+    try {
+      setErrorMessage("");
+      const data = await getChamados();
+      setTickets(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Erro ao carregar chamados:", error);
+      const msg = error instanceof Error ? error.message : "Não foi possível carregar os chamados.";
+      setErrorMessage(msg);
+      setTickets([]);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
-    function syncTheme() {
-      const storedSettings = getCompanyStorageItem(companyId, "contrx_theme_settings", "contrx_theme_settings");
-      if (storedSettings) {
-        try {
-          const parsed = JSON.parse(storedSettings);
-          if (parsed.mode) {
-            setThemeMode(parsed.mode === "dark" ? "black" : parsed.mode);
-            return;
-          }
-        } catch {}
+    if (isAuthLoading) return;
+    loadData();
+  }, [isAuthLoading, loadData]);
+
+  // Limpeza de filtros
+  function handleResetFilters() {
+    setSearch("");
+    setStatusFilter("ALL");
+    setSortOption("recent");
+  }
+
+  const hasActiveFilters =
+    Boolean(search) || statusFilter !== "ALL" || sortOption !== "recent";
+
+  // Filtragem e Ordenação em Memória
+  const filteredTickets = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    const result = tickets.filter((ticket) => {
+      // Filtro de Status
+      if (statusFilter !== "ALL" && ticket.status !== statusFilter) {
+        return false;
       }
-      const legacyMode = getCompanyStorageItem(companyId, "contrx_theme", "contrx_theme");
-      if (legacyMode) {
-        setThemeMode(legacyMode === "dark" ? "black" : legacyMode);
-        return;
+
+      // Busca Textual
+      if (query) {
+        const subject = (ticket.subject || "").toLowerCase();
+        const message = (ticket.message || "").toLowerCase();
+        const response = (ticket.response || "").toLowerCase();
+
+        const matches =
+          subject.includes(query) ||
+          message.includes(query) ||
+          response.includes(query);
+
+        if (!matches) return false;
       }
-      setThemeMode("light");
-    }
 
-    syncTheme();
-    window.addEventListener("storage", syncTheme);
-    window.addEventListener("contrx-theme-change", syncTheme);
-    return () => {
-      window.removeEventListener("storage", syncTheme);
-      window.removeEventListener("contrx-theme-change", syncTheme);
-    };
-  }, [companyId]);
-
-  const isSystemOwner = user?.role === "SYSTEM_OWNER" || user?.role === "DONO_SISTEMA";
-  const {
-    chamados,
-    loading,
-    respondingTicketId,
-    setRespondingTicketId,
-    ticketResponse,
-    setTicketResponse,
-    isReplying,
-    fetchTickets,
-    handleClienteAcao,
-  } = useSupportTickets(companyId);
-
-  const {
-    subject,
-    setSubject,
-    message,
-    setMessage,
-    error,
-    setError,
-    success,
-    setSuccess,
-    submitting,
-    attachmentBase64,
-    attachmentName,
-    attachmentPreview,
-    handleFileChange,
-    removeAttachment,
-    handleSubmit,
-  } = useSupportForm({
-    onSubmitSuccess: () => setView("list"),
-  });
-
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
+      return true;
     });
-  };
+
+    // Ordenação
+    result.sort((a, b) => {
+      if (sortOption === "waiting_first") {
+        if (a.status === "RESPONDIDO" && b.status !== "RESPONDIDO") return -1;
+        if (a.status !== "RESPONDIDO" && b.status === "RESPONDIDO") return 1;
+        if (a.status === "ABERTO" && b.status !== "ABERTO") return -1;
+        if (a.status !== "ABERTO" && b.status === "ABERTO") return 1;
+      }
+
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+
+      if (sortOption === "oldest") {
+        return dateA - dateB;
+      }
+
+      // Default: recent
+      return dateB - dateA;
+    });
+
+    return result;
+  }, [tickets, search, statusFilter, sortOption]);
+
+  // Ações do Usuário
+  function handleOpenTicketDetail(ticket: SupportTicket) {
+    setSelectedTicket(ticket);
+    setIsDetailModalOpen(true);
+  }
+
+  async function handleSendReply(ticketId: string, replyText: string) {
+    try {
+      await clienteAcaoChamado(ticketId, "reply", replyText);
+      setSuccessMessage("Réplica enviada com sucesso para a equipe de suporte!");
+      await loadData();
+    } catch (err) {
+      console.error("Erro ao enviar réplica:", err);
+      throw err;
+    }
+  }
+
+  async function handleCloseTicket(ticketId: string) {
+    if (!confirm("Deseja realmente confirmar que seu chamado foi atendido e encerrá-lo?")) return;
+    try {
+      await clienteAcaoChamado(ticketId, "close");
+      setSuccessMessage("Chamado encerrado com sucesso.");
+      await loadData();
+    } catch (err) {
+      console.error("Erro ao encerrar chamado:", err);
+      setErrorMessage(
+        err instanceof Error ? err.message : "Não foi possível encerrar o chamado.",
+      );
+    }
+  }
+
+  function handleCreateSuccess() {
+    setSuccessMessage("Chamado enviado com sucesso! Nossa equipe técnica já foi notificada.");
+    loadData();
+  }
+
+  if (isAuthLoading || isLoading) {
+    return (
+      <div className="flex h-96 flex-col items-center justify-center gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+        <p className="text-sm font-bold text-slate-500">
+          Carregando seus chamados de suporte...
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div data-contrx-theme={themeMode} className="mx-auto max-w-4xl px-4 py-8">
-      {view === "list" ? (
-        <div>
-          {/* Header */}
-          <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-            <div>
-              <h1 className="flex items-center gap-3 text-2xl font-black text-slate-900">
-                <MessageSquare className="h-6 w-6 text-orange-600" />
-                {isSystemOwner ? "Chamados do Sistema" : "Meus chamados"}
-              </h1>
-              <p className="text-sm text-slate-500">
-                {isSystemOwner 
-                  ? "Gerencie e visualize todos os chamados abertos pelos clientes da plataforma." 
-                  : "Acompanhe e envie chamados de suporte técnico diretamente para o desenvolvedor."
-                }
-              </p>
-            </div>
-
-            {!isSystemOwner && (
-              <button
-                onClick={() => setView("new")}
-                className="flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-bold transition shadow-md hover:opacity-90"
-                style={{ backgroundColor: "var(--primary-color)", color: "#ffffff" }}
-              >
-                <Plus className="h-4 w-4" />
-                Novo chamado
-              </button>
-            )}
+    <div className="mx-auto max-w-6xl px-4 py-8 space-y-6">
+      {/* Cabeçalho da Página */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3.5">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
+            <LifeBuoy className="h-6 w-6" />
           </div>
 
-          {/* List content */}
-          {loading ? (
-            <div className="flex h-48 items-center justify-center">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-200 border-t-orange-600"></div>
-            </div>
-          ) : chamados.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-white p-12 text-center">
-              <div className="mb-4 rounded-full bg-slate-50 p-4">
-                <MessageSquare className="h-8 w-8 text-slate-400" />
-              </div>
-              <h3 className="text-lg font-bold text-slate-800">Nenhum chamado</h3>
-              <p className="mt-1 text-sm text-slate-500">
-                {isSystemOwner 
-                  ? "Nenhum cliente abriu chamado até o momento." 
-                  : "Você não possui chamados de suporte abertos."
-                }
-              </p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-4">
-              {chamados.map((ticket) => (
-                <div
-                  key={ticket.id}
-                  className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:shadow-md"
-                >
-                  <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
-                    <div>
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                          ticket.status === "ABERTO"
-                            ? "bg-orange-50 text-orange-700"
-                            : ticket.status === "RESPONDIDO"
-                            ? "bg-blue-50 text-blue-700"
-                            : "bg-slate-100 text-slate-500"
-                        }`}
-                      >
-                        {ticket.status === "ABERTO"
-                          ? "Aberto"
-                          : ticket.status === "RESPONDIDO"
-                          ? "Respondido"
-                          : "Fechado"}
-                      </span>
-                      <h4 className="mt-2 text-lg font-bold text-slate-900">
-                        {ticket.subject}
-                      </h4>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                      <Clock className="h-3.5 w-3.5" />
-                      {formatDate(ticket.createdAt)}
-                    </div>
-                  </div>
-
-                  {(() => {
-                    const parsed = parseMessageWithAttachment(ticket.message);
-                    return (
-                      <>
-                        <p className="mt-3 text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">
-                          {parsed.message}
-                        </p>
-                        {parsed.attachment && (
-                          <div className="mt-3 rounded-2xl border border-slate-100 bg-slate-50 p-3 max-w-sm">
-                            <span className="block text-[10px] font-black uppercase text-slate-400 mb-1.5">Anexo</span>
-                            {parsed.attachment.isImage ? (
-                              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                                <img
-                                  src={parsed.attachment.content}
-                                  alt={parsed.attachment.name}
-                                  className="max-h-48 w-full object-contain cursor-pointer transition hover:opacity-90"
-                                  onClick={() => {
-                                    const win = window.open();
-                                    if (win) {
-                                      win.document.write(`<img src="${parsed.attachment?.content}" style="max-width:100%; max-height:100vh; display:block; margin:auto;" />`);
-                                    }
-                                  }}
-                                />
-                              </div>
-                            ) : (
-                              <a
-                                href={parsed.attachment.content}
-                                download={parsed.attachment.name}
-                                className="flex items-center gap-2 text-xs font-bold text-orange-600 hover:underline"
-                              >
-                                📥 {parsed.attachment.name}
-                              </a>
-                            )}
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
-
-                  {ticket.response && (
-                    <div className="mt-4 rounded-2xl bg-orange-50/50 border border-orange-100 p-4">
-                      <p className="text-xs font-black uppercase text-orange-600">Resposta do Desenvolvedor</p>
-                      <p className="mt-1.5 text-sm font-semibold text-slate-700 whitespace-pre-wrap leading-relaxed">
-                        {ticket.response}
-                      </p>
-                    </div>
-                  )}
-
-                   {/* Actions for customer */}
-                  {!isSystemOwner && ticket.status !== "FECHADO" && (
-                    <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-                      {ticket.status === "RESPONDIDO" && (
-                        <button
-                          onClick={() => {
-                            setRespondingTicketId(respondingTicketId === ticket.id ? null : ticket.id);
-                            setTicketResponse("");
-                          }}
-                          className="rounded-xl px-4 py-2 text-xs font-bold text-white transition hover:opacity-90"
-                          style={{ backgroundColor: "var(--primary-color)" }}
-                        >
-                          {respondingTicketId === ticket.id ? "Cancelar" : "Responder"}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleClienteAcao(ticket.id, "close")}
-                        disabled={isReplying}
-                        className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
-                      >
-                        Encerrar chamado
-                      </button>
-                    </div>
-                  )}
-
-                  {respondingTicketId === ticket.id && (
-                    <div className="mt-4 border-t border-dashed border-slate-200 pt-4">
-                      <label className="block text-xs font-bold text-slate-500 mb-2">
-                        Sua resposta
-                      </label>
-                      <textarea
-                        value={ticketResponse}
-                        onChange={(e) => setTicketResponse(e.target.value)}
-                        placeholder="Escreva sua resposta para o desenvolvedor..."
-                        className="w-full min-h-[100px] rounded-xl border border-slate-200 p-3 text-sm font-medium focus:border-orange-500 focus:outline-none"
-                      />
-                      <div className="mt-3 flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => handleClienteAcao(ticket.id, "reply")}
-                          disabled={isReplying || !ticketResponse.trim()}
-                          className="rounded-xl px-4 py-2 text-xs font-bold text-white transition hover:opacity-90 disabled:opacity-50"
-                          style={{ backgroundColor: "var(--primary-color)" }}
-                        >
-                          {isReplying ? "Enviando..." : "Enviar Resposta"}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Metadata display for Admin / System Owner */}
-                  {isSystemOwner && (
-                    <div className="mt-4 flex flex-wrap gap-4 border-t border-slate-100 pt-3 text-xs text-slate-500">
-                      {ticket.company && (
-                        <span className="flex items-center gap-1">
-                          <Building className="h-3.5 w-3.5 text-slate-400" />
-                          <strong>Empresa:</strong> {ticket.company.tradeName}
-                        </span>
-                      )}
-                      {ticket.user && (
-                        <span className="flex items-center gap-1">
-                          <User className="h-3.5 w-3.5 text-slate-400" />
-                          <strong>Usuário:</strong> {ticket.user.name} ({ticket.user.email})
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : (
-        /* New Ticket Form */
-        <div>
-          {/* Header */}
-          <div className="mb-8 flex items-center gap-4">
-            <button
-              onClick={() => {
-                setView("list");
-                setError("");
-                setSuccess("");
-              }}
-              className="rounded-full bg-slate-100 p-3 text-slate-600 hover:bg-slate-200 transition"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-            <div>
-              <h1 className="text-2xl font-black text-slate-900">
-                Novo chamado
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-black tracking-tight text-slate-950 dark:text-white sm:text-3xl">
+                Suporte & Chamados
               </h1>
-              <p className="text-sm text-slate-500">
-                Descreva suas dúvidas ou problemas técnicos para análise.
-              </p>
-            </div>
-          </div>
-
-          {/* Form Card */}
-          <form
-            onSubmit={handleSubmit}
-            className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8 shadow-md"
-          >
-            {error && (
-              <div className="mb-6 rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-700">
-                {error}
-              </div>
-            )}
-            {success && (
-              <div className="mb-6 rounded-2xl bg-emerald-50 p-4 text-sm font-medium text-emerald-700">
-                {success}
-              </div>
-            )}
-
-            <div className="mb-6">
-              <label htmlFor="subject" className="mb-2 block text-sm font-bold text-slate-800">
-                Assunto *
-              </label>
-              <input
-                type="text"
-                id="subject"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                placeholder="Resuma o assunto"
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3.5 text-sm font-medium focus:border-orange-500 focus:outline-none"
-                required
-              />
-            </div>
-
-            <div className="mb-6">
-              <label htmlFor="message" className="mb-2 block text-sm font-bold text-slate-800">
-                Mensagem *
-              </label>
-              <textarea
-                id="message"
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="Descreva o problema ou dúvida"
-                rows={6}
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3.5 text-sm font-medium focus:border-orange-500 focus:outline-none"
-                required
-              />
-            </div>
-
-            <div className="mb-8">
-              <span className="mb-2 block text-sm font-bold text-slate-800">
-                Anexar evidência (opcional)
+              <span className="inline-flex items-center rounded-xl bg-indigo-50 px-2.5 py-0.5 text-xs font-black text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-900/40">
+                Atendimento Técnico
               </span>
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-3">
-                  <label
-                    htmlFor="attachment"
-                    className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-3 text-xs font-bold text-slate-600 transition hover:bg-slate-100"
-                  >
-                    📎 Selecionar arquivo (Max 5MB)
-                  </label>
-                  <input
-                    type="file"
-                    id="attachment"
-                    accept="image/*,application/pdf"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleFileChange(file);
-                    }}
-                  />
-                  {attachmentName && (
-                    <div className="flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
-                      <span>{attachmentName}</span>
-                      <button
-                        type="button"
-                        onClick={removeAttachment}
-                        className="text-red-500 hover:text-red-700 font-bold ml-1"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {attachmentPreview && attachmentPreview !== "document" && (
-                  <div className="mt-2 h-32 w-32 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                    <img
-                      src={attachmentPreview}
-                      alt="Preview"
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                )}
-              </div>
             </div>
+            <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+              Acompanhe o andamento de suas solicitações e envie novas mensagens diretamente para os desenvolvedores da plataforma.
+            </p>
+          </div>
+        </div>
 
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setView("list")}
-                className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50 transition"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="flex items-center justify-center gap-2 rounded-2xl px-6 py-3 text-sm font-bold transition shadow-md disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none hover:opacity-90"
-                style={submitting ? {} : { backgroundColor: "var(--primary-color)", color: "#ffffff" }}
-              >
-                {submitting ? "Enviando..." : "Enviar"}
-                <Send className="h-4 w-4" />
-              </button>
-            </div>
-          </form>
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => {
+              setIsRefreshing(true);
+              loadData();
+            }}
+            disabled={isRefreshing}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-95 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            title="Sincronizar chamados"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${isRefreshing ? "animate-spin text-indigo-600" : "text-slate-400"}`}
+            />
+            <span>Atualizar</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsCreateModalOpen(true)}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-5 text-xs font-black text-white shadow-md shadow-indigo-600/20 transition hover:bg-indigo-700 active:scale-95"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Novo Chamado</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Alertas de Erro ou Sucesso */}
+      {errorMessage && (
+        <div className="flex items-center justify-between rounded-2xl border border-red-200 bg-red-50 p-4 text-xs font-bold text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300 shadow-sm">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
+            <span>{errorMessage}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setErrorMessage("")}
+            className="rounded-lg p-1 text-red-400 hover:bg-red-100 dark:hover:bg-red-900"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
+
+      {successMessage && (
+        <div className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs font-bold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300 shadow-sm">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+            <span>{successMessage}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSuccessMessage("")}
+            className="rounded-lg p-1 text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* KPIs Horizontais no Topo */}
+      <SuporteKpis
+        tickets={tickets}
+        statusFilter={statusFilter}
+        onSelectStatus={(status) => setStatusFilter(status)}
+      />
+
+      {/* Barra de Filtros e Busca Rápida */}
+      <SuporteFilters
+        search={search}
+        onSearchChange={setSearch}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        sortOption={sortOption}
+        onSortOptionChange={setSortOption}
+        totalFiltered={filteredTickets.length}
+        totalAll={tickets.length}
+        onResetFilters={handleResetFilters}
+        hasActiveFilters={hasActiveFilters}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+      />
+
+      {/* Exibição em Tabela ou Cards */}
+      {viewMode === "table" ? (
+        <>
+          <div className="hidden sm:block">
+            <SuporteTable
+              tickets={filteredTickets}
+              onOpenTicket={handleOpenTicketDetail}
+              onCloseTicket={handleCloseTicket}
+            />
+          </div>
+          <div className="block sm:hidden">
+            <SuporteCards
+              tickets={filteredTickets}
+              onOpenTicket={handleOpenTicketDetail}
+              onCloseTicket={handleCloseTicket}
+              onResetFilters={handleResetFilters}
+              onNewTicket={() => setIsCreateModalOpen(true)}
+            />
+          </div>
+        </>
+      ) : (
+        <SuporteCards
+          tickets={filteredTickets}
+          onOpenTicket={handleOpenTicketDetail}
+          onCloseTicket={handleCloseTicket}
+          onResetFilters={handleResetFilters}
+          onNewTicket={() => setIsCreateModalOpen(true)}
+        />
+      )}
+
+      {/* Modal de Detalhes e Conversa com o Suporte (Draggable, Maximizável, Redimensionável) */}
+      <SuporteDetailModal
+        isOpen={isDetailModalOpen}
+        onClose={() => {
+          setIsDetailModalOpen(false);
+          setSelectedTicket(null);
+        }}
+        ticket={selectedTicket}
+        onSendReply={handleSendReply}
+        onCloseTicket={handleCloseTicket}
+      />
+
+      {/* Modal de Criação de Novo Chamado (Draggable, Maximizável, Redimensionável) */}
+      <SuporteCreateModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSuccess={handleCreateSuccess}
+      />
     </div>
   );
 }

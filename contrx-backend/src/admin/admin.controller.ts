@@ -65,6 +65,15 @@ export class AdminController {
     return this.adminService.updateUser(user.id, id, data);
   }
 
+  @Post('usuarios/:id/impersonar')
+  @UseGuards(SystemOwnerGuard)
+  impersonateUser(
+    @CurrentUser() user: UsuarioAutenticado,
+    @Param('id') id: string,
+  ) {
+    return this.adminService.impersonateUser(user.id, id);
+  }
+
   @Patch('empresas/:id')
   @UseGuards(SystemOwnerGuard)
   updateCompany(

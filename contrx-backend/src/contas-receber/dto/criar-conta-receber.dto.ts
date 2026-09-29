@@ -95,6 +95,10 @@ export class ReceberPagamentoDto {
   @IsOptional()
   @IsString()
   note?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  bankAccountId?: string | null;
 }
 
 export class ReceberPagamentoLoteItemDto extends ReceberPagamentoDto {

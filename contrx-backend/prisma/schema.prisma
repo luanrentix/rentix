@@ -193,6 +193,7 @@ model Property {
   condition   String? @map("condicao")
   patrimonyCode String? @map("codigo_patrimonial")
   rentalValue Decimal? @map("valor_aluguel") @db.Decimal(10, 2)
+  operationalStatus String @default("AVAILABLE") @map("status_operacional")
   managementMode String @default("OWNED") @map("modo_gestao")
   administrationFeePercentage Decimal? @map("taxa_administracao_percentual") @db.Decimal(5, 2)
   ownerPayoutDay Int? @map("dia_repasse_proprietario")

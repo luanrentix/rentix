@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import { Document as DocxDocument, Packer, Paragraph, TextRun } from "docx";
 import { type PrintDocumentKey, type PrintTemplates } from "../types/settings.types";
 
 export const legacyTemporaryContractTemplateContent = 'CONTRATO TEMPORÁRIO\n\nLOCADOR: {companyName}\nLOCATÁRIO: {personName}\nBEM/ATIVO: {propertyName}\nPERÍODO: {startDate} até {endDate}\nHORÁRIO: Entrada {entryTime} / Saída {exitTime}\n\nCLÁUSULAS E CONDIÇÕES:\n1. O presente contrato tem finalidade de locação temporária.\n2. O locatário declara estar ciente das regras de uso do bem/ativo.\n3. As informações financeiras e condições acordadas deverão constar no documento final.\n\n{contractDefaultNotes}\n\n{contractCity}, {currentDate}.\n\n__________________________________\nLOCADOR\n\n__________________________________\nLOCATÁRIO';
@@ -468,7 +469,74 @@ export const printTemplateAliasMap: Record<string, string> = {
   valor: "amount",
   valor_aluguel: "amount",
   valor_contrato: "amount",
+  chave_pix: "pixKey",
+  pix_chave: "pixKey",
+  chavepix: "pixKey",
+  contrato_dias: "contractDays",
+  dias: "contractDays",
+  dias_contrato: "contractDays",
+  meses: "contractMonths",
+  meses_contrato: "contractMonths",
+  horario_entrada: "entryTime",
+  horario_saida: "exitTime",
+  entrada_horario: "entryTime",
+  saida_horario: "exitTime",
+  checkin: "entryTime",
+  checkout: "exitTime",
+  documento_locador: "landlordDocument",
+  documento_locatario: "tenantDocument",
+  endereco_locatario: "tenantAddress",
+  email_locador: "companyEmail",
+  email_locatario: "tenantEmail",
+  telefone_locador: "companyPhone",
+  telefone_locatario: "tenantPhone",
 };
+
+export type FriendlyPrintVariable = {
+  tag: string;
+  label: string;
+  description: string;
+  category: "locador" | "locatario" | "imovel" | "valores" | "assinatura";
+  example: string;
+};
+
+export const friendlyPrintVariables: FriendlyPrintVariable[] = [
+  // Locador / Empresa
+  { tag: "{{nome_empresa}}", label: "Nome / Razão Social do Locador", description: "Nome da empresa ou proprietário locador", category: "locador", example: "Contrx Gestão de Locações LTDA" },
+  { tag: "{{cnpj_empresa}}", label: "CPF ou CNPJ do Locador", description: "Documento oficial do locador", category: "locador", example: "12.345.678/0001-90" },
+  { tag: "{{endereco_empresa}}", label: "Endereço Completo do Locador", description: "Logradouro, número, bairro, cidade e CEP", category: "locador", example: "Rua Principal, nº 100, Rolim de Moura/RO" },
+  { tag: "{{telefone_empresa}}", label: "Telefone / WhatsApp da Empresa", description: "Telefone de contato do locador", category: "locador", example: "(69) 99999-0000" },
+  { tag: "{{email_empresa}}", label: "E-mail da Empresa", description: "E-mail de contato do locador", category: "locador", example: "contato@suaempresa.com.br" },
+  { tag: "{{chave_pix}}", label: "Chave Pix para Pagamento", description: "Chave Pix cadastrada nas configurações da empresa", category: "locador", example: "pix@suaempresa.com.br" },
+
+  // Locatário / Inquilino
+  { tag: "{{inquilino_nome}}", label: "Nome do Locatário / Inquilino", description: "Nome completo do cliente que está alugando", category: "locatario", example: "João da Silva" },
+  { tag: "{{inquilino_documento}}", label: "CPF ou CNPJ do Locatário", description: "Documento oficial informado no cadastro", category: "locatario", example: "123.456.789-00" },
+  { tag: "{{inquilino_endereco}}", label: "Endereço do Locatário", description: "Endereço residencial ou comercial do cliente", category: "locatario", example: "Avenida Central, nº 250, Rolim de Moura/RO" },
+  { tag: "{{inquilino_telefone}}", label: "Telefone do Locatário", description: "WhatsApp ou celular do inquilino", category: "locatario", example: "(69) 99999-1111" },
+  { tag: "{{inquilino_email}}", label: "E-mail do Locatário", description: "E-mail de contato do inquilino", category: "locatario", example: "joao@email.com" },
+
+  // Imóvel / Bem / Ativo
+  { tag: "{{imovel_nome}}", label: "Nome do Imóvel ou Bem/Ativo", description: "Identificação do imóvel ou equipamento alugado", category: "imovel", example: "Casa de Campo Temporada" },
+  { tag: "{{imovel_endereco}}", label: "Endereço do Imóvel / Bem", description: "Localização física onde se encontra o bem", category: "imovel", example: "Rodovia BR-364, Km 15" },
+  { tag: "{{categoria_bem}}", label: "Categoria do Bem/Ativo", description: "Ex: Imóvel, Máquina, Equipamento, Veículo", category: "imovel", example: "Imóvel" },
+
+  // Valores e Prazos
+  { tag: "{{valor_aluguel}}", label: "Valor do Aluguel / Período", description: "Valor total ou da locação formatado em reais", category: "valores", example: "R$ 1.500,00" },
+  { tag: "{{data_inicio}}", label: "Data de Início do Contrato", description: "Data de início da vigência / check-in", category: "valores", example: "01/10/2026" },
+  { tag: "{{data_fim}}", label: "Data de Término do Contrato", description: "Data final da vigência / check-out", category: "valores", example: "10/10/2026" },
+  { tag: "{{contrato_dias}}", label: "Duração em Dias", description: "Quantidade total de diárias/dias calculada", category: "valores", example: "9" },
+  { tag: "{{contrato_meses}}", label: "Duração em Meses", description: "Quantidade total de meses do contrato", category: "valores", example: "12" },
+  { tag: "{{dia_vencimento}}", label: "Dia do Vencimento", description: "Dia do mês em que vence a parcela do aluguel", category: "valores", example: "10" },
+  { tag: "{{multa}}", label: "Valor / Cálculo da Multa", description: "Valor estipulado para rescisão ou atraso", category: "valores", example: "R$ 300,00" },
+  { tag: "{{horario_entrada}}", label: "Horário de Entrada (Check-in)", description: "Horário previsto para entrada na temporada", category: "valores", example: "14:00" },
+  { tag: "{{horario_saida}}", label: "Horário de Saída (Check-out)", description: "Horário previsto para entrega das chaves", category: "valores", example: "10:00" },
+
+  // Assinatura e Local
+  { tag: "{{cidade_assinatura}}", label: "Cidade de Assinatura", description: "Cidade informada nas configurações ou do imóvel", category: "assinatura", example: "Rolim de Moura/RO" },
+  { tag: "{{data_assinatura}}", label: "Data Atual por Extenso", description: "Data de emissão formatada para contrato", category: "assinatura", example: "29 de setembro de 2026" },
+  { tag: "{{observacoes}}", label: "Observações Padrão", description: "Notas e observações cadastradas nas configurações", category: "assinatura", example: "Sem animais domésticos." },
+];
 
 export const requiredPrintTemplateVariables: Partial<Record<PrintDocumentKey, string[]>> = {
   temporaryContract: [
@@ -579,8 +647,9 @@ export function getMissingPrintTemplateVariables(content: string, documentKey: P
   );
 }
 
-function getXmlElementsByLocalName(element: Element | Document, localName: string) {
-  return Array.from(element.getElementsByTagName("*")).filter(
+function getXmlElementsByLocalName(element: any, localName: string): Element[] {
+  if (!element || typeof element.getElementsByTagName !== "function") return [];
+  return Array.from(element.getElementsByTagName("*") as HTMLCollectionOf<Element>).filter(
     (childElement) => childElement.localName === localName,
   );
 }
@@ -643,21 +712,18 @@ export async function extractTextFromDocx(file: File) {
     throw new Error("O arquivo DOCX não possui corpo de documento válido.");
   }
 
-  const textBlocks = Array.from(bodyElement.children)
-    .map((childElement) => {
-      if (childElement.localName === "p") {
-        return getDocxParagraphText(childElement);
-      }
+  const textBlocks: string[] = [];
+  const children = Array.from((bodyElement as any).children || []) as Element[];
 
-      if (childElement.localName === "tbl") {
-        return getDocxTableText(childElement);
-      }
+  children.forEach((childElement) => {
+    if (childElement.localName === "p") {
+      textBlocks.push(getDocxParagraphText(childElement));
+    } else if (childElement.localName === "tbl") {
+      textBlocks.push(getDocxTableText(childElement));
+    }
+  });
 
-      return "";
-    })
-    .filter(Boolean);
-
-  const textContent = textBlocks.join("\n\n").trim();
+  const textContent = textBlocks.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 
   if (!textContent) {
     throw new Error("Não encontrei texto editável no DOCX. Verifique se o arquivo não é apenas imagem ou PDF convertido.");
@@ -666,69 +732,61 @@ export async function extractTextFromDocx(file: File) {
   return textContent;
 }
 
-function escapeDocxXml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
+export async function buildDocxBlobFromTemplateText(content: string): Promise<Blob> {
+  const normalized = (content || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+  const lines = normalized.split("\n");
 
-function getDocxParagraphXml(text: string) {
-  const runs = text.split("\t").map((part) => (
-    `<w:r><w:t xml:space="preserve">${escapeDocxXml(part)}</w:t></w:r>`
-  ));
+  const paragraphs: Paragraph[] = lines.map((line) => {
+    const trimmed = line.trimEnd();
+    if (!trimmed) {
+      return new Paragraph({
+        children: [],
+        spacing: { after: 120 },
+      });
+    }
 
-  return `<w:p>${runs.join("<w:r><w:tab/></w:r>")}</w:p>`;
-}
+    const isHeading =
+      /^(INSTRUMENTO|CONTRATO|CLÁUSULA|CLAUSULA|[IVXLCDM]+\s*[-–]|TERMO|RELATÓRIO)/i.test(trimmed.trim()) &&
+      trimmed.trim().length < 80;
 
-export async function buildDocxBlobFromTemplateText(content: string) {
-  const zip = new JSZip();
-  const paragraphs = (content || "")
-    .split("\n")
-    .map((line) => getDocxParagraphXml(line))
-    .join("");
-
-  zip.file(
-    "[Content_Types].xml",
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
-  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document"/>
-</Types>`,
-  );
-
-  zip.folder("_rels")?.file(
-    ".rels",
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
-</Relationships>`,
-  );
-
-  zip.folder("word")?.folder("_rels")?.file(
-    "document.xml.rels",
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`,
-  );
-
-  zip.folder("word")?.file(
-    "document.xml",
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>
-    ${paragraphs}
-    <w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>
-  </w:body>
-</w:document>`,
-  );
-
-  return zip.generateAsync({
-    type: "blob",
-    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    return new Paragraph({
+      children: [
+        new TextRun({
+          text: trimmed,
+          bold: isHeading,
+          font: "Arial",
+          size: isHeading ? 24 : 22,
+          color: "1A1A1A",
+        }),
+      ],
+      spacing: {
+        after: isHeading ? 160 : 100,
+        line: 276,
+      },
+    });
   });
+
+  const doc = new DocxDocument({
+    sections: [
+      {
+        properties: {
+          page: {
+            margin: {
+              top: 1440,
+              right: 1440,
+              bottom: 1440,
+              left: 1440,
+            },
+          },
+        },
+        children: paragraphs,
+      },
+    ],
+  });
+
+  return await Packer.toBlob(doc);
 }
 
 export function extractPaymentBookletInstructions(content: string) {

@@ -7,6 +7,7 @@ import {
   Printer,
   Palette,
   AlertTriangle,
+  Zap,
 } from "lucide-react";
 import { type CompanySettings, type SettingsTab, type UserSettings } from "../types/settings.types";
 
@@ -43,6 +44,12 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
       label: "Usuários e equipe",
       description: "Meu perfil e membros com acesso",
       icon: User,
+    },
+    {
+      id: "integrations" as SettingsTab,
+      label: "Integrações & Conexões",
+      description: "WhatsApp, Gateways e notificações",
+      icon: Zap,
     },
     {
       id: "print" as SettingsTab,
