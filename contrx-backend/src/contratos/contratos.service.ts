@@ -22,6 +22,11 @@ type CriarContratoDataWithCompany = CriarContratoDto & {
   companyId: string;
 };
 
+const TRANSACTION_OPTIONS = {
+  maxWait: 10000,
+  timeout: 30000,
+};
+
 @Injectable()
 export class ContratosService {
   constructor(private readonly prisma: PrismaService) {}
@@ -62,7 +67,7 @@ export class ContratosService {
       }
 
       return contract;
-    });
+    }, TRANSACTION_OPTIONS);
   }
 
   async findAll(companyId?: string) {
@@ -167,7 +172,7 @@ export class ContratosService {
       await this.syncRelatedRecordsAfterContractChange(tx, contract);
 
       return contract;
-    });
+    }, TRANSACTION_OPTIONS);
   }
 
   async cancel(id: string, data: MotivoContratoDto, companyId: string) {
@@ -198,7 +203,7 @@ export class ContratosService {
       );
 
       return contract;
-    });
+    }, TRANSACTION_OPTIONS);
   }
 
   async softDelete(id: string, data: MotivoContratoDto, companyId: string) {
@@ -229,7 +234,7 @@ export class ContratosService {
       );
 
       return contract;
-    });
+    }, TRANSACTION_OPTIONS);
   }
 
   async finish(id: string, data: MotivoContratoDto, companyId: string) {
@@ -262,7 +267,7 @@ export class ContratosService {
       );
 
       return contract;
-    });
+    }, TRANSACTION_OPTIONS);
   }
 
   async renew(id: string, data: RenovarContratoDto, companyId: string) {
@@ -312,7 +317,7 @@ export class ContratosService {
       await this.upsertContractDueScheduleItem(tx, renewedContract);
 
       return renewedContract;
-    });
+    }, TRANSACTION_OPTIONS);
   }
 
   async remove(id: string, companyId: string) {
@@ -483,30 +488,55 @@ export class ContratosService {
     );
     const installmentGroupId = `${contract.id}-installments`;
 
-    await Promise.all(
-      openAccounts
-        .slice(0, openReceivableSchedule.length)
-        .map((account, index) => {
-          const installment = openReceivableSchedule[index];
+    const updates = openAccounts
+      .slice(0, openReceivableSchedule.length)
+      .map((account, index) => {
+        const installment = openReceivableSchedule[index];
+        const newDueDate = installment.dueDate;
+        const newAmount = Number(installment.amount);
+        const newIssueDate = contract.startDate;
+        const newPropertyName = contract.propertyName || '';
+        const newTenantName = contract.tenantName || '';
 
-          return tx.contaReceber.update({
-            where: { id: account.id },
-            data: {
-              tenant: { connect: { id: contract.tenantId } },
-              propertyName: contract.propertyName || '',
-              tenantName: contract.tenantName || '',
-              issueDate: contract.startDate,
-              dueDate: installment.dueDate,
-              amount: new Prisma.Decimal(installment.amount),
-              manual: false,
-              installmentNumber: installment.installmentNumber,
-              installmentTotal: installment.installmentTotal,
-              installmentGroupId,
-              isDownPayment: false,
-            },
-          });
-        }),
-    );
+        const isUnchanged =
+          account.tenantId === contract.tenantId &&
+          (account.propertyName || '') === newPropertyName &&
+          (account.tenantName || '') === newTenantName &&
+          account.dueDate?.getTime() === newDueDate.getTime() &&
+          account.issueDate?.getTime() === newIssueDate?.getTime() &&
+          Number(account.amount) === newAmount &&
+          account.installmentNumber === installment.installmentNumber &&
+          account.installmentTotal === installment.installmentTotal &&
+          account.installmentGroupId === installmentGroupId;
+
+        if (isUnchanged) {
+          return null;
+        }
+
+        return tx.contaReceber.update({
+          where: { id: account.id },
+          data: {
+            tenant: { connect: { id: contract.tenantId } },
+            propertyName: newPropertyName,
+            tenantName: newTenantName,
+            issueDate: newIssueDate,
+            dueDate: newDueDate,
+            amount: new Prisma.Decimal(installment.amount),
+            manual: false,
+            installmentNumber: installment.installmentNumber,
+            installmentTotal: installment.installmentTotal,
+            installmentGroupId,
+            isDownPayment: false,
+          },
+        });
+      })
+      .filter(
+        (update): update is NonNullable<typeof update> => update !== null,
+      );
+
+    if (updates.length > 0) {
+      await Promise.all(updates);
+    }
 
     const extraOpenAccounts = openAccounts.slice(openReceivableSchedule.length);
     const extraOpenAccountIds = extraOpenAccounts.map((account) => account.id);

@@ -32,8 +32,8 @@ export function AssetFilters({
   onOperationalStatusFilterChange,
 }: AssetFiltersProps) {
   return (
-    <div className="grid w-full gap-3 md:grid-cols-2 xl:grid-cols-[minmax(280px,1.5fr)_160px_160px_170px]">
-      <div className="space-y-1">
+    <div className="grid w-full min-w-0 gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_160px_160px_150px]">
+      <div className="min-w-0 space-y-1">
         <label className="text-xs font-black uppercase tracking-wider text-slate-600">
           Buscar
         </label>
@@ -49,7 +49,7 @@ export function AssetFilters({
         </div>
       </div>
 
-      <div className="space-y-1">
+      <div className="min-w-0 space-y-1">
         <label className="text-xs font-black uppercase tracking-wider text-slate-600">
           Categoria
         </label>
@@ -58,7 +58,7 @@ export function AssetFilters({
           onChange={(e) =>
             onCategoryFilterChange(e.target.value as PropertyCategoryFilterStatus)
           }
-          className="w-full appearance-auto rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+          className="w-full appearance-auto rounded-2xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 truncate"
         >
           <option value="All">Todas as categorias</option>
           {assetCategories.map((c) => (
@@ -69,7 +69,7 @@ export function AssetFilters({
         </select>
       </div>
 
-      <div className="space-y-1">
+      <div className="min-w-0 space-y-1">
         <label className="text-xs font-black uppercase tracking-wider text-slate-600">
           Status Operacional
         </label>
@@ -80,7 +80,7 @@ export function AssetFilters({
               e.target.value as PropertyOperationalFilterStatus
             )
           }
-          className="w-full appearance-auto rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+          className="w-full appearance-auto rounded-2xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 truncate"
         >
           <option value="All">Todos os status</option>
           {operationalStatusOptions.map((s) => (
@@ -91,7 +91,7 @@ export function AssetFilters({
         </select>
       </div>
 
-      <div className="space-y-1">
+      <div className="min-w-0 space-y-1">
         <label className="text-xs font-black uppercase tracking-wider text-slate-600">
           Cadastro
         </label>
@@ -102,7 +102,7 @@ export function AssetFilters({
               e.target.value as PropertyRegistrationFilterStatus
             )
           }
-          className="w-full appearance-auto rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+          className="w-full appearance-auto rounded-2xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 truncate"
         >
           <option value="Active">Apenas Ativos</option>
           <option value="Inactive">Apenas Inativos</option>

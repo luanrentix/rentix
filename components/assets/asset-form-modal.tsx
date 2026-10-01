@@ -29,7 +29,7 @@ import {
 import { PersonCreateModal } from "@/components/people/person-create-modal";
 import type { Person as ApiPerson } from "@/services/people.service";
 import { deleteProperty, updateProperty } from "@/services/properties.service";
-import { getMediaUrl } from "@/services/api";
+import { getMediaUrl, api } from "@/services/api";
 
 interface AssetFormModalProps {
   isOpen: boolean;
@@ -157,16 +157,36 @@ export function AssetFormModal({
       );
       setAutoCreateOwnerPayable(editingProperty.autoCreateOwnerPayable !== false);
 
+      let initialPhotos: string[] = [];
       if (editingProperty.photos) {
         try {
           const parsed = JSON.parse(editingProperty.photos);
-          setPhotos(Array.isArray(parsed) ? parsed : [editingProperty.photos]);
+          initialPhotos = Array.isArray(parsed) ? parsed.filter(Boolean) : [editingProperty.photos];
         } catch {
-          setPhotos([editingProperty.photos]);
+          initialPhotos = [editingProperty.photos];
         }
-      } else {
-        setPhotos([]);
       }
+      setPhotos(initialPhotos);
+
+      // Também buscar fotos da tabela de arquivos do sistema
+      if (editingProperty.id) {
+        api.get<Array<{ url: string }>>(`/files/entity/PROPERTY/${editingProperty.id}`)
+          .then((res) => {
+            if (Array.isArray(res.data)) {
+              setPhotos((prev) => {
+                const combined = [...prev];
+                res.data.forEach((f) => {
+                  if (f.url && !combined.includes(f.url)) {
+                    combined.push(f.url);
+                  }
+                });
+                return combined;
+              });
+            }
+          })
+          .catch(() => {});
+      }
+
       setSelectedFiles([]);
     } else {
       resetForm();
@@ -1040,6 +1060,9 @@ export function AssetFormModal({
                           src={getMediaUrl(url)}
                           alt="Foto"
                           className="h-full w-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.opacity = "0.2";
+                          }}
                         />
                         <button
                           type="button"

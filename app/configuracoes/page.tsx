@@ -18,7 +18,12 @@ import {
   setCompanyStorageItem,
 } from "@/services/company-storage";
 import { getAppSettings, saveAppSettings } from "@/services/settings.service";
-import { setCachedAppSettings } from "@/services/settings-cache";
+import { setCachedAppSettings, getCachedThemeSettings } from "@/services/settings-cache";
+import {
+  readThemeSettingsFromStorage,
+  saveThemeSettingsLocally,
+  applyThemeToDom,
+} from "@/services/theme-storage";
 
 import {
   type BrasilApiCnpjResponse,
@@ -246,7 +251,10 @@ function renderPrintTemplatePreview(content: string, documentKey: PrintDocumentK
     exitTime: "10:00",
     contractDays: "3",
     contractMonths: "12",
+    dueDay: "10",
     amount: "R$ 1.200,00",
+    rentValue: "R$ 1.200,00",
+    penaltyAmount: "R$ 3.600,00",
     dueDate: "10/05/2026",
     pixKey: "pix@contrx.com.br",
     contractNumber: "CTR-0001",
@@ -296,6 +304,23 @@ const contrxThemeStyle = `
     border-color: #334155 !important;
     color: #f8fafc !important;
   }
+
+  [data-contrx-theme="graphite"] {
+    background: #07111f !important;
+    color: #f8fafc !important;
+  }
+  [data-contrx-theme="graphite"] .bg-white,
+  [data-contrx-theme="graphite"] .bg-slate-50,
+  [data-contrx-theme="graphite"] .bg-slate-100 {
+    background-color: #0d1b2e !important;
+  }
+  [data-contrx-theme="graphite"] input,
+  [data-contrx-theme="graphite"] select,
+  [data-contrx-theme="graphite"] textarea {
+    background-color: #07111f !important;
+    border-color: #24405f !important;
+    color: #f8fafc !important;
+  }
 `;
 
 export default function ConfiguracoesPage() {
@@ -309,8 +334,22 @@ export default function ConfiguracoesPage() {
   const [companySettings, setCompanySettings] = useState<CompanySettings>(defaultCompanySettings);
   const [initialUserSettings, setInitialUserSettings] = useState<UserSettings>(defaultUserSettings);
   const [initialCompanySettings, setInitialCompanySettings] = useState<CompanySettings>(defaultCompanySettings);
-  const [themeSettings, setThemeSettings] = useState<ThemeSettings>(defaultThemeSettings);
-  const [initialThemeSettings, setInitialThemeSettings] = useState<ThemeSettings>(defaultThemeSettings);
+  const [themeSettings, setThemeSettings] = useState<ThemeSettings>(() => {
+    if (typeof window !== "undefined") {
+      const cached = getCachedThemeSettings();
+      if (cached) return normalizeThemeSettings(cached as Partial<ThemeSettings>);
+      return readThemeSettingsFromStorage();
+    }
+    return defaultThemeSettings;
+  });
+  const [initialThemeSettings, setInitialThemeSettings] = useState<ThemeSettings>(() => {
+    if (typeof window !== "undefined") {
+      const cached = getCachedThemeSettings();
+      if (cached) return normalizeThemeSettings(cached as Partial<ThemeSettings>);
+      return readThemeSettingsFromStorage();
+    }
+    return defaultThemeSettings;
+  });
   const [printTemplates, setPrintTemplates] = useState<PrintTemplates>(defaultPrintTemplates);
   const [initialPrintTemplates, setInitialPrintTemplates] = useState<PrintTemplates>(defaultPrintTemplates);
 
@@ -507,6 +546,7 @@ export default function ConfiguracoesPage() {
         const nextThemeSettings = normalizeThemeSettings(
           settings.themeSettings as Partial<ThemeSettings> | undefined,
         );
+        saveThemeSettingsLocally(nextThemeSettings, currentCompanyId);
         const nextPrintTemplates = normalizeStoredPrintTemplates(
           (settings.printTemplates || {}) as Partial<PrintTemplates>,
         );
@@ -565,15 +605,7 @@ export default function ConfiguracoesPage() {
   }, [loadCompanyUsers]);
 
   useEffect(() => {
-    const isDarkMode = themeSettings.mode !== "light";
-    document.documentElement.classList.toggle("dark", isDarkMode);
-    document.body.classList.toggle("dark", isDarkMode);
-    document.documentElement.dataset.contrxTheme = themeSettings.mode;
-    document.body.dataset.contrxTheme = themeSettings.mode;
-
-    const activeAccent = themeSettings.accent || "orange";
-    document.documentElement.dataset.contrxAccent = activeAccent;
-    document.body.dataset.contrxAccent = activeAccent;
+    applyThemeToDom(themeSettings);
   }, [themeSettings.mode, themeSettings.accent]);
 
   // Handlers para Cadastro da Empresa
@@ -959,6 +991,7 @@ export default function ConfiguracoesPage() {
   async function handleSaveAppearanceSettings() {
     setIsSavingAppearanceSettings(true);
     try {
+      saveThemeSettingsLocally(themeSettings, companyId);
       await saveAppSettings({
         companyId: companyId || "",
         userSettings: { ...userSettings, email: lockedUserEmail },

@@ -29,6 +29,7 @@ type AgendaFormModalProps = {
   onSave: () => void;
   isBlackTheme: boolean;
   isContractFlow?: boolean;
+  isMaintenanceFlow?: boolean;
 };
 
 export function AgendaFormModal({
@@ -49,6 +50,7 @@ export function AgendaFormModal({
   onSave,
   isBlackTheme,
   isContractFlow = false,
+  isMaintenanceFlow = false,
 }: AgendaFormModalProps) {
   // Detector em tempo real de conflito de agenda (Double Booking)
   const scheduleConflict = useMemo(() => {
@@ -134,7 +136,11 @@ export function AgendaFormModal({
         >
           <div className="flex items-start justify-between gap-4">
             <div>
-              {isContractFlow ? (
+              {isMaintenanceFlow ? (
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-800 dark:bg-amber-950/80 dark:text-amber-400 mb-1">
+                  🔧 Manutenção de Bem / Ativo · Módulo Agenda
+                </div>
+              ) : isContractFlow ? (
                 <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-400 mb-1">
                   Etapa 5 de 5 · Agendamento do Contrato
                 </div>
@@ -146,12 +152,16 @@ export function AgendaFormModal({
               <h2 className={`mt-1 text-2xl font-black ${strongTextClass}`}>
                 {editingScheduleId
                   ? "Atualizar compromisso"
+                  : isMaintenanceFlow
+                  ? "Agendar Manutenção do Bem/Ativo"
                   : isContractFlow
                   ? "Registrar Vencimento de Contrato"
                   : "Criar compromisso"}
               </h2>
               <p className={`mt-1.5 text-sm leading-6 ${mutedTextClass}`}>
-                {isContractFlow
+                {isMaintenanceFlow
+                  ? "Informações do bem/ativo preenchidas automaticamente para agendamento de manutenção. Ajuste a data ou responsável e salve para registrar."
+                  : isContractFlow
                   ? "Informações de vencimento do contrato preenchidas automaticamente. Salve para registrar na agenda e retornar aos contratos."
                   : "Preencha os dados para manter a rotina operacional organizada."}
               </p>
@@ -239,6 +249,12 @@ export function AgendaFormModal({
                 className={inputClass}
               >
                 <option value="">Sem pessoa vinculada</option>
+                {formData.personId &&
+                  !people.some((p) => String(p.id) === String(formData.personId)) && (
+                    <option value={formData.personId}>
+                      {formData.customerName || "Pessoa selecionada"}
+                    </option>
+                  )}
                 {people.map((person) => (
                   <option key={person.id} value={person.id}>
                     {person.name}
@@ -266,6 +282,12 @@ export function AgendaFormModal({
                 className={inputClass}
               >
                 <option value="">Sem bem/ativo vinculado</option>
+                {formData.propertyId &&
+                  !properties.some((p) => String(p.id) === String(formData.propertyId)) && (
+                    <option value={formData.propertyId}>
+                      {formData.propertyName || "Bem / Ativo selecionado"}
+                    </option>
+                  )}
                 {properties.map((property) => (
                   <option key={property.id} value={property.id}>
                     {property.name}
@@ -413,14 +435,20 @@ export function AgendaFormModal({
             disabled={isSaving}
             className={secondaryButtonClass}
           >
-            {isContractFlow ? "Concluir sem agendar" : "Cancelar"}
+            {isMaintenanceFlow
+              ? "Voltar para Bens e Ativos"
+              : isContractFlow
+              ? "Concluir sem agendar"
+              : "Cancelar"}
           </button>
           <button
             type="button"
             onClick={onSave}
             disabled={isSaving}
             className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white shadow-sm transition disabled:cursor-not-allowed disabled:opacity-70 active:scale-95 ${
-              isContractFlow
+              isMaintenanceFlow
+                ? "bg-amber-600 hover:bg-amber-700 shadow-amber-600/20"
+                : isContractFlow
                 ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20"
                 : "bg-orange-500 hover:bg-orange-600"
             }`}
@@ -428,6 +456,8 @@ export function AgendaFormModal({
             {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
             {editingScheduleId
               ? "Salvar alterações"
+              : isMaintenanceFlow
+              ? "Salvar Agendamento e Voltar aos Bens ➔"
               : isContractFlow
               ? "Salvar Agendamento e Concluir Fluxo ➔"
               : "Criar agendamento"}

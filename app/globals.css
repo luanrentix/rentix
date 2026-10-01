@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 * {
   box-sizing: border-box;
 }
@@ -36,7 +38,7 @@ table {
 
 [data-contrx-theme="black"],
 body[data-contrx-theme="black"],
-body.dark {
+body.dark[data-contrx-theme="black"] {
   color-scheme: dark;
   background: #020617;
   color: #f8fafc;
@@ -59,9 +61,9 @@ body.dark {
 [data-contrx-theme="black"][class*="bg-white"],
 [data-contrx-theme="black"][class*="bg-slate-50"],
 [data-contrx-theme="black"][class*="bg-slate-100"],
-body.dark [class*="bg-white"],
-body.dark [class*="bg-slate-50"],
-body.dark [class*="bg-slate-100"] {
+body.dark[data-contrx-theme="black"] [class*="bg-white"],
+body.dark[data-contrx-theme="black"] [class*="bg-slate-50"],
+body.dark[data-contrx-theme="black"] [class*="bg-slate-100"] {
   background-color: #0f172a !important;
 }
 
@@ -739,39 +741,39 @@ textarea {
   }
 
   [data-contrx-theme="black"] .contrx-app-main,
-  body.dark .contrx-app-main {
+  body.dark[data-contrx-theme="black"] .contrx-app-main {
     background-color: #020617 !important;
   }
 
   [data-contrx-theme="black"] .contrx-app-main > *,
-  body.dark .contrx-app-main > * {
+  body.dark[data-contrx-theme="black"] .contrx-app-main > * {
     color-scheme: dark;
   }
 
   [data-contrx-theme="black"] .contrx-app-main section[class*="rounded"],
   [data-contrx-theme="black"] .contrx-app-main div[class*="rounded-3xl"][class*="border"],
   [data-contrx-theme="black"] .contrx-app-main div[class*="rounded-lg"][class*="border"],
-  body.dark .contrx-app-main section[class*="rounded"],
-  body.dark .contrx-app-main div[class*="rounded-3xl"][class*="border"],
-  body.dark .contrx-app-main div[class*="rounded-lg"][class*="border"] {
+  body.dark[data-contrx-theme="black"] .contrx-app-main section[class*="rounded"],
+  body.dark[data-contrx-theme="black"] .contrx-app-main div[class*="rounded-3xl"][class*="border"],
+  body.dark[data-contrx-theme="black"] .contrx-app-main div[class*="rounded-lg"][class*="border"] {
     background-color: #0f172a !important;
     border-color: #334155 !important;
   }
 
   [data-contrx-theme="black"] .contrx-module-panel,
-  body.dark .contrx-module-panel {
+  body.dark[data-contrx-theme="black"] .contrx-module-panel {
     border-radius: 1.5rem !important;
     padding: 1rem !important;
   }
 
   [data-contrx-theme="black"] .contrx-mobile-bottom-nav,
-  body.dark .contrx-mobile-bottom-nav {
+  body.dark[data-contrx-theme="black"] .contrx-mobile-bottom-nav {
     background-color: rgb(2 6 23 / 0.96) !important;
     border-color: #334155 !important;
   }
 
   [data-contrx-theme="black"] .contrx-mobile-bottom-nav a:not([class*="bg-orange-500"]),
-  body.dark .contrx-mobile-bottom-nav a:not([class*="bg-orange-500"]) {
+  body.dark[data-contrx-theme="black"] .contrx-mobile-bottom-nav a:not([class*="bg-orange-500"]) {
     background-color: #0f172a !important;
     color: #cbd5e1 !important;
   }
@@ -779,33 +781,33 @@ textarea {
   [data-contrx-theme="black"] .contrx-app-main div:has(> table),
   [data-contrx-theme="black"] .contrx-app-main section:has(> table),
   [data-contrx-theme="black"] .contrx-app-main article:has(> table),
-  body.dark .contrx-app-main div:has(> table),
-  body.dark .contrx-app-main section:has(> table),
-  body.dark .contrx-app-main article:has(> table) {
+  body.dark[data-contrx-theme="black"] .contrx-app-main div:has(> table),
+  body.dark[data-contrx-theme="black"] .contrx-app-main section:has(> table),
+  body.dark[data-contrx-theme="black"] .contrx-app-main article:has(> table) {
     border-color: #334155 !important;
     background-color: #0f172a !important;
   }
 
   [data-contrx-theme="black"] .contrx-app-main table th,
   [data-contrx-theme="black"] .contrx-app-main table td,
-  body.dark .contrx-app-main table th,
-  body.dark .contrx-app-main table td {
+  body.dark[data-contrx-theme="black"] .contrx-app-main table th,
+  body.dark[data-contrx-theme="black"] .contrx-app-main table td {
     border-color: #334155 !important;
   }
 
   [data-contrx-theme="black"] .contrx-app-main ::-webkit-scrollbar,
-  body.dark .contrx-app-main ::-webkit-scrollbar {
+  body.dark[data-contrx-theme="black"] .contrx-app-main ::-webkit-scrollbar {
     height: 0.55rem;
     width: 0.55rem;
   }
 
   [data-contrx-theme="black"] .contrx-app-main ::-webkit-scrollbar-track,
-  body.dark .contrx-app-main ::-webkit-scrollbar-track {
+  body.dark[data-contrx-theme="black"] .contrx-app-main ::-webkit-scrollbar-track {
     background: #020617;
   }
 
   [data-contrx-theme="black"] .contrx-app-main ::-webkit-scrollbar-thumb,
-  body.dark .contrx-app-main ::-webkit-scrollbar-thumb {
+  body.dark[data-contrx-theme="black"] .contrx-app-main ::-webkit-scrollbar-thumb {
     background: #334155;
     border-radius: 999px;
   }

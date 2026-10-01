@@ -26,6 +26,7 @@ export type PaymentEntry = {
 
 export type ChargePayment = {
   id: string;
+  chargeId?: string;
   paidAt: string;
   method: PaymentMethod;
   interest: number;

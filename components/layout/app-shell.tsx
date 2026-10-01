@@ -23,6 +23,16 @@ import {
   setCachedAppSettings,
 } from "@/services/settings-cache";
 import {
+  type ThemeMode,
+  type ThemeSettings,
+  defaultThemeSettings,
+  normalizeThemeMode,
+  normalizeThemeSettings,
+  readThemeSettingsFromStorage,
+  saveThemeSettingsLocally,
+  applyThemeToDom,
+} from "@/services/theme-storage";
+import {
   clearMinimizedModalState,
   dispatchCloseMinimizedModal,
   dispatchRestoreMinimizedModal,
@@ -39,6 +49,7 @@ import {
 import { getChamados } from "@/services/chamados.service";
 import AgendaNotificationListener from "./agenda-notification-listener";
 import { AdminImpersonateBanner } from "@/components/admin/modals/admin-impersonate-banner";
+import WhatsNewModal from "@/components/modals/whats-new-modal";
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -74,13 +85,6 @@ type CompanySettings = {
   neighborhood: string;
   city: string;
   state: string;
-};
-
-type ThemeMode = "light" | "black" | "graphite";
-
-type ThemeSettings = {
-  mode: ThemeMode;
-  accent?: string;
 };
 
 type ResetModuleKey =
@@ -200,11 +204,6 @@ const defaultCompanySettings: CompanySettings = {
   state: "",
 };
 
-const defaultThemeSettings: ThemeSettings = {
-  mode: "light",
-  accent: "orange",
-};
-
 function getInitialLetters(name: string) {
   const cleanName = name.trim();
 
@@ -313,70 +312,6 @@ function isSystemOwnerRole(role?: string | null) {
   return role === "SYSTEM_OWNER" || role === "DONO_SISTEMA";
 }
 
-
-function normalizeThemeMode(value: unknown): ThemeMode {
-  const normalizedValue = String(value || "").toLowerCase();
-
-  if (normalizedValue === "graphite" || normalizedValue === "grafite") {
-    return "graphite";
-  }
-
-  return normalizedValue === "black" || normalizedValue === "dark"
-    ? "black"
-    : "light";
-}
-
-function normalizeThemeSettings(settings?: Partial<ThemeSettings> | null): ThemeSettings {
-  const allowedAccents = ["orange", "cobalt", "emerald", "violet", "gray", "rose"];
-  let rawAccent = settings?.accent;
-  if (rawAccent === "amber") {
-    rawAccent = "gray";
-  }
-  const accent = rawAccent && allowedAccents.includes(rawAccent) 
-    ? rawAccent 
-    : "orange";
-  return {
-    ...defaultThemeSettings,
-    ...(settings || {}),
-    mode: normalizeThemeMode(settings?.mode),
-    accent,
-  };
-}
-
-function readThemeSettingsFromStorage(companyId?: string): ThemeSettings {
-  if (typeof window === "undefined") return defaultThemeSettings;
-
-  const storageKeys = [
-    "contrx_theme_settings",
-    "contrx_theme",
-    "contrx_current_theme",
-    "theme",
-  ];
-
-  for (const storageKey of storageKeys) {
-    const storedValue = getCompanyStorageItem(
-      companyId,
-      storageKey,
-      storageKey,
-    );
-
-    if (!storedValue) continue;
-
-    try {
-      const parsedValue = JSON.parse(storedValue) as Partial<ThemeSettings> | string;
-
-      if (typeof parsedValue === "string") {
-        return { mode: normalizeThemeMode(parsedValue), accent: "orange" };
-      }
-
-      return normalizeThemeSettings(parsedValue);
-    } catch {
-      return { mode: normalizeThemeMode(storedValue), accent: "orange" };
-    }
-  }
-
-  return defaultThemeSettings;
-}
 
 function GlobalMinimizedModalDock() {
   const pathname = usePathname();
@@ -543,7 +478,16 @@ export default function AppShell({ children }: AppShellProps) {
   const [activeSettingsTab, setActiveSettingsTab] = useState<"user" | "company">("company");
   const [userSettings, setUserSettings] = useState<UserSettings>(defaultUserSettings);
   const [companySettings, setCompanySettings] = useState<CompanySettings>(defaultCompanySettings);
-  const [themeSettings, setThemeSettings] = useState<ThemeSettings>(defaultThemeSettings);
+  const [themeSettings, setThemeSettings] = useState<ThemeSettings>(() => {
+    if (typeof window !== "undefined") {
+      const cached = getCachedThemeSettings();
+      if (cached) {
+        return normalizeThemeSettings(cached as Partial<ThemeSettings>);
+      }
+      return readThemeSettingsFromStorage();
+    }
+    return defaultThemeSettings;
+  });
   const [passwordSettings, setPasswordSettings] = useState<PasswordSettings>(defaultPasswordSettings);
   const [successMessage, setSuccessMessage] = useState("");
   const [settingsErrorMessage, setSettingsErrorMessage] = useState("");
@@ -564,6 +508,35 @@ export default function AppShell({ children }: AppShellProps) {
     targetHref?: string;
     targetLabel?: string;
   } | null>(null);
+  const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const currentVersion = packageJson.version;
+    const storageKey = `contrx_seen_version_${user.id}`;
+    try {
+      const seenVersion = localStorage.getItem(storageKey);
+      if (seenVersion !== currentVersion) {
+        const timer = setTimeout(() => {
+          setIsWhatsNewOpen(true);
+        }, 1200);
+        return () => clearTimeout(timer);
+      }
+    } catch {
+      // Ignora erro de acesso ao localStorage
+    }
+  }, [user?.id]);
+
+  const handleCloseWhatsNew = useCallback(() => {
+    setIsWhatsNewOpen(false);
+    if (user?.id) {
+      try {
+        localStorage.setItem(`contrx_seen_version_${user.id}`, packageJson.version);
+      } catch {
+        // Ignora erro de acesso ao localStorage
+      }
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     let active = true;
@@ -882,9 +855,11 @@ export default function AppShell({ children }: AppShellProps) {
       }
 
       if (cachedThemeSettings) {
-        setThemeSettings(
-          normalizeThemeSettings(cachedThemeSettings as Partial<ThemeSettings>),
+        const nextTheme = normalizeThemeSettings(
+          cachedThemeSettings as Partial<ThemeSettings>,
         );
+        setThemeSettings(nextTheme);
+        saveThemeSettingsLocally(nextTheme, currentCompanyId);
       }
 
       return;
@@ -912,9 +887,11 @@ export default function AppShell({ children }: AppShellProps) {
             "",
         ),
       } as CompanySettings);
-      setThemeSettings(
-        normalizeThemeSettings(settings.themeSettings as Partial<ThemeSettings> | undefined),
+      const nextTheme = normalizeThemeSettings(
+        settings.themeSettings as Partial<ThemeSettings> | undefined,
       );
+      setThemeSettings(nextTheme);
+      saveThemeSettingsLocally(nextTheme, currentCompanyId);
     } catch {
       console.warn("Settings API unavailable. Local cached settings were loaded.");
 
@@ -943,9 +920,11 @@ export default function AppShell({ children }: AppShellProps) {
         }
 
         if (cachedThemeSettings) {
-          setThemeSettings(
-            normalizeThemeSettings(cachedThemeSettings as Partial<ThemeSettings>),
+          const nextTheme = normalizeThemeSettings(
+            cachedThemeSettings as Partial<ThemeSettings>,
           );
+          setThemeSettings(nextTheme);
+          saveThemeSettingsLocally(nextTheme, currentCompanyId);
         }
 
         return;
@@ -979,16 +958,7 @@ export default function AppShell({ children }: AppShellProps) {
   }, [isSidebarLocked]);
 
   useEffect(() => {
-    const isDarkMode = themeSettings.mode !== "light";
-
-    document.documentElement.classList.toggle("dark", isDarkMode);
-    document.body.classList.toggle("dark", isDarkMode);
-    document.documentElement.dataset.contrxTheme = themeSettings.mode;
-    document.body.dataset.contrxTheme = themeSettings.mode;
-
-    const activeAccent = themeSettings.accent || "orange";
-    document.documentElement.dataset.contrxAccent = activeAccent;
-    document.body.dataset.contrxAccent = activeAccent;
+    applyThemeToDom(themeSettings);
   }, [themeSettings.mode, themeSettings.accent]);
 
   useEffect(() => {
@@ -1181,11 +1151,7 @@ export default function AppShell({ children }: AppShellProps) {
         email: lockedUserEmail,
       }),
     );
-    setCompanyStorageItem(
-      companyId,
-      "contrx_theme_settings",
-      JSON.stringify(themeSettings),
-    );
+    saveThemeSettingsLocally(themeSettings, companyId);
     setCachedAppSettings({
       userSettings: {
         ...userSettings,
@@ -1194,7 +1160,6 @@ export default function AppShell({ children }: AppShellProps) {
       companySettings,
       themeSettings,
     });
-    window.dispatchEvent(new Event("contrx-theme-change"));
 
     if (passwordSettings.newPassword) {
       setCompanyStorageItem(companyId, "contrx_user_password_updated", "true");
@@ -1376,15 +1341,15 @@ export default function AppShell({ children }: AppShellProps) {
                         }}
                         className={`group flex items-center overflow-hidden rounded-2xl px-3 py-2.5 text-sm font-bold transition-colors duration-200 ${
                           isActive
-                            ? "bg-amber-500 text-white shadow-md shadow-amber-100"
-                            : "text-slate-600 hover:bg-amber-50 hover:text-amber-700"
+                            ? "bg-orange-500 text-white shadow-md shadow-orange-100"
+                            : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
                         }`}
                       >
                         <span
                           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors duration-200 ${
                             isActive
                               ? "bg-white/20"
-                              : "bg-amber-100/60 text-amber-600 group-hover:bg-amber-100"
+                              : "bg-slate-100 group-hover:bg-orange-100"
                           }`}
                         >
                           {item.icon}
@@ -1409,9 +1374,19 @@ export default function AppShell({ children }: AppShellProps) {
                               toggleFavorite(item.href);
                             }}
                             title="Remover dos favoritos"
-                            className="ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-amber-400 hover:bg-amber-200/50 hover:text-amber-600 transition"
+                            className={`ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-lg transition ${
+                              isActive
+                                ? "text-white/80 hover:bg-white/20 hover:text-white"
+                                : "text-amber-400 hover:bg-orange-100/50 hover:text-amber-500"
+                            }`}
                           >
-                            <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-500" />
+                            <Star
+                              className={`h-3.5 w-3.5 ${
+                                isActive
+                                  ? "fill-white/80 text-white"
+                                  : "fill-amber-400 text-amber-500"
+                              }`}
+                            />
                           </button>
                         )}
                       </Link>
@@ -1557,13 +1532,19 @@ export default function AppShell({ children }: AppShellProps) {
                 <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isApiOnline ? "bg-emerald-500" : "bg-red-500"}`}></span>
               </span>
               
-              <span className={`text-[10px] font-bold text-slate-400 whitespace-nowrap transition-all duration-300 ease-in-out ${
-                isSidebarOpen
-                  ? "max-w-48 translate-x-0 opacity-100"
-                  : "max-w-0 -translate-x-2 overflow-hidden opacity-0"
-              }`}>
-                v{packageJson.version}
-              </span>
+              <button
+                type="button"
+                onClick={() => setIsWhatsNewOpen(true)}
+                title="Ver novidades desta versão"
+                className={`group flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-orange-600 transition-all duration-300 ease-in-out cursor-pointer ${
+                  isSidebarOpen
+                    ? "max-w-48 translate-x-0 opacity-100"
+                    : "max-w-0 -translate-x-2 overflow-hidden opacity-0"
+                }`}
+              >
+                <span className="hover:underline">v{packageJson.version}</span>
+                <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[9px] text-orange-500 font-extrabold">✨</span>
+              </button>
             </div>
           </div>
         </aside>
@@ -2639,7 +2620,11 @@ export default function AppShell({ children }: AppShellProps) {
             </div>
           </div>
         )}
-
+        <WhatsNewModal
+          isOpen={isWhatsNewOpen}
+          onClose={handleCloseWhatsNew}
+          currentVersion={packageJson.version}
+        />
       </div>
     </AuthGuard>
   );

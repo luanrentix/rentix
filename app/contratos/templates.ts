@@ -218,7 +218,7 @@ Parágrafo Terceiro - Na hipótese do LOCATÁRIO abandonar o imóvel, fica o LOC
 
 Parágrafo Quarto - No caso de falecimento do LOCATÁRIO, ficarão sub-rogados nos seus direitos e obrigações o cônjuge ou companheiro e, sucessivamente, os herdeiros, nos termos da legislação aplicável.
 
-CLÁUSULA SEGUNDA - O valor mensal do aluguel será de {amount}, a ser pago pelo LOCATÁRIO ao LOCADOR até o dia {dueDay} de cada mês, por depósito bancário, transferência, dinheiro ou Pix, utilizando a chave {pixKey}, ou por outro meio formalmente acordado entre as partes.
+CLÁUSULA SEGUNDA - O valor mensal do aluguel a ser pago pelo LOCATÁRIO ao LOCADOR será de {amount}. O pagamento deverá ser efetuado até o dia {dueDay} de cada mês, mediante depósito bancário, transferência, dinheiro ou Pix (chave: {pixKey}), ou por qualquer outro meio formalmente ajustado entre as partes.
 
 Parágrafo Primeiro - Decorrido o prazo de 30 (trinta) dias do vencimento, o débito poderá ser encaminhado para cobrança amigável ou judicial, ficando o LOCATÁRIO responsável pelos encargos, honorários, custas e demais despesas decorrentes da cobrança.
 

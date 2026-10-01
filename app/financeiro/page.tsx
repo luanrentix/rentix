@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getCompanyStorageItem } from "@/services/company-storage";
+import { readThemeSettingsFromStorage } from "@/services/theme-storage";
 import { getProperties, type Property } from "@/services/properties.service";
 import {
   getFinancialSummary,
@@ -81,7 +82,12 @@ export default function FinancialPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
-  const [financialTheme, setFinancialTheme] = useState<ThemeMode>("light");
+  const [financialTheme, setFinancialTheme] = useState<ThemeMode>(() => {
+    if (typeof window !== "undefined") {
+      return readThemeSettingsFromStorage().mode;
+    }
+    return "light";
+  });
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>("all");
 
@@ -136,44 +142,8 @@ export default function FinancialPage() {
 
   useEffect(() => {
     function applyStoredTheme() {
-      const storedThemeSettings = getCompanyStorageItem(
-        companyId,
-        "contrx_theme_settings",
-        "contrx_theme_settings",
-      );
-      const legacyTheme = getCompanyStorageItem(
-        companyId,
-        "contrx_theme",
-        "contrx_theme",
-      );
-
-      try {
-        const parsedThemeSettings = storedThemeSettings
-          ? (JSON.parse(storedThemeSettings) as { mode?: string })
-          : null;
-
-        const nextTheme =
-          parsedThemeSettings?.mode === "graphite" ||
-          legacyTheme === "graphite" ||
-          legacyTheme === "grafite"
-            ? "graphite"
-            : parsedThemeSettings?.mode === "black" ||
-                parsedThemeSettings?.mode === "dark" ||
-                legacyTheme === "black" ||
-                legacyTheme === "dark"
-              ? "black"
-              : "light";
-
-        setFinancialTheme(nextTheme);
-      } catch {
-        setFinancialTheme(
-          legacyTheme === "graphite" || legacyTheme === "grafite"
-            ? "graphite"
-            : legacyTheme === "black" || legacyTheme === "dark"
-              ? "black"
-              : "light",
-        );
-      }
+      const stored = readThemeSettingsFromStorage(companyId);
+      setFinancialTheme(stored.mode);
     }
 
     applyStoredTheme();

@@ -12,6 +12,7 @@ import {
   getDisplayContractStatus,
   toUpperText,
   getAssetCategoryLabel,
+  formatApiDateForInput,
 } from "./contract-types";
 import { X, Minus, Maximize2, Clock } from "lucide-react";
 
@@ -65,8 +66,8 @@ export function ContractFormModal({
     if (editingContract) {
       setPropertyId(String(editingContract.propertyId || ""));
       setTenantId(String(editingContract.tenantId || ""));
-      setStartDate(editingContract.startDate || "");
-      setEndDate(editingContract.endDate || "");
+      setStartDate(formatApiDateForInput(editingContract.startDate));
+      setEndDate(formatApiDateForInput(editingContract.endDate));
       setRentValue(formatCurrencyInput(editingContract.rentValue || 0));
       setIsTemporaryRental(Boolean(editingContract.isTemporaryRental));
       setCheckInTime(editingContract.checkInTime || "");
@@ -108,7 +109,7 @@ export function ContractFormModal({
     // 3. Contratos ativos deste imóvel (locação contínua padrão)
     const activeContracts = allContracts.filter((contract) => {
       const isSameProperty = String(contract.propertyId) === String(property.id);
-      const isSameContract = isEditing && contract.id === editingContract?.id;
+      const isSameContract = isEditing && String(contract.id) === String(editingContract?.id);
       const isActive =
         ["Active", "Expiring", "Scheduled"].includes(getDisplayContractStatus(contract)) &&
         contract.status !== "Deleted";
@@ -143,7 +144,7 @@ export function ContractFormModal({
 
     const conflict = allContracts.find((c) => {
       const isSameProp = String(c.propertyId) === String(propertyId);
-      const isSameCont = isEditing && c.id === editingContract?.id;
+      const isSameCont = isEditing && String(c.id) === String(editingContract?.id);
       const isActiveCont =
         ["Active", "Expiring", "Scheduled"].includes(getDisplayContractStatus(c)) &&
         c.status !== "Deleted";
@@ -230,7 +231,7 @@ export function ContractFormModal({
       // Contrato padrão para imóvel: não pode haver nenhum contrato ativo para este imóvel
       const hasAnyActive = allContracts.some((c) => {
         const isSameProp = String(c.propertyId) === String(selectedProperty.id);
-        const isSameCont = isEditing && c.id === editingContract?.id;
+        const isSameCont = isEditing && String(c.id) === String(editingContract?.id);
         const isActiveCont =
           ["Active", "Expiring", "Scheduled"].includes(getDisplayContractStatus(c)) &&
           c.status !== "Deleted";
@@ -245,7 +246,7 @@ export function ContractFormModal({
       // Temporada ou Ativo não-imóvel: não pode haver contrato com sobreposição de data
       const conflicting = allContracts.find((c) => {
         const isSameProp = String(c.propertyId) === String(selectedProperty.id);
-        const isSameCont = isEditing && c.id === editingContract?.id;
+        const isSameCont = isEditing && String(c.id) === String(editingContract?.id);
         const isActiveCont =
           ["Active", "Expiring", "Scheduled"].includes(getDisplayContractStatus(c)) &&
           c.status !== "Deleted";

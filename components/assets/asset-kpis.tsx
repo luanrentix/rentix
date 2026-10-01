@@ -81,7 +81,7 @@ export function AssetKpis({
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    <div className="grid w-full min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
       {cards.map((card) => {
         const Icon = card.icon;
         const isSelected = selectedFilter === card.filter;
@@ -91,12 +91,12 @@ export function AssetKpis({
             key={card.label}
             type="button"
             onClick={() => onSelectFilter(card.filter)}
-            className={`group flex flex-col justify-between rounded-2xl border bg-white p-4 text-left transition-all duration-200 ${
+            className={`group flex min-w-0 flex-col justify-between rounded-2xl border bg-white p-3.5 sm:p-4 text-left transition-all duration-200 ${
               isSelected ? card.activeClass : "border-slate-200 hover:shadow-md"
             } ${card.borderClass}`}
           >
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">
+            <div className="flex items-center justify-between gap-1">
+              <span className="truncate text-[11px] font-black uppercase tracking-wider text-slate-500">
                 {card.label}
               </span>
               <div

@@ -37,7 +37,7 @@ export function AssetTable({
 }: AssetTableProps) {
   if (isLoading) {
     return (
-      <div className="overflow-hidden rounded-2xl border border-slate-200">
+      <div className="w-full max-w-full min-w-0 overflow-hidden rounded-3xl border border-slate-200">
         <div className="grid grid-cols-[2fr_1fr_2fr_1fr_1fr_1fr_120px] gap-4 bg-orange-50 px-5 py-4">
           {Array.from({ length: 7 }).map((_, index) => (
             <div
@@ -82,33 +82,34 @@ export function AssetTable({
   }
 
   return (
-    <div className="hidden lg:block overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-sm">
-      <table className="w-full min-w-[1100px] border-collapse text-left">
-        <thead className="border-b border-slate-200 bg-slate-50/80">
-          <tr>
-            <th className="px-5 py-4 text-xs font-black uppercase tracking-wider text-slate-600">
-              Bem/Ativo
-            </th>
-            <th className="px-5 py-4 text-xs font-black uppercase tracking-wider text-slate-600">
-              Categoria
-            </th>
-            <th className="px-5 py-4 text-xs font-black uppercase tracking-wider text-slate-600">
-              Localização
-            </th>
-            <th className="px-5 py-4 text-xs font-black uppercase tracking-wider text-slate-600">
-              Valor Locação
-            </th>
-            <th className="px-5 py-4 text-xs font-black uppercase tracking-wider text-slate-600">
-              Status Operacional
-            </th>
-            <th className="px-5 py-4 text-xs font-black uppercase tracking-wider text-slate-600">
-              Cadastro
-            </th>
-            <th className="px-5 py-4 text-right text-xs font-black uppercase tracking-wider text-slate-600">
-              Ações
-            </th>
-          </tr>
-        </thead>
+    <div className="hidden lg:block w-full max-w-full min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="overflow-x-auto w-full">
+        <table className="w-full min-w-[940px] border-collapse text-left">
+          <thead className="border-b border-slate-200 bg-slate-50/80 dark:border-slate-800 dark:bg-slate-800/50">
+            <tr>
+              <th className="px-4 py-3.5 text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                Bem/Ativo
+              </th>
+              <th className="px-3.5 py-3.5 text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                Categoria
+              </th>
+              <th className="px-3.5 py-3.5 text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                Localização
+              </th>
+              <th className="px-3.5 py-3.5 text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                Valor Locação
+              </th>
+              <th className="px-3.5 py-3.5 text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                Status Operacional
+              </th>
+              <th className="px-3.5 py-3.5 text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                Cadastro
+              </th>
+              <th className="px-4 py-3.5 text-right text-xs font-black uppercase tracking-wider text-slate-600 dark:text-slate-400 whitespace-nowrap w-[150px]">
+                Ações
+              </th>
+            </tr>
+          </thead>
 
         <tbody className="divide-y divide-slate-200">
           {properties.map((property) => {
@@ -135,7 +136,7 @@ export function AssetTable({
                 }`}
               >
                 {/* Bem / Ativo */}
-                <td className="px-5 py-4">
+                <td className="px-4 py-3.5">
                   <div
                     className="asset-name-container group group/asset flex flex-col cursor-pointer"
                     onClick={() => onOpenHistory(property)}
@@ -146,7 +147,7 @@ export function AssetTable({
                         e.stopPropagation();
                         onOpenHistory(property);
                       }}
-                      className="asset-name-btn block max-w-[320px] truncate text-left text-sm uppercase tracking-tight font-semibold text-slate-800 dark:text-slate-100 hover:font-black hover:text-orange-600 hover:underline group-hover:font-black group-hover:text-orange-600 group-hover:underline cursor-pointer transition-all duration-150"
+                      className="asset-name-btn block max-w-[260px] truncate text-left text-sm uppercase tracking-tight font-semibold text-slate-800 dark:text-slate-100 hover:font-black hover:text-orange-600 hover:underline group-hover:font-black group-hover:text-orange-600 group-hover:underline cursor-pointer transition-all duration-150"
                       title="Clique para ver o histórico e ficha técnica do ativo"
                     >
                       {property.name}
@@ -156,7 +157,7 @@ export function AssetTable({
                         Código: #{property.code}
                       </span>
                     )}
-                    <span className="mt-0.5 text-xs font-semibold text-slate-500">
+                    <span className="mt-0.5 text-xs font-semibold text-slate-500 truncate max-w-[260px]">
                       {getAssetTechnicalSummary(property) ||
                         (property.zipCode ? `CEP: ${property.zipCode}` : "Sem dados adicionais")}
                     </span>
@@ -164,32 +165,32 @@ export function AssetTable({
                 </td>
 
                 {/* Categoria */}
-                <td className="px-5 py-4 text-sm font-semibold text-slate-700">
-                  <p className="font-black text-slate-900">
+                <td className="px-3.5 py-3.5 text-sm font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                  <p className="font-black text-slate-900 dark:text-white">
                     {getAssetCategoryLabel(property.assetCategory)}
                   </p>
-                  <p className="mt-0.5 text-xs text-slate-500">
+                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                     {getPropertyTypeLabel(property.type, property.assetCategory)}
                   </p>
                 </td>
 
                 {/* Localização */}
-                <td className="px-5 py-4 text-sm font-semibold text-slate-600">
-                  <p className="truncate max-w-[200px]" title={property.address}>
+                <td className="px-3.5 py-3.5 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                  <p className="truncate max-w-[190px]" title={property.address}>
                     {property.address || "Endereço não informado"}
                   </p>
-                  <p className="mt-0.5 text-xs text-slate-400">
+                  <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
                     {property.city || "-"} / {property.state || "-"}
                   </p>
                 </td>
 
                 {/* Valor Locação */}
-                <td className="px-5 py-4 text-sm font-black text-slate-900">
+                <td className="px-3.5 py-3.5 text-sm font-black text-slate-900 dark:text-white whitespace-nowrap">
                   {formatCurrency(property.rentValue)}
                 </td>
 
                 {/* Status Operacional */}
-                <td className="px-5 py-4">
+                <td className="px-3.5 py-3.5 min-w-[150px]">
                   <AssetStatusBadge
                     status={property.operationalStatus}
                     onClick={
@@ -211,7 +212,7 @@ export function AssetTable({
                     <button
                       type="button"
                       onClick={() => onOpenRentalInfo(property, currentRentalContract)}
-                      className="mt-1.5 block max-w-[200px] truncate text-left text-xs font-semibold text-slate-500 transition hover:text-orange-600 hover:underline cursor-pointer"
+                      className="mt-1.5 block max-w-[180px] truncate text-left text-xs font-semibold text-slate-500 transition hover:text-orange-600 hover:underline cursor-pointer"
                       title="Clique para ver informações da locação e do contrato"
                     >
                       Locatário: {currentRentalContract.tenantName || "Inquilino"}
@@ -225,19 +226,19 @@ export function AssetTable({
                 </td>
 
                 {/* Cadastro */}
-                <td className="px-5 py-4">
+                <td className="px-3.5 py-3.5 whitespace-nowrap">
                   <AssetActiveBadge isActive={property.isActive} />
                 </td>
 
                 {/* Ações */}
-                <td className="px-5 py-4">
+                <td className="px-4 py-3.5 whitespace-nowrap w-[150px]">
                   <div className="flex items-center justify-end gap-1.5">
                     {/* Botão QR Code */}
                     <button
                       type="button"
                       onClick={() => onOpenQrLabel(property)}
                       title="Gerar Etiqueta Patrimonial com QR Code"
-                      className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition hover:bg-orange-50 hover:text-orange-600"
+                      className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition hover:bg-orange-50 hover:text-orange-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
                     >
                       <QrCode className="h-4 w-4" />
                     </button>
@@ -249,13 +250,13 @@ export function AssetTable({
                         onClick={() => onToggleMaintenance(property)}
                         title={
                           isMaintenance
-                            ? "Liberar bem da Manutenção (marcar Disponível)"
-                            : "Colocar bem Em Manutenção (bloquear locação)"
+                            ? "Gerenciar Manutenção (Vincular com Agenda ou Liberar)"
+                            : "Colocar bem Em Manutenção (Vincular com módulo Agenda)"
                         }
                         className={`flex h-8 w-8 items-center justify-center rounded-xl transition ${
                           isMaintenance
-                            ? "bg-amber-100 text-amber-800 hover:bg-emerald-100 hover:text-emerald-800"
-                            : "bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-700"
+                            ? "bg-amber-100 text-amber-800 hover:bg-emerald-100 hover:text-emerald-800 dark:bg-amber-950/60 dark:text-amber-300"
+                            : "bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
                         }`}
                       >
                         {isMaintenance ? (
@@ -271,7 +272,7 @@ export function AssetTable({
                       type="button"
                       onClick={() => onOpenHistory(property)}
                       title="Ficha Técnica & Histórico"
-                      className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-900"
+                      className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-900 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
                     >
                       <History className="h-4 w-4" />
                     </button>
@@ -281,7 +282,7 @@ export function AssetTable({
                       type="button"
                       onClick={() => onEdit(property.id)}
                       title="Editar cadastro do bem"
-                      className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition hover:bg-orange-50 hover:text-orange-600"
+                      className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition hover:bg-orange-50 hover:text-orange-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
                     >
                       <Edit3 className="h-4 w-4" />
                     </button>
@@ -292,6 +293,7 @@ export function AssetTable({
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

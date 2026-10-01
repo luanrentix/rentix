@@ -393,3 +393,25 @@ export function isContractActive(status: string | null | undefined): boolean {
   const s = String(status).trim().toUpperCase();
   return s === "ACTIVE" || s === "ATIVO";
 }
+
+export const ASSET_MAINTENANCE_SCHEDULE_DRAFT_KEY = "contrx_asset_maintenance_schedule_draft";
+
+export type AssetMaintenanceScheduleDraft = {
+  propertyId: string;
+  propertyName: string;
+  code?: string;
+  patrimonyCode?: string;
+  assetCategory?: string;
+  type?: string;
+  brand?: string;
+  model?: string;
+  serialNumber?: string;
+  licensePlate?: string;
+  ownerId?: string;
+  ownerName?: string;
+  address?: string;
+  description?: string;
+  defaultDate?: string;
+  defaultTime?: string;
+  reason?: string;
+};

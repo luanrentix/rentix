@@ -32,9 +32,62 @@ export interface ChargePayment {
   note?: string;
 }
 
+export type PrintableCharge = {
+  id: string;
+  companyId?: string;
+  contractId?: string | number | null;
+  tenantId?: string | null;
+  property?: string | { id?: string; title?: string } | null;
+  propertyName?: string;
+  tenant?: string | { id?: string; name?: string; phone?: string | null; cpfCnpj?: string | null } | null;
+  tenantName?: string;
+  dueDate: string;
+  amount: number;
+  status: "Pending" | "Paid" | "Overdue";
+  paidAmount?: number | null;
+  remainingAmount?: number | null;
+  manual?: boolean;
+  issueDate?: string | null;
+  installmentNumber?: number | null;
+  installmentTotal?: number | null;
+  installmentGroupId?: string | null;
+  isDownPayment?: boolean;
+  payments?: any[];
+};
+
+export type PrintablePaymentRecord = {
+  id?: string;
+  chargeId?: string;
+  paidAt: string;
+  method: any;
+  paymentItems?: Array<{ method: any; amount: number }> | null;
+  interest: number;
+  discount: number;
+  amountPaid: number;
+  note?: string | null;
+};
+
 export interface ReceiptPrintItem {
-  charge: Charge;
-  paymentRecord: ChargePayment;
+  charge: PrintableCharge;
+  paymentRecord: PrintablePaymentRecord;
+}
+
+export function getChargeTenantName(charge: PrintableCharge): string {
+  if (charge.tenantName) return charge.tenantName;
+  if (typeof charge.tenant === "string" && charge.tenant) return charge.tenant;
+  if (typeof charge.tenant === "object" && charge.tenant && "name" in charge.tenant && charge.tenant.name) {
+    return charge.tenant.name;
+  }
+  return "";
+}
+
+export function getChargePropertyName(charge: PrintableCharge): string {
+  if (charge.propertyName) return charge.propertyName;
+  if (typeof charge.property === "string" && charge.property) return charge.property;
+  if (typeof charge.property === "object" && charge.property && "title" in charge.property && charge.property.title) {
+    return charge.property.title;
+  }
+  return "";
 }
 
 export interface Contract {
@@ -260,8 +313,8 @@ export async function generatePaymentCarnet(params: {
       (charge) => `
         <tr>
           <td>${charge.isDownPayment ? "Entrada" : `${charge.installmentNumber || 1}/${charge.installmentTotal || carnetCharges.length}`}</td>
-          <td>${escapeHtml(charge.tenant)}</td>
-          <td>${escapeHtml(charge.property)}</td>
+          <td>${escapeHtml(getChargeTenantName(charge))}</td>
+          <td>${escapeHtml(getChargePropertyName(charge))}</td>
           <td>${formatDate(charge.dueDate)}</td>
           <td>${formatCurrency(charge.amount)}</td>
         </tr>
@@ -272,6 +325,8 @@ export async function generatePaymentCarnet(params: {
   const vouchers = (
     await Promise.all(
       carnetCharges.map(async (charge) => {
+        const tenantName = getChargeTenantName(charge);
+        const propertyName = getChargePropertyName(charge);
         const installmentLabel = charge.isDownPayment
           ? "Entrada / Sinal"
           : `${charge.installmentNumber || 1}/${charge.installmentTotal || carnetCharges.length}`;
@@ -284,7 +339,7 @@ export async function generatePaymentCarnet(params: {
           txId: `RX${String(charge.installmentGroupId || charge.id)
             .replace(/[^a-zA-Z0-9]/g, "")
             .slice(-18)}${String(charge.installmentNumber || 1).padStart(2, "0")}`,
-          description: `Aluguel ${installmentLabel} ${charge.tenant}`,
+          description: `Aluguel ${installmentLabel} ${tenantName}`,
         });
         const pixQrCodeDataUrl = pixPayload ? await getPixQrCodeDataUrl(pixPayload) : "";
         const paymentBookletContent = renderPaymentBookletTemplate(
@@ -292,9 +347,9 @@ export async function generatePaymentCarnet(params: {
           {
             companyName,
             tradeName: companyName,
-            personName: charge.tenant,
-            tenantName: charge.tenant,
-            propertyName: charge.property,
+            personName: tenantName,
+            tenantName,
+            propertyName,
             contractNumber: String(charge.contractId || firstCharge.contractId || "SEM CONTRATO"),
             installmentNumber: installmentLabel,
             dueDate: formatDate(charge.dueDate),
@@ -320,11 +375,11 @@ export async function generatePaymentCarnet(params: {
             <div class="payer-card">
               <div>
                 <span>Pagador</span>
-                <strong>${escapeHtml(charge.tenant)}</strong>
+                <strong>${escapeHtml(tenantName)}</strong>
               </div>
               <div>
                 <span>Bem/Ativo</span>
-                <strong>${escapeHtml(charge.property)}</strong>
+                <strong>${escapeHtml(propertyName)}</strong>
               </div>
             </div>
 
@@ -456,8 +511,8 @@ export async function generatePaymentCarnet(params: {
               <div>
                 <div class="brand">${escapeHtml(companyName)} · Financeiro</div>
                 <h1>Carnê de Pagamento</h1>
-                <p>Inquilino: <strong>${escapeHtml(firstCharge.tenant)}</strong></p>
-                <p>Bem/Ativo: <strong>${escapeHtml(firstCharge.property)}</strong></p>
+                <p>Inquilino: <strong>${escapeHtml(getChargeTenantName(firstCharge))}</strong></p>
+                <p>Bem/Ativo: <strong>${escapeHtml(getChargePropertyName(firstCharge))}</strong></p>
               </div>
               <div class="summary-meta">
                 Parcelas: <strong>${carnetCharges.length}</strong><br />
@@ -584,8 +639,8 @@ export function openAccountsReceivableReport(params: {
 
       return `
         <tr>
-          <td>${escapeHtml(charge.property)}</td>
-          <td>${escapeHtml(charge.tenant)}</td>
+          <td>${escapeHtml(getChargePropertyName(charge))}</td>
+          <td>${escapeHtml(getChargeTenantName(charge))}</td>
           <td>${formatDate(charge.dueDate)}</td>
           <td>${formatCurrency(amount)}</td>
           <td>${getStatusLabel(charge.status)}</td>
@@ -841,7 +896,9 @@ export function generatePaymentReceiptBatch(params: {
 
   const receipts = receiptItems
     .map(({ charge, paymentRecord }) => {
-      const receiptNumber = String(paymentRecord.chargeId)
+      const receiptNumber = String(
+        paymentRecord.chargeId || charge.id || paymentRecord.id || ""
+      )
         .replace(/[^a-zA-Z0-9]/g, "")
         .slice(-8)
         .toUpperCase();
@@ -872,8 +929,8 @@ export function generatePaymentReceiptBatch(params: {
           </header>
 
           <div class="info-grid">
-            <div class="info-item"><span>Pagador (Inquilino)</span><strong>${escapeHtml(charge.tenant)}</strong></div>
-            <div class="info-item"><span>Referência (Imóvel)</span><strong>${escapeHtml(charge.property)}</strong></div>
+            <div class="info-item"><span>Pagador (Inquilino)</span><strong>${escapeHtml(getChargeTenantName(charge))}</strong></div>
+            <div class="info-item"><span>Referência (Imóvel)</span><strong>${escapeHtml(getChargePropertyName(charge))}</strong></div>
             <div class="info-item"><span>Forma de Pagamento</span><strong>${escapeHtml(paymentMethods)}</strong></div>
             <div class="info-item"><span>Contrato / Parcela</span><strong>${escapeHtml(chargeLabel)}</strong></div>
           </div>
@@ -983,8 +1040,8 @@ export function generatePaymentReceiptBatch(params: {
 }
 
 export function generatePaymentReceipt(params: {
-  charge: Charge;
-  paymentRecord: ChargePayment;
+  charge: PrintableCharge;
+  paymentRecord: PrintablePaymentRecord;
   companySettings: any;
   getPaymentMethodLabel: (method: any) => string;
   setPaymentFormError: (msg: string) => void;
@@ -1010,7 +1067,9 @@ export function generatePaymentReceipt(params: {
   const companyDocument = companySettings.document || "Não informado";
   const companyPhone = companySettings.phone || "Não informado";
   const companyEmail = companySettings.email || "Não informado";
-  const receiptNumber = String(paymentRecord.chargeId)
+  const receiptNumber = String(
+    paymentRecord.chargeId || charge.id || paymentRecord.id || ""
+  )
     .replace(/[^a-zA-Z0-9]/g, "")
     .slice(-8)
     .toUpperCase();
@@ -1096,8 +1155,8 @@ export function generatePaymentReceipt(params: {
             </header>
 
             <div class="info-grid">
-              <div class="info-item"><span>Pagador (Inquilino)</span><strong>${escapeHtml(charge.tenant)}</strong></div>
-              <div class="info-item"><span>Referência (Imóvel)</span><strong>${escapeHtml(charge.property)}</strong></div>
+              <div class="info-item"><span>Pagador (Inquilino)</span><strong>${escapeHtml(getChargeTenantName(charge))}</strong></div>
+              <div class="info-item"><span>Referência (Imóvel)</span><strong>${escapeHtml(getChargePropertyName(charge))}</strong></div>
               <div class="info-item"><span>Forma de Pagamento</span><strong>${escapeHtml(paymentMethods)}</strong></div>
               <div class="info-item"><span>Contrato / Parcela</span><strong>${escapeHtml(chargeLabel)}</strong></div>
             </div>
@@ -1149,6 +1208,10 @@ export function generatePaymentReceipt(params: {
           document.getElementById("print-receipt-button").addEventListener("click", function () {
             window.print();
           });
+          window.onload = function () {
+            window.focus();
+            window.print();
+          };
         </script>
       </body>
     </html>

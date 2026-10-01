@@ -23,7 +23,9 @@ import {
   CLOSE_MINIMIZED_MODAL_EVENT,
   RESTORE_MINIMIZED_MODAL_EVENT,
 } from "@/services/minimized-modal.service";
+import { setCompanyStorageItem } from "@/services/company-storage";
 import { useAuth } from "@/context/AuthContext";
+import { compressImageFile } from "@/services/image-compression";
 
 import {
   Property,
@@ -37,6 +39,8 @@ import {
   toUpperText,
   AssetOperationalStatus,
   isContractActive,
+  ASSET_MAINTENANCE_SCHEDULE_DRAFT_KEY,
+  type AssetMaintenanceScheduleDraft,
 } from "@/components/assets/asset-types";
 import { AssetKpis } from "@/components/assets/asset-kpis";
 import { AssetFilters } from "@/components/assets/asset-filters";
@@ -46,6 +50,7 @@ import { AssetQrLabelModal } from "@/components/assets/asset-qr-label-modal";
 import { AssetHistoryModal } from "@/components/assets/asset-history-modal";
 import { AssetFormModal } from "@/components/assets/asset-form-modal";
 import { AssetRentalModal } from "@/components/assets/asset-rental-modal";
+import { AssetMaintenanceModal } from "@/components/assets/asset-maintenance-modal";
 
 function getCurrentCompanyId(): string {
   if (typeof window === "undefined") return "";
@@ -213,10 +218,24 @@ export default function PropertiesPage() {
     contract: RentalHistoryContract | null;
   } | null>(null);
   const [qrLabelProperty, setQrLabelProperty] = useState<Property | null>(null);
+  const [maintenanceModalProperty, setMaintenanceModalProperty] = useState<Property | null>(null);
+  const [isLinkingMaintenance, setIsLinkingMaintenance] = useState(false);
   const [toast, setToast] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("maintenanceScheduled") === "1") {
+      setToast({
+        type: "success",
+        message: "Manutenção vinculada e agendada com sucesso no módulo Agenda!",
+      });
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   useEffect(() => {
     if (toast) {
@@ -446,12 +465,13 @@ export default function PropertiesPage() {
         ? await updateProperty(editingPropertyId, payload)
         : await createProperty(payload);
 
-      // Upload de novas fotos
+      // Upload de novas fotos (comprimidas e convertidas para armazenamento permanente)
       if (files.length > 0) {
         await Promise.all(
-          files.map((file) => {
+          files.map(async (file) => {
+            const compressed = await compressImageFile(file);
             const formData = new FormData();
-            formData.append("file", file);
+            formData.append("file", compressed);
             formData.append("companyId", companyId);
             formData.append("entityType", "PROPERTY");
             formData.append("entityId", saved.id);
@@ -487,8 +507,89 @@ export default function PropertiesPage() {
     }
   }
 
-  // Alternar rapidamente status de Manutenção
-  async function handleToggleMaintenance(property: Property) {
+  const maintenanceActiveContract = useMemo(() => {
+    if (!maintenanceModalProperty) return null;
+    return (
+      contracts.find((c) => {
+        const cPropId =
+          c.propertyId ||
+          c.property_id ||
+          c.property ||
+          c.propertyCode ||
+          c.property_id_fk;
+        return (
+          String(cPropId || "") === maintenanceModalProperty.id &&
+          isContractActive(c.status)
+        );
+      }) || null
+    );
+  }, [contracts, maintenanceModalProperty]);
+
+  // Abre modal de gestão e agendamento de manutenção
+  function handleOpenMaintenanceModal(property: Property) {
+    setMaintenanceModalProperty(property);
+  }
+
+  // Vincular manutenção com o módulo Agenda
+  async function handleLinkWithAgenda(property: Property, reason: string) {
+    const companyId = user?.companyId || getCurrentCompanyId();
+    if (!companyId) return;
+
+    try {
+      setIsLinkingMaintenance(true);
+
+      // Se ainda não estiver em manutenção, coloca em manutenção agora
+      if (property.operationalStatus !== "MAINTENANCE") {
+        await setAssetOperationalStatus(property.id, "MAINTENANCE");
+
+        createPropertyMovement({
+          companyId,
+          propertyId: property.id,
+          propertyName: property.name,
+          type: "Updated",
+          description: "Bem/ativo colocado em manutenção com agendamento na Agenda.",
+        }).catch(console.warn);
+      }
+
+      // Prepara o rascunho com os dados do bem para a Agenda
+      const draftPayload: AssetMaintenanceScheduleDraft = {
+        propertyId: property.id,
+        propertyName: property.name,
+        code: property.code,
+        patrimonyCode: property.patrimonyCode,
+        assetCategory: property.assetCategory,
+        type: property.type,
+        brand: property.brand,
+        model: property.model,
+        serialNumber: property.serialNumber,
+        licensePlate: property.licensePlate,
+        ownerId: property.ownerId,
+        ownerName: property.ownerName,
+        address: property.address,
+        description: property.description,
+        reason: reason || undefined,
+      };
+
+      setCompanyStorageItem(
+        companyId,
+        ASSET_MAINTENANCE_SCHEDULE_DRAFT_KEY,
+        JSON.stringify(draftPayload)
+      );
+
+      // Redireciona para o módulo Agenda abrindo a tela de agendamento pré-preenchida
+      window.location.href = `/agenda?fromMaintenance=1&propertyId=${encodeURIComponent(property.id)}`;
+    } catch (err) {
+      console.error("Erro ao vincular manutenção com Agenda:", err);
+      setToast({
+        type: "error",
+        message: "Erro ao preparar agendamento de manutenção.",
+      });
+      setIsLinkingMaintenance(false);
+    }
+  }
+
+  // Apenas alternar status operacional sem agendar
+  async function handleToggleStatusOnly(property: Property) {
     const nextStatus: AssetOperationalStatus =
       property.operationalStatus === "MAINTENANCE" ? "AVAILABLE" : "MAINTENANCE";
 
@@ -510,16 +611,28 @@ export default function PropertiesPage() {
         }).catch(console.warn);
       }
 
+      setMaintenanceModalProperty(null);
+      setToast({
+        type: "success",
+        message:
+          nextStatus === "MAINTENANCE"
+            ? "Bem/ativo colocado em manutenção com sucesso."
+            : "Bem/ativo liberado da manutenção com sucesso.",
+      });
       await loadData();
     } catch (err) {
       console.error("Erro ao alterar status operacional:", err);
+      setToast({
+        type: "error",
+        message: "Erro ao alterar status operacional do bem.",
+      });
     }
   }
 
 
 
   return (
-    <div className="space-y-6">
+    <div className="w-full max-w-full min-w-0 space-y-6">
       {/* Toast Notifier */}
       {toast && (
         <div
@@ -562,7 +675,7 @@ export default function PropertiesPage() {
       />
 
       {/* Filtros e Busca */}
-      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="w-full max-w-full min-w-0 rounded-3xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm">
         <AssetFilters
           search={search}
           onSearchChange={setSearch}
@@ -584,7 +697,7 @@ export default function PropertiesPage() {
         onOpenRentalInfo={handleOpenRentalInfo}
         onEdit={handleEditProperty}
         onOpenQrLabel={setQrLabelProperty}
-        onToggleMaintenance={handleToggleMaintenance}
+        onToggleMaintenance={handleOpenMaintenanceModal}
       />
 
       {/* Cards Mobile */}
@@ -595,7 +708,7 @@ export default function PropertiesPage() {
         onOpenRentalInfo={handleOpenRentalInfo}
         onEdit={handleEditProperty}
         onOpenQrLabel={setQrLabelProperty}
-        onToggleMaintenance={handleToggleMaintenance}
+        onToggleMaintenance={handleOpenMaintenanceModal}
       />
 
       {/* Modais */}
@@ -638,6 +751,16 @@ export default function PropertiesPage() {
         property={qrLabelProperty}
         companySettings={companySettings}
         onClose={() => setQrLabelProperty(null)}
+      />
+
+      <AssetMaintenanceModal
+        isOpen={Boolean(maintenanceModalProperty)}
+        property={maintenanceModalProperty}
+        activeContract={maintenanceActiveContract}
+        isLoading={isLinkingMaintenance}
+        onClose={() => setMaintenanceModalProperty(null)}
+        onLinkWithAgenda={handleLinkWithAgenda}
+        onToggleStatusOnly={handleToggleStatusOnly}
       />
     </div>
   );

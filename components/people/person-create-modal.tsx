@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { LoaderCircle, Minus, Search, X } from "lucide-react";
 import { createPerson, type Person } from "@/services/people.service";
+import { compressImageFile } from "@/services/image-compression";
 
 type PersonType = "individual" | "company";
 type PersonStatus = "active" | "inactive";
@@ -332,17 +333,22 @@ export function PersonCreateModal({
       const createdPerson = await createPerson(personData);
 
       if (selectedPersonFile && companyId) {
-        const formDataApi = new FormData();
-        formDataApi.append("file", selectedPersonFile);
-        formDataApi.append("companyId", companyId);
-        formDataApi.append("entityType", "PERSON");
-        formDataApi.append("entityId", createdPerson.id);
-
         try {
+          const compressed = await compressImageFile(selectedPersonFile);
+          const formDataApi = new FormData();
+          formDataApi.append("file", compressed);
+          formDataApi.append("companyId", companyId);
+          formDataApi.append("entityType", "PERSON");
+          formDataApi.append("entityId", createdPerson.id);
+
           const { api } = await import("@/services/api");
-          await api.post("/files/upload", formDataApi, {
+          const uploadRes = await api.post("/files/upload", formDataApi, {
             headers: { "Content-Type": "multipart/form-data" },
           });
+
+          if (uploadRes.data?.url) {
+            createdPerson.photo = uploadRes.data.url;
+          }
         } catch (err) {
           console.error("Erro ao fazer upload da foto na criação", err);
         }

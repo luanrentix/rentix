@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   X,
   Printer,
@@ -15,6 +15,10 @@ import {
   Mail,
   MapPin,
   LoaderCircle,
+  Trash2,
+  Plus,
+  AlertCircle,
+  ExternalLink,
 } from "lucide-react";
 import type { Person, PersonHistoryData } from "./person-types";
 import {
@@ -25,6 +29,7 @@ import {
   openWhatsAppMessage,
 } from "./person-types";
 import { getMediaUrl, api } from "@/services/api";
+import { compressImageFile } from "@/services/image-compression";
 import { getProperties } from "@/services/properties.service";
 import { getContracts } from "@/services/contracts.service";
 import {
@@ -72,6 +77,10 @@ export function PersonHistoryModal({
     tradeName?: string;
     companyName?: string;
   }>({});
+  const [brokenPhotos, setBrokenPhotos] = useState<Record<string, boolean>>({});
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen && person && companyId) {
@@ -136,6 +145,52 @@ export function PersonHistoryModal({
     }
   }
 
+  async function handleUploadFile(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!e.target.files || e.target.files.length === 0 || !person || !companyId) return;
+    const files = Array.from(e.target.files);
+
+    try {
+      setIsUploadingFile(true);
+      for (const file of files) {
+        let fileToUpload: File | Blob = file;
+        if (file.type.startsWith("image/")) {
+          fileToUpload = await compressImageFile(file);
+        }
+
+        const formData = new FormData();
+        formData.append("file", fileToUpload);
+        formData.append("companyId", companyId);
+        formData.append("entityType", "PERSON");
+        formData.append("entityId", person.id);
+
+        await api.post("/files/upload", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      }
+      await loadPersonFiles(person.id);
+    } catch (err) {
+      console.error("Erro ao subir arquivo da pessoa:", err);
+    } finally {
+      setIsUploadingFile(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function handleDeleteFile(fileId?: string) {
+    if (!fileId) return;
+    if (!confirm("Tem certeza que deseja excluir este anexo?")) return;
+
+    try {
+      setDeletingFileId(fileId);
+      await api.delete(`/files/${fileId}`);
+      setPersonFiles((prev) => prev.filter((f) => f.id !== fileId));
+    } catch (err) {
+      console.error("Erro ao remover anexo da pessoa:", err);
+    } finally {
+      setDeletingFileId(null);
+    }
+  }
+
   if (!isOpen || !person) return null;
 
   const isCompany = person.type === "company";
@@ -173,11 +228,17 @@ export function PersonHistoryModal({
           <div className="flex items-center justify-between border-b border-slate-100 p-6 bg-white/95 backdrop-blur-md">
             <div className="flex items-center gap-4">
               <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-orange-600 shadow-inner overflow-hidden border border-orange-200">
-                {person.photo ? (
+                {person.photo && !brokenPhotos[person.photo] ? (
                   /* eslint-disable-next-line @next/next/no-img-element */
                   <img
                     src={getMediaUrl(person.photo)}
                     alt={person.name}
+                    onError={() =>
+                      setBrokenPhotos((prev) => ({
+                        ...prev,
+                        [person.photo!]: true,
+                      }))
+                    }
                     className="h-full w-full object-cover"
                   />
                 ) : (
@@ -688,37 +749,98 @@ export function PersonHistoryModal({
                 {/* ABA 5: FOTOS & ANEXOS */}
                 {activeTab === "Photos" && (
                   <div className="space-y-4">
-                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">
-                      Galeria de Fotos e Documentos Anexados
-                    </h3>
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-150 pb-3">
+                      <div>
+                        <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">
+                          Galeria de Fotos e Documentos Anexados ({(person.photo ? 1 : 0) + personFiles.length})
+                        </h3>
+                        <p className="text-xs text-slate-500 font-medium mt-0.5">
+                          Arquivos armazenados permanentemente no banco de dados.
+                        </p>
+                      </div>
+
+                      <div>
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={handleUploadFile}
+                          accept="image/*,application/pdf"
+                          multiple
+                          className="hidden"
+                          id="person-file-upload-input"
+                        />
+                        <label
+                          htmlFor="person-file-upload-input"
+                          className={`inline-flex items-center gap-2 rounded-xl bg-orange-500 px-3.5 py-2 text-xs font-black text-white shadow-md shadow-orange-500/20 cursor-pointer transition hover:bg-orange-600 active:scale-95 ${
+                            isUploadingFile ? "opacity-70 pointer-events-none" : ""
+                          }`}
+                        >
+                          {isUploadingFile ? (
+                            <>
+                              <LoaderCircle className="h-4 w-4 animate-spin" />
+                              Otimizando & Salvando...
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="h-4 w-4" />
+                              Anexar Foto / Documento
+                            </>
+                          )}
+                        </label>
+                      </div>
+                    </div>
 
                     {personFiles.length === 0 && !person.photo ? (
-                      <div className="rounded-2xl border border-dashed border-slate-200 p-12 text-center text-sm font-semibold text-slate-500">
+                      <div className="rounded-2xl border-2 border-dashed border-slate-200 p-12 text-center text-sm font-semibold text-slate-500">
+                        <ImageIcon className="mx-auto h-10 w-10 text-slate-300 mb-2" />
                         Nenhuma foto ou documento anexado nesta pessoa.
+                        <p className="mt-1 text-xs text-slate-400 font-normal">
+                          Clique em &quot;Anexar Foto / Documento&quot; para fazer o upload.
+                        </p>
                       </div>
                     ) : (
                       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                         {person.photo && (
                           <div className="group relative aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 shadow-sm">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={getMediaUrl(person.photo)}
-                              alt="Foto de perfil"
-                              className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
-                            />
-                            <div className="absolute top-2 left-2 rounded-lg bg-slate-900/80 px-2 py-0.5 text-[10px] font-black text-white backdrop-blur-sm">
+                            <div className="absolute top-2 left-2 z-10 rounded-lg bg-slate-900/80 px-2 py-0.5 text-[10px] font-black text-white backdrop-blur-sm">
                               Foto Principal
                             </div>
-                            <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                              <a
-                                href={getMediaUrl(person.photo)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="rounded-xl bg-white px-3 py-1.5 text-xs font-black text-slate-900 shadow"
-                              >
-                                Ver em tela cheia
-                              </a>
-                            </div>
+
+                            {brokenPhotos[person.photo] ? (
+                              <div className="flex h-full w-full flex-col items-center justify-center p-3 text-center bg-slate-50">
+                                <AlertCircle className="h-7 w-7 text-amber-500 mb-1" />
+                                <span className="text-[11px] font-bold text-slate-600">
+                                  Foto indisponível
+                                </span>
+                              </div>
+                            ) : (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img
+                                src={getMediaUrl(person.photo)}
+                                alt="Foto de perfil"
+                                onError={() =>
+                                  setBrokenPhotos((prev) => ({
+                                    ...prev,
+                                    [person.photo!]: true,
+                                  }))
+                                }
+                                className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                              />
+                            )}
+
+                            {!brokenPhotos[person.photo] && (
+                              <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                                <a
+                                  href={getMediaUrl(person.photo)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="rounded-xl bg-white px-3 py-1.5 text-xs font-black text-slate-900 shadow hover:bg-slate-100 flex items-center gap-1"
+                                >
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                  Ver em tela cheia
+                                </a>
+                              </div>
+                            )}
                           </div>
                         )}
 
@@ -728,6 +850,7 @@ export function PersonHistoryModal({
                             file.type === "PDF" ||
                             (file.originalName &&
                               file.originalName.toLowerCase().endsWith(".pdf"));
+                          const isBroken = brokenPhotos[fileUrl];
 
                           return (
                             <div
@@ -741,24 +864,59 @@ export function PersonHistoryModal({
                                     {file.originalName || "Documento PDF"}
                                   </span>
                                 </div>
+                              ) : isBroken ? (
+                                <div className="flex flex-col items-center justify-center p-3 text-center">
+                                  <AlertCircle className="h-7 w-7 text-amber-500 mb-1" />
+                                  <span className="text-[11px] font-bold text-slate-600">
+                                    Arquivo indisponível
+                                  </span>
+                                  <span className="text-[9px] text-slate-400 line-clamp-1 mt-0.5">
+                                    {file.originalName || "Arquivo antigo"}
+                                  </span>
+                                </div>
                               ) : (
                                 /* eslint-disable-next-line @next/next/no-img-element */
                                 <img
                                   src={fileUrl}
                                   alt={file.originalName || "Anexo"}
+                                  onError={() =>
+                                    setBrokenPhotos((prev) => ({
+                                      ...prev,
+                                      [fileUrl]: true,
+                                    }))
+                                  }
                                   className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
                                 />
                               )}
 
-                              <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                                <a
-                                  href={fileUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="rounded-xl bg-white px-3 py-1.5 text-xs font-black text-slate-900 shadow"
-                                >
-                                  Visualizar
-                                </a>
+                              <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2 p-2">
+                                {!isBroken && (
+                                  <a
+                                    href={fileUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="rounded-xl bg-white px-2.5 py-1.5 text-xs font-black text-slate-900 shadow hover:bg-slate-100 flex items-center gap-1"
+                                  >
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                    Ver
+                                  </a>
+                                )}
+
+                                {file.id && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteFile(file.id)}
+                                    disabled={deletingFileId === file.id}
+                                    className="rounded-xl bg-red-600 px-2.5 py-1.5 text-xs font-black text-white shadow hover:bg-red-700 flex items-center gap-1 disabled:opacity-50"
+                                    title="Excluir anexo"
+                                  >
+                                    {deletingFileId === file.id ? (
+                                      <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    )}
+                                  </button>
+                                )}
                               </div>
                             </div>
                           );

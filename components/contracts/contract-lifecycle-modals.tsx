@@ -8,6 +8,8 @@ import {
   CheckCircle2,
   Receipt,
   ArrowRight,
+  Printer,
+  X,
 } from "lucide-react";
 
 // ----------------- MODAL DE FINALIZAÇÃO -----------------
@@ -531,3 +533,126 @@ export function ContractPromptInstallmentsModal({
     </div>
   );
 }
+
+// ----------------- MODAL PÓS-EDIÇÃO DE CONTRATO (MINUTA & AVISO FINANCEIRO) -----------------
+export interface ContractPostEditModalProps {
+  contract: Contract | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onPrintMinuta: (contract: Contract) => void;
+  onGoToReceivables?: (contractId: string) => void;
+}
+
+export function ContractPostEditModal({
+  contract,
+  isOpen,
+  onClose,
+  onPrintMinuta,
+  onGoToReceivables,
+}: ContractPostEditModalProps) {
+  if (!isOpen || !contract) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="relative w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+        {/* Botão Fechar X */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-5 top-5 rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 transition"
+        >
+          <X className="h-5 w-5" />
+        </button>
+
+        {/* Ícone e Título */}
+        <div className="flex items-center gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
+            <CheckCircle2 className="h-6 w-6" />
+          </div>
+          <div>
+            <h3 className="text-base font-black text-slate-900 dark:text-white">
+              Contrato Atualizado com Sucesso!
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              As alterações do contrato foram salvas no sistema.
+            </p>
+          </div>
+        </div>
+
+        {/* Detalhes do Contrato Editado */}
+        <div className="my-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5 dark:border-slate-800 dark:bg-slate-800/40 text-xs space-y-2">
+          <div className="flex justify-between items-center">
+            <span className="text-slate-500 dark:text-slate-400">Imóvel/Bem:</span>
+            <span className="font-bold text-slate-800 dark:text-slate-200">{contract.propertyName}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-slate-500 dark:text-slate-400">Locatário:</span>
+            <span className="font-bold text-slate-800 dark:text-slate-200">{contract.tenantName}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-slate-500 dark:text-slate-400">Novo Período de Vigência:</span>
+            <span className="font-bold text-emerald-700 dark:text-emerald-400">
+              {formatDate(contract.startDate)} até {formatDate(contract.endDate)}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-slate-500 dark:text-slate-400">Valor do Aluguel:</span>
+            <span className="font-bold text-slate-800 dark:text-slate-200">
+              {formatCurrency(contract.rentValue)}
+            </span>
+          </div>
+        </div>
+
+        {/* Aviso de Atenção ao Contas a Receber */}
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 dark:border-amber-900/50 dark:bg-amber-950/40 space-y-2">
+          <div className="flex items-center gap-2 text-amber-900 dark:text-amber-300">
+            <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span className="text-xs font-black uppercase tracking-wider">
+              Atenção ao Contas a Receber
+            </span>
+          </div>
+          <p className="text-xs text-amber-800 dark:text-amber-300/90 leading-relaxed">
+            Caso as alterações de <strong>datas, vigência ou valor</strong> afetem as cobranças, lembre-se de <strong>conferir e ajustar as parcelas correspondentes no menu Contas a Receber</strong> para manter seu financeiro atualizado.
+          </p>
+          {onGoToReceivables && (
+            <button
+              type="button"
+              onClick={() => onGoToReceivables(contract.id)}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-900 hover:text-amber-700 dark:text-amber-300 dark:hover:text-amber-200 underline underline-offset-2 mt-1"
+            >
+              Ajustar parcelas em Contas a Receber
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Pergunta sobre a Minuta */}
+        <div className="mt-4 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 text-center">
+          <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+            Deseja visualizar e imprimir a minuta atualizada deste contrato agora?
+          </p>
+        </div>
+
+        {/* Ações */}
+        <div className="mt-5 flex flex-col-reverse sm:flex-row items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full sm:w-auto rounded-2xl border border-slate-200 px-5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 transition"
+          >
+            Não, Concluir
+          </button>
+          <button
+            type="button"
+            onClick={() => onPrintMinuta(contract)}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-2.5 text-xs font-black text-white hover:bg-emerald-700 transition shadow-lg shadow-emerald-600/20 active:scale-95"
+          >
+            <Printer className="h-4 w-4" />
+            Imprimir Minuta Atualizada
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+

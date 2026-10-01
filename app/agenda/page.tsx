@@ -23,6 +23,11 @@ import { getProperties } from "@/services/properties.service";
 import { openWhatsAppMessage } from "@/services/whatsapp.service";
 import { getCompanyStorageItem, removeCompanyStorageItem } from "@/services/company-storage";
 import { CONTRACT_SCHEDULE_DRAFT_KEY } from "@/components/contracts/contract-types";
+import {
+  ASSET_MAINTENANCE_SCHEDULE_DRAFT_KEY,
+  type AssetMaintenanceScheduleDraft,
+  getAssetCategoryLabel,
+} from "@/components/assets/asset-types";
 
 import { useCalendarNavigation } from "./hooks/useCalendarNavigation";
 import { useAgendaFilters } from "./hooks/useAgendaFilters";
@@ -55,6 +60,7 @@ import {
   type ScheduleStatus,
   type ThemeMode,
 } from "@/components/agenda/agenda.types";
+import { readThemeSettingsFromStorage } from "@/services/theme-storage";
 
 import { AgendaHeader } from "@/components/agenda/agenda-header";
 import { AgendaKpis } from "@/components/agenda/agenda-kpis";
@@ -158,6 +164,7 @@ export default function AgendaPage() {
   const [deletingScheduleId, setDeletingScheduleId] = useState<string | null>(null);
   const [completeModalItem, setCompleteModalItem] = useState<ScheduleItem | null>(null);
   const [isContractFlow, setIsContractFlow] = useState(false);
+  const [isMaintenanceFlow, setIsMaintenanceFlow] = useState(false);
 
   // Menus de contexto e ações
   const [actionMenuSchedule, setActionMenuSchedule] = useState<ScheduleItem | null>(null);
@@ -169,18 +176,26 @@ export default function AgendaPage() {
   } | null>(null);
 
   // Tema
-  const [themeMode, setThemeMode] = useState<ThemeMode>("light");
-  useEffect(() => {
-    if (!companyId) return;
-    const stored = getCompanyStorageItem(companyId, "contrx_theme_settings");
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        if (parsed.mode) setThemeMode(parsed.mode);
-      } catch {
-        // ignore
-      }
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    if (typeof window !== "undefined") {
+      return readThemeSettingsFromStorage().mode;
     }
+    return "light";
+  });
+  useEffect(() => {
+    function syncTheme() {
+      const stored = readThemeSettingsFromStorage(companyId);
+      setThemeMode(stored.mode);
+    }
+
+    syncTheme();
+    window.addEventListener("storage", syncTheme);
+    window.addEventListener("contrx-theme-change", syncTheme);
+
+    return () => {
+      window.removeEventListener("storage", syncTheme);
+      window.removeEventListener("contrx-theme-change", syncTheme);
+    };
   }, [companyId]);
 
   const isBlackTheme = themeMode === "black" || themeMode === "graphite";
@@ -226,7 +241,7 @@ export default function AgendaPage() {
     void loadData();
   }, [loadData]);
 
-  // Suporte a abertura automática via fluxo de contrato (?fromContract=1&contractId=...)
+  // Suporte a abertura automática via fluxo de contrato (?fromContract=1&contractId=...) ou manutenção (?fromMaintenance=1&propertyId=...)
   useEffect(() => {
     if (typeof window === "undefined" || !companyId || isLoadingSchedules) return;
 
@@ -296,8 +311,94 @@ export default function AgendaPage() {
       setIsScheduleModalOpen(true);
 
       window.history.replaceState({}, "", window.location.pathname);
+      return;
     }
-  }, [companyId, isLoadingSchedules, todayInputValue, user?.name]);
+
+    const cameFromMaintenance = queryParams.get("fromMaintenance") === "1";
+    const propertyIdFromQuery = queryParams.get("propertyId");
+
+    if (cameFromMaintenance && propertyIdFromQuery) {
+      setIsMaintenanceFlow(true);
+
+      const rawDraft = getCompanyStorageItem(
+        companyId,
+        ASSET_MAINTENANCE_SCHEDULE_DRAFT_KEY,
+        ASSET_MAINTENANCE_SCHEDULE_DRAFT_KEY
+      );
+
+      let draftData: AssetMaintenanceScheduleDraft | null = null;
+      if (rawDraft) {
+        try {
+          draftData = JSON.parse(rawDraft);
+        } catch {
+          draftData = null;
+        }
+      }
+
+      const foundProperty = properties.find(
+        (p) => String(p.id) === String(propertyIdFromQuery)
+      );
+      const propertyTitle =
+        draftData?.propertyName || foundProperty?.name || "Bem / Ativo";
+      const ownerName = draftData?.ownerName || "";
+      const defaultTitle = `MANUTENÇÃO - ${propertyTitle}`;
+      const dueDate = draftData?.defaultDate || todayInputValue;
+      const dueTime = draftData?.defaultTime || "08:00";
+
+      const categoryLabel = draftData?.assetCategory
+        ? getAssetCategoryLabel(draftData.assetCategory as any)
+        : "";
+      const brandModel = [draftData?.brand, draftData?.model]
+        .filter(Boolean)
+        .join(" - ");
+      const serialOrPlate = [
+        draftData?.serialNumber ? `S/N: ${draftData.serialNumber}` : "",
+        draftData?.licensePlate ? `Placa: ${draftData.licensePlate}` : "",
+      ]
+        .filter(Boolean)
+        .join(" | ");
+
+      const notesLines = [
+        `[AGENDAMENTO DE MANUTENÇÃO DE BEM / ATIVO]`,
+        `Bem/Ativo: ${propertyTitle}`,
+        draftData?.code || draftData?.patrimonyCode
+          ? `Código/Patrimônio: ${draftData.code || draftData.patrimonyCode}`
+          : "",
+        categoryLabel ? `Categoria: ${categoryLabel}` : "",
+        brandModel ? `Marca/Modelo: ${brandModel}` : "",
+        serialOrPlate ? `Identificação: ${serialOrPlate}` : "",
+        draftData?.address ? `Localização: ${draftData.address}` : "",
+        ownerName ? `Proprietário: ${ownerName}` : "",
+        draftData?.reason ? `Motivo / Detalhes: ${draftData.reason}` : "",
+        draftData?.description ? `Ficha Técnica: ${draftData.description}` : "",
+        propertyIdFromQuery ? `asset-maintenance:${propertyIdFromQuery}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      setEditingScheduleId(null);
+      setFormData({
+        title: defaultTitle,
+        customerName: ownerName,
+        propertyName: propertyTitle,
+        personId: draftData?.ownerId || undefined,
+        propertyId: propertyIdFromQuery,
+        date: dueDate,
+        time: dueTime,
+        type: "Manutenção",
+        status: "scheduled",
+        priority: "high",
+        responsibleName: "Manutenção",
+        reminder: "1 dia antes",
+        notes: notesLines,
+      });
+
+      setFormError("");
+      setIsScheduleModalOpen(true);
+
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, [companyId, isLoadingSchedules, properties, todayInputValue, user?.name]);
 
   // Opções únicas para filtros
   const uniqueTypeOptions = useMemo(() => {
@@ -394,6 +495,14 @@ export default function AgendaPage() {
         window.location.href = "/contratos?flowCompleted=1";
         return;
       }
+
+      if (isMaintenanceFlow) {
+        if (companyId) {
+          removeCompanyStorageItem(companyId, ASSET_MAINTENANCE_SCHEDULE_DRAFT_KEY);
+        }
+        window.location.href = "/imoveis?maintenanceScheduled=1";
+        return;
+      }
     } catch (error) {
       setFormError(
         error instanceof Error ? error.message : "Erro ao salvar compromisso.",
@@ -411,8 +520,16 @@ export default function AgendaPage() {
         removeCompanyStorageItem(companyId, CONTRACT_SCHEDULE_DRAFT_KEY);
       }
       window.location.href = "/contratos?flowCompleted=1";
+      return;
     }
-  }, [isContractFlow, companyId]);
+    if (isMaintenanceFlow) {
+      if (companyId) {
+        removeCompanyStorageItem(companyId, ASSET_MAINTENANCE_SCHEDULE_DRAFT_KEY);
+      }
+      window.location.href = "/imoveis";
+      return;
+    }
+  }, [isContractFlow, isMaintenanceFlow, companyId]);
 
   // Exclusão
   const handleConfirmDelete = async () => {
@@ -869,6 +986,7 @@ export default function AgendaPage() {
         onSave={handleSaveSchedule}
         isBlackTheme={isBlackTheme}
         isContractFlow={isContractFlow}
+        isMaintenanceFlow={isMaintenanceFlow}
       />
 
       {/* Menu Flutuante de Ações Rápidas */}

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   Property,
   CompanySettings,
@@ -21,8 +21,15 @@ import {
   Image as ImageIcon,
   Building,
   KeyRound,
+  Upload,
+  Trash2,
+  LoaderCircle,
+  Plus,
+  AlertCircle,
+  ExternalLink,
 } from "lucide-react";
-import { getMediaUrl } from "@/services/api";
+import { getMediaUrl, api } from "@/services/api";
+import { compressImageFile } from "@/services/image-compression";
 
 interface AssetHistoryModalProps {
   property: Property | null;
@@ -30,6 +37,13 @@ interface AssetHistoryModalProps {
   contracts: RentalHistoryContract[];
   movements: PropertyMovement[];
   onClose: () => void;
+}
+
+interface AssetFile {
+  id: string;
+  url: string;
+  originalName?: string;
+  fileType?: string;
 }
 
 export function AssetHistoryModal({
@@ -40,6 +54,34 @@ export function AssetHistoryModal({
   onClose,
 }: AssetHistoryModalProps) {
   const [reportMode, setReportMode] = useState<"Overview" | "Rental" | "General" | "Photos">("Overview");
+  const [assetFiles, setAssetFiles] = useState<AssetFile[]>([]);
+  const [isLoadingFiles, setIsLoadingFiles] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+  const [brokenPhotos, setBrokenPhotos] = useState<Record<string, boolean>>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!property?.id) {
+      setAssetFiles([]);
+      return;
+    }
+    loadPropertyFiles(property.id);
+  }, [property?.id]);
+
+  async function loadPropertyFiles(propertyId: string) {
+    try {
+      setIsLoadingFiles(true);
+      const res = await api.get<AssetFile[]>(`/files/entity/PROPERTY/${propertyId}`);
+      if (Array.isArray(res.data)) {
+        setAssetFiles(res.data);
+      }
+    } catch {
+      setAssetFiles([]);
+    } finally {
+      setIsLoadingFiles(false);
+    }
+  }
 
   const rentalHistoryRecords = useMemo(() => {
     if (!property) return [];
@@ -59,19 +101,86 @@ export function AssetHistoryModal({
     return movements.filter((m) => m.propertyId === property.id);
   }, [property, movements]);
 
+  // Combina fotos da tabela arquivos_sistema e da coluna property.photos (deduplicando)
   const allPhotos = useMemo(() => {
-    if (!property?.photos) return [];
-    try {
-      const parsed = JSON.parse(property.photos);
-      if (Array.isArray(parsed)) return parsed.filter(Boolean);
-      if (typeof parsed === "string" && parsed) return [parsed];
-    } catch {
-      if (typeof property.photos === "string" && property.photos) {
-        return [property.photos];
+    const list: Array<{ url: string; id?: string; name?: string }> = [];
+    const seenUrls = new Set<string>();
+
+    // 1. Fotos cadastradas na tabela de arquivos
+    assetFiles.forEach((f) => {
+      if (f.url && !seenUrls.has(f.url)) {
+        seenUrls.add(f.url);
+        list.push({ url: f.url, id: f.id, name: f.originalName });
+      }
+    });
+
+    // 2. Fotos na coluna JSON property.photos
+    if (property?.photos) {
+      try {
+        const parsed = JSON.parse(property.photos);
+        const arrayPhotos = Array.isArray(parsed) ? parsed : [property.photos];
+        arrayPhotos.filter(Boolean).forEach((url: string) => {
+          if (typeof url === "string" && url && !seenUrls.has(url)) {
+            seenUrls.add(url);
+            list.push({ url });
+          }
+        });
+      } catch {
+        if (typeof property.photos === "string" && property.photos && !seenUrls.has(property.photos)) {
+          seenUrls.add(property.photos);
+          list.push({ url: property.photos });
+        }
       }
     }
-    return [];
-  }, [property]);
+
+    return list;
+  }, [property?.photos, assetFiles]);
+
+  async function handleUploadPhotos(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!e.target.files || e.target.files.length === 0 || !property) return;
+    const files = Array.from(e.target.files);
+
+    try {
+      setIsUploadingPhoto(true);
+      for (const file of files) {
+        const compressed = await compressImageFile(file);
+        const formData = new FormData();
+        formData.append("file", compressed);
+        formData.append("entityType", "PROPERTY");
+        formData.append("entityId", property.id);
+
+        await api.post("/files/upload", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      }
+      await loadPropertyFiles(property.id);
+    } catch (err) {
+      console.error("Erro ao subir fotos do bem/ativo:", err);
+    } finally {
+      setIsUploadingPhoto(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function handleDeleteFile(fileId?: string, fileUrl?: string) {
+    if (!fileId && !fileUrl) return;
+    if (!confirm("Tem certeza que deseja remover esta foto?")) return;
+
+    try {
+      if (fileId) {
+        setDeletingFileId(fileId);
+        await api.delete(`/files/${fileId}`);
+        setAssetFiles((prev) => prev.filter((f) => f.id !== fileId));
+      } else if (fileUrl && property) {
+        // Remover apenas da lista local se não tiver id
+        setAssetFiles((prev) => prev.filter((f) => f.url !== fileUrl));
+      }
+    } catch (err) {
+      console.error("Erro ao remover foto:", err);
+    } finally {
+      setDeletingFileId(null);
+    }
+  }
 
   if (!property) return null;
 
@@ -447,25 +556,135 @@ export function AssetHistoryModal({
           {/* Tab 4: Galeria de Fotos */}
           {reportMode === "Photos" && (
             <div className="space-y-4">
-              <h3 className="text-sm font-black uppercase text-slate-900 border-b border-slate-150 pb-2">
-                Galeria de Fotos ({allPhotos.length})
-              </h3>
-              {allPhotos.length === 0 ? (
-                <div className="py-8 text-center text-sm font-semibold text-slate-400">
-                  Nenhuma foto anexada a este bem/ativo.
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-150 pb-3">
+                <div>
+                  <h3 className="text-sm font-black uppercase text-slate-900">
+                    Galeria de Fotos ({allPhotos.length})
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Fotos armazenadas permanentemente no banco de dados do sistema.
+                  </p>
+                </div>
+
+                <div className="print:hidden">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleUploadPhotos}
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    id="asset-photo-upload-input"
+                  />
+                  <label
+                    htmlFor="asset-photo-upload-input"
+                    className={`inline-flex items-center gap-2 rounded-xl bg-orange-500 px-4 py-2 text-xs font-black text-white shadow-md shadow-orange-500/20 cursor-pointer transition hover:bg-orange-600 active:scale-95 ${
+                      isUploadingPhoto ? "opacity-70 pointer-events-none" : ""
+                    }`}
+                  >
+                    {isUploadingPhoto ? (
+                      <>
+                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                        Otimizando & Salvando...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4" />
+                        Anexar Novas Fotos
+                      </>
+                    )}
+                  </label>
+                </div>
+              </div>
+
+              {isLoadingFiles ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-2 text-slate-400">
+                  <LoaderCircle className="h-6 w-6 animate-spin text-orange-500" />
+                  <span className="text-xs font-semibold">Carregando galeria...</span>
+                </div>
+              ) : allPhotos.length === 0 ? (
+                <div className="rounded-2xl border-2 border-dashed border-slate-200 p-12 text-center">
+                  <ImageIcon className="mx-auto h-10 w-10 text-slate-300" />
+                  <p className="mt-2 text-sm font-bold text-slate-700">
+                    Nenhuma foto anexada a este bem/ativo.
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Clique em &quot;Anexar Novas Fotos&quot; para adicionar imagens permanentes.
+                  </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  {allPhotos.map((photoUrl, idx) => (
-                    <div key={idx} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 aspect-video">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={getMediaUrl(photoUrl)}
-                        alt={'Foto ' + (idx + 1) + ' de ' + property.name}
-                        className="h-full w-full object-cover transition hover:scale-105"
-                      />
-                    </div>
-                  ))}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {allPhotos.map((photo, idx) => {
+                    const isBroken = brokenPhotos[photo.url];
+                    const fullMediaUrl = getMediaUrl(photo.url);
+
+                    return (
+                      <div
+                        key={photo.id || idx}
+                        className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 aspect-video shadow-sm transition hover:shadow-md"
+                      >
+                        {idx === 0 && (
+                          <div className="absolute top-2 left-2 z-10 rounded-lg bg-slate-900/80 px-2 py-0.5 text-[10px] font-black text-white backdrop-blur-sm">
+                            Foto Principal
+                          </div>
+                        )}
+
+                        {isBroken ? (
+                          <div className="flex h-full w-full flex-col items-center justify-center p-3 text-center bg-slate-50">
+                            <AlertCircle className="h-7 w-7 text-amber-500 mb-1" />
+                            <span className="text-[11px] font-bold text-slate-600">
+                              Foto indisponível
+                            </span>
+                            <span className="text-[9px] text-slate-400 line-clamp-1">
+                              {photo.name || "Arquivo não encontrado"}
+                            </span>
+                          </div>
+                        ) : (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={fullMediaUrl}
+                            alt={photo.name || `Foto ${idx + 1} de ${property.name}`}
+                            onError={() =>
+                              setBrokenPhotos((prev) => ({
+                                ...prev,
+                                [photo.url]: true,
+                              }))
+                            }
+                            className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                          />
+                        )}
+
+                        {/* Barra de ações / Overlay */}
+                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 p-2 print:hidden">
+                          {!isBroken && (
+                            <a
+                              href={fullMediaUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="rounded-xl bg-white px-2.5 py-1.5 text-xs font-black text-slate-900 shadow hover:bg-slate-100 flex items-center gap-1.5"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                              Ver
+                            </a>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteFile(photo.id, photo.url)}
+                            disabled={deletingFileId === photo.id}
+                            className="rounded-xl bg-red-600 px-2.5 py-1.5 text-xs font-black text-white shadow hover:bg-red-700 flex items-center gap-1 disabled:opacity-50"
+                            title="Excluir foto"
+                          >
+                            {deletingFileId === photo.id ? (
+                              <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

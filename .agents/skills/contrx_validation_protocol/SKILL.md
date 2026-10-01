@@ -4,7 +4,7 @@ description: Protocolo padrão de validação local e pré-deploy para o projeto
 ---
 # Protocolo de Validação Pré-Deploy Contrx
 
-**Versão Atual Validada Localmente**: `v1.0.18` (Anterior em Produção: `v1.0.17`)
+**Versão Atual Validada Localmente**: `v1.0.19` (Anterior em Produção: `v1.0.18`)
 
 Quando o usuário disser "iniciar", "iniciar verificações", "rodar protocolo", "auditoria de segurança" ou similar, execute AUTOMATICAMENTE os seguintes passos em segundo plano ou sequencialmente:
 
@@ -36,9 +36,27 @@ Quando o usuário disser "iniciar", "iniciar verificações", "rodar protocolo",
    - Verificar arquivos alterados, adicionados ou removidos via `git status` e `git diff`.
    - Listar detalhadamente na resposta final quais funcionalidades, componentes ou arquivos foram modificados nesta versão para transparência total antes do deploy.
 
-6. **Versionamento e Execução do Script de Deploy/Atualização**:
-   - Incrementar/verificar a versão nos arquivos de configuração/package.json.
-   - Apontar o script `C:\Users\MacOS\Documents\Contrx\ATUALIZA-VERSÃO.BAT` para atualização de versão/envio, **respeitando estritamente a regra de não enviar nada automaticamente para produção** (apenas realizar os ajustes e preparar o ambiente/script para quando você autorizar a execução manual).
+6. **Versionamento, Notas de Versão e Popup Automático no Primeiro Acesso**:
+   - **Incrementar Versão**: Atualizar sem falta a versão nos arquivos:
+     - `package.json` (frontend)
+     - `contrx-backend/package.json` (backend)
+     - `SKILL.md` (registro da versão atual validada)
+   - **Alimentar Release Notes Obrigatório (`constants/release-notes.ts`)**:
+     - Sempre adicionar uma nova entrada no topo do array `RELEASE_NOTES` correspondente à nova versão incrementada.
+     - Informar `version`, `date` (data atual por extenso), `title` (resumo do tema da release), `subtitle` e o array `highlights`.
+     - Categorizar cada item com rigor:
+       - `novo`: novas funcionalidades, telas ou módulos criados.
+       - `melhoria`: otimizações de UI/UX, filtros, performance ou refatorações.
+       - `correcao`: resolução de bugs, crashes ou falhas operacionais.
+       - `seguranca`: hardening de banco, RLS, sanitização e permissões.
+   - **Garantia de Exibição no Primeiro Acesso**:
+     - O sistema (`components/layout/app-shell.tsx`) detecta se `contrx_seen_version_{userId} !== packageJson.version`.
+     - Ao fazer login ou acessar qualquer tela na nova versão, o popup (`components/modals/whats-new-modal.tsx`) abrirá AUTOMATICAMENTE para o usuário no primeiro acesso.
+     - Ao clicar em "Entendi, vamos começar!", a versão é gravada no navegador do usuário e o modal não reabre sozinho.
+     - A versão no rodapé da barra lateral (`vX.X.XX ✨`) permanece clicável caso o usuário queira consultar as novidades a qualquer momento.
+   - **Preparação para Deploy Manual**:
+     - Apontar o script `C:\Users\MacOS\Documents\Contrx\ATUALIZA-VERSÃO.BAT` para atualização/envio manual.
+     - **Respeitar estritamente a regra de não enviar nada automaticamente para produção**.
 
 7. **Verificação Obrigatória do Supabase (Banco Remoto)**:
    - Inspecionar a pasta de migrations (`contrx-backend/prisma/migrations`) e verificar o status em relação ao Supabase.

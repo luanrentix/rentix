@@ -79,6 +79,7 @@ import {
   ContractDeleteModal,
   ContractEditConfirmationModal,
   ContractPromptInstallmentsModal,
+  ContractPostEditModal,
 } from "@/components/contracts/contract-lifecycle-modals";
 import { ContractPrintModal } from "@/components/contracts/contract-print-modal";
 import { ContractTimeDefaultsModal } from "@/components/contracts/contract-time-defaults-modal";
@@ -125,6 +126,7 @@ export default function ContractsPage() {
   const [promptParcelasContract, setPromptParcelasContract] = useState<Contract | null>(null);
   const [pendingEditContract, setPendingEditContract] = useState<Contract | null>(null);
   const [postCreateFlowContract, setPostCreateFlowContract] = useState<Contract | null>(null);
+  const [postEditNoticeContract, setPostEditNoticeContract] = useState<Contract | null>(null);
 
   // Compartilhamento via WhatsApp
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -316,9 +318,20 @@ export default function ContractsPage() {
         ...buildContractPayload({ ...editingContract, ...data } as Contract),
       };
       const res = await updateContract(editingContract.id, updatedDto);
-      const saved = mapApiContractToContract(res);
+      const apiSaved = mapApiContractToContract(res);
 
-      setContracts((prev) => prev.map((c) => (c.id === saved.id ? saved : c)));
+      const saved: Contract = {
+        ...editingContract,
+        ...data,
+        ...apiSaved,
+        id: String(editingContract.id),
+        startDate: data.startDate || apiSaved.startDate,
+        endDate: data.endDate || apiSaved.endDate,
+        propertyName: data.propertyName || editingContract.propertyName || apiSaved.propertyName,
+        tenantName: data.tenantName || editingContract.tenantName || apiSaved.tenantName,
+      };
+
+      setContracts((prev) => prev.map((c) => (String(c.id) === String(saved.id) ? saved : c)));
       setToast({ type: "success", message: "Contrato atualizado com sucesso!" });
 
       createPropertyMovement({
@@ -328,6 +341,19 @@ export default function ContractsPage() {
         type: "ContractUpdated",
         description: "Contrato atualizado no cadastro de locação.",
       }).catch(console.warn);
+
+      // Fecha o formulário de edição
+      handleCloseFormModal();
+
+      // Exibe modal pós-edição com aviso de Contas a Receber e opção de impressão da minuta
+      setPostEditNoticeContract(saved);
+
+      // Sincroniza contratos atualizados do backend
+      getContracts(companyId)
+        .then((apiContracts) => {
+          setContracts(apiContracts.map(mapApiContractToContract));
+        })
+        .catch(console.warn);
     } else {
       // Criação
       const createDto: CreateContractDto = {
@@ -967,6 +993,21 @@ export default function ContractsPage() {
         defaultCheckInTime={defaultCheckInTime}
         defaultCheckOutTime={defaultCheckOutTime}
         onSave={handleSaveTimeDefaults}
+      />
+
+      {/* 12. Modal Pós-Edição com Aviso de Minuta e Contas a Receber */}
+      <ContractPostEditModal
+        isOpen={Boolean(postEditNoticeContract)}
+        contract={postEditNoticeContract}
+        onClose={() => setPostEditNoticeContract(null)}
+        onPrintMinuta={(c) => {
+          setPostEditNoticeContract(null);
+          setPrintContract(c);
+        }}
+        onGoToReceivables={(contractId) => {
+          setPostEditNoticeContract(null);
+          window.location.href = `/contas-receber?contractId=${encodeURIComponent(String(contractId))}`;
+        }}
       />
     </div>
   );

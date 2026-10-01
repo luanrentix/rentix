@@ -21,6 +21,7 @@ import type {
   DashboardOverviewResponse,
   ThemeMode,
 } from "@/types/dashboard.types";
+import { readThemeSettingsFromStorage } from "@/services/theme-storage";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { OnboardingChecklist } from "@/components/dashboard/onboarding-checklist";
 import { MetricCard } from "@/components/dashboard/metric-card";
@@ -115,6 +116,91 @@ const contrxDashboardThemeStyle = `
   .contrx-dashboard-page[data-contrx-theme="black"] .recharts-tooltip-wrapper .recharts-tooltip-item {
     color: #f8fafc !important;
   }
+
+  .contrx-dashboard-page[data-contrx-theme="graphite"] {
+    color: #f8fafc;
+  }
+
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .bg-white,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .bg-slate-50,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .bg-slate-100 {
+    background-color: #0d1b2e !important;
+  }
+
+  .contrx-dashboard-page[data-contrx-theme="graphite"] section.bg-white,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] div.bg-white {
+    background: linear-gradient(145deg, #0d1b2e 0%, #11253e 100%) !important;
+  }
+
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .bg-orange-50,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .bg-orange-100 {
+    background-color: color-mix(in srgb, var(--primary-color) 14%, transparent) !important;
+  }
+
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .bg-red-50 {
+    background-color: rgba(220, 38, 38, 0.12) !important;
+  }
+
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .bg-emerald-50 {
+    background-color: rgba(16, 185, 129, 0.12) !important;
+  }
+
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .bg-sky-50 {
+    background-color: rgba(14, 165, 233, 0.12) !important;
+  }
+
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .text-slate-950,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .text-slate-900,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .text-slate-800,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .text-slate-700,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .text-slate-600 {
+    color: #f8fafc !important;
+  }
+
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .text-slate-500,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .text-slate-400 {
+    color: #b6c6dc !important;
+  }
+
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .border-orange-100,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .border-slate-100,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .border-slate-200,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .border-slate-300,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .border-red-100,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .border-emerald-100,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .border-sky-100 {
+    border-color: #24405f !important;
+  }
+
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .shadow-sm,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .shadow-md,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .shadow-lg,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .shadow-xl,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .shadow-2xl {
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45) !important;
+  }
+
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .recharts-cartesian-grid line {
+    stroke: #24405f !important;
+  }
+
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .recharts-text,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .recharts-cartesian-axis-tick-value {
+    fill: #b6c6dc !important;
+  }
+
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .recharts-tooltip-wrapper .recharts-default-tooltip {
+    background-color: #07111f !important;
+    border-color: #24405f !important;
+    color: #f8fafc !important;
+    border-radius: 14px !important;
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.5) !important;
+  }
+
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .recharts-tooltip-wrapper .recharts-tooltip-label,
+  .contrx-dashboard-page[data-contrx-theme="graphite"] .recharts-tooltip-wrapper .recharts-tooltip-item {
+    color: #f8fafc !important;
+  }
 `;
 
 export default function DashboardPage() {
@@ -139,7 +225,12 @@ export default function DashboardPage() {
     "month",
   );
 
-  const [dashboardTheme, setDashboardTheme] = useState<ThemeMode>("light");
+  const [dashboardTheme, setDashboardTheme] = useState<ThemeMode>(() => {
+    if (typeof window !== "undefined") {
+      return readThemeSettingsFromStorage().mode;
+    }
+    return "light";
+  });
   const [isOnboardingDismissed, setIsOnboardingDismissed] = useState(false);
   const [hasCompanyConfigured, setHasCompanyConfigured] = useState(false);
   const [isPrivacyMode, setIsPrivacyMode] = useState(false);
@@ -243,37 +334,8 @@ export default function DashboardPage() {
   // Tema
   useEffect(() => {
     function applyStoredTheme() {
-      const storedThemeSettings = getCompanyStorageItem(
-        companyId,
-        "contrx_theme_settings",
-        "contrx_theme_settings",
-      );
-      const legacyTheme = getCompanyStorageItem(
-        companyId,
-        "contrx_theme",
-        "contrx_theme",
-      );
-
-      try {
-        const parsedThemeSettings = storedThemeSettings
-          ? (JSON.parse(storedThemeSettings) as { mode?: ThemeMode | "dark" })
-          : null;
-        const nextTheme =
-          parsedThemeSettings?.mode === "graphite" ||
-          legacyTheme === "graphite" ||
-          legacyTheme === "grafite"
-            ? "graphite"
-            : parsedThemeSettings?.mode === "black" ||
-                parsedThemeSettings?.mode === "dark" ||
-                legacyTheme === "black" ||
-                legacyTheme === "dark"
-              ? "black"
-              : "light";
-
-        setDashboardTheme(nextTheme);
-      } catch {
-        setDashboardTheme("light");
-      }
+      const stored = readThemeSettingsFromStorage(companyId);
+      setDashboardTheme(stored.mode);
     }
 
     applyStoredTheme();

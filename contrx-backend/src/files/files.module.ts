@@ -4,13 +4,17 @@ import { FilesService } from './files.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AutenticacaoModule } from '../autenticacao/autenticacao.module';
 import { MulterModule } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 
 @Module({
   imports: [
     PrismaModule,
     AutenticacaoModule,
     MulterModule.register({
-      dest: './uploads',
+      storage: memoryStorage(),
+      limits: {
+        fileSize: 10 * 1024 * 1024,
+      },
     }),
   ],
   controllers: [FilesController],

@@ -24,6 +24,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { getCompanyStorageItem } from "@/services/company-storage";
+import { readThemeSettingsFromStorage } from "@/services/theme-storage";
 import {
   getCachedCompanySettings,
   getCachedUserSettings,
@@ -260,7 +261,12 @@ export default function FinancialReportsPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [copyFeedback, setCopyFeedback] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
-  const [financialTheme, setFinancialTheme] = useState<ThemeMode>("light");
+  const [financialTheme, setFinancialTheme] = useState<ThemeMode>(() => {
+    if (typeof window !== "undefined") {
+      return readThemeSettingsFromStorage().mode;
+    }
+    return "light";
+  });
 
   const loadReports = useCallback(
     async (currentCompanyId: string) => {
@@ -306,43 +312,8 @@ export default function FinancialReportsPage() {
 
   useEffect(() => {
     function applyStoredTheme() {
-      const storedThemeSettings = getCompanyStorageItem(
-        companyId,
-        "contrx_theme_settings",
-        "contrx_theme_settings",
-      );
-      const legacyTheme = getCompanyStorageItem(
-        companyId,
-        "contrx_theme",
-        "contrx_theme",
-      );
-
-      try {
-        const parsedThemeSettings = storedThemeSettings
-          ? (JSON.parse(storedThemeSettings) as { mode?: string })
-          : null;
-
-        setFinancialTheme(
-          parsedThemeSettings?.mode === "graphite" ||
-            legacyTheme === "graphite" ||
-            legacyTheme === "grafite"
-            ? "graphite"
-            : parsedThemeSettings?.mode === "black" ||
-                parsedThemeSettings?.mode === "dark" ||
-                legacyTheme === "black" ||
-                legacyTheme === "dark"
-              ? "black"
-              : "light",
-        );
-      } catch {
-        setFinancialTheme(
-          legacyTheme === "graphite" || legacyTheme === "grafite"
-            ? "graphite"
-            : legacyTheme === "black" || legacyTheme === "dark"
-              ? "black"
-              : "light",
-        );
-      }
+      const stored = readThemeSettingsFromStorage(companyId);
+      setFinancialTheme(stored.mode);
     }
 
     applyStoredTheme();

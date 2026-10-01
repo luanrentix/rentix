@@ -54,14 +54,30 @@ export function resolveContractDocumentKey(
   return "standardContract";
 }
 
+export function isLegacyStandardContractContent(content?: string | null): boolean {
+  if (!content) return false;
+  const trimmed = content.trim();
+  return (
+    trimmed.includes("CLÁUSULA DÉCIMA - DO FORO") &&
+    !trimmed.includes("CLÁUSULA DÉCIMA PRIMEIRA")
+  );
+}
+
 export function getEffectiveContractTemplateContent(
   key: "temporaryContract" | "standardContract" | "assetContract",
   fallback: string
 ): string {
+  const isLegacy = (content?: string | null) => {
+    if (key === "standardContract") {
+      return isLegacyStandardContractContent(content);
+    }
+    return false;
+  };
+
   const cached = getCachedPrintTemplates();
   if (cached && typeof cached === "object") {
     const template = (cached as Record<string, { content?: string }>)[key];
-    if (template?.content?.trim()) {
+    if (template?.content?.trim() && !isLegacy(template.content)) {
       return template.content;
     }
   }
@@ -70,7 +86,7 @@ export function getEffectiveContractTemplateContent(
       const stored = localStorage.getItem("contrx_print_templates");
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed[key]?.content?.trim()) {
+        if (parsed[key]?.content?.trim() && !isLegacy(parsed[key].content)) {
           return parsed[key].content;
         }
       }

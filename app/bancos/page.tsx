@@ -42,6 +42,7 @@ import {
 import { openWhatsAppMessage } from "@/services/whatsapp.service";
 import { useAuth } from "@/context/AuthContext";
 import { getCompanyStorageItem, setCompanyStorageItem } from "@/services/company-storage";
+import { readThemeSettingsFromStorage } from "@/services/theme-storage";
 import { brazilianBanks, type BrazilianBank } from "@/lib/brazilian-banks";
 import { formatCurrencyInput, parseCurrencyToNumber } from "@/lib/currency";
 import { getPeople, type Person } from "@/services/people.service";
@@ -686,25 +687,16 @@ export default function BancosPage() {
   };
 
   // Theme support
-  const [themeMode, setThemeMode] = useState("light");
+  const [themeMode, setThemeMode] = useState(() => {
+    if (typeof window !== "undefined") {
+      return readThemeSettingsFromStorage().mode;
+    }
+    return "light";
+  });
   useEffect(() => {
     function syncTheme() {
-      const storedSettings = getCompanyStorageItem(companyId, "contrx_theme_settings", "contrx_theme_settings");
-      if (storedSettings) {
-        try {
-          const parsed = JSON.parse(storedSettings);
-          if (parsed.mode) {
-            setThemeMode(parsed.mode === "dark" ? "black" : parsed.mode);
-            return;
-          }
-        } catch {}
-      }
-      const legacyMode = getCompanyStorageItem(companyId, "contrx_theme", "contrx_theme");
-      if (legacyMode) {
-        setThemeMode(legacyMode === "dark" ? "black" : legacyMode);
-        return;
-      }
-      setThemeMode("light");
+      const stored = readThemeSettingsFromStorage(companyId);
+      setThemeMode(stored.mode);
     }
 
     syncTheme();

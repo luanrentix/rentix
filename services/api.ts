@@ -282,16 +282,48 @@ export async function checkApiHealth(): Promise<boolean> {
 export { getApiBaseUrl };
 
 export const api = {
-  get: async <T = any>(endpoint: string) => {
-    const data = await apiFetch<T>(endpoint, { method: 'GET' });
+  get: async <T = any>(endpoint: string, options: any = {}) => {
+    const data = await apiFetch<T>(endpoint, { method: 'GET', ...options });
     return { data };
   },
-  post: async <T = any>(endpoint: string, data: any, options: any = {}) => {
+  post: async <T = any>(endpoint: string, data?: any, options: any = {}) => {
     const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
     const reqOptions: any = { 
       method: 'POST', 
       headers: options.headers || {},
-      body: isFormData ? data : JSON.stringify(data)
+      body: isFormData ? data : (data !== undefined ? JSON.stringify(data) : undefined),
+      ...options
+    };
+    const responseData = await apiFetch<T>(endpoint, reqOptions);
+    return { data: responseData };
+  },
+  put: async <T = any>(endpoint: string, data?: any, options: any = {}) => {
+    const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+    const reqOptions: any = { 
+      method: 'PUT', 
+      headers: options.headers || {},
+      body: isFormData ? data : (data !== undefined ? JSON.stringify(data) : undefined),
+      ...options
+    };
+    const responseData = await apiFetch<T>(endpoint, reqOptions);
+    return { data: responseData };
+  },
+  patch: async <T = any>(endpoint: string, data?: any, options: any = {}) => {
+    const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+    const reqOptions: any = { 
+      method: 'PATCH', 
+      headers: options.headers || {},
+      body: isFormData ? data : (data !== undefined ? JSON.stringify(data) : undefined),
+      ...options
+    };
+    const responseData = await apiFetch<T>(endpoint, reqOptions);
+    return { data: responseData };
+  },
+  delete: async <T = any>(endpoint: string, options: any = {}) => {
+    const reqOptions: any = {
+      method: 'DELETE',
+      headers: options.headers || {},
+      ...options
     };
     const responseData = await apiFetch<T>(endpoint, reqOptions);
     return { data: responseData };

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Charge, ChargePayment } from "../printing";
+import { Charge, ChargePayment, getChargeTenantName } from "../printing";
 
 export type StatusFilter = "All" | "Pending" | "Paid" | "Overdue";
 export type PeriodShortcut =
@@ -110,12 +110,13 @@ export function useReceivableFilters(params: UseReceivableFiltersParams) {
     }
 
     if (selectedTenant) {
-      result = result.filter(
-        (charge) =>
-          String(charge.tenantId || "") === String(selectedTenant.id) ||
-          (!charge.tenantId &&
-            charge.tenant.toLowerCase() === selectedTenant.name.toLowerCase()),
-      );
+      const selectedNameLower = selectedTenant.name.toLowerCase();
+      result = result.filter((charge) => {
+        if (charge.tenantId && String(charge.tenantId) === String(selectedTenant.id)) {
+          return true;
+        }
+        return getChargeTenantName(charge).toLowerCase() === selectedNameLower;
+      });
     }
 
     if (statusFilter !== "All") {

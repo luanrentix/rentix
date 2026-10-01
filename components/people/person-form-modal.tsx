@@ -37,6 +37,7 @@ import {
 } from "./person-types";
 import { createPerson, updatePerson, deletePerson } from "@/services/people.service";
 import { getMediaUrl } from "@/services/api";
+import { compressImageFile } from "@/services/image-compression";
 
 interface PersonFormModalProps {
   isOpen: boolean;
@@ -382,17 +383,22 @@ export function PersonFormModal({
 
       // Upload de arquivo se houver foto selecionada
       if (selectedFile && companyId) {
-        const formDataApi = new FormData();
-        formDataApi.append("file", selectedFile);
-        formDataApi.append("companyId", companyId);
-        formDataApi.append("entityType", "PERSON");
-        formDataApi.append("entityId", savedPersonApi.id);
-
         try {
+          const compressed = await compressImageFile(selectedFile);
+          const formDataApi = new FormData();
+          formDataApi.append("file", compressed);
+          formDataApi.append("companyId", companyId);
+          formDataApi.append("entityType", "PERSON");
+          formDataApi.append("entityId", savedPersonApi.id);
+
           const { api } = await import("@/services/api");
-          await api.post("/files/upload", formDataApi, {
+          const uploadRes = await api.post("/files/upload", formDataApi, {
             headers: { "Content-Type": "multipart/form-data" },
           });
+
+          if (uploadRes.data?.url) {
+            savedPersonApi.photo = uploadRes.data.url;
+          }
         } catch (err) {
           console.error("Erro no upload da foto", err);
         }

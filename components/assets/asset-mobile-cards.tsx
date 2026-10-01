@@ -158,7 +158,11 @@ export function AssetMobileCards({
                   <button
                     type="button"
                     onClick={() => onToggleMaintenance(property)}
-                    title={isMaintenance ? "Liberar" : "Manutenção"}
+                    title={
+                      isMaintenance
+                        ? "Gerenciar Manutenção / Liberar"
+                        : "Colocar em Manutenção (Vincular com Agenda)"
+                    }
                     className={`flex h-8 w-8 items-center justify-center rounded-xl ${
                       isMaintenance
                         ? "bg-amber-100 text-amber-800"

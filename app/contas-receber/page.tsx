@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, ArrowUpCircle, RefreshCw, Loader2, CheckSquare, Printer, ArrowRight, X, Calendar, FileText } from "lucide-react";
+import { Plus, ArrowUpCircle, RefreshCw, Loader2, CheckSquare, Printer, ArrowRight, X, Calendar, FileText, CheckCircle2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import {
   getReceivableAccounts,
@@ -24,6 +24,8 @@ import {
 } from "@/services/company-storage";
 import {
   Charge,
+  ChargePayment,
+  PAYMENT_METHODS,
   formatCurrency,
   StatusFilter,
   PeriodShortcut,
@@ -50,7 +52,7 @@ import { ReceivableDeleteModal } from "@/components/contas-receber/modals/receiv
 import { ReceivableHistoryModal } from "@/components/contas-receber/modals/receivable-history-modal";
 import { PersonSelectModal } from "@/components/contas-receber/modals/person-select-modal";
 import { ReceivableShareModal } from "@/components/contas-receber/modals/receivable-share-modal";
-import { generatePaymentReceipt, generatePaymentCarnet } from "./printing";
+import { generatePaymentReceipt, generatePaymentReceiptBatch, generatePaymentCarnet } from "./printing";
 
 export default function ContasReceberPage() {
   const { user } = useAuth();
@@ -96,6 +98,18 @@ export default function ContasReceberPage() {
     contractId: string;
     charges: Charge[];
   } | null>(null);
+  const [paymentReceiptSuccess, setPaymentReceiptSuccess] = useState<{
+    charge: Charge;
+    paymentRecord: ChargePayment;
+  } | null>(null);
+  const [batchReceiptSuccess, setBatchReceiptSuccess] = useState<{
+    items: Array<{ charge: Charge; paymentRecord: ChargePayment }>;
+  } | null>(null);
+
+  const getPaymentMethodLabel = useCallback((method: any): string => {
+    const found = PAYMENT_METHODS.find((pm) => pm.value === method);
+    return found?.label || String(method || "");
+  }, []);
 
   // Mapear dados da API para o tipo de domínio Charge
   function mapApiCharge(item: ReceivableAccount): Charge {
@@ -455,6 +469,8 @@ export default function ContasReceberPage() {
   }) {
     if (!selectedCharge || !companyId) return;
 
+    const chargeToPrint = { ...selectedCharge };
+
     const apiPaymentItems = data.paymentItems?.map((item) => ({
       method: mapUiPaymentMethodToApi(item.method),
       amount: item.amount,
@@ -474,6 +490,23 @@ export default function ContasReceberPage() {
 
     await loadData(companyId);
 
+    const paymentRecord: ChargePayment = {
+      id: `pay_${Date.now()}`,
+      paidAt: data.paidAt,
+      method: data.method,
+      amountPaid: data.amountPaid,
+      interest: data.interest,
+      discount: data.discount,
+      note: data.note || null,
+      paymentItems: data.paymentItems || null,
+    };
+
+    const printableCharge: Charge = {
+      ...chargeToPrint,
+      status: "Paid",
+      payments: [paymentRecord],
+    };
+
     // Se estiver no fluxo de contrato, atualiza o status da parcela paga no carnê
     if (pendingContractCarnetFlow) {
       setPendingContractCarnetFlow((prev) => {
@@ -481,26 +514,31 @@ export default function ContasReceberPage() {
         return {
           ...prev,
           charges: prev.charges.map((c) =>
-            c.id === selectedCharge.id
+            c.id === chargeToPrint.id
               ? {
                   ...c,
                   status: "Paid" as const,
-                  payments: [
-                    {
-                      id: `pay_${Date.now()}`,
-                      paidAt: data.paidAt,
-                      method: data.method,
-                      interest: data.interest,
-                      discount: data.discount,
-                      amountPaid: data.amountPaid,
-                      note: data.note || null,
-                      paymentItems: data.paymentItems || null,
-                    },
-                  ],
+                  payments: [paymentRecord],
                 }
               : c
           ),
         };
+      });
+    } else {
+      // Abre o comprovante de pagamento diretamente para impressão
+      const companySettings = getCachedCompanySettings() || {};
+      generatePaymentReceipt({
+        charge: printableCharge,
+        paymentRecord,
+        companySettings,
+        getPaymentMethodLabel,
+        setPaymentFormError: (msg) => console.warn(msg),
+      });
+
+      // Exibe modal de confirmação do recibo com botão de reimpressão garantido
+      setPaymentReceiptSuccess({
+        charge: printableCharge,
+        paymentRecord,
       });
     }
   }
@@ -511,6 +549,8 @@ export default function ContasReceberPage() {
     bankAccountId?: string | null;
   }) {
     if (!companyId || selectedIds.length === 0) return;
+
+    const chargesToReceive = charges.filter((c) => selectedIds.includes(c.id));
 
     const payload = selectedIds.map((id) => {
       const ch = charges.find((c) => c.id === id);
@@ -527,6 +567,38 @@ export default function ContasReceberPage() {
     await receiveAccountsBatch(payload);
     setSelectedIds([]);
     await loadData(companyId);
+
+    const companySettings = getCachedCompanySettings() || {};
+    const receiptItems = chargesToReceive.map((ch) => {
+      const paymentRecord: ChargePayment = {
+        id: `pay_${Date.now()}_${ch.id}`,
+        paidAt: data.paidAt,
+        method: data.method,
+        amountPaid: getChargeRemainingAmount(ch),
+        interest: 0,
+        discount: 0,
+        note: null,
+        paymentItems: null,
+      };
+      return {
+        charge: {
+          ...ch,
+          status: "Paid" as const,
+        },
+        paymentRecord,
+      };
+    });
+
+    if (receiptItems.length > 0) {
+      generatePaymentReceiptBatch({
+        receiptItems,
+        companySettings,
+        getPaymentMethodLabel,
+        setPaymentFormError: (msg) => console.warn(msg),
+      });
+
+      setBatchReceiptSuccess({ items: receiptItems });
+    }
   }
 
   async function handleSaveCharge(payload: {
@@ -753,25 +825,19 @@ export default function ContasReceberPage() {
 
     const companySettings = getCachedCompanySettings() || {};
     generatePaymentReceipt({
-      charge: {
-        id: charge.id,
-        property: charge.propertyName,
-        tenant: charge.tenantName,
-        amount: charge.amount,
-        dueDate: charge.dueDate,
-        status: charge.status,
-      },
+      charge,
       paymentRecord: {
-        chargeId: charge.id,
+        id: lastPayment.id,
         paidAt: lastPayment.paidAt,
         method: lastPayment.method,
         amountPaid: lastPayment.amountPaid,
         interest: lastPayment.interest,
         discount: lastPayment.discount,
         note: lastPayment.note || undefined,
+        paymentItems: lastPayment.paymentItems || undefined,
       },
       companySettings,
-      getPaymentMethodLabel: (m) => m,
+      getPaymentMethodLabel,
       setPaymentFormError: (msg) => alert(msg),
     });
   }
@@ -1258,6 +1324,171 @@ export default function ContasReceberPage() {
                   </>
                 );
               })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação com Botão de Impressão de Recibo Individual */}
+      {paymentReceiptSuccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
+                  <CheckCircle2 className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
+                    Recebimento confirmado!
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    O pagamento foi registrado com sucesso.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPaymentReceiptSuccess(null)}
+                className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="py-5 space-y-3">
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/50 space-y-2">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">Inquilino:</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">{paymentReceiptSuccess.charge.tenantName}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">Imóvel/Referência:</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">{paymentReceiptSuccess.charge.propertyName}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">Forma de pagamento:</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">
+                    {paymentReceiptSuccess.paymentRecord.paymentItems?.length
+                      ? paymentReceiptSuccess.paymentRecord.paymentItems
+                          .map((item) => `${getPaymentMethodLabel(item.method)} (${formatCurrency(item.amount)})`)
+                          .join(", ")
+                      : getPaymentMethodLabel(paymentReceiptSuccess.paymentRecord.method)}
+                  </span>
+                </div>
+                <div className="border-t border-slate-200 dark:border-slate-700 pt-2 flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Valor Recebido:</span>
+                  <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
+                    {formatCurrency(paymentReceiptSuccess.paymentRecord.amountPaid)}
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+                Caso a janela de impressão não tenha aberto automaticamente, clique em <strong>Imprimir Recibo</strong> abaixo.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setPaymentReceiptSuccess(null)}
+                className="rounded-2xl border border-slate-200 px-5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Concluir
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const companySettings = getCachedCompanySettings() || {};
+                  generatePaymentReceipt({
+                    charge: paymentReceiptSuccess.charge,
+                    paymentRecord: paymentReceiptSuccess.paymentRecord,
+                    companySettings,
+                    getPaymentMethodLabel,
+                    setPaymentFormError: (msg) => alert(msg),
+                  });
+                }}
+                className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-2.5 text-xs font-black text-white hover:bg-emerald-700 transition shadow-lg shadow-emerald-600/20"
+              >
+                <Printer className="h-4 w-4" />
+                Imprimir Recibo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação com Botão de Impressão de Recibos em Lote */}
+      {batchReceiptSuccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400">
+                  <CheckCircle2 className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
+                    Recebimento em lote confirmado!
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {batchReceiptSuccess.items.length} contas recebidas com sucesso.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBatchReceiptSuccess(null)}
+                className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="py-5 space-y-3">
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-800/50 space-y-2">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">Total de Contas:</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">{batchReceiptSuccess.items.length}</span>
+                </div>
+                <div className="border-t border-slate-200 dark:border-slate-700 pt-2 flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Valor Total Recebido:</span>
+                  <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
+                    {formatCurrency(batchReceiptSuccess.items.reduce((acc, it) => acc + it.paymentRecord.amountPaid, 0))}
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
+                Caso a janela de impressão não tenha aberto automaticamente, clique em <strong>Imprimir Recibos</strong> abaixo.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setBatchReceiptSuccess(null)}
+                className="rounded-2xl border border-slate-200 px-5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                Concluir
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const companySettings = getCachedCompanySettings() || {};
+                  generatePaymentReceiptBatch({
+                    receiptItems: batchReceiptSuccess.items,
+                    companySettings,
+                    getPaymentMethodLabel,
+                    setPaymentFormError: (msg) => alert(msg),
+                  });
+                }}
+                className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-2.5 text-xs font-black text-white hover:bg-emerald-700 transition shadow-lg shadow-emerald-600/20"
+              >
+                <Printer className="h-4 w-4" />
+                Imprimir Recibos ({batchReceiptSuccess.items.length})
+              </button>
             </div>
           </div>
         </div>
