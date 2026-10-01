@@ -27,9 +27,11 @@ import {
   Plus,
   AlertCircle,
   ExternalLink,
+  ZoomIn,
 } from "lucide-react";
 import { getMediaUrl, api } from "@/services/api";
 import { compressImageFile } from "@/services/image-compression";
+import { MediaLightboxModal } from "@/components/modals/media-lightbox-modal";
 
 interface AssetHistoryModalProps {
   property: Property | null;
@@ -59,6 +61,11 @@ export function AssetHistoryModal({
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
   const [brokenPhotos, setBrokenPhotos] = useState<Record<string, boolean>>({});
+  const [lightboxMedia, setLightboxMedia] = useState<{
+    url: string;
+    title: string;
+    isPdf?: boolean;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -209,9 +216,39 @@ export function AssetHistoryModal({
         <div className="sticky top-0 z-20 flex flex-col gap-4 border-b border-slate-150 bg-white/95 px-8 py-5 backdrop-blur-md print:hidden">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-orange-600 shadow-inner">
-                <Building className="h-6 w-6" />
-              </div>
+              {allPhotos.length > 0 && !brokenPhotos[allPhotos[0].url] ? (
+                <div
+                  className="group relative h-12 w-12 shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm"
+                  onClick={() =>
+                    setLightboxMedia({
+                      url: getMediaUrl(allPhotos[0].url),
+                      title: `${property.name} • Foto Principal`,
+                      isPdf: false,
+                    })
+                  }
+                  title="Clique para ampliar a foto principal"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={getMediaUrl(allPhotos[0].url)}
+                    alt={property.name}
+                    className="h-full w-full object-cover transition duration-200 group-hover:scale-110"
+                    onError={() =>
+                      setBrokenPhotos((prev) => ({
+                        ...prev,
+                        [allPhotos[0].url]: true,
+                      }))
+                    }
+                  />
+                  <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                    <ZoomIn className="h-4 w-4 text-white" />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-orange-600 shadow-inner">
+                  <Building className="h-6 w-6" />
+                </div>
+              )}
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-xl font-black text-slate-950">
@@ -368,6 +405,54 @@ export function AssetHistoryModal({
                   </p>
                 </div>
               </div>
+
+              {/* Card de Fotos Rápidas da Ficha Técnica */}
+              {allPhotos.length > 0 && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 print:hidden">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-black uppercase text-slate-700 flex items-center gap-1.5">
+                      <ImageIcon className="h-3.5 w-3.5 text-orange-600" />
+                      Fotos Registradas ({allPhotos.length})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setReportMode("Photos")}
+                      className="text-xs font-black text-orange-600 hover:text-orange-700 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      Gerenciar / Ver galeria completa →
+                    </button>
+                  </div>
+                  <div className="flex gap-2.5 overflow-x-auto pb-1">
+                    {allPhotos.slice(0, 8).map((photo, pIdx) => {
+                      const fullUrl = getMediaUrl(photo.url);
+                      return (
+                        <div
+                          key={pIdx}
+                          onClick={() =>
+                            setLightboxMedia({
+                              url: fullUrl,
+                              title: photo.name || `Foto ${pIdx + 1} • ${property.name}`,
+                              isPdf: false,
+                            })
+                          }
+                          className="group relative h-20 w-28 shrink-0 cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md hover:scale-[1.02]"
+                          title="Clique para ampliar"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={fullUrl}
+                            alt={photo.name || "Foto"}
+                            className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
+                          />
+                          <div className="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                            <ZoomIn className="h-4 w-4 text-white" />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Especificações Técnicas / Dados do Bem */}
               <div className="rounded-2xl border border-slate-200 p-6 print:p-4">
@@ -621,7 +706,16 @@ export function AssetHistoryModal({
                     return (
                       <div
                         key={photo.id || idx}
-                        className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 aspect-video shadow-sm transition hover:shadow-md"
+                        className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 aspect-video shadow-sm transition hover:shadow-md cursor-pointer"
+                        onClick={() => {
+                          if (!isBroken) {
+                            setLightboxMedia({
+                              url: fullMediaUrl,
+                              title: photo.name || `Foto ${idx + 1} • ${property.name}`,
+                              isPdf: false,
+                            });
+                          }
+                        }}
                       >
                         {idx === 0 && (
                           <div className="absolute top-2 left-2 z-10 rounded-lg bg-slate-900/80 px-2 py-0.5 text-[10px] font-black text-white backdrop-blur-sm">
@@ -655,24 +749,33 @@ export function AssetHistoryModal({
                         )}
 
                         {/* Barra de ações / Overlay */}
-                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 p-2 print:hidden">
+                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 p-2 print:hidden pointer-events-none">
                           {!isBroken && (
-                            <a
-                              href={fullMediaUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="rounded-xl bg-white px-2.5 py-1.5 text-xs font-black text-slate-900 shadow hover:bg-slate-100 flex items-center gap-1.5"
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLightboxMedia({
+                                  url: fullMediaUrl,
+                                  title: photo.name || `Foto ${idx + 1} • ${property.name}`,
+                                  isPdf: false,
+                                });
+                              }}
+                              className="pointer-events-auto rounded-xl bg-white px-2.5 py-1.5 text-xs font-black text-slate-900 shadow hover:bg-slate-100 flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
                             >
-                              <ExternalLink className="h-3.5 w-3.5" />
+                              <ZoomIn className="h-3.5 w-3.5" />
                               Ver
-                            </a>
+                            </button>
                           )}
 
                           <button
                             type="button"
-                            onClick={() => handleDeleteFile(photo.id, photo.url)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteFile(photo.id, photo.url);
+                            }}
                             disabled={deletingFileId === photo.id}
-                            className="rounded-xl bg-red-600 px-2.5 py-1.5 text-xs font-black text-white shadow hover:bg-red-700 flex items-center gap-1 disabled:opacity-50"
+                            className="pointer-events-auto rounded-xl bg-red-600 px-2.5 py-1.5 text-xs font-black text-white shadow hover:bg-red-700 flex items-center gap-1 disabled:opacity-50 cursor-pointer"
                             title="Excluir foto"
                           >
                             {deletingFileId === photo.id ? (
@@ -691,6 +794,14 @@ export function AssetHistoryModal({
           )}
         </div>
       </div>
+
+      <MediaLightboxModal
+        isOpen={Boolean(lightboxMedia)}
+        mediaUrl={lightboxMedia?.url || null}
+        title={lightboxMedia?.title}
+        isPdf={lightboxMedia?.isPdf}
+        onClose={() => setLightboxMedia(null)}
+      />
     </div>
   );
 }

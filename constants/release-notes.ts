@@ -16,6 +16,32 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "1.0.20",
+    date: "01 de Outubro de 2026",
+    title: "Visualizador Lightbox de Mídias, Pré-visualização e Downloads",
+    subtitle: "Novo visualizador imersivo para fotos e documentos PDF, abertura rápida em nova aba com Blob URLs e downloads otimizados em Ativos, Pessoas e Contratos.",
+    highlights: [
+      {
+        category: "novo",
+        title: "Visualizador Lightbox de Fotos e Documentos PDF",
+        description:
+          "Novo modal de visualização imersiva para fotos e arquivos PDF com tecla de atalho ESC, controle de zoom, download com um clique e suporte a telas cheias.",
+      },
+      {
+        category: "melhoria",
+        title: "Abertura Segura em Nova Aba e Download com Blob URLs",
+        description:
+          "Conversão transparente de mídias Base64 em objetos Blob na memória, permitindo abrir arquivos pesados em nova aba sem limitações de URL e liberando memória automaticamente.",
+      },
+      {
+        category: "melhoria",
+        title: "Pré-visualização Integrada em Ativos, Pessoas e Contratos",
+        description:
+          "Galeria aprimorada em cadastros e históricos de Imóveis, Pessoas e Contratos, facilitando a conferência rápida de fotos de perfil, comprovantes e contratos assinados.",
+      },
+    ],
+  },
+  {
     version: "1.0.19",
     date: "29 de Setembro de 2026",
     title: "Compressão de Imagens, Manutenção de Ativos & Notificação de Versões",

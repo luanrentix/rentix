@@ -25,11 +25,13 @@ import {
   AlertCircle,
   PowerOff,
   CheckCircle2,
+  ZoomIn,
 } from "lucide-react";
 import { PersonCreateModal } from "@/components/people/person-create-modal";
 import type { Person as ApiPerson } from "@/services/people.service";
 import { deleteProperty, updateProperty } from "@/services/properties.service";
 import { getMediaUrl, api } from "@/services/api";
+import { MediaLightboxModal } from "@/components/modals/media-lightbox-modal";
 
 interface AssetFormModalProps {
   isOpen: boolean;
@@ -102,6 +104,11 @@ export function AssetFormModal({
   const [photos, setPhotos] = useState<string[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [errorMessage, setErrorMessage] = useState("");
+  const [lightboxMedia, setLightboxMedia] = useState<{
+    url: string;
+    title: string;
+    isPdf?: boolean;
+  } | null>(null);
 
   const [isConfirmingInactivate, setIsConfirmingInactivate] = useState(false);
   const [isInactivating, setIsInactivating] = useState(false);
@@ -1054,24 +1061,54 @@ export function AssetFormModal({
                   </p>
                   <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
                     {photos.map((url, idx) => (
-                      <div key={idx} className="relative group rounded-xl overflow-hidden border border-slate-200 aspect-video bg-slate-50">
+                      <div
+                        key={idx}
+                        onClick={() =>
+                          setLightboxMedia({
+                            url: getMediaUrl(url),
+                            title: `Foto ${idx + 1} • ${name || "Bem/Ativo"}`,
+                            isPdf: false,
+                          })
+                        }
+                        className="group relative rounded-xl overflow-hidden border border-slate-200 aspect-video bg-slate-50 cursor-pointer shadow-sm hover:shadow-md transition"
+                        title="Clique para visualizar em tela cheia"
+                      >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={getMediaUrl(url)}
                           alt="Foto"
-                          className="h-full w-full object-cover"
+                          className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
                           onError={(e) => {
                             (e.target as HTMLElement).style.opacity = "0.2";
                           }}
                         />
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveExistingPhoto(idx)}
-                          className="absolute top-1.5 right-1.5 h-6 w-6 rounded-lg bg-red-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow-sm"
-                          title="Remover foto"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-1.5 pointer-events-none p-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLightboxMedia({
+                                url: getMediaUrl(url),
+                                title: `Foto ${idx + 1} • ${name || "Bem/Ativo"}`,
+                                isPdf: false,
+                              });
+                            }}
+                            className="pointer-events-auto rounded-lg bg-white px-2 py-1 text-[11px] font-black text-slate-900 shadow hover:bg-slate-100 flex items-center gap-1 transition active:scale-95 cursor-pointer"
+                          >
+                            <ZoomIn className="h-3 w-3" /> Ver
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveExistingPhoto(idx);
+                            }}
+                            className="pointer-events-auto h-6 w-6 rounded-lg bg-red-600 text-white flex items-center justify-center hover:bg-red-700 transition shadow active:scale-95 cursor-pointer"
+                            title="Remover foto"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1086,14 +1123,33 @@ export function AssetFormModal({
                   </p>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                     {selectedFiles.map((file, idx) => (
-                      <div key={idx} className="flex items-center justify-between rounded-xl border border-orange-200 bg-orange-50/50 p-2 text-xs">
-                        <span className="truncate max-w-[150px] font-semibold text-slate-700">
+                      <div
+                        key={idx}
+                        onClick={() => {
+                          if (file.type.startsWith("image/")) {
+                            setLightboxMedia({
+                              url: URL.createObjectURL(file),
+                              title: `Prévia • ${file.name}`,
+                              isPdf: false,
+                            });
+                          }
+                        }}
+                        className={`flex items-center justify-between rounded-xl border border-orange-200 bg-orange-50/50 p-2 text-xs transition ${
+                          file.type.startsWith("image/") ? "cursor-pointer hover:bg-orange-100/70" : ""
+                        }`}
+                        title={file.type.startsWith("image/") ? "Clique para visualizar prévia" : file.name}
+                      >
+                        <span className="truncate max-w-[150px] font-semibold text-slate-700 flex items-center gap-1.5">
+                          {file.type.startsWith("image/") && <ZoomIn className="h-3.5 w-3.5 text-orange-600 shrink-0" />}
                           {file.name}
                         </span>
                         <button
                           type="button"
-                          onClick={() => handleRemoveSelectedFile(idx)}
-                          className="text-red-500 hover:text-red-700 ml-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveSelectedFile(idx);
+                          }}
+                          className="text-red-500 hover:text-red-700 ml-2 cursor-pointer"
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -1344,6 +1400,14 @@ export function AssetFormModal({
           </div>
         </div>
       )}
+
+      <MediaLightboxModal
+        isOpen={Boolean(lightboxMedia)}
+        mediaUrl={lightboxMedia?.url || null}
+        title={lightboxMedia?.title}
+        isPdf={lightboxMedia?.isPdf}
+        onClose={() => setLightboxMedia(null)}
+      />
     </div>
   );
 }

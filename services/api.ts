@@ -279,6 +279,66 @@ export async function checkApiHealth(): Promise<boolean> {
   }
 }
 
+export function dataUrlToBlob(dataUrl: string): Blob {
+  const parts = dataUrl.split(',');
+  const mimeMatch = parts[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+  const binaryString = atob(parts[1] || '');
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mime });
+}
+
+export function openMediaInNewTab(url: string, title?: string): void {
+  if (typeof window === 'undefined' || !url) return;
+
+  if (url.startsWith('data:')) {
+    try {
+      const blob = dataUrlToBlob(url);
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank', 'noopener,noreferrer');
+      // Revogar URL após 1 minuto para liberar memória
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      return;
+    } catch (e) {
+      console.error('Falha ao abrir data URL:', e);
+    }
+  }
+
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+export function downloadMediaFile(url: string, filename = 'arquivo'): void {
+  if (typeof window === 'undefined' || !url) return;
+
+  let targetUrl = url;
+  let revokeNeeded = false;
+
+  if (url.startsWith('data:')) {
+    try {
+      const blob = dataUrlToBlob(url);
+      targetUrl = URL.createObjectURL(blob);
+      revokeNeeded = true;
+    } catch (e) {
+      console.error('Falha ao converter data URL para download:', e);
+    }
+  }
+
+  const a = document.createElement('a');
+  a.href = targetUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  if (revokeNeeded) {
+    setTimeout(() => URL.revokeObjectURL(targetUrl), 15000);
+  }
+}
+
 export { getApiBaseUrl };
 
 export const api = {

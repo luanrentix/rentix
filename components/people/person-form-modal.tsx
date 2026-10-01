@@ -17,6 +17,7 @@ import {
   Phone,
   Mail,
   Camera,
+  ZoomIn,
 } from "lucide-react";
 import {
   type Person,
@@ -38,6 +39,7 @@ import {
 import { createPerson, updatePerson, deletePerson } from "@/services/people.service";
 import { getMediaUrl } from "@/services/api";
 import { compressImageFile } from "@/services/image-compression";
+import { MediaLightboxModal } from "@/components/modals/media-lightbox-modal";
 
 interface PersonFormModalProps {
   isOpen: boolean;
@@ -102,6 +104,11 @@ export function PersonFormModal({
   const [formData, setFormData] = useState<PersonFormData>(emptyFormData);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [lightboxMedia, setLightboxMedia] = useState<{
+    url: string;
+    title: string;
+    isPdf?: boolean;
+  } | null>(null);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isSearchingZipCode, setIsSearchingZipCode] = useState(false);
@@ -928,17 +935,33 @@ export function PersonFormModal({
 
                 <div className="flex items-center gap-4 rounded-3xl border border-dashed border-slate-300 p-4 bg-slate-50/50">
                   {photoPreview ? (
-                    <div className="relative h-20 w-20 shrink-0 rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-sm">
+                    <div
+                      onClick={() =>
+                        setLightboxMedia({
+                          url: photoPreview,
+                          title: `Foto / Documento • ${formData.name || "Cadastro"}`,
+                          isPdf: false,
+                        })
+                      }
+                      className="group relative h-20 w-20 shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
+                      title="Clique para ampliar em tela cheia"
+                    >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={photoPreview}
                         alt="Preview"
-                        className="h-full w-full object-cover"
+                        className="h-full w-full object-cover transition group-hover:scale-105"
                       />
+                      <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                        <ZoomIn className="h-5 w-5 text-white" />
+                      </div>
                       <button
                         type="button"
-                        onClick={handleRemovePhoto}
-                        className="absolute top-1 right-1 h-5 w-5 bg-red-600 text-white rounded-full flex items-center justify-center hover:bg-red-700 transition"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemovePhoto();
+                        }}
+                        className="absolute top-1 right-1 h-5 w-5 bg-red-600 text-white rounded-full flex items-center justify-center hover:bg-red-700 transition shadow z-10 cursor-pointer"
                         title="Remover foto"
                       >
                         <X className="h-3 w-3" />
@@ -1228,6 +1251,14 @@ export function PersonFormModal({
           </div>
         </div>
       )}
+
+      <MediaLightboxModal
+        isOpen={Boolean(lightboxMedia)}
+        mediaUrl={lightboxMedia?.url || null}
+        title={lightboxMedia?.title}
+        isPdf={lightboxMedia?.isPdf}
+        onClose={() => setLightboxMedia(null)}
+      />
     </div>
   );
 }

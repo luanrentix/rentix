@@ -467,7 +467,7 @@ export default function PropertiesPage() {
 
       // Upload de novas fotos (comprimidas e convertidas para armazenamento permanente)
       if (files.length > 0) {
-        await Promise.all(
+        const uploadResults = await Promise.all(
           files.map(async (file) => {
             const compressed = await compressImageFile(file);
             const formData = new FormData();
@@ -476,11 +476,28 @@ export default function PropertiesPage() {
             formData.append("entityType", "PROPERTY");
             formData.append("entityId", saved.id);
 
-            return api.post("/files/upload", formData, {
+            const res = await api.post("/files/upload", formData, {
               headers: { "Content-Type": "multipart/form-data" },
             });
+            return res.data?.url;
           })
         );
+
+        const newUrls = uploadResults.filter(Boolean);
+        if (newUrls.length > 0) {
+          let currentPhotos: string[] = [];
+          try {
+            currentPhotos = payload.photos ? JSON.parse(payload.photos) : [];
+            if (!Array.isArray(currentPhotos)) currentPhotos = [payload.photos];
+          } catch {
+            currentPhotos = payload.photos ? [payload.photos] : [];
+          }
+          const updatedPhotos = Array.from(new Set([...currentPhotos, ...newUrls]));
+          await updateProperty(saved.id, {
+            ...payload,
+            photos: JSON.stringify(updatedPhotos),
+          });
+        }
       }
 
       // Registrar movimentação

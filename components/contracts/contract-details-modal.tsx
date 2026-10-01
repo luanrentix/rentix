@@ -27,8 +27,10 @@ import {
   Upload,
   Download,
   Printer,
+  ExternalLink,
 } from "lucide-react";
 import { openWhatsAppMessage } from "@/services/whatsapp.service";
+import { downloadMediaFile, openMediaInNewTab } from "@/services/api";
 
 interface ContractDetailsModalProps {
   contract: Contract | null;
@@ -523,14 +525,22 @@ export function ContractDetailsModal({
                       </div>
                     </div>
                     {signedPdfFile.url && (
-                      <a
-                        href={signedPdfFile.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-1 rounded-xl bg-white px-3 py-1.5 text-xs font-black text-emerald-700 shadow-sm hover:bg-emerald-100"
-                      >
-                        <Download className="h-3.5 w-3.5" /> Baixar
-                      </a>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => openMediaInNewTab(signedPdfFile.url, signedPdfFile.name || "Contrato_Assinado.pdf")}
+                          className="flex items-center gap-1 rounded-xl bg-white px-3 py-1.5 text-xs font-black text-emerald-700 shadow-sm hover:bg-emerald-100 cursor-pointer"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" /> Abrir
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => downloadMediaFile(signedPdfFile.url, signedPdfFile.name || "Contrato_Assinado.pdf")}
+                          className="flex items-center gap-1 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-black text-white shadow-sm hover:bg-emerald-700 cursor-pointer"
+                        >
+                          <Download className="h-3.5 w-3.5" /> Baixar
+                        </button>
+                      </div>
                     )}
                   </div>
                 ) : (

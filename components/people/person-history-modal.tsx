@@ -19,6 +19,7 @@ import {
   Plus,
   AlertCircle,
   ExternalLink,
+  ZoomIn,
 } from "lucide-react";
 import type { Person, PersonHistoryData } from "./person-types";
 import {
@@ -30,6 +31,7 @@ import {
 } from "./person-types";
 import { getMediaUrl, api } from "@/services/api";
 import { compressImageFile } from "@/services/image-compression";
+import { MediaLightboxModal } from "@/components/modals/media-lightbox-modal";
 import { getProperties } from "@/services/properties.service";
 import { getContracts } from "@/services/contracts.service";
 import {
@@ -80,6 +82,11 @@ export function PersonHistoryModal({
   const [brokenPhotos, setBrokenPhotos] = useState<Record<string, boolean>>({});
   const [isUploadingFile, setIsUploadingFile] = useState(false);
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+  const [lightboxMedia, setLightboxMedia] = useState<{
+    url: string;
+    title: string;
+    isPdf?: boolean;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -227,7 +234,27 @@ export function PersonHistoryModal({
           {/* Header do Histórico */}
           <div className="flex items-center justify-between border-b border-slate-100 p-6 bg-white/95 backdrop-blur-md">
             <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-orange-600 shadow-inner overflow-hidden border border-orange-200">
+              <div
+                className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-orange-50 text-orange-600 shadow-inner overflow-hidden border border-orange-200 ${
+                  person.photo && !brokenPhotos[person.photo]
+                    ? "cursor-pointer hover:opacity-90 hover:scale-105 transition active:scale-95"
+                    : ""
+                }`}
+                onClick={() => {
+                  if (person.photo && !brokenPhotos[person.photo]) {
+                    setLightboxMedia({
+                      url: getMediaUrl(person.photo),
+                      title: `Foto de Perfil • ${person.name}`,
+                      isPdf: false,
+                    });
+                  }
+                }}
+                title={
+                  person.photo && !brokenPhotos[person.photo]
+                    ? "Clique para ampliar a foto"
+                    : undefined
+                }
+              >
                 {person.photo && !brokenPhotos[person.photo] ? (
                   /* eslint-disable-next-line @next/next/no-img-element */
                   <img
@@ -829,16 +856,23 @@ export function PersonHistoryModal({
                             )}
 
                             {!brokenPhotos[person.photo] && (
-                              <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                                <a
-                                  href={getMediaUrl(person.photo)}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="rounded-xl bg-white px-3 py-1.5 text-xs font-black text-slate-900 shadow hover:bg-slate-100 flex items-center gap-1"
+                              <div
+                                className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center cursor-pointer"
+                                onClick={() =>
+                                  setLightboxMedia({
+                                    url: getMediaUrl(person.photo!),
+                                    title: `Foto de Perfil • ${person.name}`,
+                                    isPdf: false,
+                                  })
+                                }
+                              >
+                                <button
+                                  type="button"
+                                  className="rounded-xl bg-white px-3 py-1.5 text-xs font-black text-slate-900 shadow hover:bg-slate-100 flex items-center gap-1.5 transition active:scale-95"
                                 >
-                                  <ExternalLink className="h-3.5 w-3.5" />
+                                  <ZoomIn className="h-3.5 w-3.5" />
                                   Ver em tela cheia
-                                </a>
+                                </button>
                               </div>
                             )}
                           </div>
@@ -846,10 +880,11 @@ export function PersonHistoryModal({
 
                         {personFiles.map((file, idx) => {
                           const fileUrl = getMediaUrl(file.url || file);
-                          const isPdf =
+                          const isPdf = Boolean(
                             file.type === "PDF" ||
                             (file.originalName &&
-                              file.originalName.toLowerCase().endsWith(".pdf"));
+                              file.originalName.toLowerCase().endsWith(".pdf"))
+                          );
                           const isBroken = brokenPhotos[fileUrl];
 
                           return (
@@ -891,15 +926,20 @@ export function PersonHistoryModal({
 
                               <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2 p-2">
                                 {!isBroken && (
-                                  <a
-                                    href={fileUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="rounded-xl bg-white px-2.5 py-1.5 text-xs font-black text-slate-900 shadow hover:bg-slate-100 flex items-center gap-1"
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setLightboxMedia({
+                                        url: fileUrl,
+                                        title: file.originalName || "Anexo",
+                                        isPdf,
+                                      })
+                                    }
+                                    className="rounded-xl bg-white px-2.5 py-1.5 text-xs font-black text-slate-900 shadow hover:bg-slate-100 flex items-center gap-1.5 transition active:scale-95"
                                   >
-                                    <ExternalLink className="h-3.5 w-3.5" />
-                                    Ver
-                                  </a>
+                                    <ZoomIn className="h-3.5 w-3.5" />
+                                    Visualizar
+                                  </button>
                                 )}
 
                                 {file.id && (
@@ -981,6 +1021,14 @@ export function PersonHistoryModal({
           </div>
         </div>
       </div>
+
+      <MediaLightboxModal
+        isOpen={Boolean(lightboxMedia)}
+        mediaUrl={lightboxMedia?.url || null}
+        title={lightboxMedia?.title}
+        isPdf={lightboxMedia?.isPdf}
+        onClose={() => setLightboxMedia(null)}
+      />
     </>
   );
 }
