@@ -4,6 +4,7 @@ set "GIT_PAGER=cat"
 set "PAGER=cat"
 chcp 65001 >nul
 set "PROJECT_DIR=C:\projetos\contrx"
+set "SSH_KEY=/c/ssh/oracle-final.key"
 set "GIT_BASH=%ProgramFiles%\Git\bin\bash.exe"
 if not exist "%GIT_BASH%" set "GIT_BASH=%ProgramFiles(x86)%\Git\bin\bash.exe"
 cd /d "%PROJECT_DIR%"
@@ -23,6 +24,10 @@ if "%OPCAO%"=="2" goto SUPABASE
 if "%OPCAO%"=="3" exit /b 0
 goto MENU
 :DEPLOY
+if not exist "C:\ssh\oracle-final.key" (
+  echo Chave SSH nao encontrada em C:\ssh\oracle-final.key. Nenhum envio iniciado.
+  goto FALHA
+)
 echo Pare os servidores locais antes do build. O envio exige schema de producao atualizado.
 node contrx-backend\scripts\manual-supabase-update.cjs --env contrx-backend\.env.supabase --check --require-current
 if errorlevel 1 goto FALHA
@@ -61,7 +66,7 @@ if errorlevel 1 goto FALHA
 :PUSH
 git push origin main
 if errorlevel 1 goto FALHA
-"%GIT_BASH%" -lc "ssh -i ~/oracle-final.key ubuntu@163.176.163.165 'cd /opt/contrx && git pull --ff-only origin main && docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build && docker compose -f docker-compose.prod.yml ps && curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-connrefused -I https://www.contrx.com.br && curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-connrefused -I https://api.contrx.com.br'"
+"%GIT_BASH%" -lc "ssh -i %SSH_KEY% ubuntu@163.176.163.165 'cd /opt/contrx && git pull --ff-only origin main && docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build && docker compose -f docker-compose.prod.yml ps && curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-connrefused -I https://www.contrx.com.br && curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-connrefused -I https://api.contrx.com.br'"
 if errorlevel 1 goto FALHA
 echo Envio concluido. Valide login e operacoes essenciais antes de encerrar a janela de manutencao.
 pause
