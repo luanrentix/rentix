@@ -6,7 +6,7 @@ import ToggleSwitch from "@/components/ui/toggle-switch";
 import ProductPriceHistory from "./product-price-history";
 import { useAuth } from "@/context/AuthContext";
 import { getCompanyStorageKey } from "@/services/company-storage";
-import { isValidGtin, gtinAliases } from "@/contrx-backend/src/vendas/gtin";
+import { isValidGtin, gtinAliases } from "@/lib/gtin";
 import { createPortal } from "react-dom";
 import ConfirmationModal from "@/components/ui/confirmation-modal";
 import { getSalesProductUnits, createSalesProductUnit } from "@/services/vendas.service";
