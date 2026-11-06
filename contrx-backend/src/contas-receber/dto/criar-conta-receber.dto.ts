@@ -76,7 +76,7 @@ export class ReceberPagamentoDto {
   method: PaymentMethod;
 
   @IsOptional()
-  paymentItems?: Prisma.InputJsonValue;
+  paymentItems?: Prisma.InputJsonValue | null;
 
   @IsOptional()
   @IsNumber()

@@ -166,6 +166,7 @@ export class DashboardService {
       }),
       this.prisma.contaReceber.findMany({
         where: {
+          cancelledAt: null,
           companyId,
           ...(startDate && endDate
             ? {
@@ -189,6 +190,7 @@ export class DashboardService {
       }),
       this.prisma.contaPagar.findMany({
         where: {
+          cancelledAt: null,
           companyId,
           ...(startDate && endDate
             ? {

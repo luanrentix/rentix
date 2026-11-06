@@ -3,31 +3,15 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 
-function isSupabaseDatabaseUrl(databaseUrl: string): boolean {
-  try {
-    const { hostname } = new URL(databaseUrl);
-
-    return hostname.includes('supabase.');
-  } catch {
-    return databaseUrl.includes('supabase.');
-  }
-}
-
-function removeSslMode(databaseUrl: string): string {
-  try {
-    const url = new URL(databaseUrl);
-
-    url.searchParams.delete('sslmode');
-
-    return url.toString();
-  } catch {
-    return databaseUrl.replace(/[?&]sslmode=require\b/, '');
-  }
-}
-
-function shouldRejectUnauthorizedTls() {
-  return process.env.CONTRX_DB_SSL_REJECT_UNAUTHORIZED !== 'false';
-}
+import { createRequire } from 'node:module';
+import { resolve } from 'node:path';
+import type { PoolConfig } from 'pg';
+const loadDatabaseConfig = createRequire(
+  resolve(process.cwd(), 'package.json'),
+);
+const { databaseConnectionOptions } = loadDatabaseConfig(
+  './scripts/lib/database-connection.cjs',
+) as { databaseConnectionOptions: (url: string) => PoolConfig };
 
 @Injectable()
 export class PrismaService
@@ -41,15 +25,7 @@ export class PrismaService
       throw new Error('DATABASE_URL environment variable is not defined.');
     }
 
-    const isSupabaseConnection = isSupabaseDatabaseUrl(databaseUrl);
-    const pool = new Pool({
-      connectionString: isSupabaseConnection
-        ? removeSslMode(databaseUrl)
-        : databaseUrl,
-      ssl: isSupabaseConnection
-        ? { rejectUnauthorized: shouldRejectUnauthorizedTls() }
-        : undefined,
-    });
+    const pool = new Pool(databaseConnectionOptions(databaseUrl));
     const adapter = new PrismaPg(pool, {
       disposeExternalPool: true,
     });

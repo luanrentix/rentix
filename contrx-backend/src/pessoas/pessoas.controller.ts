@@ -10,7 +10,10 @@ import {
 } from '@nestjs/common';
 
 import { PessoasService } from './pessoas.service';
-import { RequireToolPermission } from '../autenticacao/decorators/tool-permission.decorator';
+import {
+  RequireToolPermission,
+  RequireToolAction,
+} from '../autenticacao/decorators/tool-permission.decorator';
 import { CurrentUser } from '../autenticacao/decorators/usuario-atual.decorator';
 import { JwtGuardAutenticacao } from '../autenticacao/guards/jwt-autenticacao.guard';
 import { ToolPermissionGuard } from '../autenticacao/guards/tool-permission.guard';
@@ -25,6 +28,7 @@ import { AtualizarPessoaDto } from './dto/atualizar-pessoa.dto';
 export class PessoasController {
   constructor(private readonly peopleService: PessoasService) {}
 
+  @RequireToolAction('create')
   @Post()
   async create(
     @Body() data: CriarPessoaDto,
@@ -33,11 +37,13 @@ export class PessoasController {
     return this.peopleService.create(data, user.companyId);
   }
 
+  @RequireToolAction('view')
   @Get()
   async findAll(@CurrentUser() user: UsuarioAutenticado) {
     return this.peopleService.findAll(user.companyId);
   }
 
+  @RequireToolAction('view')
   @Get(':id')
   async findOne(
     @Param('id') id: string,
@@ -46,6 +52,7 @@ export class PessoasController {
     return this.peopleService.findOne(id, user.companyId);
   }
 
+  @RequireToolAction('edit')
   @Patch(':id')
   async update(
     @Param('id') id: string,
@@ -55,6 +62,7 @@ export class PessoasController {
     return this.peopleService.update(id, data, user.companyId);
   }
 
+  @RequireToolAction('delete')
   @Delete(':id')
   async remove(
     @Param('id') id: string,

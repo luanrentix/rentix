@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { canPrintLocally } from "@/services/authorize-action";
 import { Expense, ExpensePayment } from "./hooks/useExpenseCalculations";
 
 function formatCurrency(value: number) {
@@ -36,6 +37,7 @@ export function generateExpensePaymentReceipt(params: {
   getPaymentMethodLabel: (method: any) => string;
   setPaymentFormError: (msg: string) => void;
 }) {
+  if (!canPrintLocally("accountsPayable", params.setPaymentFormError)) return;
   const { expense, paymentRecord, companySettings, getPaymentMethodLabel, setPaymentFormError } = params;
 
   const receiptWindow = window.open(

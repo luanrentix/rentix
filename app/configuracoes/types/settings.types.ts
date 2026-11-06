@@ -21,6 +21,12 @@ export type PasswordSettings = {
 };
 
 export type NewCompanyUserForm = {
+  emailLoginEnabled: boolean;
+  userLoginEnabled: boolean;
+  username: string;
+  maxConcurrentSessions: number;
+  actionPermissions: string[] | null;
+  confirmPassword: string;
   name: string;
   email: string;
   password: string;
@@ -29,6 +35,12 @@ export type NewCompanyUserForm = {
 };
 
 export type EditCompanyUserForm = {
+  emailLoginEnabled: boolean;
+  userLoginEnabled: boolean;
+  username: string;
+  maxConcurrentSessions: number;
+  actionPermissions: string[] | null;
+  confirmPassword: string;
   name: string;
   email: string;
   password: string;
@@ -48,6 +60,7 @@ export type SettingsValidationErrors = Partial<Record<SettingsValidationErrorKey
 export type PixKeyType = "cpf" | "cnpj" | "email" | "phone" | "random";
 
 export type CompanySettings = {
+  ramoAtividade: "OUTRO" | "CONFECCOES";
   companyName: string;
   tradeName: string;
   logo: string;
@@ -305,6 +318,8 @@ export const roleLabels: Record<string, string> = {
 };
 
 export const defaultNewCompanyUserForm: NewCompanyUserForm = {
+  emailLoginEnabled: false, userLoginEnabled: true,
+  username: "", maxConcurrentSessions: 1, actionPermissions: null, confirmPassword: "",
   name: "",
   email: "",
   password: "",
@@ -313,6 +328,8 @@ export const defaultNewCompanyUserForm: NewCompanyUserForm = {
 };
 
 export const defaultEditCompanyUserForm: EditCompanyUserForm = {
+  emailLoginEnabled: true, userLoginEnabled: true,
+  username: "", maxConcurrentSessions: 1, actionPermissions: null, confirmPassword: "",
   name: "",
   email: "",
   password: "",
@@ -322,6 +339,7 @@ export const defaultEditCompanyUserForm: EditCompanyUserForm = {
 };
 
 export const defaultCompanySettings: CompanySettings = {
+  ramoAtividade: "OUTRO",
   companyName: "",
   tradeName: "",
   logo: "",
@@ -381,6 +399,7 @@ export const companyAccessProfiles: CompanyAccessProfile[] = [
       "accountsPayable",
       "schedule",
       "settings",
+      "sales",
     ],
   },
   {
@@ -397,6 +416,7 @@ export const companyAccessProfiles: CompanyAccessProfile[] = [
       "accountsReceivable",
       "accountsPayable",
       "schedule",
+      "sales",
     ],
   },
   {
@@ -404,14 +424,14 @@ export const companyAccessProfiles: CompanyAccessProfile[] = [
     label: "Operador",
     description: "Foca em cadastros, contratos e agenda do dia a dia.",
     role: "USER",
-    permissions: ["dashboard", "properties", "people", "contracts", "schedule"],
+    permissions: ["dashboard", "properties", "people", "contracts", "schedule", "sales"],
   },
   {
     key: "readOnly",
     label: "Consulta",
     description: "Mantém acesso básico para consulta do painel inicial.",
     role: "USER",
-    permissions: ["dashboard"],
+    permissions: ["dashboard", "sales"],
   },
 ];
 

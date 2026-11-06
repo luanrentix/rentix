@@ -1,3 +1,5 @@
+import { PrismaService } from '../prisma/prisma.service';
+import { UserSessionsService } from './user-sessions.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AutenticacaoController } from './autenticacao.controller';
 import { AutenticacaoService } from './autenticacao.service';
@@ -9,6 +11,8 @@ describe('AutenticacaoController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AutenticacaoController],
       providers: [
+        { provide: UserSessionsService, useValue: {} },
+        { provide: PrismaService, useValue: {} },
         {
           provide: AutenticacaoService,
           useValue: {},

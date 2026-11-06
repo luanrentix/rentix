@@ -10,7 +10,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 
 import * as bcrypt from 'bcrypt';
-import { createHash, randomBytes, randomUUID } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import nodemailer from 'nodemailer';
 import type { Company, User } from '@prisma/client';
 
@@ -31,6 +31,9 @@ import {
   type UserToolPermission,
 } from './dto/criar-usuario-empresa.dto';
 import { UsuarioAutenticado } from './types/usuario-autenticado.type';
+import { UserSessionsService } from './user-sessions.service';
+import { LoginEmpresaUsuarioDto } from './dto/login-empresa-usuario.dto';
+import { validateActionPermissions } from './access-policy';
 
 const DATABASE_AUTH_ERROR_MESSAGE =
   'Credenciais do banco de dados invalidas. Atualize DATABASE_URL e DIRECT_URL no arquivo contrx-backend/.env e reinicie o backend.';
@@ -40,6 +43,36 @@ const DATABASE_CONNECTION_ERROR_MESSAGE =
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+function handleUserWriteError(error: unknown): never {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    error.code === 'P2002'
+  ) {
+    throw new ConflictException(
+      'Este e-mail ou usuário de acesso já está cadastrado. O usuário deve ser único nesta empresa.',
+    );
+  }
+  throw error;
+}
+
+function validateLoginMethods(
+  email: string | null,
+  username: string | null,
+  emailEnabled: boolean,
+  userEnabled: boolean,
+) {
+  if (!emailEnabled && !userEnabled)
+    throw new BadRequestException('Selecione ao menos uma forma de login.');
+  if (emailEnabled && !email)
+    throw new BadRequestException(
+      'Informe o e-mail para habilitar o acesso administrativo.',
+    );
+  if (userEnabled && !username && !(emailEnabled && email))
+    throw new BadRequestException('Informe o usuário de acesso.');
 }
 
 function formatPhone(phone: string): string {
@@ -122,10 +155,12 @@ function buildAuthenticatedUserPayload(user: AuthenticatedUserWithCompany) {
   return {
     id: user.id,
     name: user.name,
-    email: user.email,
+    email: user.email || '',
     companyId: user.companyId,
     role: user.role,
     permissions: user.permissions,
+    username: user.username,
+    actionPermissions: user.actionPermissions,
     companyIsActive: user.company.isActive,
     subscriptionStatus: user.company.subscriptionStatus,
     trialStartsAt: user.company.trialStartsAt,
@@ -194,6 +229,7 @@ export class AutenticacaoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly sessions: UserSessionsService,
   ) {}
 
   async register(data: RegisterDto) {
@@ -228,7 +264,7 @@ export class AutenticacaoService {
     };
   }
 
-  async login(data: LoginDto) {
+  async login(data: LoginDto, device?: string) {
     let user: AuthenticatedUserWithCompany | null;
     const email = normalizeEmail(data.email);
 
@@ -255,7 +291,7 @@ export class AutenticacaoService {
       throwDatabaseUnavailable(error);
     }
 
-    if (!user) {
+    if (!user || !user.emailLoginEnabled) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -278,44 +314,56 @@ export class AutenticacaoService {
       throw new UnauthorizedException(accessState.reason);
     }
 
-    const sessionId = randomUUID();
-    const authenticatedUser = await this.prisma.user.update({
-      where: {
-        id: user.id,
-      },
-      data: {
-        activeSessionId: sessionId,
-        lastLoginAt: new Date(),
-      },
-      include: {
-        company: {
-          select: {
-            isActive: true,
-            subscriptionStatus: true,
-            trialStartsAt: true,
-            trialEndsAt: true,
-            trialExtendedUntil: true,
-            subscriptionEndsAt: true,
-          },
-        },
-      },
-    });
-
-    const token = await this.jwtService.signAsync({
-      sub: authenticatedUser.id,
-      email: authenticatedUser.email,
-      companyId: authenticatedUser.companyId,
-      role: authenticatedUser.role,
-      sessionId,
-    });
-
+    const result = await this.sessions.issue(
+      user.id,
+      user.companyId,
+      user.passwordHash,
+      device,
+      undefined,
+      'EMAIL',
+    );
     return {
-      accessToken: token,
-      user: buildAuthenticatedUserPayload(authenticatedUser),
+      accessToken: result.accessToken,
+      user: buildAuthenticatedUserPayload(result.user),
     };
   }
 
-  async createAccount(data: CriarContaDto) {
+  async loginCompanyUser(data: LoginEmpresaUsuarioDto, device?: string) {
+    const company = await this.prisma.company.findUnique({
+      where: { code: data.companyCode.trim().toUpperCase() },
+      select: { id: true },
+    });
+    const login = data.username.trim().toLowerCase();
+    const user = company
+      ? await this.prisma.user.findFirst({
+          where: {
+            companyId: company.id,
+            OR: [{ username: login }, { email: login }],
+          },
+        })
+      : null;
+    // Keep bcrypt work for missing identities too; do not disclose which credential failed.
+    const hash =
+      user?.passwordHash ||
+      '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
+    const valid = await bcrypt.compare(data.password, hash);
+    if (!user || !user.isActive || !user.userLoginEnabled || !valid)
+      throw new UnauthorizedException('Credenciais inválidas.');
+    const result = await this.sessions.issue(
+      user.id,
+      user.companyId,
+      user.passwordHash,
+      device,
+      undefined,
+      'USER',
+    );
+    return {
+      accessToken: result.accessToken,
+      user: buildAuthenticatedUserPayload(result.user),
+    };
+  }
+
+  async createAccount(data: CriarContaDto, device?: string) {
     const name = data.name ? toUpperText(data.name) : '';
     const email = normalizeEmail(data.email || '');
     const password = data.password;
@@ -429,40 +477,15 @@ export class AutenticacaoService {
       throwDatabaseUnavailable(error);
     }
 
-    const sessionId = randomUUID();
-    const authenticatedUser = await this.prisma.user.update({
-      where: {
-        id: user.id,
-      },
-      data: {
-        activeSessionId: sessionId,
-        lastLoginAt: new Date(),
-      },
-      include: {
-        company: {
-          select: {
-            isActive: true,
-            subscriptionStatus: true,
-            trialStartsAt: true,
-            trialEndsAt: true,
-            trialExtendedUntil: true,
-            subscriptionEndsAt: true,
-          },
-        },
-      },
-    });
-
-    const token = await this.jwtService.signAsync({
-      sub: user.id,
-      email: user.email,
-      companyId: user.companyId,
-      role: user.role,
-      sessionId,
-    });
-
+    const result = await this.sessions.issue(
+      user.id,
+      user.companyId,
+      user.passwordHash,
+      device,
+    );
     return {
-      accessToken: token,
-      user: buildAuthenticatedUserPayload(authenticatedUser),
+      accessToken: result.accessToken,
+      user: buildAuthenticatedUserPayload(result.user),
     };
   }
 
@@ -656,6 +679,7 @@ export class AutenticacaoService {
       },
       select: {
         id: true,
+        companyId: true,
       },
     });
 
@@ -667,16 +691,34 @@ export class AutenticacaoService {
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
 
-    await this.prisma.user.update({
-      where: {
-        id: user.id,
-      },
-      data: {
-        passwordHash,
-        passwordResetTokenHash: null,
-        passwordResetExpiresAt: null,
-        activeSessionId: null,
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await this.sessions.lock(tx, user.id, user.companyId);
+      const current = await tx.user.findUnique({ where: { id: user.id } });
+      if (
+        !current?.isActive ||
+        current.passwordResetTokenHash !== tokenHash ||
+        !current.passwordResetExpiresAt ||
+        current.passwordResetExpiresAt <= new Date()
+      )
+        throw new BadRequestException(
+          'Codigo de recuperacao invalido ou expirado.',
+        );
+      await tx.user.update({
+        where: {
+          id: user.id,
+        },
+        data: {
+          passwordHash,
+          passwordResetTokenHash: null,
+          passwordResetExpiresAt: null,
+          activeSessionId: null,
+        },
+      });
+
+      await tx.userSession.updateMany({
+        where: { userId: user.id, companyId: user.companyId, revokedAt: null },
+        data: { revokedAt: new Date(), reason: 'PASSWORD_RESET' },
+      });
     });
 
     return {
@@ -696,9 +738,14 @@ export class AutenticacaoService {
         id: true,
         name: true,
         email: true,
+        emailLoginEnabled: true,
+        userLoginEnabled: true,
         role: true,
         isActive: true,
         permissions: true,
+        username: true,
+        maxConcurrentSessions: true,
+        actionPermissions: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -710,12 +757,16 @@ export class AutenticacaoService {
     data: CriarUsuarioEmpresaDto,
   ) {
     const name = data.name ? toUpperText(data.name) : '';
-    const email = normalizeEmail(data.email || '');
+    const email = normalizeEmail(data.email || '') || null;
+    const username = data.username?.trim().toLowerCase() || null;
+    const emailLoginEnabled = data.emailLoginEnabled ?? true;
+    const userLoginEnabled = data.userLoginEnabled ?? true;
+    validateLoginMethods(email, username, emailLoginEnabled, userLoginEnabled);
     const password = data.password;
     const permissions = normalizePermissions(data.permissions || []);
 
-    if (!name || !email || !password) {
-      throw new BadRequestException('Preencha nome, e-mail e senha.');
+    if (!name || !password) {
+      throw new BadRequestException('Preencha nome e senha.');
     }
 
     if (permissions.length === 0) {
@@ -728,14 +779,16 @@ export class AutenticacaoService {
       );
     }
 
-    const userExists = await this.prisma.user.findUnique({
-      where: {
-        email,
-      },
-      select: {
-        id: true,
-      },
-    });
+    const userExists = email
+      ? await this.prisma.user.findUnique({
+          where: {
+            email,
+          },
+          select: {
+            id: true,
+          },
+        })
+      : null;
 
     if (userExists) {
       throw new ConflictException('Este e-mail ja possui uma conta no Contrx.');
@@ -743,26 +796,38 @@ export class AutenticacaoService {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const createdUser = await this.prisma.user.create({
-      data: {
-        companyId: user.companyId,
-        name,
-        email,
-        passwordHash,
-        role: data.role,
-        permissions,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        isActive: true,
-        permissions: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    const createdUser = await this.prisma.user
+      .create({
+        data: {
+          companyId: user.companyId,
+          name,
+          email,
+          emailLoginEnabled,
+          userLoginEnabled,
+          passwordHash,
+          role: data.role,
+          permissions,
+          username: data.username?.trim().toLowerCase() || null,
+          maxConcurrentSessions: data.maxConcurrentSessions ?? 1,
+          actionPermissions: validateActionPermissions(data.actionPermissions),
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          emailLoginEnabled: true,
+          userLoginEnabled: true,
+          role: true,
+          isActive: true,
+          permissions: true,
+          username: true,
+          maxConcurrentSessions: true,
+          actionPermissions: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      })
+      .catch(handleUserWriteError);
 
     return createdUser;
   }
@@ -784,92 +849,173 @@ export class AutenticacaoService {
       throw new BadRequestException('Selecione ao menos uma ferramenta.');
     }
 
-    const existingUser = await this.prisma.user.findFirst({
-      where: {
-        id: userId,
-        companyId: user.companyId,
-      },
-      select: {
-        id: true,
-        role: true,
-        isActive: true,
-      },
-    });
-
-    if (!existingUser) {
-      throw new NotFoundException('Usuario nao encontrado nesta empresa.');
-    }
-
-    if (existingUser.role === 'SYSTEM_OWNER') {
-      throw new BadRequestException(
-        'O dono do sistema nao pode ser editado neste cadastro.',
-      );
-    }
-
-    if (isOwnerRole(data.role) && existingUser.role !== 'OWNER') {
-      throw new BadRequestException(
-        'O perfil de dono da empresa nao pode ser atribuido por este fluxo.',
-      );
-    }
-
-    if (existingUser.role === 'OWNER' && !isOwnerRole(data.role)) {
-      throw new BadRequestException(
-        'O perfil de dono da empresa nao pode ser alterado por este fluxo.',
-      );
-    }
-
-    const currentUserIsCompanyAdmin =
-      existingUser.isActive &&
-      (existingUser.role === 'OWNER' || existingUser.role === 'ADMIN');
-    const nextUserIsCompanyAdmin =
-      data.isActive && (data.role === 'OWNER' || data.role === 'ADMIN');
-
-    if (currentUserIsCompanyAdmin && !nextUserIsCompanyAdmin) {
-      const activeCompanyAdminsCount = await this.prisma.user.count({
-        where: {
-          companyId: user.companyId,
-          isActive: true,
-          role: {
-            in: ['OWNER', 'ADMIN'],
+    return this.prisma
+      .$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM empresas WHERE id = ${user.companyId} FOR UPDATE`;
+        await this.sessions.lock(tx, userId, user.companyId);
+        const existingUser = await tx.user.findFirst({
+          where: {
+            id: userId,
+            companyId: user.companyId,
           },
-        },
-      });
+          select: {
+            id: true,
+            role: true,
+            isActive: true,
+            email: true,
+            emailLoginEnabled: true,
+            userLoginEnabled: true,
+            username: true,
+          },
+        });
 
-      if (activeCompanyAdminsCount <= 1) {
-        throw new BadRequestException(
-          'Mantenha pelo menos um administrador ativo na empresa.',
+        if (!existingUser) {
+          throw new NotFoundException('Usuario nao encontrado nesta empresa.');
+        }
+
+        const email =
+          data.email !== undefined
+            ? normalizeEmail(data.email || '') || null
+            : existingUser.email;
+        const username =
+          data.username !== undefined
+            ? data.username?.trim().toLowerCase() || null
+            : existingUser.username;
+        const emailLoginEnabled =
+          data.emailLoginEnabled ?? existingUser.emailLoginEnabled;
+        const userLoginEnabled =
+          data.userLoginEnabled ?? existingUser.userLoginEnabled;
+        validateLoginMethods(
+          email,
+          username,
+          emailLoginEnabled,
+          userLoginEnabled,
         );
-      }
-    }
 
-    const updatedUser = await this.prisma.user.update({
-      where: {
-        id: userId,
-      },
-      data: {
-        name,
-        role: data.role,
-        isActive: data.isActive,
-        permissions,
-        ...(password
-          ? {
-              passwordHash: await bcrypt.hash(password, 10),
-            }
-          : {}),
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        isActive: true,
-        permissions: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+        if (existingUser.role === 'SYSTEM_OWNER') {
+          throw new BadRequestException(
+            'O dono do sistema nao pode ser editado neste cadastro.',
+          );
+        }
 
-    return updatedUser;
+        if (isOwnerRole(data.role) && existingUser.role !== 'OWNER') {
+          throw new BadRequestException(
+            'O perfil de dono da empresa nao pode ser atribuido por este fluxo.',
+          );
+        }
+
+        if (existingUser.role === 'OWNER' && !isOwnerRole(data.role)) {
+          throw new BadRequestException(
+            'O perfil de dono da empresa nao pode ser alterado por este fluxo.',
+          );
+        }
+
+        const currentUserIsCompanyAdmin =
+          existingUser.isActive &&
+          (existingUser.role === 'OWNER' || existingUser.role === 'ADMIN');
+        const nextUserIsCompanyAdmin =
+          data.isActive && (data.role === 'OWNER' || data.role === 'ADMIN');
+
+        if (currentUserIsCompanyAdmin && !nextUserIsCompanyAdmin) {
+          const activeCompanyAdminsCount = await tx.user.count({
+            where: {
+              companyId: user.companyId,
+              isActive: true,
+              role: {
+                in: ['OWNER', 'ADMIN'],
+              },
+            },
+          });
+
+          if (activeCompanyAdminsCount <= 1) {
+            throw new BadRequestException(
+              'Mantenha pelo menos um administrador ativo na empresa.',
+            );
+          }
+        }
+
+        const updatedUser = await tx.user.update({
+          where: {
+            id: userId,
+          },
+          data: {
+            name,
+            email,
+            emailLoginEnabled,
+            userLoginEnabled,
+            role: data.role,
+            isActive: data.isActive,
+            permissions,
+            ...(data.username !== undefined
+              ? { username: data.username?.trim().toLowerCase() || null }
+              : {}),
+            ...(data.maxConcurrentSessions !== undefined
+              ? { maxConcurrentSessions: data.maxConcurrentSessions }
+              : {}),
+            ...(data.actionPermissions !== undefined
+              ? {
+                  actionPermissions: validateActionPermissions(
+                    data.actionPermissions,
+                  ),
+                }
+              : {}),
+            ...(password
+              ? {
+                  passwordHash: await bcrypt.hash(password, 10),
+                }
+              : {}),
+          },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            emailLoginEnabled: true,
+            userLoginEnabled: true,
+            role: true,
+            isActive: true,
+            permissions: true,
+            username: true,
+            maxConcurrentSessions: true,
+            actionPermissions: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        });
+
+        if (!data.isActive || password)
+          await tx.userSession.updateMany({
+            where: { userId, companyId: user.companyId, revokedAt: null },
+            data: {
+              revokedAt: new Date(),
+              reason: password ? 'PASSWORD_CHANGED' : 'USER_INACTIVE',
+              revokedBy: user.id,
+            },
+          });
+        if (data.maxConcurrentSessions !== undefined) {
+          await this.sessions.trim(
+            tx,
+            userId,
+            user.companyId,
+            data.maxConcurrentSessions,
+            'LIMIT_REDUCED',
+            user.id,
+          );
+          await tx.commercialHistory.create({
+            data: {
+              companyId: user.companyId,
+              userId: user.id,
+              action: 'SESSION_LIMIT_CHANGED',
+              description: 'Limite de acessos simultaneos alterado.',
+              metadata: {
+                targetUserId: userId,
+                limit: data.maxConcurrentSessions,
+              },
+            },
+          });
+        }
+        return updatedUser;
+      })
+      .catch(handleUserWriteError);
   }
 
   async changePassword(user: UsuarioAutenticado, data: AlterarSenhaDto) {
@@ -902,13 +1048,37 @@ export class AutenticacaoService {
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
 
-    await this.prisma.user.update({
-      where: {
-        id: existingUser.id,
-      },
-      data: {
-        passwordHash,
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await this.sessions.lock(tx, existingUser.id, user.companyId);
+      const current = await tx.user.findUniqueOrThrow({
+        where: { id: existingUser.id },
+      });
+      if (current.passwordHash !== existingUser.passwordHash)
+        throw new UnauthorizedException(
+          'Credenciais alteradas. Entre novamente.',
+        );
+      await tx.user.update({
+        where: {
+          id: existingUser.id,
+        },
+        data: {
+          passwordHash,
+        },
+      });
+
+      await tx.userSession.updateMany({
+        where: {
+          userId: user.id,
+          companyId: user.companyId,
+          revokedAt: null,
+          ...(user.sessionId ? { sessionId: { not: user.sessionId } } : {}),
+        },
+        data: {
+          revokedAt: new Date(),
+          reason: 'PASSWORD_CHANGED',
+          revokedBy: user.id,
+        },
+      });
     });
 
     return {

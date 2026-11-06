@@ -15,6 +15,7 @@ describe('ContasReceberService', () => {
     currentPaidAmount?: number;
   } = {}) {
     const tx = {
+      $queryRaw: jest.fn().mockResolvedValue([{ id: 'company-1' }]),
       pagamentoRecebido: {
         aggregate: jest.fn().mockResolvedValue({
           _sum: {
@@ -75,6 +76,72 @@ describe('ContasReceberService', () => {
       tx,
     };
   }
+
+  it('bloqueia alteração ou exclusão de recebível gerado por venda', async () => {
+    const { service, prisma } = createService();
+    jest.spyOn(prisma.contaReceber, 'findFirst').mockResolvedValue({
+      id: 'receivable-1',
+      amount: new Prisma.Decimal(1000),
+      salesOrderId: 'sale-1',
+    } as never);
+    await expect(service.remove('receivable-1', 'company-1')).rejects.toThrow(
+      'venda de origem',
+    );
+    await expect(
+      service.update('receivable-1', {}, 'company-1'),
+    ).rejects.toThrow('módulo Vendas');
+  });
+
+  it('não recebe uma parcela que foi cancelada junto com a venda', async () => {
+    const { service, prisma } = createService();
+    jest.spyOn(prisma.contaReceber, 'findFirst').mockResolvedValue(null);
+    await expect(
+      service.receivePayment(
+        'receivable-1',
+        { paidAt: '2026-11-05', method: 'PIX', amountPaid: 100 },
+        'company-1',
+      ),
+    ).rejects.toThrow('nao encontrada');
+    expect(prisma.contaReceber.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'receivable-1',
+          companyId: 'company-1',
+          cancelledAt: null,
+        },
+      }),
+    );
+  });
+
+  it('revalida o valor da parcela após aguardar uma devolução concorrente', async () => {
+    const { service, prisma, tx } = createService();
+    jest.spyOn(prisma.contaReceber, 'findFirst').mockResolvedValue({
+      id: 'receivable-1',
+      amount: new Prisma.Decimal(1000),
+      salesOrderId: 'sale-1',
+    } as never);
+    tx.contaReceber.findFirst.mockResolvedValue({
+      id: 'receivable-1',
+      amount: new Prisma.Decimal(100),
+      tenantName: 'Cliente',
+      propertyName: 'Venda',
+      payments: [],
+      contract: null,
+    });
+    await expect(
+      service.receivePayment(
+        'receivable-1',
+        {
+          paidAt: '2026-11-05',
+          method: 'PIX',
+          amountPaid: 150,
+          bankAccountId: 'account-1',
+        },
+        'company-1',
+      ),
+    ).rejects.toThrow('excede o saldo');
+    expect(tx.pagamentoRecebido.create).not.toHaveBeenCalled();
+  });
 
   it('mantem a conta pendente quando o recebimento e parcial', async () => {
     const { service, tx } = createService();

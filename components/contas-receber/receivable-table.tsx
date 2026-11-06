@@ -146,7 +146,7 @@ export function ReceivableTable({
   return (
     <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs">
+        <table className="w-full min-w-[860px] text-left text-xs">
           <thead className="border-b border-slate-100 bg-slate-50/75 text-[11px] font-black uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-400">
             <tr>
               <th className="py-4 pl-6 pr-2">
@@ -198,16 +198,15 @@ export function ReceivableTable({
                       {charge.tenantName || "Inquilino não informado"}
                     </div>
                     {tenantPhone && (
-                      <a
-                        href={getWhatsAppUrl(tenantPhone, charge)}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => onShareReport(charge)}
                         className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
-                        title="Enviar cobrança pelo WhatsApp"
+                        title="Cobrar pelo WhatsApp / Copiar Link"
                       >
                         <MessageCircle className="h-3 w-3" />
                         {tenantPhone}
-                      </a>
+                      </button>
                     )}
                   </td>
 
@@ -421,20 +420,19 @@ export function ReceivableTable({
               </>
             )}
 
-            {getTenantPhone(menuTarget.charge.tenantId) && (
-              <a
-                href={getWhatsAppUrl(
-                  getTenantPhone(menuTarget.charge.tenantId)!,
-                  menuTarget.charge
-                )}
-                target="_blank"
-                rel="noreferrer"
-                onClick={() => setMenuTarget(null)}
+            {menuTarget.charge.status !== "Paid" && (
+              <button
+                type="button"
+                onClick={() => {
+                  const target = menuTarget.charge;
+                  setMenuTarget(null);
+                  onShareReport(target);
+                }}
                 className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
               >
                 <MessageCircle className="h-3.5 w-3.5" />
                 Cobrar no WhatsApp
-              </a>
+              </button>
             )}
 
             <div className="my-1 border-t border-slate-100 dark:border-slate-700" />

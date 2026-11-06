@@ -14,7 +14,10 @@ import { CriarContaBancariaDto } from './dto/criar-conta-bancaria.dto';
 import { CriarMovimentacaoDto } from './dto/criar-movimentacao.dto';
 import { TransferenciaSaldoDto } from './dto/transferencia-saldo.dto';
 import { CompartilharExtratoDto } from './dto/compartilhar-extrato.dto';
-import { RequireToolPermission } from '../autenticacao/decorators/tool-permission.decorator';
+import {
+  RequireToolPermission,
+  RequireToolAction,
+} from '../autenticacao/decorators/tool-permission.decorator';
 import { CurrentUser } from '../autenticacao/decorators/usuario-atual.decorator';
 import { JwtGuardAutenticacao } from '../autenticacao/guards/jwt-autenticacao.guard';
 import { ToolPermissionGuard } from '../autenticacao/guards/tool-permission.guard';
@@ -26,6 +29,7 @@ import type { UsuarioAutenticado } from '../autenticacao/types/usuario-autentica
 export class BancosController {
   constructor(private readonly bancosService: BancosService) {}
 
+  @RequireToolAction('create')
   @Post('contas')
   createAccount(
     @Body() dto: CriarContaBancariaDto,
@@ -34,11 +38,13 @@ export class BancosController {
     return this.bancosService.createAccount(dto, user.companyId);
   }
 
+  @RequireToolAction('view')
   @Get('contas')
   findAllAccounts(@CurrentUser() user: UsuarioAutenticado) {
     return this.bancosService.findAllAccounts(user.companyId);
   }
 
+  @RequireToolAction('view')
   @Get('contas/:id')
   findOneAccount(
     @Param('id') id: string,
@@ -47,6 +53,7 @@ export class BancosController {
     return this.bancosService.findOneAccount(id, user.companyId);
   }
 
+  @RequireToolAction('edit')
   @Patch('contas/:id')
   updateAccount(
     @Param('id') id: string,
@@ -56,6 +63,7 @@ export class BancosController {
     return this.bancosService.updateAccount(id, dto, user.companyId);
   }
 
+  @RequireToolAction('delete')
   @Delete('contas/:id')
   removeAccount(
     @Param('id') id: string,
@@ -64,6 +72,7 @@ export class BancosController {
     return this.bancosService.removeAccount(id, user.companyId);
   }
 
+  @RequireToolAction('create')
   @Post('contas/:id/movimentacoes')
   createTransaction(
     @Param('id') bankAccountId: string,
@@ -77,6 +86,7 @@ export class BancosController {
     );
   }
 
+  @RequireToolAction('view')
   @Get('movimentacoes')
   findAllTransactions(
     @CurrentUser() user: UsuarioAutenticado,
@@ -106,6 +116,7 @@ export class BancosController {
     );
   }
 
+  @RequireToolAction('delete')
   @Delete('movimentacoes/:id')
   deleteTransaction(
     @Param('id') id: string,
@@ -114,6 +125,7 @@ export class BancosController {
     return this.bancosService.deleteTransaction(id, user.companyId);
   }
 
+  @RequireToolAction('special')
   @Patch('movimentacoes/:id/conciliar')
   reconcileTransaction(
     @Param('id') id: string,
@@ -127,6 +139,7 @@ export class BancosController {
     );
   }
 
+  @RequireToolAction('special')
   @Post('transferir')
   transfer(
     @Body() dto: TransferenciaSaldoDto,
@@ -135,6 +148,7 @@ export class BancosController {
     return this.bancosService.transfer(dto, user.companyId);
   }
 
+  @RequireToolAction('export')
   @Post('compartilhar')
   shareStatement(
     @Body() dto: CompartilharExtratoDto,

@@ -45,14 +45,38 @@ function getApiBaseUrl() {
 
 type RequestOptions = RequestInit & {
   auth?: boolean;
+  cacheTtlMs?: number;
+  skipCache?: boolean;
 };
+
+type ApiCacheEntry = {
+  data: any;
+  timestamp: number;
+  ttlMs: number;
+};
+
+const DEFAULT_CACHE_TTL_MS = 25_000; // 25 segundos de cache em memoria no cliente para dados de leitura
+const apiGetCache = new Map<string, ApiCacheEntry>();
+const inFlightRequests = new Map<string, Promise<any>>();
+
+export function invalidateApiCache(pattern?: string | RegExp): void {
+  if (!pattern) {
+    apiGetCache.clear();
+    return;
+  }
+  for (const key of Array.from(apiGetCache.keys())) {
+    if (typeof pattern === 'string' ? key.includes(pattern) : pattern.test(key)) {
+      apiGetCache.delete(key);
+    }
+  }
+}
 
 const LEGACY_STORAGE_PREFIX = ['ren', 'tix'].join('');
 const SESSION_REPLACED_EVENT = 'contrx-session-replaced';
 const SESSION_EXPIRED_NOTICE =
   'Sua sessao expirou ou nao e mais valida. Acesse novamente para continuar.';
 const SESSION_REPLACED_NOTICE =
-  'Sua sessão foi encerrada porque este usuário entrou no Contrx em outro dispositivo. Para proteger seus dados, mantemos apenas um acesso ativo por usuário.';
+  'Sua sessão foi encerrada porque o limite de acessos foi atingido em outro dispositivo.';
 const READ_RETRY_DELAY_MS = 600;
 const READ_RETRY_ATTEMPTS = 5;
 
@@ -137,9 +161,10 @@ async function fetchWithReadRetry(
   throw lastError;
 }
 
-export async function apiFetch<TResponse>(
+async function executeApiFetch<TResponse>(
   endpoint: string,
   options: RequestOptions = {},
+  token: string | null,
 ): Promise<TResponse> {
   const apiBaseUrl = getApiBaseUrl();
 
@@ -148,8 +173,6 @@ export async function apiFetch<TResponse>(
       'Backend nao configurado. Configure NEXT_PUBLIC_API_URL com a URL publica da API do Contrx.',
     );
   }
-
-  const token = getStoredToken();
 
   const headers = new Headers(options.headers);
 
@@ -184,8 +207,8 @@ export async function apiFetch<TResponse>(
     const errorMessage =
       errorBody?.message || `Request failed with status ${response.status}`;
 
-    if (response.status === 401 && options.auth !== false && token) {
-      const sessionMessage = isSessionReplacedMessage(String(errorMessage))
+    if (response.status === 401 && options.auth !== false && token && getStoredToken() === token) {
+      const sessionMessage = errorBody?.code === 'NEW_LOGIN' || (!errorBody?.code && isSessionReplacedMessage(String(errorMessage)))
         ? SESSION_REPLACED_NOTICE
         : SESSION_EXPIRED_NOTICE;
 
@@ -222,6 +245,67 @@ export async function apiFetch<TResponse>(
   } catch {
     return text as unknown as TResponse;
   }
+}
+
+export async function apiFetch<TResponse>(
+  endpoint: string,
+  options: RequestOptions = {},
+): Promise<TResponse> {
+  const method = String(options.method || 'GET').toUpperCase();
+  const isGet = method === 'GET' || method === 'HEAD';
+  const token = getStoredToken();
+
+  // Cache em memória para requisições GET
+  if (isGet && !options.skipCache && options.cacheTtlMs !== 0) {
+    const cacheKey = `${token || 'anon'}:${endpoint}`;
+    const cached = apiGetCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached && now - cached.timestamp < cached.ttlMs) {
+      try {
+        return JSON.parse(JSON.stringify(cached.data)) as TResponse;
+      } catch {
+        return cached.data as TResponse;
+      }
+    }
+
+    // Deduplicação de requisições em andamento idênticas
+    if (inFlightRequests.has(cacheKey)) {
+      return inFlightRequests.get(cacheKey) as Promise<TResponse>;
+    }
+
+    const fetchPromise = (async () => {
+      try {
+        const result = await executeApiFetch<TResponse>(endpoint, options, token);
+        if (result !== undefined) {
+          const ttl = typeof options.cacheTtlMs === 'number' ? options.cacheTtlMs : DEFAULT_CACHE_TTL_MS;
+          if (ttl > 0) {
+            apiGetCache.set(cacheKey, {
+              data: result,
+              timestamp: Date.now(),
+              ttlMs: ttl,
+            });
+          }
+        }
+        return result;
+      } finally {
+        inFlightRequests.delete(cacheKey);
+      }
+    })();
+
+    inFlightRequests.set(cacheKey, fetchPromise);
+    return fetchPromise;
+  }
+
+  // Execução de mutações ou requisições sem cache
+  const result = await executeApiFetch<TResponse>(endpoint, options, token);
+
+  // Invalidação automática do cache para mutações que alteram dados
+  if (!isGet) {
+    invalidateApiCache();
+  }
+
+  return result;
 }
 
 export function getMediaUrl(urlInput: any): string {

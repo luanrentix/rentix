@@ -71,7 +71,12 @@ async function bootstrap() {
   }
 
   if (typeof httpAdapter.set === 'function') {
-    httpAdapter.set('trust proxy', 1);
+    httpAdapter.set(
+      'trust proxy',
+      process.env.CONTRX_TRUST_PROXY?.split(',')
+        .map((value) => value.trim())
+        .filter(Boolean) || ['loopback', '172.16.0.0/12'],
+    );
   }
 
   app.use((request: Request, response: Response, next: NextFunction) => {
@@ -133,7 +138,7 @@ async function bootstrap() {
 
   const port = process.env.PORT ? Number(process.env.PORT) : 3001;
   console.log('Contrx Backend Running');
-  await app.listen(port);
+  await app.listen(port, process.env.HOST || '0.0.0.0');
 
   console.log('🚀 Contrx Backend Running');
 }

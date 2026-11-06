@@ -41,7 +41,7 @@ function getConfiguredCompanyPhone(settings: unknown) {
   return getStringValue(settings, 'phone');
 }
 
-import { randomUUID } from 'crypto';
+import { UserSessionsService } from '../autenticacao/user-sessions.service';
 import { JwtService } from '@nestjs/jwt';
 
 function toPrismaJson(value: unknown): Prisma.InputJsonValue {
@@ -53,6 +53,7 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly sessions: UserSessionsService,
   ) {}
 
   async getResumo() {
@@ -160,25 +161,15 @@ export class AdminService {
       );
     }
 
-    const sessionId = randomUUID();
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        activeSessionId: sessionId,
-      },
-    });
-
+    const issued = await this.sessions.issue(
+      user.id,
+      user.companyId,
+      user.passwordHash,
+      'Acesso de suporte autorizado',
+      { isImpersonated: true, impersonatedBy: currentUserId },
+    );
+    const token = issued.accessToken;
     const accessState = getCompanyAccessState(user.company);
-
-    const token = await this.jwtService.signAsync({
-      sub: user.id,
-      email: user.email,
-      companyId: user.companyId,
-      role: user.role,
-      sessionId,
-      isImpersonated: true,
-      impersonatedBy: currentUserId,
-    });
 
     await this.prisma.commercialHistory.create({
       data: {
@@ -203,6 +194,8 @@ export class AdminService {
         companyId: user.companyId,
         role: user.role,
         permissions: user.permissions,
+        actionPermissions: user.actionPermissions,
+        username: user.username,
         companyIsActive: user.company.isActive,
         subscriptionStatus: user.company.subscriptionStatus,
         trialStartsAt: user.company.trialStartsAt,
@@ -712,6 +705,14 @@ export class AdminService {
       }
 
       if (selectedModules.has('masterPanel')) {
+        // Existing explicit test-data reset deletes these users; their sessions
+        // must be removed in the same transaction to preserve referential integrity.
+        await tx.userSession.deleteMany({
+          where: {
+            companyId,
+            user: { id: { not: currentUserId }, role: { not: 'SYSTEM_OWNER' } },
+          },
+        });
         const deletedMasterPanelUsers = await tx.user.deleteMany({
           where: {
             companyId,

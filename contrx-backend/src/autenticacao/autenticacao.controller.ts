@@ -1,5 +1,6 @@
 import {
   Body,
+  Headers,
   Controller,
   Get,
   Param,
@@ -9,6 +10,9 @@ import {
   UseGuards,
 } from '@nestjs/common';
 
+import { UserSessionsService } from './user-sessions.service';
+import { LoginEmpresaUsuarioDto } from './dto/login-empresa-usuario.dto';
+import { PrismaService } from '../prisma/prisma.service';
 import { AutenticacaoService } from './autenticacao.service';
 
 import { RegisterDto } from './dto/registro.dto';
@@ -27,10 +31,15 @@ import { JwtGuardAutenticacao } from './guards/jwt-autenticacao.guard';
 import { RateLimitGuard } from './guards/rate-limit.guard';
 import type { UsuarioAutenticado } from './types/usuario-autenticado.type';
 import { SystemOwnerGuard } from '../admin/system-owner.guard';
+import { assertAccess } from './access-policy';
 
 @Controller('autenticacao')
 export class AutenticacaoController {
-  constructor(private readonly authService: AutenticacaoService) {}
+  constructor(
+    private readonly authService: AutenticacaoService,
+    private readonly sessions: UserSessionsService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get('verificar-email')
   @UseGuards(RateLimitGuard)
@@ -47,14 +56,72 @@ export class AutenticacaoController {
 
   @Post('login')
   @UseGuards(RateLimitGuard)
-  async login(@Body() data: LoginDto) {
-    return this.authService.login(data);
+  async login(@Body() data: LoginDto, @Headers('user-agent') device?: string) {
+    return this.authService.login(data, device);
+  }
+
+  @Post('login-usuario')
+  @UseGuards(RateLimitGuard)
+  loginCompanyUser(
+    @Body() data: LoginEmpresaUsuarioDto,
+    @Headers('user-agent') device?: string,
+  ) {
+    return this.authService.loginCompanyUser(data, device);
+  }
+
+  @Post('logout')
+  @UseGuards(JwtGuardAutenticacao)
+  logout(@CurrentUser() user: UsuarioAutenticado) {
+    return this.sessions.revoke(
+      user.companyId,
+      user.id,
+      user.id,
+      undefined,
+      user.sessionId,
+    );
+  }
+
+  @Get('empresa-codigo')
+  @UseGuards(JwtGuardAutenticacao, CompanyAdminGuard)
+  companyCode(@CurrentUser() user: UsuarioAutenticado) {
+    return this.prisma.company.findUnique({
+      where: { id: user.companyId },
+      select: { code: true, tradeName: true },
+    });
+  }
+
+  @Get('usuarios/:id/sessoes')
+  @UseGuards(JwtGuardAutenticacao, CompanyAdminGuard)
+  listSessions(
+    @CurrentUser() user: UsuarioAutenticado,
+    @Param('id') id: string,
+  ) {
+    return this.sessions.list(user.companyId, id);
+  }
+
+  @Post('usuarios/:id/sessoes/encerrar')
+  @UseGuards(JwtGuardAutenticacao, CompanyAdminGuard)
+  revokeAll(@CurrentUser() user: UsuarioAutenticado, @Param('id') id: string) {
+    return this.sessions.revoke(user.companyId, id, user.id);
+  }
+
+  @Post('usuarios/:id/sessoes/:sessionId/encerrar')
+  @UseGuards(JwtGuardAutenticacao, CompanyAdminGuard)
+  revokeOne(
+    @CurrentUser() user: UsuarioAutenticado,
+    @Param('id') id: string,
+    @Param('sessionId') sessionId: string,
+  ) {
+    return this.sessions.revoke(user.companyId, id, user.id, sessionId);
   }
 
   @Post('criar-conta')
   @UseGuards(RateLimitGuard)
-  async createAccount(@Body() data: CriarContaDto) {
-    return this.authService.createAccount(data);
+  async createAccount(
+    @Body() data: CriarContaDto,
+    @Headers('user-agent') device?: string,
+  ) {
+    return this.authService.createAccount(data, device);
   }
 
   @Post('recuperar-senha')
@@ -75,12 +142,29 @@ export class AutenticacaoController {
     return this.authService.findCompanyUsers(user);
   }
 
+  @Get('acesso/:module/:action')
+  @UseGuards(JwtGuardAutenticacao)
+  actionAccess(
+    @CurrentUser() user: UsuarioAutenticado,
+    @Param('module') module: string,
+    @Param('action') action: string,
+  ) {
+    assertAccess(user, module, action);
+    return { allowed: true };
+  }
+
   @Get('sessao')
   @UseGuards(JwtGuardAutenticacao)
   verifySession(@CurrentUser() user: UsuarioAutenticado) {
     return {
       active: true,
       userId: user.id,
+      user: {
+        name: user.name,
+        role: user.role,
+        permissions: user.permissions,
+        actionPermissions: user.actionPermissions,
+      },
     };
   }
 

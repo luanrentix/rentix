@@ -7,6 +7,7 @@ npm-debug.log
 .env.local
 .env.*.local
 backups
+_backups
 PROJETO_EXPORTADO.md
 PROJETO_COMPLETO.md
 *.log

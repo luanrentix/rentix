@@ -43,6 +43,8 @@ export type AuthUser = {
   email: string;
   role: string;
   permissions?: string[] | null;
+  username?: string | null;
+  actionPermissions?: string[] | null;
   companyIsActive?: boolean;
   subscriptionStatus?: 'TRIAL' | 'ACTIVE' | 'EXPIRED' | 'SUSPENDED' | 'CANCELED';
   trialStartsAt?: string | null;
@@ -121,8 +123,8 @@ export async function resetPasswordRequest(
   });
 }
 
-export async function verifySessionRequest(): Promise<{ active: boolean }> {
-  return apiFetch<{ active: boolean }>('/autenticacao/sessao');
+export async function verifySessionRequest(): Promise<{ active: boolean; user?: Pick<AuthUser, 'name' | 'role' | 'permissions' | 'actionPermissions'> }> {
+  return apiFetch('/autenticacao/sessao', { skipCache: true });
 }
 
 export async function checkEmailExistsRequest(
@@ -136,3 +138,8 @@ export async function checkEmailExistsRequest(
     },
   );
 }
+
+export async function loginCompanyUserRequest(companyCode: string, username: string, password: string): Promise<LoginResponse> {
+  return apiFetch('/autenticacao/login-usuario', { method: 'POST', auth: false, body: JSON.stringify({ companyCode, username, password }) });
+}
+export async function logoutRequest() { return apiFetch('/autenticacao/logout', { method: 'POST' }); }

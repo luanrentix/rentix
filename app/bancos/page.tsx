@@ -1,5 +1,6 @@
 "use client";
 
+import { canPrintLocally } from "@/services/authorize-action";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Plus,
@@ -741,6 +742,7 @@ export default function BancosPage() {
   const agenciaNumero = activeAccount && activeAccount.agency ? activeAccount.agency : "—";
 
   const handlePrint = () => {
+    if (!canPrintLocally("bank", setError)) return;
     const printContent = document.getElementById("print-layout-exclusivo")?.innerHTML;
     if (!printContent) return;
 

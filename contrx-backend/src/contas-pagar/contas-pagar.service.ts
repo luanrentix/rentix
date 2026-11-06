@@ -51,7 +51,7 @@ export class ContasPagarService {
     }
 
     return this.prisma.contaPagar.findMany({
-      where: { companyId },
+      where: { companyId, cancelledAt: null },
       orderBy: { dueDate: 'asc' },
       include: this.defaultInclude,
     });
@@ -59,7 +59,7 @@ export class ContasPagarService {
 
   async findOne(id: string, companyId: string) {
     const account = await this.prisma.contaPagar.findFirst({
-      where: { id, companyId },
+      where: { id, companyId, cancelledAt: null },
       include: this.defaultInclude,
     });
 
@@ -71,7 +71,11 @@ export class ContasPagarService {
   }
 
   async update(id: string, data: AtualizarContaPagarDto, companyId: string) {
-    await this.ensureExists(id, companyId);
+    const source = await this.ensureExists(id, companyId);
+    if (source.salesReturnId)
+      throw new BadRequestException(
+        'Este lançamento é gerenciado pela troca/devolução no módulo Vendas.',
+      );
 
     await this.validateCompany(companyId);
     await this.validatePerson(companyId, data.personId);
@@ -88,7 +92,11 @@ export class ContasPagarService {
   }
 
   async remove(id: string, companyId: string) {
-    await this.ensureExists(id, companyId);
+    const source = await this.ensureExists(id, companyId);
+    if (source.salesReturnId)
+      throw new BadRequestException(
+        'Este lançamento é gerenciado pela troca/devolução no módulo Vendas.',
+      );
 
     await this.prisma.pagamentoRealizado.deleteMany({
       where: { expenseId: id },
@@ -111,6 +119,10 @@ export class ContasPagarService {
     }
 
     const account = await this.ensureExists(id, companyId);
+    if (account.salesReturnId)
+      throw new BadRequestException(
+        'Este lançamento é gerenciado pela troca/devolução no módulo Vendas.',
+      );
 
     return this.prisma.$transaction(async (tx) => {
       const currentPaymentSummary = await tx.pagamentoRealizado.aggregate({
@@ -220,6 +232,10 @@ export class ContasPagarService {
     }
 
     const account = await this.ensureExists(id, companyId);
+    if (account.salesReturnId)
+      throw new BadRequestException(
+        'Este lançamento é gerenciado pela troca/devolução no módulo Vendas.',
+      );
     const settlementAmount = getFinancialSettlementAmount(
       data.amountPaid,
       data.discount || 0,
@@ -267,7 +283,11 @@ export class ContasPagarService {
   }
 
   async reversePayment(id: string, companyId: string) {
-    await this.ensureExists(id, companyId);
+    const source = await this.ensureExists(id, companyId);
+    if (source.salesReturnId)
+      throw new BadRequestException(
+        'Este lançamento é gerenciado pela troca/devolução no módulo Vendas.',
+      );
 
     return this.prisma.$transaction(async (tx) => {
       // Reverter/estornar lançamentos bancários vinculados a este pagamento
@@ -328,9 +348,10 @@ export class ContasPagarService {
 
   private async ensureExists(id: string, companyId: string) {
     const account = await this.prisma.contaPagar.findFirst({
-      where: { id, companyId },
+      where: { id, companyId, cancelledAt: null },
       select: {
         id: true,
+        salesReturnId: true,
         amount: true,
         personName: true,
         description: true,
@@ -490,8 +511,7 @@ export class ContasPagarService {
 
   private normalizeAccountData<
     TData extends
-      | CriarContaPagarDataWithCompany
-      | AtualizarContaPagarDataWithCompany,
+      CriarContaPagarDataWithCompany | AtualizarContaPagarDataWithCompany,
   >(data: TData) {
     return uppercaseFields(data, [
       'personName',

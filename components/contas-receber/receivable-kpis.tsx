@@ -116,7 +116,12 @@ export function ReceivableKpis({
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
       {cards.map((card) => {
         const Icon = card.icon;
-        const isSelected = selectedFilter === card.filter;
+        const isSelected =
+          card.label === "Total de Cobranças"
+            ? selectedFilter === "All"
+            : card.label === "Saldo Total a Receber"
+            ? false
+            : selectedFilter === card.filter;
 
         return (
           <button

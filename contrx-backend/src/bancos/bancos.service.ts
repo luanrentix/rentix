@@ -360,6 +360,29 @@ export class BancosService {
       throw new NotFoundException('Movimentação não encontrada.');
     }
 
+    if (transaction.referenceType === 'CASH_OPERATION')
+      throw new BadRequestException(
+        'Operações de caixa não podem ser excluídas. Registre uma operação de sentido contrário no Caixa, informando o motivo.',
+      );
+    if (
+      ['SALES_REVERSAL', 'SALES_RETURN'].includes(
+        transaction.referenceType || '',
+      ) ||
+      (transaction.referenceType === 'RECEIVABLE' &&
+        transaction.referenceId &&
+        (await this.prisma.contaReceber.findFirst({
+          where: {
+            id: transaction.referenceId,
+            companyId,
+            salesOrderId: { not: null },
+          },
+          select: { id: true },
+        })))
+    ) {
+      throw new BadRequestException(
+        'Este lançamento está vinculado a uma venda. Faça o estorno no módulo Vendas.',
+      );
+    }
     const amount = Number(transaction.amount);
 
     return this.prisma.$transaction(async (tx) => {

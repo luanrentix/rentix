@@ -2,7 +2,10 @@ import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 
 import { CriarPropertyMovementDto } from './dto/criar-property-movement.dto';
 import { PropertyMovementsService } from './property-movements.service';
-import { RequireToolPermission } from '../autenticacao/decorators/tool-permission.decorator';
+import {
+  RequireToolPermission,
+  RequireToolAction,
+} from '../autenticacao/decorators/tool-permission.decorator';
 import { CurrentUser } from '../autenticacao/decorators/usuario-atual.decorator';
 import { JwtGuardAutenticacao } from '../autenticacao/guards/jwt-autenticacao.guard';
 import { ToolPermissionGuard } from '../autenticacao/guards/tool-permission.guard';
@@ -16,6 +19,7 @@ export class PropertyMovementsController {
     private readonly propertyMovementsService: PropertyMovementsService,
   ) {}
 
+  @RequireToolAction('create')
   @Post()
   create(
     @Body() data: CriarPropertyMovementDto,
@@ -24,6 +28,7 @@ export class PropertyMovementsController {
     return this.propertyMovementsService.create(data, user.companyId);
   }
 
+  @RequireToolAction('view')
   @Get()
   findAll(
     @CurrentUser() user: UsuarioAutenticado,

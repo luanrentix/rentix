@@ -69,12 +69,12 @@ export default function ContasReceberPage() {
 
   // Filtros e Seleção em Lote
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("Pending");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const [selectedTenantId, setSelectedTenantId] = useState("all");
   const [selectedPropertyId, setSelectedPropertyId] = useState("all");
-  const [periodShortcut, setPeriodShortcut] = useState<PeriodShortcut>("CurrentMonth");
-  const [startDate, setStartDate] = useState(getStartOfCurrentMonth());
-  const [endDate, setEndDate] = useState(getEndOfCurrentMonth());
+  const [periodShortcut, setPeriodShortcut] = useState<PeriodShortcut>("All");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
@@ -332,7 +332,7 @@ export default function ContasReceberPage() {
 
   function handleResetFilters() {
     setSearch("");
-    setStatusFilter("Pending");
+    setStatusFilter("All");
     setSelectedTenantId("all");
     setSelectedPropertyId("all");
     handlePeriodShortcutChange("All");
@@ -341,10 +341,12 @@ export default function ContasReceberPage() {
 
   const hasActiveFilters =
     Boolean(search) ||
-    statusFilter !== "Pending" ||
+    statusFilter !== "All" ||
     selectedTenantId !== "all" ||
     selectedPropertyId !== "all" ||
-    periodShortcut !== "CurrentMonth";
+    periodShortcut !== "All" ||
+    Boolean(startDate) ||
+    Boolean(endDate);
 
   // Filtragem de cobranças
   const filteredCharges = useMemo(() => {

@@ -87,7 +87,10 @@ function getAuthErrorPresentation(
 }
 
 export default function LoginPage() {
-  const { login, isLoading } = useAuth();
+  const { login, loginCompanyUser, isLoading } = useAuth();
+  const [loginMode, setLoginMode] = useState<'admin' | 'user'>('admin');
+  const [companyCode, setCompanyCode] = useState('');
+  const [username, setUsername] = useState('');
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -125,6 +128,20 @@ export default function LoginPage() {
 
   useEffect(() => {
     const legacyStoragePrefix = ["ren", "tix"].join("");
+    try {
+      const storedCompanyLogin = localStorage.getItem("contrx_last_company_login");
+      const savedCompanyLogin = storedCompanyLogin ? JSON.parse(storedCompanyLogin) : null;
+      const savedMode = localStorage.getItem("contrx_last_login_mode");
+      if (savedCompanyLogin && typeof savedCompanyLogin.companyCode === "string"
+        && /^CTX-[A-Z0-9]{5}$/.test(savedCompanyLogin.companyCode)
+        && typeof savedCompanyLogin.username === "string" && savedCompanyLogin.username.trim()) {
+        setCompanyCode(savedCompanyLogin.companyCode);
+        setUsername(savedCompanyLogin.username);
+        if (savedMode !== "admin") setLoginMode("user");
+      }
+    } catch {
+      // Preferencias indisponiveis nao impedem o preenchimento manual.
+    }
     const savedEmail =
       localStorage.getItem("contrx_remember_email") ||
       localStorage.getItem(`${legacyStoragePrefix}_remember_email`);
@@ -166,8 +183,8 @@ export default function LoginPage() {
       return;
     }
 
-    if (!email.trim() || !password) {
-      showAuthError("Dados incompletos", "Informe e-mail e senha para entrar.");
+    if (!password || (loginMode === 'admin' ? !email.trim() : !companyCode.trim() || !username.trim())) {
+      showAuthError("Dados incompletos", "Preencha os dados de acesso e a senha.");
       return;
     }
 
@@ -175,13 +192,28 @@ export default function LoginPage() {
       setIsSubmitting(true);
       setAuthError(false);
 
-      await login(email.trim(), password);
+      if (loginMode === 'admin') await login(email.trim(), password);
+      else await loginCompanyUser(companyCode.trim(), username.trim(), password);
 
-      if (remember) {
-        localStorage.setItem("contrx_remember_email", email.trim());
-      } else {
-        localStorage.removeItem("contrx_remember_email");
-        localStorage.removeItem(`${["ren", "tix"].join("")}_remember_email`);
+      try {
+        if (loginMode === "user") {
+          localStorage.setItem("contrx_last_company_login", JSON.stringify({
+            companyCode: companyCode.trim().toUpperCase(),
+            username: username.trim(),
+          }));
+        }
+        localStorage.setItem("contrx_last_login_mode", loginMode);
+      } catch {
+        // Salvar a preferencia e opcional; a autenticacao ja foi concluida.
+      }
+
+      if (loginMode === "admin") {
+        if (remember) {
+          localStorage.setItem("contrx_remember_email", email.trim());
+        } else {
+          localStorage.removeItem("contrx_remember_email");
+          localStorage.removeItem(`${["ren", "tix"].join("")}_remember_email`);
+        }
       }
     } catch (error) {
       const authErrorPresentation = getAuthErrorPresentation(
@@ -320,6 +352,10 @@ export default function LoginPage() {
               </p>
 
               <div className="mt-5 space-y-3 sm:mt-7 sm:space-y-4">
+                <div className="grid grid-cols-2 gap-1 rounded-2xl bg-slate-100 p-1" role="group" aria-label="Tipo de acesso">
+                  {(['admin', 'user'] as const).map(mode => <button type="button" key={mode} aria-pressed={loginMode === mode} onClick={() => { setLoginMode(mode); setAuthError(false); }} className={`rounded-xl px-2 py-3 text-sm font-bold ${loginMode === mode ? 'bg-white text-[#ff4b00] shadow-sm' : 'text-slate-500'}`}>{mode === 'admin' ? 'Acesso administrativo' : 'Acesso de usuário'}</button>)}
+                </div>
+                {loginMode === 'admin' ? (
                 <AuthInput
                   icon={<Mail size={20} />}
                   type="email"
@@ -329,6 +365,12 @@ export default function LoginPage() {
                   autoComplete="username"
                   onEnter={handleLogin}
                 />
+                ) : <>
+                  <label className="block text-xs font-bold text-slate-600">Código da empresa</label>
+                  <AuthInput icon={<Mail size={20} />} type="text" placeholder="Código informado pela empresa" value={companyCode} onChange={value => setCompanyCode(value.toUpperCase())} autoComplete="organization" onEnter={handleLogin} />
+                  <label className="block text-xs font-bold text-slate-600">Usuário</label>
+                  <AuthInput icon={<Mail size={20} />} type="text" placeholder="Seu usuário ou e-mail" value={username} onChange={setUsername} autoComplete="username" onEnter={handleLogin} />
+                </>}
 
                 <div className="flex h-[54px] items-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_3px_10px_rgba(15,23,42,0.10)] sm:h-[58px]">
                   <div className="flex h-full w-[58px] items-center justify-center text-slate-600">
@@ -357,7 +399,7 @@ export default function LoginPage() {
                   </button>
                 </div>
 
-                <label className="flex w-fit items-center gap-2">
+                {loginMode === 'admin' && <label className="flex w-fit items-center gap-2">
                   <input
                     type="checkbox"
                     checked={remember}
@@ -367,7 +409,7 @@ export default function LoginPage() {
                   <span className="text-sm font-bold text-slate-600">
                     Lembrar e-mail
                   </span>
-                </label>
+                </label>}
 
                 <button
                   type="button"

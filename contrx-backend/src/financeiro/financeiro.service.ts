@@ -255,7 +255,9 @@ export class FinanceiroService {
   ): Prisma.ContaReceberWhereInput {
     if (accountingMode === 'accrual') {
       const range = this.buildPrismaDateRange(dateRange);
-      return range ? { companyId, dueDate: range } : { companyId };
+      return range
+        ? { companyId, cancelledAt: null, dueDate: range }
+        : { companyId, cancelledAt: null };
     }
 
     const periodFilter = this.buildPeriodFilter(dateRange, 'payments');
@@ -263,9 +265,10 @@ export class FinanceiroService {
     return periodFilter
       ? {
           companyId,
+          cancelledAt: null,
           OR: periodFilter,
         }
-      : { companyId };
+      : { companyId, cancelledAt: null };
   }
 
   private buildPayableWhere(
@@ -275,7 +278,9 @@ export class FinanceiroService {
   ): Prisma.ContaPagarWhereInput {
     if (accountingMode === 'accrual') {
       const range = this.buildPrismaDateRange(dateRange);
-      return range ? { companyId, dueDate: range } : { companyId };
+      return range
+        ? { companyId, cancelledAt: null, dueDate: range }
+        : { companyId, cancelledAt: null };
     }
 
     const periodFilter = this.buildPeriodFilter(dateRange, 'payments');
@@ -283,9 +288,10 @@ export class FinanceiroService {
     return periodFilter
       ? {
           companyId,
+          cancelledAt: null,
           OR: periodFilter,
         }
-      : { companyId };
+      : { companyId, cancelledAt: null };
   }
 
   private buildPeriodFilter(

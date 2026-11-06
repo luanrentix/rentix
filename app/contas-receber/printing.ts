@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { canPrintLocally } from "@/services/authorize-action";
 import QRCode from "qrcode";
 
 export interface Charge {
@@ -277,6 +278,7 @@ export async function generatePaymentCarnet(params: {
   renderPaymentBookletInstructions?: (content: string) => string;
   setChargeFormError?: (msg: string) => void;
 }) {
+  if (!canPrintLocally('accountsReceivable', params.setChargeFormError || console.warn)) return;
   const carnetCharges = params.carnetCharges || params.charges || [];
   const companySettings = params.companySettings || {};
   const paymentBookletInstructions = params.paymentBookletInstructions || "";
@@ -582,6 +584,7 @@ export function openAccountsReceivableReport(params: {
   setReportFormError: (msg: string) => void;
   onShare?: () => Promise<any>;
 }) {
+  if (!canPrintLocally('accountsReceivable', params.setReportFormError)) return;
   const {
     shouldPrint,
     reportDueFilter,
@@ -872,6 +875,7 @@ export function generatePaymentReceiptBatch(params: {
   getPaymentMethodLabel: (method: any) => string;
   setPaymentFormError: (msg: string) => void;
 }) {
+  if (!canPrintLocally('accountsReceivable', params.setPaymentFormError)) return;
   const { receiptItems, companySettings, getPaymentMethodLabel, setPaymentFormError } = params;
 
   if (receiptItems.length === 0) return;
@@ -1046,6 +1050,7 @@ export function generatePaymentReceipt(params: {
   getPaymentMethodLabel: (method: any) => string;
   setPaymentFormError: (msg: string) => void;
 }) {
+  if (!canPrintLocally('accountsReceivable', params.setPaymentFormError)) return;
   const { charge, paymentRecord, companySettings, getPaymentMethodLabel, setPaymentFormError } = params;
 
   const receiptWindow = window.open(

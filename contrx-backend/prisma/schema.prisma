@@ -42,6 +42,7 @@ enum PersonStatus {
 
 model Company {
   id          String  @id @default(uuid())
+  code        String  @unique @default(dbgenerated()) @map("codigo_empresa")
   tradeName   String  @map("nome_fantasia")
   companyName String? @map("razao_social")
   document    String? @map("documento")
@@ -72,6 +73,18 @@ model Company {
   sharedBankStatements SharedBankStatement[]
   systemFiles        SystemFile[]
   errorLogs          SystemErrorLog[]
+  salesProducts      SalesProduct[]
+  salesOrders        SalesOrder[]
+  salesCustomers     SalesCustomer[]
+  salesSellers       SalesSeller[]
+  salesCreditAdjustments SalesCreditAdjustment[]
+  salesRefunds SalesRefund[]
+  salesRefundSettlements SalesRefundSettlement[]
+  salesSuppliers    SalesSupplier[]
+  salesProductCategories SalesProductCategory[]
+  salesProductBrands SalesProductBrand[]
+  salesProductUnits SalesProductUnit[]
+  salesProductGrids SalesProductGrid[]
 
   @@map("empresas")
 }
@@ -112,11 +125,414 @@ model AppSettings {
   @@map("configuracoes_app")
 }
 
+model SalesProduct {
+  id           String   @id @default(uuid())
+  companyId    String   @map("empresa_id")
+  isGridParent Boolean @default(false) @map("matriz_grade")
+  parentProductId String? @map("produto_grade_id")
+  gridValue String? @map("valor_grade")
+  gridId String? @map("grade_id")
+  grid SalesProductGrid? @relation(fields: [gridId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: Cascade)
+  parentProduct SalesProduct? @relation("SalesGridProducts", fields: [parentProductId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: Cascade)
+  gridChildren SalesProduct[] @relation("SalesGridProducts")
+  name         String   @map("nome")
+  sku          String?  @map("codigo")
+  price        Decimal  @db.Decimal(10, 2) @map("preco")
+  allowDiscount Boolean @default(true) @map("permite_desconto")
+  allowAddition Boolean @default(true) @map("permite_acrescimo")
+  priceHistory SalesProductPriceHistory[]
+  purchaseCost Decimal  @default(0) @db.Decimal(10, 2) @map("custo_compra")
+  additionalCost Decimal @default(0) @db.Decimal(10, 2) @map("custo_adicional")
+  markupMultiplier Decimal @default(1) @db.Decimal(7, 2) @map("markup_multiplicador")
+  promotionalPrice Decimal? @db.Decimal(10, 2) @map("preco_promocional")
+  reference    String?  @map("referencia")
+  barcode      String?  @map("codigo_barras")
+  factoryCode  String?  @map("codigo_fabrica")
+  unit         String   @default("UN") @map("unidade")
+  kind         String   @default("PRODUTO") @map("tipo")
+  description  String?  @map("descricao")
+  showInSale   Boolean  @default(true) @map("mostrar_venda")
+  category     String?  @map("categoria")
+  subcategory  String?  @map("subcategoria")
+  brand        String?  @map("marca")
+  productType  String   @default("REVENDA") @map("tipo_produto")
+  internalNote String?  @map("observacao_interna")
+  stock        Decimal  @default(0) @db.Decimal(12, 3) @map("estoque")
+  reservedStock Decimal @default(0) @db.Decimal(12, 3) @map("estoque_reservado")
+  minimumStock Decimal  @default(0) @db.Decimal(12, 3) @map("estoque_minimo")
+  manageStock  Boolean  @default(false) @map("controlar_estoque")
+  variations   String?  @map("variacoes")
+  inheritGridPrice Boolean @default(true) @map("herdar_preco_grade")
+  commission   Decimal  @default(0) @db.Decimal(5, 2) @map("comissao")
+  commissionEnabled Boolean @default(false) @map("gerar_comissao")
+  commissionType String @default("VENDEDOR") @map("tipo_comissao")
+  commissionRule String @default("PADRAO") @map("regra_comissao")
+  supplierName String?  @map("fornecedor")
+  supplierId   String?  @map("fornecedor_id")
+  supplier SalesSupplier? @relation(fields: [supplierId, companyId], references: [id, companyId])
+  stockMovements SalesStockMovement[]
+  variants SalesProductVariant[]
+  active       Boolean  @default(true) @map("ativo")
+  createdAt    DateTime @default(now()) @map("criado_em")
+  updatedAt    DateTime @updatedAt @map("atualizado_em")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, sku])
+  @@unique([id, companyId])
+  @@unique([companyId, parentProductId, gridValue])
+  @@index([companyId, parentProductId, active])
+  @@index([companyId, active])
+  @@map("vendas_produtos")
+}
+
+model SalesSupplier {
+  id        String   @id @default(uuid())
+  code      Int      @unique @default(autoincrement()) @map("codigo")
+  companyId String   @map("empresa_id")
+  name      String   @map("nome")
+  document  String?  @map("documento")
+  contact   String?  @map("contato")
+  phone     String?  @map("telefone")
+  email     String?  @map("email")
+  address   String?  @map("endereco")
+  notes     String?  @map("observacoes")
+  active    Boolean  @default(true) @map("ativo")
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  products SalesProduct[]
+
+  @@unique([id, companyId])
+  @@unique([companyId, document])
+  @@index([companyId, active, name])
+  @@map("vendas_fornecedores")
+}
+
+model SalesProductPriceHistory {
+  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  companyId String @map("empresa_id")
+  productId String @map("produto_id")
+  actorId String? @map("usuario_id")
+  actorName String? @map("usuario_nome")
+  previous Json? @map("valores_anteriores")
+  current Json @map("valores_atuais")
+  createdAt DateTime @default(now()) @map("criado_em")
+  product SalesProduct @relation(fields: [productId, companyId], references: [id, companyId], onDelete: Cascade)
+  @@index([companyId, productId, createdAt], map: "vendas_precos_empresa_produto_data_idx")
+  @@map("vendas_produtos_historico_precos")
+}
+
+model SalesProductVariant {
+  id String @id @default(uuid())
+  companyId String @map("empresa_id")
+  productId String @map("produto_id")
+  name String @map("nome")
+  barcode String? @map("codigo_barras")
+  price Decimal? @db.Decimal(10, 2) @map("preco")
+  stock Decimal @default(0) @db.Decimal(12, 3) @map("estoque")
+  reservedStock Decimal @default(0) @db.Decimal(12, 3) @map("estoque_reservado")
+  active Boolean @default(true) @map("ativo")
+  product SalesProduct @relation(fields: [productId], references: [id])
+  @@unique([companyId, barcode])
+  @@unique([productId, name])
+  @@index([companyId, productId, active])
+  @@map("vendas_variacoes_produtos")
+}
+
+model SalesProductCategory {
+  id        String   @id @default(uuid())
+  companyId String   @map("empresa_id")
+  name      String   @map("nome")
+  active    Boolean  @default(true) @map("ativo")
+  createdAt DateTime @default(now()) @map("criado_em")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, name])
+  @@index([companyId, active, name])
+  @@map("vendas_categorias_produtos")
+}
+
+model SalesProductUnit {
+  id        String   @id @default(uuid())
+  companyId String   @map("empresa_id")
+  name      String   @db.VarChar(12) @map("nome")
+  active    Boolean  @default(true) @map("ativo")
+  createdAt DateTime @default(now()) @map("criado_em")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, name])
+  @@index([companyId, active, name])
+  @@map("vendas_unidades_produtos")
+}
+
+model SalesProductBrand {
+  id        String   @id @default(uuid())
+  companyId String   @map("empresa_id")
+  name      String   @map("nome")
+  active    Boolean  @default(true) @map("ativo")
+  createdAt DateTime @default(now()) @map("criado_em")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, name])
+  @@index([companyId, active, name])
+  @@map("vendas_marcas_produtos")
+}
+
+model SalesProductGrid {
+  id        String   @id @default(uuid())
+  companyId String   @map("empresa_id")
+  name      String   @map("nome")
+  values    String   @map("valores")
+  active    Boolean  @default(true) @map("ativo")
+  createdAt DateTime @default(now()) @map("criado_em")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  products SalesProduct[]
+
+  @@unique([id, companyId])
+
+  @@unique([companyId, name])
+  @@index([companyId, active, name])
+  @@map("vendas_grades_produtos")
+}
+
+model SalesOrder {
+  id            String   @id @default(uuid())
+  number        Int      @unique @default(autoincrement()) @map("numero")
+  companyId     String   @map("empresa_id")
+  sellerId      String?  @map("vendedor_id")
+  customerId    String?  @map("cliente_id")
+  sellerName    String   @map("vendedor")
+  customerName  String   @map("cliente")
+  saleType      String   @default("VENDA") @map("tipo_venda")
+  items          Json     @map("itens")
+  subtotal       Decimal  @db.Decimal(10, 2) @map("subtotal")
+  discount       Decimal  @default(0) @db.Decimal(10, 2) @map("desconto")
+  addition       Decimal  @default(0) @db.Decimal(10, 2) @map("acrescimo")
+  total          Decimal  @db.Decimal(10, 2) @map("total")
+  paymentMethod String   @map("forma_pagamento")
+  paymentDetails Json?   @map("detalhes_pagamento")
+  status         String   @default("CONCLUIDA") @map("status")
+  stockApplied   Boolean  @default(false) @map("estoque_aplicado")
+  stockReserved  Boolean  @default(false) @map("estoque_reservado")
+  version        Int      @default(1) @map("versao")
+  requestId      String?  @map("requisicao_id")
+  bankAccountId  String?  @map("conta_bancaria_id")
+  commissionTotal Decimal @default(0) @db.Decimal(10, 2) @map("total_comissao")
+  originalOrderId String? @map("venda_original_id")
+  returnedItems Json? @map("itens_devolvidos")
+  returnTotal Decimal @default(0) @db.Decimal(10, 2) @map("total_devolvido")
+  debtOffset Decimal @default(0) @db.Decimal(10, 2) @map("divida_compensada")
+  returnDisposition String? @map("destino_devolucao")
+  returnAdjustments Json? @map("ajustes_devolucao")
+  installments Int @default(1) @map("parcelas")
+  completedAt DateTime? @map("concluido_em")
+  notes          String?  @map("observacoes")
+  createdAt      DateTime @default(now()) @map("criado_em")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  seller  SalesSeller? @relation(fields: [sellerId], references: [id], onDelete: SetNull)
+  customer SalesCustomer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  receivables ContaReceber[]
+  events SalesOrderEvent[]
+  originalOrder SalesOrder? @relation("SalesReturns", fields: [originalOrderId], references: [id])
+  returns SalesOrder[] @relation("SalesReturns")
+  returnPayables ContaPagar[]
+  creditAdjustments SalesCreditAdjustment[]
+  refunds SalesRefund[]
+
+  @@unique([companyId, requestId])
+  @@index([companyId, originalOrderId])
+  @@index([companyId, createdAt])
+  @@map("vendas_pedidos")
+}
+
+model SalesOrderEvent {
+  id String @id @default(uuid())
+  orderId String @map("venda_id")
+  action String @map("acao")
+  details Json @map("detalhes")
+  createdAt DateTime @default(now()) @map("criado_em")
+  order SalesOrder @relation(fields: [orderId], references: [id])
+  @@index([orderId, createdAt])
+  @@map("vendas_eventos")
+}
+
+model SalesStockMovement {
+  id String @id @default(uuid())
+  companyId String @map("empresa_id")
+  productId String @map("produto_id")
+  stockChange Decimal @db.Decimal(12, 3) @map("variacao_estoque")
+  reservedChange Decimal @db.Decimal(12, 3) @map("variacao_reserva")
+  reason String @map("motivo")
+  createdAt DateTime @default(now()) @map("criado_em")
+  product SalesProduct @relation(fields: [productId], references: [id])
+  @@index([companyId, productId, createdAt])
+  @@map("vendas_movimentos_estoque")
+}
+
+model SalesCustomer {
+  id           String   @id @default(uuid())
+  code         Int      @unique @default(autoincrement()) @map("codigo")
+  companyId    String   @map("empresa_id")
+  personType   String   @default("INDIVIDUAL") @map("tipo_pessoa")
+  name         String   @map("nome")
+  referenceOnly Boolean @default(false) @map("apenas_referencia")
+  alias        String?  @map("apelido_fantasia")
+  document     String?  @map("documento")
+  identityNumber String? @map("rg")
+  issuingAuthority String? @map("orgao_expedidor")
+  birthDate    DateTime? @map("data_nascimento") @db.Date
+  sex          String?  @map("sexo")
+  email        String?  @map("email")
+  phone        String?  @map("telefone")
+  phone2       String?  @map("telefone_2")
+  zipCode      String?  @map("cep")
+  address      String?  @map("endereco")
+  number       String?  @map("numero")
+  complement   String?  @map("complemento")
+  neighborhood String?  @map("bairro")
+  city         String?  @map("cidade")
+  state        String?  @map("uf")
+  notes        String?  @map("observacoes")
+  creditLimit  Decimal  @default(0) @map("limite_credito") @db.Decimal(10, 2)
+  creditDays   Int?     @map("prazo_crediario")
+  creditBlocked Boolean @default(false) @map("crediario_bloqueado")
+  active       Boolean  @default(true) @map("ativo")
+  isSystem     Boolean  @default(false) @map("sistema")
+  systemKey    String?  @map("chave_sistema")
+  createdAt    DateTime @default(now()) @map("criado_em")
+  updatedAt    DateTime @updatedAt @map("atualizado_em")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  orders  SalesOrder[]
+  credits SalesCustomerCredit[]
+  creditAdjustments SalesCreditAdjustment[]
+
+  @@unique([companyId, document])
+  @@unique([companyId, systemKey])
+  @@index([companyId, active, name])
+  @@map("vendas_clientes")
+}
+
+model SalesCustomerCredit {
+  id String @id @default(uuid())
+  companyId String @map("empresa_id")
+  customerId String @map("cliente_id")
+  orderId String @map("venda_id")
+  amount Decimal @db.Decimal(10, 2) @map("valor")
+  reason String @map("motivo")
+  reversedAt DateTime? @map("estornado_em")
+  createdAt DateTime @default(now()) @map("criado_em")
+  customer SalesCustomer @relation(fields: [customerId], references: [id])
+  @@index([companyId, customerId, reversedAt])
+  @@index([orderId])
+  @@map("vendas_creditos_clientes")
+}
+
+// Estruturas complementares de Confecções; sem alteração das tabelas financeiras.
+model SalesCreditAdjustment {
+  id String @id @default(uuid())
+  companyId String @map("empresa_id")
+  customerId String @map("cliente_id")
+  orderId String? @map("venda_id")
+  amount Decimal @db.Decimal(10, 2) @map("valor")
+  reason String @map("motivo")
+  actorId String @map("usuario_id")
+  requestId String @map("requisicao_id")
+  createdAt DateTime @default(now()) @map("criado_em")
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  customer SalesCustomer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  order SalesOrder? @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  @@unique([companyId, requestId])
+  @@index([companyId, customerId, createdAt])
+  @@map("vendas_ajustes_credito")
+}
+
+model SalesRefund {
+  id String @id @default(uuid())
+  companyId String @map("empresa_id")
+  orderId String @map("venda_id")
+  transactionId String @unique @map("transacao_id")
+  amount Decimal @db.Decimal(10, 2) @map("valor")
+  settledAmount Decimal @default(0) @db.Decimal(10, 2) @map("valor_liquidado")
+  actorId String? @map("usuario_id")
+  reason String @map("motivo")
+  createdAt DateTime @default(now()) @map("criado_em")
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  order SalesOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  transaction BankTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  actor User? @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  settlements SalesRefundSettlement[]
+  @@index([companyId, orderId])
+  @@map("vendas_reembolsos")
+}
+
+model SalesRefundSettlement {
+  id String @id @default(uuid())
+  companyId String @map("empresa_id")
+  refundId String @map("reembolso_id")
+  amount Decimal @db.Decimal(10, 2) @map("valor")
+  disposition String @map("destino")
+  actorId String @map("usuario_id")
+  reason String @map("motivo")
+  requestId String @map("requisicao_id")
+  createdAt DateTime @default(now()) @map("criado_em")
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  refund SalesRefund @relation(fields: [refundId], references: [id], onDelete: Restrict)
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  @@unique([companyId, requestId])
+  @@index([companyId, refundId])
+  @@map("vendas_liquidacoes_reembolso")
+}
+
+model SalesSeller {
+  personType String @default("INDIVIDUAL") @map("tipo_pessoa")
+  alias String? @map("nome_fantasia")
+  identityNumber String? @map("identidade")
+  issuingAuthority String? @map("orgao_emissor")
+  birthDate String? @map("data_nascimento")
+  sex String? @map("sexo")
+  phone2 String? @map("telefone_secundario")
+  zipCode String? @map("cep")
+  address String? @map("endereco")
+  number String? @map("numero")
+  complement String? @map("complemento")
+  neighborhood String? @map("bairro")
+  city String? @map("cidade")
+  state String? @map("uf")
+  notes String? @map("observacoes")
+  id          String   @id @default(uuid())
+  code        Int      @unique @default(autoincrement()) @map("codigo")
+  companyId   String   @map("empresa_id")
+  name        String   @map("nome")
+  document    String?  @map("cpf")
+  phone       String?  @map("telefone")
+  email       String?  @map("email")
+  commission  Decimal  @default(0) @map("comissao") @db.Decimal(5, 2)
+  active      Boolean  @default(true) @map("ativo")
+  createdAt   DateTime @default(now()) @map("criado_em")
+  updatedAt   DateTime @updatedAt @map("atualizado_em")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  orders  SalesOrder[]
+
+  @@unique([companyId, document])
+  @@index([companyId, active, name])
+  @@map("vendas_vendedores")
+}
+
 model User {
   id           String @id @default(uuid())
   companyId    String @map("empresa_id")
   name         String @map("nome")
-  email        String @unique
+  email        String? @unique
+  emailLoginEnabled Boolean @default(true) @map("login_email_habilitado")
+  userLoginEnabled Boolean @default(true) @map("login_usuario_habilitado")
+  username     String? @map("usuario_login")
+  maxConcurrentSessions Int @default(1) @map("limite_sessoes")
+  actionPermissions Json? @map("permissoes_acoes")
   passwordHash String @map("senha_hash")
 
   role     UserRole @default(USER) @map("papel")
@@ -131,9 +547,32 @@ model User {
   updatedAt DateTime @updatedAt @map("atualizado_em")
 
   company Company @relation(fields: [companyId], references: [id])
+  sessions UserSession[]
   supportTickets SupportTicket[]
+  salesCreditAdjustments SalesCreditAdjustment[]
+  salesRefunds SalesRefund[]
+  salesRefundSettlements SalesRefundSettlement[]
 
+  @@unique([companyId, username])
+  @@unique([id, companyId])
   @@map("usuarios")
+}
+
+model UserSession {
+  id String @id @default(uuid())
+  sessionId String @unique @map("sessao_id")
+  userId String @map("usuario_id")
+  companyId String @map("empresa_id")
+  createdAt DateTime @default(now()) @map("criado_em")
+  lastSeenAt DateTime @default(now()) @map("ultima_atividade_em")
+  expiresAt DateTime @map("expira_em")
+  revokedAt DateTime? @map("encerrado_em")
+  reason String? @map("motivo")
+  revokedBy String? @map("responsavel_id")
+  device String? @map("dispositivo")
+  user User @relation(fields: [userId, companyId], references: [id, companyId], onDelete: Restrict, map: "usuarios_sessoes_usuario_empresa_fk")
+  @@index([companyId, userId, revokedAt, createdAt], map: "usuarios_sessoes_empresa_usuario_ativas_idx")
+  @@map("usuarios_sessoes")
 }
 
 model Person {
@@ -340,6 +779,9 @@ model ContaReceber {
   companyId  String  @map("empresa_id")
   contractId String? @map("contrato_id")
   tenantId   String? @map("inquilino_id")
+  salesOrderId String? @map("venda_id")
+  salesCustomerId String? @map("cliente_venda_id")
+  cancelledAt DateTime? @map("cancelado_em")
 
   propertyName String @map("imovel")
   tenantName   String @map("inquilino")
@@ -362,7 +804,10 @@ model ContaReceber {
   contract Contract?           @relation(fields: [contractId], references: [id])
   tenant   Person?             @relation(fields: [tenantId], references: [id])
   payments PagamentoRecebido[]
+  salesOrder SalesOrder? @relation(fields: [salesOrderId], references: [id])
 
+  @@index([companyId, salesCustomerId, cancelledAt])
+  @@index([salesOrderId])
   @@index([companyId])
   @@index([contractId])
   @@index([tenantId])
@@ -395,6 +840,8 @@ model PagamentoRecebido {
 model ContaPagar {
   id         String  @id @default(uuid())
   companyId  String  @map("empresa_id")
+  salesReturnId String? @map("devolucao_venda_id")
+  cancelledAt DateTime? @map("cancelado_em")
   personId   String? @map("pessoa_id")
   propertyId String? @map("imovel_id")
   personName String? @map("pessoa")
@@ -419,7 +866,9 @@ model ContaPagar {
   person   Person?              @relation(fields: [personId], references: [id])
   property Property?            @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   payments PagamentoRealizado[]
+  salesReturn SalesOrder? @relation(fields: [salesReturnId], references: [id])
 
+  @@index([companyId, salesReturnId, cancelledAt])
   @@index([companyId])
   @@index([personId])
   @@index([propertyId])
@@ -574,6 +1023,7 @@ model BankTransaction {
   updatedAt     DateTime              @updatedAt @map("atualizado_em")
 
   bankAccount   BankAccount           @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  salesRefund SalesRefund?
 
   @@index([bankAccountId])
   @@index([competenceDate])

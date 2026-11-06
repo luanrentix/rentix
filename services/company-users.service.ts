@@ -11,14 +11,20 @@ export type UserToolPermission =
   | 'accountsPayable'
   | 'schedule'
   | 'settings'
-  | 'bank';
+  | 'bank'
+  | 'sales';
 
 export type CompanyUserRole = 'OWNER' | 'ADMIN' | 'MANAGER' | 'USER';
 
 export type CompanyUser = {
+  emailLoginEnabled?: boolean;
+  userLoginEnabled?: boolean;
+  username?: string | null;
+  maxConcurrentSessions?: number;
+  actionPermissions?: string[] | null;
   id: string;
   name: string;
-  email: string;
+  email: string | null;
   role: string;
   isActive: boolean;
   permissions?: UserToolPermission[] | null;
@@ -27,14 +33,25 @@ export type CompanyUser = {
 };
 
 export type CreateCompanyUserRequest = {
+  emailLoginEnabled?: boolean;
+  userLoginEnabled?: boolean;
+  username?: string | null;
+  maxConcurrentSessions?: number;
+  actionPermissions?: string[] | null;
   name: string;
-  email: string;
+  email?: string | null;
   password: string;
   role: CompanyUserRole;
   permissions: UserToolPermission[];
 };
 
 export type UpdateCompanyUserRequest = {
+  emailLoginEnabled?: boolean;
+  userLoginEnabled?: boolean;
+  email?: string | null;
+  username?: string | null;
+  maxConcurrentSessions?: number;
+  actionPermissions?: string[] | null;
   name: string;
   password?: string;
   role: CompanyUserRole;
@@ -43,7 +60,7 @@ export type UpdateCompanyUserRequest = {
 };
 
 export async function getCompanyUsers() {
-  return apiFetch<CompanyUser[]>('/autenticacao/usuarios');
+  return apiFetch<CompanyUser[]>('/autenticacao/usuarios', { skipCache: true });
 }
 
 export async function createCompanyUser(data: CreateCompanyUserRequest) {

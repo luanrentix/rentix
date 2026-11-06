@@ -1,0 +1,12 @@
+BEGIN;
+ALTER TABLE "vendas_produtos" ADD COLUMN "matriz_grade" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "vendas_produtos" ADD COLUMN "produto_grade_id" TEXT;
+ALTER TABLE "vendas_produtos" ADD COLUMN "valor_grade" TEXT;
+ALTER TABLE "vendas_produtos" ADD COLUMN "grade_id" TEXT;
+CREATE UNIQUE INDEX "vendas_grades_produtos_id_empresa_id_key" ON "vendas_grades_produtos"("id", "empresa_id");
+ALTER TABLE "vendas_produtos" ADD CONSTRAINT "vendas_produtos_grade_cadastro_fkey" FOREIGN KEY ("grade_id", "empresa_id") REFERENCES "vendas_grades_produtos"("id", "empresa_id") ON DELETE RESTRICT ON UPDATE CASCADE;
+CREATE UNIQUE INDEX "vendas_produtos_id_empresa_id_key" ON "vendas_produtos"("id", "empresa_id");
+CREATE UNIQUE INDEX "vendas_produtos_empresa_id_produto_grade_id_valor_grade_key" ON "vendas_produtos"("empresa_id", "produto_grade_id", "valor_grade");
+CREATE INDEX "vendas_produtos_empresa_id_produto_grade_id_ativo_idx" ON "vendas_produtos"("empresa_id", "produto_grade_id", "ativo");
+ALTER TABLE "vendas_produtos" ADD CONSTRAINT "vendas_produtos_grade_empresa_fkey" FOREIGN KEY ("produto_grade_id", "empresa_id") REFERENCES "vendas_produtos"("id", "empresa_id") ON DELETE RESTRICT ON UPDATE CASCADE;
+COMMIT;

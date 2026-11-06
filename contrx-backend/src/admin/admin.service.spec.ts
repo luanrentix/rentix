@@ -34,6 +34,9 @@ function createService() {
     user: {
       deleteMany: jest.fn().mockResolvedValue({ count: 3 }),
     },
+    userSession: {
+      deleteMany: jest.fn().mockResolvedValue({ count: 2 }),
+    },
   };
 
   const prisma = {
@@ -43,7 +46,7 @@ function createService() {
   };
 
   return {
-    service: new AdminService(prisma as never),
+    service: new AdminService(prisma as never, {} as never, {} as never),
     prisma,
     tx,
   };
@@ -62,6 +65,12 @@ describe('AdminService', () => {
         companyId: 'company-1',
         id: { not: 'current-user' },
         role: { not: 'SYSTEM_OWNER' },
+      },
+    });
+    expect(tx.userSession.deleteMany).toHaveBeenCalledWith({
+      where: {
+        companyId: 'company-1',
+        user: { id: { not: 'current-user' }, role: { not: 'SYSTEM_OWNER' } },
       },
     });
     expect(result).toEqual({

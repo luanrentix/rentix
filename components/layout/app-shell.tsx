@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { CONFECTIONS_HOME, isBusinessRouteAllowed } from "@/services/business-navigation";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { AlertTriangle, Bell, CalendarDays, Clock3, Command, Loader2, Maximize2, RotateCcw, Search, Star, X } from "lucide-react";
+import { AlertTriangle, Bell, ChartNoAxesCombined, Clock3, Command, ContactRound, Loader2, Maximize2, Package, RotateCcw, Search, ShoppingCart, Star, Store, Truck, Users, X } from "lucide-react";
 import AuthGuard from "@/components/auth/auth-guard";
 import { useAuth } from "@/context/AuthContext";
 import { changePasswordRequest } from "@/services/auth";
@@ -69,6 +70,7 @@ type PasswordSettings = {
 type PixKeyType = "cpf" | "cnpj" | "email" | "phone" | "random";
 
 type CompanySettings = {
+  ramoAtividade: "OUTRO" | "CONFECCOES";
   companyName: string;
   tradeName: string;
   logo: string;
@@ -186,6 +188,7 @@ const defaultPasswordSettings: PasswordSettings = {
 };
 
 const defaultCompanySettings: CompanySettings = {
+  ramoAtividade: "OUTRO",
   companyName: "",
   tradeName: "",
   logo: "",
@@ -299,13 +302,6 @@ function getTrialDaysRemaining(user: { trialAccessEndsAt?: string | null; trialD
     new Date(user.trialAccessEndsAt).getTime() - new Date().getTime();
 
   return Math.ceil(remainingMilliseconds / 86_400_000);
-}
-
-function getTrialBannerTone(daysRemaining: number | null) {
-  if (daysRemaining === null) return "neutral";
-  if (daysRemaining <= 3) return "danger";
-  if (daysRemaining <= 7) return "warning";
-  return "normal";
 }
 
 function isSystemOwnerRole(role?: string | null) {
@@ -464,6 +460,9 @@ export default function AppShell({ children }: AppShellProps) {
   const router = useRouter();
   const { user, logout } = useAuth();
   const companyId = user?.companyId;
+  const [settingsCompanyId, setSettingsCompanyId] = useState<string | null>(null);
+  const [settingsError, setSettingsError] = useState(false);
+  const settingsReady = Boolean(companyId && settingsCompanyId === companyId);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isSidebarLocked, setIsSidebarLocked] = useState(() => {
@@ -497,17 +496,11 @@ export default function AppShell({ children }: AppShellProps) {
   const [resetOptions, setResetOptions] = useState<ResetOptions>(defaultResetOptions);
   const [resetConfirmationText, setResetConfirmationText] = useState("");
   const [resetError, setResetError] = useState("");
-  const [isTrialLoginNoticeOpen, setIsTrialLoginNoticeOpen] = useState(false);
+
   const [isApiOnline, setIsApiOnline] = useState(true);
   const [isQuickSearchOpen, setIsQuickSearchOpen] = useState(false);
   const [quickSearchQuery, setQuickSearchQuery] = useState("");
   const [favoriteHrefs, setFavoriteHrefs] = useState<string[]>([]);
-  const [sidebarContextMenu, setSidebarContextMenu] = useState<{
-    x: number;
-    y: number;
-    targetHref?: string;
-    targetLabel?: string;
-  } | null>(null);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
 
   useEffect(() => {
@@ -554,7 +547,7 @@ export default function AppShell({ children }: AppShellProps) {
     };
   }, []);
 
-  const lockedUserEmail = user?.email || userSettings.email;
+  const lockedUserEmail = user ? (user.email || "") : userSettings.email;
   const companyDisplayName =
     companySettings.tradeName || companySettings.companyName || "Empresa não cadastrada";
   const companyLogoFallbackText = getInitialLetters(
@@ -562,15 +555,19 @@ export default function AppShell({ children }: AppShellProps) {
   );
   const visibleMenuItems = useMemo(
     () => {
+      if (!settingsReady) return [];
+      const confectioneryOnly = companySettings.ramoAtividade === "CONFECCOES";
       const allowedMenuItems = internalToolRoutes.filter((item) =>
+        (!confectioneryOnly || [CONFECTIONS_HOME, "/vendas"].includes(item.href)) &&
+        (confectioneryOnly || ![CONFECTIONS_HOME, "/vendas"].includes(item.href)) &&
         canAccessTool(user?.role, user?.permissions, toolKeyByHref[item.href]),
       );
 
-      return isSystemOwnerRole(user?.role)
+      return !confectioneryOnly && isSystemOwnerRole(user?.role)
         ? [...allowedMenuItems, ...systemOwnerToolRoutes]
         : allowedMenuItems;
     },
-    [user?.permissions, user?.role],
+    [settingsReady, companySettings.ramoAtividade, user?.permissions, user?.role],
   );
 
   const favoriteItems = useMemo(
@@ -623,38 +620,14 @@ export default function AppShell({ children }: AppShellProps) {
         );
         return next;
       });
-      setSidebarContextMenu(null);
     },
     [companyId],
   );
 
   const resetFavoritesToDefault = useCallback(() => {
     saveFavorites([]);
-    setSidebarContextMenu(null);
   }, [saveFavorites]);
 
-  useEffect(() => {
-    if (!sidebarContextMenu) return;
-
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target?.closest("#contrx-sidebar-context-menu")) return;
-      setSidebarContextMenu(null);
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setSidebarContextMenu(null);
-      }
-    };
-
-    window.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [sidebarContextMenu]);
 
   const isSystemOwner = isSystemOwnerRole(user?.role);
   const [unreadSupportCount, setUnreadSupportCount] = useState(0);
@@ -769,40 +742,14 @@ export default function AppShell({ children }: AppShellProps) {
     };
   }, []);
 
+  const businessRouteAllowed = isBusinessRouteAllowed(pathname, companySettings.ramoAtividade);
+  const currentToolAllowed = !toolKeyByHref[pathname] || canAccessTool(user?.role, user?.permissions, toolKeyByHref[pathname]);
   useEffect(() => {
-    if (typeof window === "undefined" || isSystemOwner) {
-      return;
+    if (!settingsReady) return;
+    if (pathname === "/inicio" || !businessRouteAllowed || !currentToolAllowed) {
+      router.replace(visibleMenuItems[0]?.href || "/configuracoes");
     }
-
-    if (user?.subscriptionStatus !== "TRIAL") {
-      return;
-    }
-
-    const shouldShowTrialNotice = localStorage.getItem(
-      "contrx_show_trial_login_notice",
-    );
-
-    if (shouldShowTrialNotice !== "true") {
-      return;
-    }
-
-    localStorage.removeItem("contrx_show_trial_login_notice");
-    setIsTrialLoginNoticeOpen(true);
-  }, [isSystemOwner, user?.subscriptionStatus]);
-
-  useEffect(() => {
-    const currentToolKey = toolKeyByHref[pathname];
-
-    if (!currentToolKey) {
-      return;
-    }
-
-    if (canAccessTool(user?.role, user?.permissions, currentToolKey)) {
-      return;
-    }
-
-    router.replace(visibleMenuItems[0]?.href || "/configuracoes");
-  }, [pathname, router, user?.permissions, user?.role, visibleMenuItems]);
+  }, [settingsReady, pathname, businessRouteAllowed, currentToolAllowed, router, visibleMenuItems]);
 
   const loadSettingsFromLocalStorage = useCallback(() => {
     const storedUserSettings = getCompanyStorageItem(
@@ -824,7 +771,7 @@ export default function AppShell({ children }: AppShellProps) {
 
   const loadSettings = useCallback(async (currentCompanyId: string) => {
     const cachedUserSettings = getCachedUserSettings();
-    const cachedCompanySettings = getCachedCompanySettings();
+    const cachedCompanySettings = getCachedCompanySettings(currentCompanyId);
     const cachedThemeSettings = getCachedThemeSettings();
 
     if (
@@ -869,6 +816,7 @@ export default function AppShell({ children }: AppShellProps) {
       const settings = await getAppSettings(currentCompanyId);
       setCachedAppSettings(settings);
       loadedSettingsCompanyId = currentCompanyId;
+      setCompanyStorageItem(currentCompanyId, "contrx_business_mode", settings.companySettings?.ramoAtividade === "CONFECCOES" ? "CONFECCOES" : "OUTRO");
 
       setUserSettings({
         ...defaultUserSettings,
@@ -895,7 +843,7 @@ export default function AppShell({ children }: AppShellProps) {
     } catch {
       console.warn("Settings API unavailable. Local cached settings were loaded.");
 
-      if (cachedUserSettings || cachedCompanySettings || cachedThemeSettings) {
+      if (cachedCompanySettings) {
         if (cachedUserSettings) {
           setUserSettings({
             ...defaultUserSettings,
@@ -930,6 +878,9 @@ export default function AppShell({ children }: AppShellProps) {
         return;
       }
 
+      const savedMode = getCompanyStorageItem(currentCompanyId, "contrx_business_mode");
+      if (savedMode !== "CONFECCOES" && savedMode !== "OUTRO") throw new Error("Configuração da empresa indisponível.");
+      setCompanySettings({ ...defaultCompanySettings, ramoAtividade: savedMode });
       loadSettingsFromLocalStorage();
     }
   }, [loadSettingsFromLocalStorage, user?.email]);
@@ -940,7 +891,12 @@ export default function AppShell({ children }: AppShellProps) {
       return;
     }
 
-    loadSettings(companyId);
+    let active = true;
+    setSettingsError(false);
+    void loadSettings(companyId).then(() => {
+      if (active) setSettingsCompanyId(companyId);
+    }).catch(() => { if (active) setSettingsError(true); });
+    return () => { active = false; };
   }, [companyId, loadSettings, loadSettingsFromLocalStorage]);
 
   useEffect(() => {
@@ -966,8 +922,8 @@ export default function AppShell({ children }: AppShellProps) {
       const storedTheme = readThemeSettingsFromStorage(companyId);
 
       setThemeSettings((currentTheme) =>
-        currentTheme.mode === storedTheme.mode && currentTheme.accent === storedTheme.accent 
-          ? currentTheme 
+        currentTheme.mode === storedTheme.mode && currentTheme.accent === storedTheme.accent
+          ? currentTheme
           : storedTheme
       );
     }
@@ -1179,16 +1135,7 @@ export default function AppShell({ children }: AppShellProps) {
 
   const isSidebarOpen = isSidebarExpanded || isSidebarLocked;
   const trialDaysRemaining = user ? getTrialDaysRemaining(user) : null;
-  const trialNoticeTone = getTrialBannerTone(trialDaysRemaining);
   const trialEndsAtLabel = formatTrialDate(user?.trialAccessEndsAt);
-  const trialLoginNoticeText =
-    trialDaysRemaining === null
-      ? "Seu teste profissional de 30 dias está ativo."
-      : trialDaysRemaining === 0
-        ? "Seu teste profissional termina hoje."
-        : trialDaysRemaining === 1
-          ? "Seu teste profissional termina em 1 dia."
-          : `Seu teste profissional termina em ${trialDaysRemaining} dias.`;
   const isTrialExpired =
     user?.subscriptionStatus === "TRIAL" &&
     trialDaysRemaining !== null &&
@@ -1258,7 +1205,7 @@ export default function AppShell({ children }: AppShellProps) {
           <div className="border-b border-orange-100 px-4 py-5">
             <div className="flex items-center justify-between gap-3 lg:justify-center">
               <Link
-                href="/dashboard"
+                href={companySettings.ramoAtividade === "CONFECCOES" ? CONFECTIONS_HOME : "/dashboard"}
                 prefetch={menuLinkPrefetch}
                 onClick={handleCloseMobileSidebar}
                 className="flex min-w-0 flex-1 items-center justify-center transition hover:opacity-90"
@@ -1283,13 +1230,6 @@ export default function AppShell({ children }: AppShellProps) {
           </div>
 
           <nav
-            onContextMenu={(e) => {
-              if ((e.target as HTMLElement)?.closest("[data-menu-item]")) return;
-              e.preventDefault();
-              const clickX = Math.min(e.clientX, window.innerWidth - 230);
-              const clickY = Math.min(e.clientY, window.innerHeight - 120);
-              setSidebarContextMenu({ x: clickX, y: clickY });
-            }}
             className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-2 py-3 lg:py-4"
           >
             {favoriteItems.length > 0 && (
@@ -1327,18 +1267,6 @@ export default function AppShell({ children }: AppShellProps) {
                         prefetch={menuLinkPrefetch}
                         title={!isSidebarOpen ? `⭐ ${item.label} (Favorito)` : undefined}
                         onClick={handleCloseMobileSidebar}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          const clickX = Math.min(e.clientX, window.innerWidth - 230);
-                          const clickY = Math.min(e.clientY, window.innerHeight - 150);
-                          setSidebarContextMenu({
-                            x: clickX,
-                            y: clickY,
-                            targetHref: item.href,
-                            targetLabel: item.label,
-                          });
-                        }}
                         className={`group flex items-center overflow-hidden rounded-2xl px-3 py-2.5 text-sm font-bold transition-colors duration-200 ${
                           isActive
                             ? "bg-orange-500 text-white shadow-md shadow-orange-100"
@@ -1425,18 +1353,6 @@ export default function AppShell({ children }: AppShellProps) {
                           prefetch={menuLinkPrefetch}
                           title={!isSidebarOpen ? item.label : undefined}
                           onClick={handleCloseMobileSidebar}
-                          onContextMenu={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            const clickX = Math.min(e.clientX, window.innerWidth - 230);
-                            const clickY = Math.min(e.clientY, window.innerHeight - 150);
-                            setSidebarContextMenu({
-                              x: clickX,
-                              y: clickY,
-                              targetHref: item.href,
-                              targetLabel: item.label,
-                            });
-                          }}
                           className={`group flex items-center overflow-hidden rounded-2xl px-3 py-2.5 text-sm font-bold transition-colors duration-200 ${
                             isActive
                               ? "bg-orange-500 text-white shadow-md shadow-orange-100"
@@ -1486,6 +1402,32 @@ export default function AppShell({ children }: AppShellProps) {
                             </button>
                           )}
                         </Link>
+                        {item.href === "/vendas" && companySettings.ramoAtividade === "CONFECCOES" && isSidebarOpen && (
+                          <div className="ml-4 mt-1 space-y-1 border-l border-slate-200 pl-3">
+                            <Link href="/vendas?view=POS" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-slate-600 hover:bg-orange-50 hover:text-orange-600"><ShoppingCart className="h-4 w-4"/>Nova venda</Link>
+                            <details className="group/sales-abrir"><summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-slate-600 hover:bg-orange-50 hover:text-orange-600"><Clock3 className="h-4 w-4"/>Abrir</summary><div className="ml-4 mt-1 space-y-1 border-l border-slate-200 pl-3"><Link href="/vendas?view=ABRIR&tipo=ORCAMENTO" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600">Orçamentos</Link><Link href="/vendas?view=ABRIR&tipo=CONDICIONAL" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600">Condicionais</Link><Link href="/vendas?view=ABRIR&tipo=ATIVAS" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600">Em andamento</Link><Link href="/vendas?view=ABRIR&tipo=GRAVADAS" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600">Vendas gravadas</Link></div></details>
+                            <details className="group/sales-cadastros">
+                              <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-slate-600 hover:bg-orange-50 hover:text-orange-600"><ContactRound className="h-4 w-4"/>Cadastros</summary>
+                              <div className="ml-4 mt-1 space-y-1 border-l border-slate-200 pl-3">
+                                <Link href="/vendas?view=CLIENTES" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><Users className="h-3.5 w-3.5"/>Clientes</Link>
+                                <Link href="/vendas?view=PRODUTOS" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><Package className="h-3.5 w-3.5"/>Produtos</Link>
+                                <Link href="/vendas?view=VENDEDORES" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><ContactRound className="h-3.5 w-3.5"/>Vendedores</Link>
+                                <Link href="/vendas?view=FORNECEDORES" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><Truck className="h-3.5 w-3.5"/>Fornecedores</Link>
+                              </div>
+                            </details>
+                            <details className="group/sales-caixa">
+                              <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-slate-600 hover:bg-orange-50 hover:text-orange-600"><Store className="h-4 w-4"/>Caixa</summary>
+                              <div className="ml-4 mt-1 space-y-1 border-l border-slate-200 pl-3">
+                                <Link href="/vendas?view=CAIXA" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><Store className="h-3.5 w-3.5"/>Operação de caixa</Link>
+                                <Link href="/vendas?view=CREDITOS" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><Users className="h-3.5 w-3.5"/>Créditos de Clientes</Link>
+
+                                <Link href="/vendas?view=ESTORNOS" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><RotateCcw className="h-3.5 w-3.5"/>Estornos</Link>
+                                <Link href="/vendas?view=POS&tipo=TROCA" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><ShoppingCart className="h-3.5 w-3.5"/>Troca de venda</Link>
+                              </div>
+                            </details>
+                            <Link href="/vendas?view=RELATORIOS" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-slate-600 hover:bg-orange-50 hover:text-orange-600"><ChartNoAxesCombined className="h-4 w-4"/>Relatórios</Link>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -1526,12 +1468,12 @@ export default function AppShell({ children }: AppShellProps) {
               </label>
             </div>
 
-            <div className="flex items-center gap-2 justify-center lg:justify-start">
+            <div className="flex min-w-0 items-center gap-2 justify-center lg:justify-start">
               <span className="relative flex h-2.5 w-2.5 shrink-0" title={isApiOnline ? "Banco Online" : "Banco Offline"}>
                 <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isApiOnline ? "bg-emerald-400" : "bg-red-400"}`}></span>
                 <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isApiOnline ? "bg-emerald-500" : "bg-red-500"}`}></span>
               </span>
-              
+
               <button
                 type="button"
                 onClick={() => setIsWhatsNewOpen(true)}
@@ -1545,12 +1487,20 @@ export default function AppShell({ children }: AppShellProps) {
                 <span className="hover:underline">v{packageJson.version}</span>
                 <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[9px] text-orange-500 font-extrabold">✨</span>
               </button>
+              {isSidebarOpen && user && (
+                <span
+                  title={`Usuário logado: ${user.name || user.username || user.email}`}
+                  className="ml-auto min-w-0 truncate text-xs font-semibold text-slate-600 dark:text-slate-300"
+                >
+                  {user.name || user.username || user.email}
+                </span>
+              )}
             </div>
           </div>
         </aside>
 
         <div
-          className={`flex min-h-screen flex-1 flex-col transition-[margin] duration-300 ease-in-out ${
+          className={`contrx-workspace flex min-h-screen flex-1 flex-col transition-[margin] duration-300 ease-in-out ${
             isSidebarOpen ? "lg:ml-72" : "lg:ml-20"
           }`}
         >
@@ -1589,6 +1539,8 @@ export default function AppShell({ children }: AppShellProps) {
               <button
                 type="button"
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                aria-label="Abrir menu do usuário"
+                aria-expanded={isUserMenuOpen}
                 className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 text-lg font-black text-white shadow-md transition hover:scale-105 lg:h-12 lg:w-12"
               >
                 {companySettings.logo ? (
@@ -1702,8 +1654,12 @@ export default function AppShell({ children }: AppShellProps) {
             ) : (
               <>
                 <AdminImpersonateBanner />
-                {children}
-                <AgendaNotificationListener />
+                {!settingsReady || !businessRouteAllowed || !currentToolAllowed ? (
+                  <div role="status" className="rounded-xl border bg-white p-8 text-center text-slate-600">
+                    {settingsError ? <>Não foi possível carregar a configuração da empresa. <button className="font-bold underline" onClick={() => window.location.reload()}>Tentar novamente</button></> : "Preparando seu ambiente…"}
+                  </div>
+                ) : children}
+                {settingsReady && companySettings.ramoAtividade !== "CONFECCOES" && businessRouteAllowed && <AgendaNotificationListener />}
               </>
             )}
           </main>
@@ -1744,157 +1700,6 @@ export default function AppShell({ children }: AppShellProps) {
           <GlobalMinimizedModalDock />
         </div>
 
-        {sidebarContextMenu && (
-          <div
-            id="contrx-sidebar-context-menu"
-            style={{
-              left: `${sidebarContextMenu.x}px`,
-              top: `${sidebarContextMenu.y}px`,
-            }}
-            className={`fixed z-[100] min-w-56 overflow-hidden rounded-2xl border p-1.5 shadow-2xl backdrop-blur animate-in fade-in zoom-in-95 duration-100 ${
-              themeSettings.mode !== "light"
-                ? darkSurfaceClass
-                : "border-slate-200/90 bg-white"
-            }`}
-          >
-            {sidebarContextMenu.targetHref && (
-              <>
-                <div
-                  className={`px-3 py-1.5 text-[11px] font-bold truncate ${
-                    themeSettings.mode !== "light" ? "text-slate-400" : "text-slate-400"
-                  }`}
-                >
-                  {sidebarContextMenu.targetLabel || "Módulo"}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (sidebarContextMenu.targetHref) {
-                      toggleFavorite(sidebarContextMenu.targetHref);
-                    }
-                  }}
-                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold transition ${
-                    themeSettings.mode !== "light"
-                      ? darkMenuItemClass
-                      : "text-slate-700 hover:bg-orange-50 hover:text-orange-600"
-                  }`}
-                >
-                  <Star
-                    className={`h-4 w-4 ${
-                      favoriteHrefs.includes(sidebarContextMenu.targetHref)
-                        ? "fill-amber-400 text-amber-500"
-                        : "text-slate-400"
-                    }`}
-                  />
-                  <span>
-                    {favoriteHrefs.includes(sidebarContextMenu.targetHref)
-                      ? "Remover dos favoritos"
-                      : "Adicionar aos favoritos"}
-                  </span>
-                </button>
-                <div
-                  className={`my-1 border-t ${
-                    themeSettings.mode !== "light"
-                      ? "border-slate-800"
-                      : "border-slate-100"
-                  }`}
-                />
-              </>
-            )}
-
-            <button
-              type="button"
-              onClick={() => resetFavoritesToDefault()}
-              className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold transition ${
-                themeSettings.mode !== "light"
-                  ? "text-slate-300 hover:bg-red-950/40 hover:text-red-400"
-                  : "text-slate-600 hover:bg-red-50 hover:text-red-600"
-              }`}
-            >
-              <RotateCcw className="h-4 w-4" />
-              <span>Restaurar padrão</span>
-            </button>
-          </div>
-        )}
-
-        {isTrialLoginNoticeOpen && (
-          <div
-            className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="trial-login-notice-title"
-          >
-            <div className="w-full max-w-md rounded-[18px] border border-slate-200 bg-white p-6 text-slate-950 shadow-[0_28px_80px_rgba(15,23,42,0.28)]">
-              <div
-                className={`flex h-14 w-14 items-center justify-center rounded-2xl ring-1 ${
-                  trialNoticeTone === "danger"
-                    ? "bg-red-50 text-red-700 ring-red-100"
-                    : trialNoticeTone === "warning"
-                      ? "bg-amber-50 text-amber-700 ring-amber-100"
-                      : "bg-orange-50 text-orange-700 ring-orange-100"
-                }`}
-              >
-                {trialNoticeTone === "danger" ? (
-                  <AlertTriangle className="h-7 w-7" />
-                ) : (
-                  <Clock3 className="h-7 w-7" />
-                )}
-              </div>
-
-              <h2
-                id="trial-login-notice-title"
-                className="mt-5 text-2xl font-black leading-tight text-slate-950"
-              >
-                Acesso profissional ativo
-              </h2>
-              <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">
-                {trialLoginNoticeText}
-              </p>
-              <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                {trialEndsAtLabel
-                  ? `Seu acesso está válido até ${trialEndsAtLabel}.`
-                  : "Seu acesso é válido por 30 dias a partir do cadastro."}
-              </p>
-
-              <div className="mt-5 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-100">
-                <div className="flex items-center gap-3">
-                  <CalendarDays className="h-5 w-5 text-orange-600" />
-                  <div>
-                    <p className="text-sm font-black text-slate-900">
-                      Dias disponíveis para uso
-                    </p>
-                    <p className="mt-1 text-xs font-semibold text-slate-500">
-                      {trialDaysRemaining === null
-                        ? "Período de teste em andamento."
-                        : `${trialDaysRemaining} dia${trialDaysRemaining === 1 ? "" : "s"} restante${
-                            trialDaysRemaining === 1 ? "" : "s"
-                          }.`}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 grid gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => setIsTrialLoginNoticeOpen(false)}
-                  className="flex h-12 items-center justify-center rounded-2xl bg-[#ff4b00] px-5 text-sm font-black text-white shadow-[0_16px_30px_rgba(255,75,0,0.22)] transition hover:bg-[#e94400]"
-                >
-                  Continuar
-                </button>
-
-                <Link
-                  href="/configuracoes"
-                  prefetch={menuLinkPrefetch}
-                  onClick={() => setIsTrialLoginNoticeOpen(false)}
-                  className="flex h-12 items-center justify-center rounded-2xl bg-slate-100 px-5 text-sm font-black text-slate-800 transition hover:bg-slate-200"
-                >
-                  Configurar empresa
-                </Link>
-              </div>
-            </div>
-          </div>
-        )}
 
         {isSettingsOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm">

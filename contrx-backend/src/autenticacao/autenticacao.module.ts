@@ -1,3 +1,4 @@
+import { UserSessionsService } from './user-sessions.service';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
@@ -41,11 +42,17 @@ import { ToolPermissionGuard } from './guards/tool-permission.guard';
   controllers: [AutenticacaoController],
   providers: [
     AutenticacaoService,
+    UserSessionsService,
     JwtStrategy,
     CompanyAdminGuard,
     RateLimitGuard,
     ToolPermissionGuard,
   ],
-  exports: [AutenticacaoService, JwtModule, PassportModule],
+  exports: [
+    UserSessionsService,
+    AutenticacaoService,
+    JwtModule,
+    PassportModule,
+  ],
 })
 export class AutenticacaoModule {}

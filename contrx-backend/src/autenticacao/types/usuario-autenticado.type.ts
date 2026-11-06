@@ -5,4 +5,6 @@ export type UsuarioAutenticado = {
   email: string;
   role: string;
   permissions?: unknown;
+  actionPermissions?: unknown;
+  sessionId?: string;
 };

@@ -20,6 +20,7 @@ import { ChamadosModule } from './chamados/chamados.module';
 import { FilesModule } from './files/files.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { VendasModule } from './vendas/vendas.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
     ChamadosModule,
     FilesModule,
     DashboardModule,
+    VendasModule,
   ],
   controllers: [AppController],
   providers: [

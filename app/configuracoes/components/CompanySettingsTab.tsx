@@ -150,6 +150,18 @@ export const CompanySettingsTab: React.FC<CompanySettingsTabProps> = ({
         </div>
 
         <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <label className="space-y-1.5 lg:col-span-1">
+            <span className="text-xs font-bold text-slate-600">Ramo de atividade</span>
+            <select
+              value={companySettings.ramoAtividade || "OUTRO"}
+              onChange={(event) => setCompanySettings({ ...companySettings, ramoAtividade: event.target.value as CompanySettings["ramoAtividade"] })}
+              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+            >
+              <option value="OUTRO">Contratos e aluguéis</option>
+              <option value="CONFECCOES">Varejo</option>
+            </select>
+            <span className="block text-xs text-slate-500">Varejo habilita o módulo de Vendas.</span>
+          </label>
           <label className="space-y-1.5 lg:col-span-2">
             <span className="text-xs font-bold text-slate-600">
               Razão social <span className="text-red-500">*</span>

@@ -16,11 +16,12 @@ import {
   CreateAccountRequest,
   createAccountRequest,
   loginRequest,
+  loginCompanyUserRequest,
+  logoutRequest,
   verifySessionRequest,
 } from '@/services/auth';
 import { isSessionReplacedError } from '@/services/api';
 import {
-  getCompanyStorageItem,
   removeCompanyStorageItem,
   setCompanyStorageItem,
 } from '@/services/company-storage';
@@ -31,6 +32,7 @@ type AuthContextData = {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginCompanyUser: (companyCode: string, username: string, password: string) => Promise<void>;
   createAccount: (data: CreateAccountRequest) => Promise<void>;
   logout: () => void;
 };
@@ -46,7 +48,7 @@ const LOCAL_BACKUP_TOKEN = 'contrx-local-backup-token';
 const AUTH_NOTICE_STORAGE_KEY = 'contrx_auth_notice';
 const SESSION_REPLACED_EVENT = 'contrx-session-replaced';
 const SESSION_REPLACED_MESSAGE =
-  'Sua sessão foi encerrada porque este usuário entrou no Contrx em outro dispositivo. Para proteger seus dados, mantemos apenas um acesso ativo por usuário.';
+  'Sua sessão foi encerrada. Entre novamente para continuar.';
 
 type AuthProviderProps = {
   children: ReactNode;
@@ -130,7 +132,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       try {
         isCheckingSession = true;
-        await verifySessionRequest();
+        const response = await verifySessionRequest();
+        if (response.user && localStorage.getItem(TOKEN_STORAGE_KEY) === token) setUser(current => {
+          if (!current) return current;
+          const next = { ...current, ...response.user };
+          if (JSON.stringify(next) === JSON.stringify(current)) return current;
+          localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(next));
+          return next;
+        });
       } catch (error) {
         if (!isSessionReplacedError(error)) {
           console.warn('Não foi possível verificar a sessão atual.', error);
@@ -148,7 +157,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     window.addEventListener('focus', verifyCurrentSession);
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    const sessionCheckInterval = window.setInterval(verifyCurrentSession, 60_000);
+    const sessionCheckInterval = window.setInterval(verifyCurrentSession, 15_000);
 
     return () => {
       window.removeEventListener('focus', verifyCurrentSession);
@@ -157,33 +166,34 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, [token, user]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const response = await loginRequest({
-      email,
-      password,
-    });
+  useEffect(() => {
+    const sync = (event: StorageEvent) => {
+      if (event.key !== TOKEN_STORAGE_KEY && event.key !== USER_STORAGE_KEY) return;
+      const nextToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+      const nextUser = localStorage.getItem(USER_STORAGE_KEY);
+      try { setToken(nextToken); setUser(nextUser ? JSON.parse(nextUser) : null); } catch { clearStoredAuth(); setToken(null); setUser(null); }
+      if (!nextToken) router.push('/login');
+    };
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
+  }, [clearStoredAuth, router]);
+
+  const finishLogin = useCallback(async (response: Awaited<ReturnType<typeof loginRequest>>) => {
 
     localStorage.setItem(TOKEN_STORAGE_KEY, response.accessToken);
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.user));
-    if (response.user.subscriptionStatus === 'TRIAL') {
-      localStorage.setItem('contrx_show_trial_login_notice', 'true');
-    }
+    localStorage.removeItem('contrx_show_trial_login_notice');
 
     isHandlingSessionReplacementRef.current = false;
     setToken(response.accessToken);
     setUser(response.user);
 
-    const hasPendingOnboarding = getCompanyStorageItem(
-      response.user.companyId,
-      'contrx_onboarding_pending',
-    ) === 'true';
-
-    if (hasPendingOnboarding) {
-      router.push('/configuracoes?onboarding=1');
-    } else {
-      router.push('/dashboard');
-    }
+    // Configuracao inicial pertence ao cadastro de empresa, nunca ao login.
+    router.push('/inicio');
   }, [router]);
+
+  const login = useCallback(async (email: string, password: string) => finishLogin(await loginRequest({ email, password })), [finishLogin]);
+  const loginCompanyUser = useCallback(async (companyCode: string, username: string, password: string) => finishLogin(await loginCompanyUserRequest(companyCode, username, password)), [finishLogin]);
 
   const createAccount = useCallback(async (data: CreateAccountRequest) => {
     const response = await createAccountRequest(data);
@@ -202,6 +212,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const logout = useCallback(() => {
+    void logoutRequest().catch(() => console.warn("Nao foi possivel confirmar o encerramento remoto da sessao."));
     clearStoredAuth();
     removeCompanyStorageItem(user?.companyId, 'contrx_onboarding_pending');
 
@@ -219,10 +230,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       isAuthenticated: Boolean(token && user),
       isLoading,
       login,
+      loginCompanyUser,
       createAccount,
       logout,
     }),
-    [user, token, isLoading, login, createAccount, logout],
+    [user, token, isLoading, login, loginCompanyUser, createAccount, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

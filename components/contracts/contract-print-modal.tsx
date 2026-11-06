@@ -1,5 +1,6 @@
 "use client";
 
+import { canPrintLocally } from "@/services/authorize-action";
 import React, { useState, useEffect, useRef } from "react";
 import {
   Contract,
@@ -142,6 +143,7 @@ export function ContractPrintModal({
   }
 
   function handlePrint() {
+    if (!canPrintLocally("contracts", setFeedbackMessage)) return;
     const html = generateHtml(true);
     const printWindow = window.open("", "_blank", "width=1000,height=900");
     if (printWindow) {

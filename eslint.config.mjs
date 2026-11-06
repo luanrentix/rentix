@@ -6,6 +6,12 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
+    files: ["scripts/**/*.cjs"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
+  {
     rules: {
       "react-hooks/immutability": "off",
       "react-hooks/set-state-in-effect": "off",
@@ -22,6 +28,7 @@ const eslintConfig = defineConfig([
     // Backend and generated artifacts are linted by their own project.
     "contrx-backend/**",
     "backups/**",
+    "_backups/**",
   ]),
 ]);
 

@@ -25,11 +25,7 @@ export class UpdateAdminCompanyDto {
   @IsOptional()
   @IsIn(['TRIAL', 'ACTIVE', 'EXPIRED', 'SUSPENDED', 'CANCELED'])
   subscriptionStatus?:
-    | 'TRIAL'
-    | 'ACTIVE'
-    | 'EXPIRED'
-    | 'SUSPENDED'
-    | 'CANCELED';
+    'TRIAL' | 'ACTIVE' | 'EXPIRED' | 'SUSPENDED' | 'CANCELED';
 
   @IsOptional()
   @IsDateString()

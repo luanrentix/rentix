@@ -80,60 +80,16 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   async validate(payload: JwtPayload): Promise<UsuarioAutenticado> {
-    let user: {
-      id: string;
-      companyId: string;
-      name: string;
-      email: string;
-      role: string;
-      permissions: unknown;
-      isActive: boolean;
-      activeSessionId: string | null;
-      company: {
-        isActive: boolean;
-        subscriptionStatus:
-          | 'TRIAL'
-          | 'ACTIVE'
-          | 'EXPIRED'
-          | 'SUSPENDED'
-          | 'CANCELED';
-        trialEndsAt: Date | null;
-        trialExtendedUntil: Date | null;
-        subscriptionEndsAt: Date | null;
-      };
-    } | null;
-
+    let user;
     try {
       user = await this.prisma.user.findUnique({
-        where: {
-          id: payload.sub,
-        },
-        select: {
-          id: true,
-          companyId: true,
-          name: true,
-          email: true,
-          role: true,
-          permissions: true,
-          isActive: true,
-          activeSessionId: true,
-          company: {
-            select: {
-              isActive: true,
-              subscriptionStatus: true,
-              trialEndsAt: true,
-              trialExtendedUntil: true,
-              subscriptionEndsAt: true,
-            },
-          },
-        },
+        where: { id: payload.sub },
+        include: { company: true },
       });
     } catch (error) {
-      console.error('Falha ao validar token no banco.', error);
       throwDatabaseUnavailable(error);
     }
-
-    if (!user || !user.isActive) {
+    if (!user || !user.isActive || user.companyId !== payload.companyId) {
       throw new UnauthorizedException(
         'Invalid or expired authentication token.',
       );
@@ -145,19 +101,36 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException(accessState.reason);
     }
 
-    if (!payload.sessionId || user.activeSessionId !== payload.sessionId) {
-      throw new UnauthorizedException(
-        'Sessao encerrada porque este usuario entrou no Contrx em outro dispositivo.',
-      );
+    const session = payload.sessionId
+      ? await this.prisma.userSession.findFirst({
+          where: {
+            sessionId: payload.sessionId,
+            userId: user.id,
+            companyId: user.companyId,
+          },
+        })
+      : null;
+    if (!session || session.revokedAt || session.expiresAt <= new Date()) {
+      throw new UnauthorizedException({
+        code: session?.reason || 'SESSION_EXPIRED',
+        message: 'Sua sessão foi encerrada. Entre novamente para continuar.',
+      });
     }
+    if (session.lastSeenAt.getTime() < Date.now() - 60_000)
+      await this.prisma.userSession.updateMany({
+        where: { id: session.id, revokedAt: null },
+        data: { lastSeenAt: new Date() },
+      });
 
     return {
       id: user.id,
       companyId: user.companyId,
       name: user.name,
-      email: user.email,
+      email: user.email || '',
       role: user.role,
       permissions: user.permissions,
+      actionPermissions: user.actionPermissions,
+      sessionId: payload.sessionId,
     };
   }
 }

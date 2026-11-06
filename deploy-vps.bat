@@ -5,7 +5,7 @@ set "BRANCH=main"
 set "VPS_USER=ubuntu"
 set "VPS_HOST=163.176.163.165"
 set "VPS_PATH=/opt/contrx"
-set "SSH_KEY=~/oracle-final.key"
+set "SSH_KEY=/c/ssh/oracle-final.key"
 set "GIT_BASH=%ProgramFiles%\Git\bin\bash.exe"
 
 if not exist "%GIT_BASH%" (

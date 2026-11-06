@@ -1,21 +1,23 @@
-import type { AppSettingsResponse } from './settings.service';
+import type { AppSettingsResponse } from "./settings.service";
 
-type CachedSettings = Pick<
+type CachedSettings = { companyId?: string } & Pick<
   AppSettingsResponse,
-  'userSettings' | 'companySettings' | 'themeSettings' | 'printTemplates'
+  "userSettings" | "companySettings" | "themeSettings" | "printTemplates"
 >;
 
 let cachedSettings: CachedSettings = {};
 
 export function setCachedAppSettings(settings: CachedSettings) {
   cachedSettings = {
-    ...cachedSettings,
+    ...(settings.companyId && settings.companyId !== cachedSettings.companyId
+      ? {}
+      : cachedSettings),
     ...settings,
   };
 }
 
 export function getCachedCompanySettings(companyId?: string) {
-  void companyId;
+  if (companyId && cachedSettings.companyId !== companyId) return null;
   return cachedSettings.companySettings || null;
 }
 

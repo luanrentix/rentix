@@ -1,69 +1,76 @@
 ---
 name: contrx-validation-protocol
-description: Protocolo padrão de validação local e pré-deploy para o projeto Contrx ao comando 'iniciar'.
+description: Protocolo padrão de análise de sistemas, validação local, limpeza e pré-deploy para o projeto Contrx ao comando 'INICIAR'.
 ---
-# Protocolo de Validação Pré-Deploy Contrx
+# Protocolo do Analista de Sistemas: Auditoria, Otimização e Validação Pré-Deploy Contrx
 
-**Versão Atual Validada Localmente**: `v1.0.20` (Anterior em Produção: `v1.0.19`)
+**Papel Operacional**: Analista de Sistemas Sênior, Especialista em Arquitetura ERP, UI/UX Corporativo e DevSecOps.
+**Versão Atual Registrada**: `v1.0.21`
+**Script de Envio do Usuário**: `C:\Users\MacOS\Documents\Contrx\ATUALIZA-VERSÃO.BAT`
 
-Quando o usuário disser "iniciar", "iniciar verificações", "rodar protocolo", "auditoria de segurança" ou similar, execute AUTOMATICAMENTE os seguintes passos em segundo plano ou sequencialmente:
+---
 
-0. **Protocolo de Segurança DevSecOps & Supabase Hardening**:
-   - Verificar RLS e permissões de tabelas no Supabase (`contrx-backend/prisma/migrations`).
-   - Validar isolamento multiempresa (`companyId`) em consultas e rotas.
-   - Garantir proteção de Rate Limit (`RateLimitGuard`) nos endpoints de autenticação e ingestão de erros.
-   - Verificar se há segredos vazados no frontend.
+## REGRA DE OURO (NÃO ENVIAR NADA PARA PRODUÇÃO)
+- **ESTRITAMENTE PROIBIDO**: Realizar `git push`, commits automáticos, disparar scripts de deploy para produção (`deploy-vps.bat` ou SSH) na Oracle VPS, GitHub ou Supabase.
+- **ESCOPO**: Realizar única e exclusivamente o mapeamento, correções de código, ajustes visuais/mobile, testes, limpezas e builds locais.
+- **LIBERAÇÃO**: O envio final de informações e release é de responsabilidade exclusiva do usuário através do arquivo `C:\Users\MacOS\Documents\Contrx\ATUALIZA-VERSÃO.BAT`.
 
-1. **Validação do Frontend (Lint e Build)**:
-   - Rodar `npm run lint` na raiz.
-   - Rodar `npm run build` na raiz.
+---
 
-2. **Validação do Backend (Lint, Testes e Build)**:
-   - Rodar `npm --prefix contrx-backend run lint` (se houver script).
-   - Rodar `npm --prefix contrx-backend run test` (se houver script).
-   - Rodar `npm --prefix contrx-backend run build` (se houver script).
+## GATILHO DE EXECUÇÃO
+- O protocolo **NÃO deve ser executado de imediato**. Permanece em espera na memória ativa do agente.
+- Sempre e somente quando o usuário enviar a instrução **"INICIAR"** (ou "iniciar nesse protocolo", "iniciar verificações"), a execução completa das etapas abaixo será acionada.
 
-3. **Ajustes de Responsividade Mobile & Padrão Visual ERP**:
-   - Analisar a responsividade das páginas principais do frontend (`dashboard`, `imoveis`, `pessoas`, `bancos`, `admin`, etc.).
-   - Verificar tabelas, modais, cards de KPI e menus no layout móvel (rolagem horizontal, flex-col no mobile).
-   - Verificar padronização de fontes e tamanhos de texto no padrão ERP (tipografia limpa, hierarquia de títulos, tamanhos legíveis e profissionais).
-   - Propor ou aplicar correções necessárias no CSS/Tailwind.
+---
 
-4. **Verificação de Arquivos Inúteis e Limpeza**:
-   - Mapear e sinalizar/remover arquivos temporários, logs, builds de teste ou arquivos desnecessários para liberar espaço.
+## ETAPAS EXECUTADAS AO COMANDO "INICIAR"
 
-5. **Mapeamento e Listagem de Mudanças Realizadas (Changelog/Git Diff)**:
-   - Verificar arquivos alterados, adicionados ou removidos via `git status` e `git diff`.
-   - Listar detalhadamente na resposta final quais funcionalidades, componentes ou arquivos foram modificados nesta versão para transparência total antes do deploy.
+### 1. Mapeamento e Correções Necessárias Pré-Envio (Oracle VPS, GitHub, Supabase)
+- **Integridade do Código**:
+  - Execução de linter e compilação do Frontend (`npm run lint`, `npm run build`).
+  - Execução de compilação do Backend (`npm --prefix contrx-backend run build`, e testes se aplicável).
+  - Cada ciclo de verificação constitui formalmente um **Build da Versão Criada**.
+- **Sincronismo com Banco Supabase**:
+  - Inspecionar migrations em `contrx-backend/prisma/migrations`.
+  - Validar status das tabelas, RLS (Row Level Security) e consistência das entidades para garantir que o backend na Oracle VPS aplique as migrações sem conflito.
+- **Isolamento Multiempresa (Multi-tenancy)**:
+  - Garantir integridade de consultas com filtro mandatório `companyId`.
 
-6. **Versionamento, Notas de Versão e Popup Automático no Primeiro Acesso**:
-   - **Incrementar Versão**: Atualizar sem falta a versão nos arquivos:
-     - `package.json` (frontend)
-     - `contrx-backend/package.json` (backend)
-     - `SKILL.md` (registro da versão atual validada)
-   - **Alimentar Release Notes Obrigatório (`constants/release-notes.ts`)**:
-     - Sempre adicionar uma nova entrada no topo do array `RELEASE_NOTES` correspondente à nova versão incrementada.
-     - Informar `version`, `date` (data atual por extenso), `title` (resumo do tema da release), `subtitle` e o array `highlights`.
-     - Categorizar cada item com rigor:
-       - `novo`: novas funcionalidades, telas ou módulos criados.
-       - `melhoria`: otimizações de UI/UX, filtros, performance ou refatorações.
-       - `correcao`: resolução de bugs, crashes ou falhas operacionais.
-       - `seguranca`: hardening de banco, RLS, sanitização e permissões.
-   - **Garantia de Exibição no Primeiro Acesso**:
-     - O sistema (`components/layout/app-shell.tsx`) detecta se `contrx_seen_version_{userId} !== packageJson.version`.
-     - Ao fazer login ou acessar qualquer tela na nova versão, o popup (`components/modals/whats-new-modal.tsx`) abrirá AUTOMATICAMENTE para o usuário no primeiro acesso.
-     - Ao clicar em "Entendi, vamos começar!", a versão é gravada no navegador do usuário e o modal não reabre sozinho.
-     - A versão no rodapé da barra lateral (`vX.X.XX ✨`) permanece clicável caso o usuário queira consultar as novidades a qualquer momento.
-   - **Preparação para Deploy Manual**:
-     - Apontar o script `C:\Users\MacOS\Documents\Contrx\ATUALIZA-VERSÃO.BAT` para atualização/envio manual.
-     - **Respeitar estritamente a regra de não enviar nada automaticamente para produção**.
+### 2. Higienização e Limpeza de Arquivos Inúteis (Economia de Espaço na Oracle VPS)
+- Mapear e eliminar/sinalizar artefatos dispensáveis para preservar o disco e memória do servidor Oracle VPS:
+  - Caches e resíduos temporários (`.turbo`, logs temporários `.log`, arquivos de dump, artefatos soltos de teste).
+  - Validar `.gitignore` para garantir que pastas pesadas (`node_modules`, `.next`, `dist`, `.env`) não sejam transferidas incorretamente para o repositório.
+  - Eliminar arquivos órfãos, backups temporários (`.bak`, `.old`, `.tmp`) gerados durante o desenvolvimento.
 
-7. **Verificação Obrigatória do Supabase (Banco Remoto)**:
-   - Inspecionar a pasta de migrations (`contrx-backend/prisma/migrations`) e verificar o status em relação ao Supabase.
-   - O backend na VPS já aplica automaticamente as migrations pendentes no Supabase ao iniciar (`node scripts/apply-pending-migrations.js`).
-   - Indicar no relatório se o banco do Supabase já está **Atualizado** ou se há novas migrations criadas no repositório.
+### 3. Padrão Visual e Tipografia ERP (Fontes, Tamanhos e Hierarquia)
+- **Escala Tipográfica Corporativa ERP**:
+  - Utilizar fontes do sistema / sans-serif neutras e modernas (Geist / Inter).
+  - Textos de metadados, badges, labels e células compactas de tabela: `text-xs` (0.75rem / 12px) com tracking suave.
+  - Textos normais de formulários, inputs, botões e corpo padrão: `text-sm` (0.875rem / 14px).
+  - Subtítulos e títulos de seção/card: `text-base` a `text-lg` (16px - 18px), semibold.
+  - Indicadores numéricos de KPI e títulos de página: `text-xl` a `text-2xl` (20px - 24px), bold/extrabold.
+- **Harmonização de Densidade de Informação**:
+  - Garantir consistência visual entre módulos (Dashboard, Imóveis, Pessoas, Bancos, Admin).
+  - Remover fontes desproporcionais, espaçamentos excessivos ou tipografia amadora, assegurando aspecto profissional de software ERP de alto nível.
 
-8. **Não Enviar Nada Automaticamente**:
-   - Garantir que nada seja enviado para produção (Oracle, GitHub, Supabase) sem autorização prévia.
+### 4. Responsividade e Ajustes de Versão para Mobile
+- **Adaptação Completa para Telas Móveis (< 768px)**:
+  - Menus e Navegação: gaveta/drawer mobile (hamburger menu) funcional com overlay limpo.
+  - Tabelas de Dados: rolagem horizontal suave (`overflow-x-auto`) ou conversão para visualização em cards responsivos no mobile.
+  - Modais e Diálogos: ajuste de largura (`w-full max-w-lg mx-auto`), rolagem interna em telas pequenas (`max-h-[90vh] overflow-y-auto`).
+  - Formulários e Botões: grids responsivos (`grid-cols-1 md:grid-cols-2`), touch targets com altura mínima acessível (`min-h-[44px]`).
 
-Ao final, consolide todos os resultados em uma tabela informativa, inclua a **seção detalhada de mudanças realizadas** e aguarde instrução do usuário.
+### 5. Versionamento e Release Notes Automático
+- Atualizar versão sequencial caso aprovado novo incremento nos arquivos:
+  - `package.json` (frontend)
+  - `contrx-backend/package.json` (backend)
+  - `SKILL.md` (registro da versão atual)
+- Alimentar `constants/release-notes.ts` com categorias padronizadas (`novo`, `melhoria`, `correcao`, `seguranca`).
+- Garantir que o modal "O que há de novo" (`WhatsNewModal`) seja preparado para abertura automática no primeiro acesso do usuário.
+
+### 6. Relatório Final do Analista de Sistemas
+Ao concluir as análises e correções pós-comando "INICIAR", apresentar um relatório consolidado contendo:
+1. **Quadro Executivo de Verificação**: Status do Frontend, Backend, Supabase, Mobile, Tipografia ERP e Limpeza de Disco.
+2. **Mapeamento Detalhado de Alterações (Changelog)**: Lista de componentes e arquivos corrigidos/refatorados via `git status`/`diff`.
+3. **Status de Build**: Confirmação do sucesso da compilação da versão.
+4. **Instruções de Deploy Manual**: Lembrete para execução manual do `ATUALIZA-VERSÃO.BAT` pelo usuário.

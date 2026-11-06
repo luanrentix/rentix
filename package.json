@@ -1,6 +1,6 @@
 {
   "name": "contrx",
-  "version": "1.0.20",
+  "version": "1.0.21",
   "private": true,
   "scripts": {
     "dev": "next dev --webpack -p 3000",
@@ -34,6 +34,7 @@
     "typescript": "^5"
   },
   "overrides": {
-    "postcss": "^8.5.10"
+    "postcss": "^8.5.10",
+    "minimatch@>=7 <11": "^11.0.1"
   }
 }

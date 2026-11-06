@@ -16,6 +16,19 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "1.0.21",
+    date: "06 de Novembro de 2026",
+    title: "Varejo, produtos e gestão da equipe",
+    subtitle: "Novo painel da loja, catálogo mais organizado e melhorias nos cadastros e acessos.",
+    highlights: [
+      { category: "novo", title: "Painel da loja", description: "Resumo de vendas e pendências, acessos personalizáveis e previsão do tempo para a cidade selecionada." },
+      { category: "melhoria", title: "Catálogo de produtos", description: "Listagem compacta, fotos ampliadas, destaque da seleção e ordenação salva, com botões seguindo o tema escolhido." },
+      { category: "novo", title: "Preços e vendedores", description: "Margem de lucro editável, permissões de desconto e acréscimo, histórico de preços e cadastro completo de vendedores." },
+      { category: "correcao", title: "Validação de cadastros e acesso", description: "Verificação de GTIN e duplicidade, códigos de grade vinculados ao produto e acesso de usuários existentes sem redirecionamento indevido." },
+      { category: "seguranca", title: "Proteção de acesso e atualização", description: "Melhorias na proteção das sessões, isolamento dos dados da empresa e validação das atualizações do sistema." },
+    ],
+  },
+  {
     version: "1.0.20",
     date: "01 de Outubro de 2026",
     title: "Visualizador Lightbox de Mídias, Pré-visualização e Downloads",

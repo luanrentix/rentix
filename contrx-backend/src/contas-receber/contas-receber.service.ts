@@ -54,7 +54,7 @@ export class ContasReceberService {
     }
 
     return this.prisma.contaReceber.findMany({
-      where: { companyId },
+      where: { companyId, cancelledAt: null },
       orderBy: { dueDate: 'asc' },
       include: this.defaultInclude,
     });
@@ -93,7 +93,7 @@ export class ContasReceberService {
 
   async findOne(id: string, companyId: string) {
     const account = await this.prisma.contaReceber.findFirst({
-      where: { id, companyId },
+      where: { id, companyId, cancelledAt: null },
       include: this.defaultInclude,
     });
 
@@ -105,7 +105,9 @@ export class ContasReceberService {
   }
 
   async update(id: string, data: AtualizarContaReceberDto, companyId: string) {
-    await this.ensureExists(id, companyId);
+    const existing = await this.ensureExists(id, companyId);
+    if (existing.salesOrderId)
+      throw new BadRequestException('Altere o documento pelo módulo Vendas.');
 
     await this.validateCompany(companyId);
     await this.validateRelations(companyId, data.contractId, data.tenantId);
@@ -121,7 +123,9 @@ export class ContasReceberService {
   }
 
   async remove(id: string, companyId: string) {
-    await this.ensureExists(id, companyId);
+    const existing = await this.ensureExists(id, companyId);
+    if (existing.salesOrderId)
+      throw new BadRequestException('Cancele ou estorne a venda de origem.');
 
     return this.prisma.$transaction(async (tx) => {
       await this.deleteOwnerPayoutForReceivable(tx, id, companyId);
@@ -149,6 +153,13 @@ export class ContasReceberService {
     const account = await this.ensureExists(id, companyId);
 
     return this.prisma.$transaction(async (tx) => {
+      const lockedAccount = await this.lockSalesReceivable(
+        tx,
+        account.salesOrderId,
+        companyId,
+        id,
+      );
+      if (lockedAccount) account.amount = lockedAccount.amount;
       const currentPaymentSummary = await tx.pagamentoRecebido.aggregate({
         where: { chargeId: id },
         _sum: { amountPaid: true, discount: true, interest: true },
@@ -195,7 +206,13 @@ export class ContasReceberService {
 
       await this.syncOwnerPayoutFromReceivable(tx, id, companyId);
 
-      if (data.bankAccountId && (tx as any).bankTransaction) {
+      if (account.salesOrderId)
+        await this.recordSalesReceiptBank(tx, companyId, id, data);
+      if (
+        !account.salesOrderId &&
+        data.bankAccountId &&
+        (tx as any).bankTransaction
+      ) {
         const bankAccount = await (tx as any).bankAccount.findFirst({
           where: { id: data.bankAccountId, companyId, deletedAt: null },
         });
@@ -253,6 +270,10 @@ export class ContasReceberService {
       'O valor recebido deve ser maior que zero.',
     );
     const account = await this.ensureExists(id, companyId);
+    if (account.salesOrderId)
+      throw new BadRequestException(
+        'Use recebimento parcial ou estorno; não substitua o recebimento de uma venda.',
+      );
     const nextSettlementAmount = getFinancialSettlementAmount(
       data.amountPaid,
       data.discount || 0,
@@ -323,10 +344,19 @@ export class ContasReceberService {
 
         for (const payment of data.payments) {
           const account = await tx.contaReceber.findFirst({
-            where: { id: payment.chargeId, companyId },
-            select: { id: true, amount: true },
+            where: { id: payment.chargeId, companyId, cancelledAt: null },
+            select: { id: true, amount: true, salesOrderId: true },
           });
 
+          if (account?.salesOrderId) {
+            const lockedAccount = await this.lockSalesReceivable(
+              tx,
+              account.salesOrderId,
+              companyId,
+              account.id,
+            );
+            if (lockedAccount) account.amount = lockedAccount.amount;
+          }
           if (!account) {
             throw new NotFoundException('Conta a receber nao encontrada.');
           }
@@ -398,6 +428,13 @@ export class ContasReceberService {
             companyId,
           );
 
+          if (account.salesOrderId)
+            await this.recordSalesReceiptBank(
+              tx,
+              companyId,
+              account.id,
+              payment,
+            );
           updatedAccounts.push(updatedAccount);
         }
 
@@ -408,7 +445,11 @@ export class ContasReceberService {
   }
 
   async reversePayment(id: string, companyId: string) {
-    await this.ensureExists(id, companyId);
+    const existing = await this.ensureExists(id, companyId);
+    if (existing.salesOrderId)
+      throw new BadRequestException(
+        'Estorne a venda de origem para reverter seus recebimentos.',
+      );
 
     return this.prisma.$transaction(async (tx) => {
       await this.deleteOwnerPayoutForReceivable(tx, id, companyId);
@@ -469,11 +510,84 @@ export class ContasReceberService {
     };
   }
 
+  private async recordSalesReceiptBank(
+    tx: Prisma.TransactionClient,
+    companyId: string,
+    chargeId: string,
+    payment: ReceberPagamentoDto,
+  ) {
+    if (
+      !payment.bankAccountId ||
+      !(await tx.bankAccount.findFirst({
+        where: {
+          id: payment.bankAccountId,
+          companyId,
+          active: true,
+          deletedAt: null,
+        },
+      }))
+    )
+      throw new BadRequestException(
+        'Selecione uma conta ou caixa válido para receber a parcela da venda.',
+      );
+    const paidAt = this.parseDate(
+      payment.paidAt,
+      'Data de pagamento inválida.',
+    );
+    const cashReceipt = await tx.bankTransaction.create({
+      data: {
+        bankAccountId: payment.bankAccountId,
+        type: 'INFLOW',
+        status: 'CONFIRMED',
+        amount: payment.amountPaid,
+        description: 'RECEBIMENTO DE PARCELA DE VENDA',
+        competenceDate: paidAt,
+        paymentDate: paidAt,
+        category: 'VENDAS',
+        referenceType: 'RECEIVABLE',
+        referenceId: chargeId,
+      },
+    });
+    await tx.commercialHistory.create({
+      data: {
+        companyId,
+        action: 'SALES_CASH_RECEIPT',
+        description: 'RECEBIMENTO DE PARCELA DE VENDA',
+        metadata: {
+          transactionId: cashReceipt.id,
+          method: payment.method,
+          paymentItems: payment.paymentItems ?? null,
+        },
+      },
+    });
+    await tx.bankAccount.update({
+      where: { id: payment.bankAccountId },
+      data: { currentBalance: { increment: payment.amountPaid } },
+    });
+  }
+
+  private async lockSalesReceivable(
+    tx: Prisma.TransactionClient,
+    salesOrderId: string | null | undefined,
+    companyId: string,
+    id: string,
+  ) {
+    if (!salesOrderId) return;
+    await tx.$queryRaw`SELECT "id" FROM "empresas" WHERE "id" = ${companyId} FOR UPDATE`;
+    const charge = await tx.contaReceber.findFirst({
+      where: { id, companyId, cancelledAt: null },
+    });
+    if (!charge)
+      throw new BadRequestException('A venda foi estornada. Atualize a tela.');
+    return charge;
+  }
+
   private async ensureExists(id: string, companyId: string) {
     const account = await this.prisma.contaReceber.findFirst({
-      where: { id, companyId },
+      where: { id, companyId, cancelledAt: null },
       select: {
         id: true,
+        salesOrderId: true,
         amount: true,
         tenantName: true,
         propertyName: true,
@@ -622,8 +736,7 @@ export class ContasReceberService {
 
   private normalizeAccountData<
     TData extends
-      | CriarContaReceberDataWithCompany
-      | AtualizarContaReceberDataWithCompany,
+      CriarContaReceberDataWithCompany | AtualizarContaReceberDataWithCompany,
   >(data: TData) {
     return uppercaseFields(data, ['property', 'tenant']);
   }

@@ -21,6 +21,7 @@
 /build
 
 # database backups
+/_backups/
 /backups/
 contrx-backend/backups/
 contrx-backend/.local-postgres/

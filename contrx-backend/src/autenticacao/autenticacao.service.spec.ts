@@ -1,3 +1,4 @@
+import { UserSessionsService } from './user-sessions.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { ServiceUnavailableException } from '@nestjs/common';
@@ -51,6 +52,7 @@ describe('AutenticacaoService', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: UserSessionsService, useValue: {} },
         AutenticacaoService,
         {
           provide: PrismaService,
@@ -101,8 +103,7 @@ describe('AutenticacaoService', () => {
     expect(response.resetUrl).toContain('email=user%40example.com');
 
     const updateCall = prisma.user.update.mock.calls[0]?.[0] as
-      | PasswordResetUpdateArgs
-      | undefined;
+      PasswordResetUpdateArgs | undefined;
 
     expect(updateCall?.where).toEqual({ id: 'user-1' });
     expect(typeof updateCall?.data.passwordResetTokenHash).toBe('string');

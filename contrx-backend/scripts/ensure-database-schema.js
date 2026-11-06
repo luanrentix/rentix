@@ -4,46 +4,8 @@ const { Client } = require('pg');
 
 const databaseUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
 
-function isSupabaseDatabaseUrl(url) {
-  try {
-    return new URL(url).hostname.includes('supabase.');
-  } catch {
-    return url?.includes('supabase.');
-  }
-}
-
-function removeSslMode(url) {
-  try {
-    const parsedUrl = new URL(url);
-
-    parsedUrl.searchParams.delete('sslmode');
-
-    return parsedUrl.toString();
-  } catch {
-    return url.replace(/[?&]sslmode=require\b/, '');
-  }
-}
-
-function shouldRejectUnauthorizedTls() {
-  return process.env.CONTRX_DB_SSL_REJECT_UNAUTHORIZED !== 'false';
-}
-
-function createClient() {
-  if (!databaseUrl) {
-    throw new Error('DATABASE_URL or DIRECT_URL environment variable is required.');
-  }
-
-  const isSupabaseConnection = isSupabaseDatabaseUrl(databaseUrl);
-
-  return new Client({
-    connectionString: isSupabaseConnection
-      ? removeSslMode(databaseUrl)
-      : databaseUrl,
-    ssl: isSupabaseConnection
-      ? { rejectUnauthorized: shouldRejectUnauthorizedTls() }
-      : undefined,
-  });
-}
+const { databaseConnectionOptions } = require('./lib/database-connection.cjs');
+function createClient() { return new Client(databaseConnectionOptions(databaseUrl)); }
 
 async function ensureSchema(client) {
   await client.query(`

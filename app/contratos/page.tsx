@@ -17,7 +17,6 @@ import {
   type CreateContractDto,
   type UpdateContractDto,
 } from "@/services/contracts.service";
-import { openWhatsAppMessage } from "@/services/whatsapp.service";
 import { getProperties } from "@/services/properties.service";
 import { getPeople } from "@/services/people.service";
 import {
@@ -697,6 +696,7 @@ export default function ContractsPage() {
   }, [finishContractTarget, receivableAccounts]);
 
   // Compartilhamento de Contrato via WhatsApp com link público válido por 7 dias
+  // Compartilhamento de Contrato com modal para copiar link ou enviar via WhatsApp
   async function handleShareContractWhatsApp(contract: Contract) {
     try {
       setToast({ type: "info", message: "Gerando link de visualização seguro do contrato..." });
@@ -704,30 +704,16 @@ export default function ContractsPage() {
       const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
       const url = `${baseUrl}/contrato-compartilhado/${res.id}`;
 
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch {
+        // Ignora caso permissão de clipboard seja bloqueada
+      }
+
       setShareModalContract(contract);
       setShareModalUrl(url);
       setShareModalExpiresAt(res.expiresAt);
       setIsShareModalOpen(true);
-
-      const tenant = tenants.find((t) => String(t.id) === String(contract.tenantId));
-      if (tenant?.phone) {
-        const cleanPhone = tenant.phone.replace(/\D/g, "");
-        const customerName = contract.tenantName || tenant.name || "Cliente";
-        const propertyTitle = contract.propertyName || "Imóvel / Bem";
-        const msg = [
-          `Olá, *${customerName}*!`,
-          ``,
-          `Segue o link para visualização e impressão do seu Contrato de Locação referente ao bem *${propertyTitle}*:`,
-          `🔗 ${url}`,
-          ``,
-          `ℹ️ _Este link é válido por 7 dias._`,
-        ].join("\n");
-
-        openWhatsAppMessage({
-          phone: cleanPhone,
-          message: msg,
-        });
-      }
     } catch (err) {
       setToast({
         type: "error",

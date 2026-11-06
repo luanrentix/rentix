@@ -1,5 +1,40 @@
 @import "tailwindcss";
 
+/* O catalogo usa o espaco do cabecalho geral sem afetar outras telas. */
+.contrx-workspace:has([data-products-page]) > header {
+  display: none;
+}
+
+.contrx-workspace:has([data-confections-home]) > header {
+  height: 3.5rem;
+  min-height: 3.5rem;
+  justify-content: flex-end;
+}
+
+.contrx-workspace:has([data-confections-home]) > header > :first-child {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .contrx-workspace:has([data-products-page], [data-confections-home]) > .contrx-app-main {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+}
+
+@media (max-width: 767px) {
+  [data-products-page] button,
+  [data-products-page] select,
+  [data-products-page] input:not([type="checkbox"]):not([type="radio"]),
+  [data-confections-home] button {
+    min-height: 44px;
+  }
+
+  [data-products-page] button {
+    min-width: 44px;
+  }
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 * {

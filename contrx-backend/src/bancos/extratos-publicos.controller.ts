@@ -1,7 +1,9 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { PublicShareRateLimitGuard } from '../autenticacao/guards/rate-limit.guard';
+import { Controller, Get, Param, UseGuards } from '@nestjs/common';
 import { BancosService } from './bancos.service';
 
 @Controller('extratos-publicos')
+@UseGuards(PublicShareRateLimitGuard)
 export class ExtratosPublicosController {
   constructor(private readonly bancosService: BancosService) {}
 

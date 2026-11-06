@@ -157,16 +157,16 @@ export function ReceivableMobileCards({
             {/* Ações inferiores */}
             <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
               <div className="flex items-center gap-1.5">
-                {tenantPhone && (
-                  <a
-                    href={getWhatsAppUrl(tenantPhone, charge)}
-                    target="_blank"
-                    rel="noreferrer"
+                {tenantPhone && onShareReport && (
+                  <button
+                    type="button"
+                    onClick={() => onShareReport(charge)}
                     className="inline-flex items-center gap-1 rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400"
+                    title="Cobrar pelo WhatsApp / Copiar Link"
                   >
                     <MessageCircle className="h-3.5 w-3.5" />
                     Cobrar
-                  </a>
+                  </button>
                 )}
                 {onShareReport && (
                   <button

@@ -55,13 +55,13 @@ export default function ContasPagarPage() {
 
   // Filtros
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<ExpenseFilterStatus>("Pending");
+  const [statusFilter, setStatusFilter] = useState<ExpenseFilterStatus>("All");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [selectedPersonId, setSelectedPersonId] = useState("all");
   const [selectedPropertyId, setSelectedPropertyId] = useState("all");
-  const [periodShortcut, setPeriodShortcut] = useState<ExpensePeriodShortcut>("CurrentMonth");
-  const [startDate, setStartDate] = useState(getStartOfCurrentMonth());
-  const [endDate, setEndDate] = useState(getEndOfCurrentMonth());
+  const [periodShortcut, setPeriodShortcut] = useState<ExpensePeriodShortcut>("All");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
 
   // Modais
@@ -214,7 +214,7 @@ export default function ContasPagarPage() {
 
   function handleResetFilters() {
     setSearch("");
-    setStatusFilter("Pending");
+    setStatusFilter("All");
     setCategoryFilter("all");
     setSelectedPersonId("all");
     setSelectedPropertyId("all");
@@ -223,11 +223,13 @@ export default function ContasPagarPage() {
 
   const hasActiveFilters =
     Boolean(search) ||
-    statusFilter !== "Pending" ||
+    statusFilter !== "All" ||
     categoryFilter !== "all" ||
     selectedPersonId !== "all" ||
     selectedPropertyId !== "all" ||
-    periodShortcut !== "CurrentMonth";
+    periodShortcut !== "All" ||
+    Boolean(startDate) ||
+    Boolean(endDate);
 
   // Filtragem de despesas
   const filteredExpenses = useMemo(() => {

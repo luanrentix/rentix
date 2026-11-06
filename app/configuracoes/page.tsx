@@ -408,7 +408,7 @@ export default function ConfiguracoesPage() {
   const printTemplateTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const printTemplateDocxInputRef = useRef<HTMLInputElement | null>(null);
 
-  const lockedUserEmail = user?.email || userSettings.email;
+  const lockedUserEmail = user ? (user.email || "") : userSettings.email;
   const currentUserRoleLabel = roleLabels[user?.role || ""] || "Usuário";
   const canResetTestData = canResetTestDataRole(user?.role);
   const canManageCompanyUsers = isCompanyAdminRole(user?.role);
@@ -776,7 +776,9 @@ export default function ConfiguracoesPage() {
     try {
       setIsCreatingCompanyUser(true);
       setCompanyUserError("");
-      await createCompanyUser(newCompanyUserForm);
+      if (newCompanyUserForm.password !== newCompanyUserForm.confirmPassword) throw new Error('As senhas não conferem.');
+      const { confirmPassword, ...payload } = newCompanyUserForm;
+      await createCompanyUser({ ...payload, email: payload.email.trim() || null, username: payload.username || undefined });
       setNewCompanyUserForm(defaultNewCompanyUserForm);
       setActiveCompanyUsersTab("list");
       await loadCompanyUsers();
@@ -810,8 +812,12 @@ export default function ConfiguracoesPage() {
   function handleStartEditCompanyUser(companyUser: CompanyUser) {
     setEditingCompanyUser(companyUser);
     setEditCompanyUserForm({
+      username: companyUser.username || '', maxConcurrentSessions: companyUser.maxConcurrentSessions || 1,
+      actionPermissions: companyUser.actionPermissions ?? null, confirmPassword: '',
       name: companyUser.name,
-      email: companyUser.email,
+      email: companyUser.email || '',
+      emailLoginEnabled: companyUser.emailLoginEnabled ?? true,
+      userLoginEnabled: companyUser.userLoginEnabled ?? true,
       password: "",
       role: companyUser.role as CompanyUserRole,
       isActive: companyUser.isActive,
@@ -830,7 +836,14 @@ export default function ConfiguracoesPage() {
     try {
       setIsUpdatingCompanyUser(true);
       setCompanyUserError("");
+      if (editCompanyUserForm.password && editCompanyUserForm.password !== editCompanyUserForm.confirmPassword) throw new Error('As senhas não conferem.');
       await updateCompanyUser(editingCompanyUser.id, {
+        email: editCompanyUserForm.email.trim() || null,
+        emailLoginEnabled: editCompanyUserForm.emailLoginEnabled,
+        userLoginEnabled: editCompanyUserForm.userLoginEnabled,
+        username: editCompanyUserForm.username || null,
+        maxConcurrentSessions: editCompanyUserForm.maxConcurrentSessions,
+        actionPermissions: editCompanyUserForm.actionPermissions,
         name: editCompanyUserForm.name,
         role: editCompanyUserForm.role,
         isActive: editCompanyUserForm.isActive,

@@ -344,9 +344,7 @@ export function BankTransactionModal({
     } else {
       // New transaction with optional initialData
       const tab = initialData?.type || "RECEITA";
-      const activeAccounts = accounts.filter((acc) => acc.active !== false);
-      const defaultAccountId =
-        initialData?.bankAccountId || (activeAccounts.length > 0 ? activeAccounts[0].id : "");
+      const defaultAccountId = initialData?.bankAccountId || "";
 
       let formattedAmount = "R$ 0,00";
       if (initialData?.amountStr) {
@@ -371,21 +369,7 @@ export function BankTransactionModal({
       });
       setActiveTab(tab);
     }
-  }, [isOpen, editingTransaction, initialData, accounts]);
-
-  // If default account was empty initially but accounts loaded later, select first active account
-  useEffect(() => {
-    if (isOpen && !editingTransaction && !launchForm.bankAccountId && accounts.length > 0) {
-      const activeAcc = accounts.find((acc) => acc.active);
-      if (activeAcc) {
-        setLaunchForm((prev) => ({
-          ...prev,
-          bankAccountId: prev.bankAccountId || activeAcc.id,
-          originBankAccountId: prev.originBankAccountId || activeAcc.id,
-        }));
-      }
-    }
-  }, [isOpen, accounts, editingTransaction, launchForm.bankAccountId]);
+  }, [isOpen, editingTransaction, initialData]);
 
   // Handle category line changes
   const handleCategoryLineChange = (

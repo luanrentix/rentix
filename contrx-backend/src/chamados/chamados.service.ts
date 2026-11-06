@@ -153,13 +153,14 @@ export class ChamadosService {
     });
 
     // Send email to the customer who created the ticket
-    await this.enviarEmailResposta(
-      chamado.user.email,
-      chamado.user.name,
-      chamado.subject,
-      chamado.message,
-      responseText,
-    );
+    if (chamado.user.email)
+      await this.enviarEmailResposta(
+        chamado.user.email,
+        chamado.user.name,
+        chamado.subject,
+        chamado.message,
+        responseText,
+      );
 
     return updatedChamado;
   }

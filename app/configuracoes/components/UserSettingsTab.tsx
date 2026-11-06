@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { UserAccessFields, CompanySessionSettings, UserLoginMethods } from "./UserAccessFields";
 import {
   type CompanyUser,
   type EditCompanyUserForm,
@@ -133,6 +134,8 @@ export const UserSettingsTab: React.FC<UserSettingsTabProps> = ({
           Editar usuário
         </button>
       </div>
+
+      {canManageCompanyUsers && <CompanySessionSettings users={companyUsers} />}
 
       {/* User Card */}
       <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
@@ -416,7 +419,7 @@ export const UserSettingsTab: React.FC<UserSettingsTabProps> = ({
                                   </div>
                                   <div className="min-w-0">
                                     <p className="truncate font-bold text-slate-900">{u.name}</p>
-                                    <p className="truncate text-xs font-normal text-slate-500">{u.email}</p>
+                                    <p className="truncate text-xs font-normal text-slate-500">{u.email || u.username || "Sem e-mail"}</p>
                                   </div>
                                 </div>
                               </td>
@@ -479,7 +482,7 @@ export const UserSettingsTab: React.FC<UserSettingsTabProps> = ({
                               </div>
                               <div className="min-w-0">
                                 <p className="truncate text-sm font-bold text-slate-900">{u.name}</p>
-                                <p className="truncate text-xs text-slate-500">{u.email}</p>
+                                <p className="truncate text-xs text-slate-500">{u.email || u.username || "Sem e-mail"}</p>
                               </div>
                             </div>
                             <button
@@ -521,6 +524,7 @@ export const UserSettingsTab: React.FC<UserSettingsTabProps> = ({
           {activeCompanyUsersTab === "new" && (
             <form onSubmit={handleCreateCompanyUser} className="space-y-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
               <h4 className="text-base font-black text-slate-950">Cadastrar Novo Usuário</h4>
+              <UserLoginMethods form={newCompanyUserForm} onChange={patch => setNewCompanyUserForm(f => ({ ...f, ...patch }))} />
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <label className="space-y-2">
@@ -537,10 +541,10 @@ export const UserSettingsTab: React.FC<UserSettingsTabProps> = ({
                 </label>
 
                 <label className="space-y-2">
-                  <span className="text-xs font-black uppercase text-slate-500">E-mail *</span>
+                  <span className="text-xs font-black uppercase text-slate-500">E-mail {newCompanyUserForm.emailLoginEnabled ? "*" : "(opcional)"}</span>
                   <input
                     type="email"
-                    required
+                    required={newCompanyUserForm.emailLoginEnabled}
                     value={newCompanyUserForm.email}
                     onChange={(e) =>
                       setNewCompanyUserForm((f) => ({ ...f, email: e.target.value }))
@@ -649,6 +653,7 @@ export const UserSettingsTab: React.FC<UserSettingsTabProps> = ({
                 </div>
               </div>
 
+              <UserAccessFields form={newCompanyUserForm} onChange={patch => setNewCompanyUserForm(f => ({ ...f, ...patch }))} />
               <div className="flex justify-end pt-4">
                 <button
                   type="submit"
@@ -670,7 +675,7 @@ export const UserSettingsTab: React.FC<UserSettingsTabProps> = ({
             <div className="border-b border-slate-100 bg-slate-50 px-6 py-5 flex items-center justify-between">
               <div>
                 <h3 className="text-xl font-black text-slate-950">Editar Usuário da Empresa</h3>
-                <p className="text-xs font-semibold text-slate-500">{editingCompanyUser.email}</p>
+                <p className="text-xs font-semibold text-slate-500">{editingCompanyUser.email || editingCompanyUser.username || "Sem e-mail"}</p>
               </div>
               <button
                 type="button"
@@ -682,6 +687,8 @@ export const UserSettingsTab: React.FC<UserSettingsTabProps> = ({
             </div>
 
             <form onSubmit={handleUpdateCompanyUser} className="min-h-0 flex-1 overflow-y-auto p-6 space-y-5">
+              <UserLoginMethods form={editCompanyUserForm} onChange={patch => setEditCompanyUserForm(f => ({ ...f, ...patch }))} />
+              <label className="block space-y-2 text-sm font-bold">E-mail {editCompanyUserForm.emailLoginEnabled ? '*' : '(opcional)'}<input type="email" required={editCompanyUserForm.emailLoginEnabled} value={editCompanyUserForm.email} onChange={e => setEditCompanyUserForm(f => ({ ...f, email: e.target.value }))} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400" /></label>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <label className="space-y-2">
                   <span className="text-xs font-black uppercase text-slate-500">Nome *</span>
@@ -807,6 +814,8 @@ export const UserSettingsTab: React.FC<UserSettingsTabProps> = ({
                 </div>
               </div>
 
+              <UserAccessFields form={editCompanyUserForm} onChange={patch => setEditCompanyUserForm(f => ({ ...f, ...patch }))} />
+              <button type="button" className="text-sm font-bold text-orange-600" onClick={() => setEditCompanyUserForm(f => ({ ...f, email: editingCompanyUser.email || "", emailLoginEnabled: editingCompanyUser.emailLoginEnabled ?? true, userLoginEnabled: editingCompanyUser.userLoginEnabled ?? true, username: editingCompanyUser.username || "", maxConcurrentSessions: editingCompanyUser.maxConcurrentSessions || 1, permissions: editingCompanyUser.permissions || [], actionPermissions: editingCompanyUser.actionPermissions ?? null }))}>Restaurar acessos não salvos</button>
               <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
                 <button
                   type="button"

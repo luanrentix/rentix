@@ -12,12 +12,14 @@ export type AppToolRoute = {
 export const publicRoutes = ["/"] as const;
 export const authRoutes = ["/login"] as const;
 export const internalUtilityRoutes = [
+  "/inicio",
   "/configuracoes",
   "/financeiro/relatorios",
   "/suporte",
 ] as const;
 
 export const internalToolRoutes: AppToolRoute[] = [
+  { label: "Início", href: "/confeccoes", icon: "🏠", permissionKey: "sales", scope: "internal", category: "PRINCIPAL" },
   {
     label: "Dashboard",
     href: "/dashboard",
@@ -89,6 +91,14 @@ export const internalToolRoutes: AppToolRoute[] = [
     permissionKey: "bank",
     scope: "internal",
     category: "FINANCEIRO",
+  },
+  {
+    label: "Vendas",
+    href: "/vendas",
+    icon: "🛍️",
+    permissionKey: "sales",
+    scope: "internal",
+    category: "PRINCIPAL",
   },
 ];
 
