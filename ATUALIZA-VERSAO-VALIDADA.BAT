@@ -15,13 +15,15 @@ echo ============================================================
 echo CONTRX - ATUALIZACAO MANUAL VALIDADA
 echo [1] Validar e enviar versao para VPS Oracle
 echo [2] Backup local dos dados e migrations do Supabase
-echo [3] Sair
+echo [3] Manutencao manual - diagnostico, simulacao e plano aprovado
+echo [4] Sair
 echo ============================================================
 set "OPCAO="
-set /p "OPCAO=Escolha 1, 2 ou 3: "
+set /p "OPCAO=Escolha 1, 2, 3 ou 4: "
 if "%OPCAO%"=="1" goto DEPLOY
 if "%OPCAO%"=="2" goto SUPABASE
-if "%OPCAO%"=="3" exit /b 0
+if "%OPCAO%"=="3" goto MANUTENCAO
+if "%OPCAO%"=="4" exit /b 0
 goto MENU
 :DEPLOY
 if not exist "C:\ssh\oracle-final.key" (
@@ -69,6 +71,15 @@ if errorlevel 1 goto FALHA
 "%GIT_BASH%" -lc "ssh -i %SSH_KEY% ubuntu@163.176.163.165 'cd /opt/contrx && git pull --ff-only origin main && docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build && docker compose -f docker-compose.prod.yml ps && curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-connrefused -I https://www.contrx.com.br && curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-connrefused -I https://api.contrx.com.br'"
 if errorlevel 1 goto FALHA
 echo Envio concluido. Valide login e operacoes essenciais antes de encerrar a janela de manutencao.
+pause
+goto MENU
+:MANUTENCAO
+pushd "%PROJECT_DIR%\contrx-backend"
+if errorlevel 1 goto FALHA
+node scripts\maintenance\manual-menu.cjs
+set "MANUTENCAO_RESULT=%ERRORLEVEL%"
+popd
+if not "%MANUTENCAO_RESULT%"=="0" goto FALHA
 pause
 goto MENU
 :SUPABASE

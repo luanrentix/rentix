@@ -745,11 +745,12 @@ export default function AppShell({ children }: AppShellProps) {
   const businessRouteAllowed = isBusinessRouteAllowed(pathname, companySettings.ramoAtividade);
   const currentToolAllowed = !toolKeyByHref[pathname] || canAccessTool(user?.role, user?.permissions, toolKeyByHref[pathname]);
   useEffect(() => {
-    if (!settingsReady) return;
+    if (!settingsReady || !user) return;
     if (pathname === "/inicio" || !businessRouteAllowed || !currentToolAllowed) {
-      router.replace(visibleMenuItems[0]?.href || "/configuracoes");
+      const destination = visibleMenuItems[0]?.href || "/inicio";
+      if (pathname !== destination) router.replace(destination);
     }
-  }, [settingsReady, pathname, businessRouteAllowed, currentToolAllowed, router, visibleMenuItems]);
+  }, [settingsReady, user, pathname, businessRouteAllowed, currentToolAllowed, router, visibleMenuItems]);
 
   const loadSettingsFromLocalStorage = useCallback(() => {
     const storedUserSettings = getCompanyStorageItem(

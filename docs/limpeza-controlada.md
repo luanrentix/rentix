@@ -1,5 +1,13 @@
 # Limpeza controlada: procedimento manual
 
+## Acesso pelo BAT de atualização
+
+No `C:\Users\MacOS\Documents\Contrx\ATUALIZA-VERSÃO.BAT`, a opção **3 — Manutenção manual** abre um menu independente: diagnóstico, simulação ou execução do plano aprovado. A opção **4** encerra o BAT. As opções 1 e 2 mantêm seus fluxos anteriores.
+
+O menu solicita explicitamente o arquivo de ambiente; caminhos relativos partem de `contrx-backend`. Diagnóstico e simulação geram relatórios novos em `contrx-backend/backups`. Para execução real, também exige relatório aprovado, arquivo de aprovação humana, ambiente local vazio para teste de restauração e digitação da confirmação exata. Todos os bloqueios do executor continuam válidos. Nenhuma manutenção é executada automaticamente ao atualizar a versão.
+
+O catálogo inicial contém somente a limpeza controlada conhecida. Scripts futuros devem ser registrados e revisados antes de serem disponibilizados; não há campo para executar comandos arbitrários.
+
 Data da implementação: 06/11/2026. Esta ferramenta é independente de deploy, startup e migrations. Não altera APIs, telas, permissões, schema ou regras comerciais.
 
 ## Entregáveis
