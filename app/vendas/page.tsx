@@ -31,7 +31,6 @@ import {
   getSalesReceivingAccounts,
   type SalesReceivingAccount,
 } from "@/services/vendas.service";
-import { prepareSalesCashAccount } from "@/services/caixa.service";
 import PaymentPanel from "./payment-panel";
 import posStyles from "./pos.module.css";
 import {
@@ -44,7 +43,10 @@ import CardPaymentModal from "./card-payment-modal";
 import type { SalesCardPayment } from "@/services/sales-cards";
 import { paymentBreakdown } from "@/services/sales-payment";
 import SaleReceiptModal from "./sale-receipt-modal";
-import OrderListFilterBar, { emptyOrderFilters, type OrderListFilters } from "./order-list-filters";
+import OrderListFilterBar, {
+  emptyOrderFilters,
+  type OrderListFilters,
+} from "./order-list-filters";
 import PendingSaleActions from "./pending-sale-actions";
 import PendingSalesModal, { type SalesListFilter } from "./pending-sales-modal";
 import RecordedSaleActions, {
@@ -169,10 +171,14 @@ function VendasScreen() {
   const router = useRouter();
   const [returnModalOpen, setReturnModalOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [pendingSalesFilter, setPendingSalesFilter] = useState<SalesListFilter | null>(null);
+  const [pendingSalesFilter, setPendingSalesFilter] =
+    useState<SalesListFilter | null>(null);
   const [newSaleConfirmOpen, setNewSaleConfirmOpen] = useState(false);
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
-  const [pendingNavigation, setPendingNavigation] = useState<{ href: string; newSale: boolean } | null>(null);
+  const [pendingNavigation, setPendingNavigation] = useState<{
+    href: string;
+    newSale: boolean;
+  } | null>(null);
   const [cardPayments, setCardPayments] = useState<SalesCardPayment[]>([]);
   const [cardModal, setCardModal] = useState<"DEBITO" | "CREDITO" | null>(null);
   const [receiptOrder, setReceiptOrder] = useState<SalesOrder | null>(null);
@@ -219,7 +225,9 @@ function VendasScreen() {
     | "FORNECEDORES"
   >("POS");
   const [openFilter, setOpenFilter] = useState("ORCAMENTO");
-  const [listFilters, setListFilters] = useState<Record<string, OrderListFilters>>({});
+  const [listFilters, setListFilters] = useState<
+    Record<string, OrderListFilters>
+  >({});
   const [historyRetry, setHistoryRetry] = useState(0);
   const [historyError, setHistoryError] = useState("");
   const [openSearches, setOpenSearches] = useState<Record<string, string>>({});
@@ -229,13 +237,13 @@ function VendasScreen() {
   const [saleType, setSaleType] = useState("VENDA");
   const [bankAccounts, setBankAccounts] = useState<SalesReceivingAccount[]>([]);
   const [bankAccountId, setBankAccountId] = useState("");
+  const receivingAccountId = bankAccountId || bankAccounts[0]?.id || "";
   const [installments, setInstallments] = useState(1);
   const [orderVersion, setOrderVersion] = useState<number | undefined>();
   const requestIdRef = useRef<string | null>(null);
   const savingRef = useRef(false);
   const [payment, setPayment] = useState<PayMethod>("DINHEIRO");
   const [cashTender, setCashTender] = useState("");
-  const [creatingCashAccount, setCreatingCashAccount] = useState(false);
   const [search, setSearch] = useState("");
   const [quantity, setQuantity] = useState("1,00");
   const [, setUnitPrice] = useState("");
@@ -611,17 +619,17 @@ function VendasScreen() {
         event.stopImmediatePropagation();
         return;
       }
-      if (
-        (newSale || next.pathname !== "/vendas") &&
-        live.current.dirty
-      ) {
+      if ((newSale || next.pathname !== "/vendas") && live.current.dirty) {
         event.preventDefault();
         event.stopImmediatePropagation();
         if (newSale && next.searchParams.get("tipo") !== "TROCA") {
           setError("");
           setNewSaleConfirmOpen(true);
         } else {
-          setPendingNavigation({ href: next.pathname + next.search + next.hash, newSale });
+          setPendingNavigation({
+            href: next.pathname + next.search + next.hash,
+            newSale,
+          });
         }
         return;
       }
@@ -725,10 +733,21 @@ function VendasScreen() {
     setDiscountPercent(formatMoney(subtotal ? (discount / subtotal) * 100 : 0));
     setAdditionPercent(formatMoney(subtotal ? (addition / subtotal) * 100 : 0));
   }, [subtotal, discount, addition]);
-  const discountBases = cart.map(line => line.priceType === "PROMOCIONAL" || line.product.allowDiscount === false ? 0 : saleLineCents(line.unitPrice, line.quantity));
+  const discountBases = cart.map((line) =>
+    line.priceType === "PROMOCIONAL" || line.product.allowDiscount === false
+      ? 0
+      : saleLineCents(line.unitPrice, line.quantity),
+  );
   const discountEligible = discountBases.reduce((a, b) => a + b, 0) / 100;
   const allocatedDiscounts = allocateSaleAdjustment(discount, discountBases);
-  const allocatedAdditions = allocateSaleAdjustment(addition, cart.map(line => line.product.allowAddition === false ? 0 : saleLineCents(line.unitPrice, line.quantity)));
+  const allocatedAdditions = allocateSaleAdjustment(
+    addition,
+    cart.map((line) =>
+      line.product.allowAddition === false
+        ? 0
+        : saleLineCents(line.unitPrice, line.quantity),
+    ),
+  );
   const itemCount = cart.reduce((count, row) => count + row.quantity, 0);
   const editingOrder = orders.find((order) => order.id === currentEditOrderId);
   const selectedCustomer = registeredCustomers.find(
@@ -822,10 +841,19 @@ function VendasScreen() {
     setHistoryBusy(true);
     setHistoryError("");
     setHistoryMore(false);
-    if (startDate && endDate && startDate > endDate) { setHistoryBusy(false); return; }
+    if (startDate && endDate && startDate > endDate) {
+      setHistoryBusy(false);
+      return;
+    }
     const timer = setTimeout(() => {
       setHistoryBusy(true);
-      getSalesOrdersPage({ filter: openFilter, search: openSearch, startDate, endDate, status: listStatus })
+      getSalesOrdersPage({
+        filter: openFilter,
+        search: openSearch,
+        startDate,
+        endDate,
+        status: listStatus,
+      })
         .then((rows) => {
           if (sequence === historySequence.current) {
             setOrders(rows);
@@ -833,7 +861,8 @@ function VendasScreen() {
           }
         })
         .catch((cause: Error) => {
-          if (sequence === historySequence.current) setHistoryError(cause.message);
+          if (sequence === historySequence.current)
+            setHistoryError(cause.message);
         })
         .finally(() => {
           if (sequence === historySequence.current) setHistoryBusy(false);
@@ -843,7 +872,15 @@ function VendasScreen() {
       clearTimeout(timer);
       historySequence.current = sequence + 1;
     };
-  }, [activeView, openFilter, openSearch, startDate, endDate, listStatus, historyRetry]);
+  }, [
+    activeView,
+    openFilter,
+    openSearch,
+    startDate,
+    endDate,
+    listStatus,
+    historyRetry,
+  ]);
   async function moreOrders() {
     if (historyBusy || !orders.length) return;
     const sequence = ++historySequence.current;
@@ -853,37 +890,45 @@ function VendasScreen() {
         before: orders[orders.length - 1].number,
         filter: openFilter,
         search: openSearch,
-        startDate, endDate, status: listStatus,
+        startDate,
+        endDate,
+        status: listStatus,
       });
       if (sequence === historySequence.current) {
         setOrders((current) => [...current, ...rows]);
         setHistoryMore(rows.length === 100);
       }
     } catch (cause) {
-      if (sequence === historySequence.current) setHistoryError(
-        cause instanceof Error ? cause.message : "Falha ao carregar mais documentos.",
-      );
+      if (sequence === historySequence.current)
+        setHistoryError(
+          cause instanceof Error
+            ? cause.message
+            : "Falha ao carregar mais documentos.",
+        );
     } finally {
       if (sequence === historySequence.current) setHistoryBusy(false);
     }
   }
   const openSearchTerm = openSearch.trim();
-  const visibleOpenOrders = historyBusy || historyError || (startDate && endDate && startDate > endDate) ? [] : orders.filter((order) => {
-    if (openFilter === "GRAVADAS")
-      return (
-        ["VENDA", "TROCA"].includes(order.saleType) &&
-        order.status !== "EM_ANDAMENTO"
-      );
-    if (order.status === "ESTORNADA" || order.status === "CANCELADA")
-      return false;
-    if (openFilter === "ORCAMENTO" || openFilter === "CONDICIONAL")
-      return order.saleType === openFilter;
-    if (openFilter === "ATIVAS") return order.status === "EM_ANDAMENTO";
-    return (
-      order.status === "CONCLUIDA" &&
-      ["VENDA", "TROCA"].includes(order.saleType)
-    );
-  });
+  const visibleOpenOrders =
+    historyBusy || historyError || (startDate && endDate && startDate > endDate)
+      ? []
+      : orders.filter((order) => {
+          if (openFilter === "GRAVADAS")
+            return (
+              ["VENDA", "TROCA"].includes(order.saleType) &&
+              order.status !== "EM_ANDAMENTO"
+            );
+          if (order.status === "ESTORNADA" || order.status === "CANCELADA")
+            return false;
+          if (openFilter === "ORCAMENTO" || openFilter === "CONDICIONAL")
+            return order.saleType === openFilter;
+          if (openFilter === "ATIVAS") return order.status === "EM_ANDAMENTO";
+          return (
+            order.status === "CONCLUIDA" &&
+            ["VENDA", "TROCA"].includes(order.saleType)
+          );
+        });
 
   function parseMoney(value: string) {
     const trimmed = value.trim().replace(/\s/g, "");
@@ -1028,7 +1073,11 @@ function VendasScreen() {
     if (variantMatch) addProduct(variantMatch.product, variantMatch.variant.id);
     else if (match) addProduct(match);
     else {
-      setError(filteredProducts.length > 1 ? "Selecione um produto na lista de resultados ou informe o código exato." : "Nenhum produto encontrado. Confira o código ou pesquise pela lupa.");
+      setError(
+        filteredProducts.length > 1
+          ? "Selecione um produto na lista de resultados ou informe o código exato."
+          : "Nenhum produto encontrado. Confira o código ou pesquise pela lupa.",
+      );
       searchRef.current?.focus();
     }
   }
@@ -1194,8 +1243,9 @@ function VendasScreen() {
         method: payment,
         parts: paymentParts,
         total,
-        accountId: bankAccountId,
+        accountId: receivingAccountId,
         accounts: bankAccounts,
+        accountManagedByServer: true,
         customer: saleCustomer,
         creditBalance: Number(customerCreditBalance),
         installments,
@@ -1206,22 +1256,6 @@ function VendasScreen() {
         return;
       }
     }
-    if (
-      status === "CONCLUIDA" &&
-      saleType === "VENDA" &&
-      payment !== "CREDIARIO" &&
-      payment !== "SALDO_CLIENTE" &&
-      (payment !== "MISTO" ||
-        total >
-          parseMoney(paymentParts.CREDIARIO) +
-            parseMoney(paymentParts.SALDO_CLIENTE)) &&
-      total > 0 &&
-      !bankAccountId
-    ) {
-      setError("Selecione a conta ou caixa de recebimento.");
-      return;
-    }
-
     if (!saleCustomer) {
       setError("Selecione um cliente cadastrado.");
       return;
@@ -1256,7 +1290,12 @@ function VendasScreen() {
       setError("O desconto supera o total dos produtos que permitem desconto.");
       return;
     }
-    if (addition > 0 && !cart.some(line => line.product.allowAddition !== false && line.unitPrice > 0)) {
+    if (
+      addition > 0 &&
+      !cart.some(
+        (line) => line.product.allowAddition !== false && line.unitPrice > 0,
+      )
+    ) {
       setError("Os produtos desta venda não permitem acréscimo.");
       return;
     }
@@ -1326,7 +1365,8 @@ function VendasScreen() {
         expectedTotal: exchange?.difference,
         requestId: requestIdRef.current!,
         version: orderVersion,
-        bankAccountId: exchange?.bankAccountId ?? (bankAccountId || undefined),
+        bankAccountId:
+          exchange?.bankAccountId ?? (receivingAccountId || undefined),
         installments: exchange?.installments ?? installments,
         sellerId: seller,
         customerId: saleCustomer.id,
@@ -1720,14 +1760,13 @@ function VendasScreen() {
     <div className="min-w-0 space-y-4">
       <div className={activeView === "POS" ? posStyles.surface : "space-y-4"}>
         {activeView === "POS" && !customerPickerMode && (
-          <SalesPageHeader
-            compact
-            title="Venda"
-            icon={ShoppingCart}
-          />
+          <SalesPageHeader compact title="Venda" icon={ShoppingCart} />
         )}
         {activeView === "POS" && !customerPickerMode && (
-          <nav aria-label="Consultar atendimentos de vendas" className={posStyles.quickNav}>
+          <nav
+            aria-label="Consultar atendimentos de vendas"
+            className={posStyles.quickNav}
+          >
             <button
               type="button"
               className={posStyles.newSaleButton}
@@ -1742,16 +1781,30 @@ function VendasScreen() {
                 }
               }}
             >
-              <Plus size={18} aria-hidden="true" />Nova venda
+              <Plus size={18} aria-hidden="true" />
+              Nova venda
             </button>
-            {([
-              { filter: "ATIVAS", label: "Em andamento", icon: Clock3 },
-              { filter: "ORCAMENTO", label: "Orçamentos", icon: FileText },
-              { filter: "CONDICIONAL", label: "Condicionais", icon: ClipboardList },
-              { filter: "PEDIDO", label: "Pedidos", icon: Package },
-            ] as const).map(({ filter, label, icon: Icon }) => (
-              <button key={filter} type="button" disabled={saving || loading} aria-haspopup="dialog" onClick={() => setPendingSalesFilter(filter)}>
-                <Icon size={18} aria-hidden="true" />{label}
+            {(
+              [
+                { filter: "ATIVAS", label: "Em andamento", icon: Clock3 },
+                { filter: "ORCAMENTO", label: "Orçamentos", icon: FileText },
+                {
+                  filter: "CONDICIONAL",
+                  label: "Condicionais",
+                  icon: ClipboardList,
+                },
+                { filter: "PEDIDO", label: "Pedidos", icon: Package },
+              ] as const
+            ).map(({ filter, label, icon: Icon }) => (
+              <button
+                key={filter}
+                type="button"
+                disabled={saving || loading}
+                aria-haspopup="dialog"
+                onClick={() => setPendingSalesFilter(filter)}
+              >
+                <Icon size={18} aria-hidden="true" />
+                {label}
               </button>
             ))}
           </nav>
@@ -2132,9 +2185,14 @@ function VendasScreen() {
                                   : "border-b border-slate-100 dark:border-slate-800"
                               }
                             >
-                              <td className="text-xs text-slate-600 dark:text-slate-300">{line.product.sku || "—"}</td>
+                              <td className="text-xs text-slate-600 dark:text-slate-300">
+                                {line.product.sku || "—"}
+                              </td>
                               <td>
-                                <ProductNamePreview name={line.product.name} photoUrl={line.product.photoUrl} />
+                                <ProductNamePreview
+                                  name={line.product.name}
+                                  photoUrl={line.product.photoUrl}
+                                />
                                 {!!line.product.variants?.length && (
                                   <select
                                     aria-label={
@@ -2186,41 +2244,70 @@ function VendasScreen() {
                                 }
                               >
                                 {money(
-                                  saleLineCents(line.originalUnitPrice ?? line.unitPrice, line.quantity) / 100,
+                                  saleLineCents(
+                                    line.originalUnitPrice ?? line.unitPrice,
+                                    line.quantity,
+                                  ) / 100,
                                 )}
                               </td>
-                              <td>{money((allocatedDiscounts[lineIndex] + saleAdjustmentCents(line).discount) / 100)}</td>
-                              <td className="font-bold">{money((saleLineCents(line.unitPrice, line.quantity) - allocatedDiscounts[lineIndex] + allocatedAdditions[lineIndex]) / 100)}</td>
+                              <td>
+                                {money(
+                                  (allocatedDiscounts[lineIndex] +
+                                    saleAdjustmentCents(line).discount) /
+                                    100,
+                                )}
+                              </td>
+                              <td className="font-bold">
+                                {money(
+                                  (saleLineCents(
+                                    line.unitPrice,
+                                    line.quantity,
+                                  ) -
+                                    allocatedDiscounts[lineIndex] +
+                                    allocatedAdditions[lineIndex]) /
+                                    100,
+                                )}
+                              </td>
                               <td>
                                 <select
                                   aria-label={"Ações de " + line.product.name}
                                   value=""
                                   className={posStyles.lineActions}
-                                  onChange={event => {
+                                  onChange={(event) => {
                                     if (event.target.value === "PRICE") {
-                                    const prices = getSalesPriceOptions(
-                                      line.product,
-                                      line.variantId,
-                                    );
-                                    if (prices.promotional !== null)
-                                      setPriceChoice({
-                                        product: line.product,
-                                        variantId: line.variantId,
-                                        targetKey: cartLineKey(line),
-                                      });
-                                    else
-                                      addProduct(
+                                      const prices = getSalesPriceOptions(
                                         line.product,
                                         line.variantId,
-                                        "NORMAL",
-                                        cartLineKey(line),
                                       );
-                                    } else if (event.target.value === "REMOVE") {
-                                      setCart(current => current.filter(item => cartLineKey(item) !== cartLineKey(line)));
+                                      if (prices.promotional !== null)
+                                        setPriceChoice({
+                                          product: line.product,
+                                          variantId: line.variantId,
+                                          targetKey: cartLineKey(line),
+                                        });
+                                      else
+                                        addProduct(
+                                          line.product,
+                                          line.variantId,
+                                          "NORMAL",
+                                          cartLineKey(line),
+                                        );
+                                    } else if (
+                                      event.target.value === "REMOVE"
+                                    ) {
+                                      setCart((current) =>
+                                        current.filter(
+                                          (item) =>
+                                            cartLineKey(item) !==
+                                            cartLineKey(line),
+                                        ),
+                                      );
                                     }
                                   }}
                                 >
-                                  <option value="" disabled>Ações</option>
+                                  <option value="" disabled>
+                                    Ações
+                                  </option>
                                   <option value="PRICE">Alterar preço</option>
                                   <option value="REMOVE">Remover item</option>
                                 </select>
@@ -2246,7 +2333,16 @@ function VendasScreen() {
                     <div
                       className={`${posStyles.actions} bg-slate-50/75 dark:bg-slate-800/50`}
                     >
-                      <button type="button" onClick={() => void saveSale("EM_ANDAMENTO")} disabled={!cart.length || saleType === "TROCA" || saving} className="rounded-md border border-blue-300 px-3 py-2 text-xs font-bold text-blue-700 disabled:opacity-50">Salvar em andamento</button>
+                      <button
+                        type="button"
+                        onClick={() => void saveSale("EM_ANDAMENTO")}
+                        disabled={
+                          !cart.length || saleType === "TROCA" || saving
+                        }
+                        className="rounded-md border border-blue-300 px-3 py-2 text-xs font-bold text-blue-700 disabled:opacity-50"
+                      >
+                        Salvar em andamento
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
@@ -2296,11 +2392,30 @@ function VendasScreen() {
                     </div>
                   </div>
                   <div className="mt-4 space-y-3 text-sm">
-                    {([
-                      { label: "Desconto", kind: "DESCONTO", value: discountValue, percent: discountPercent, setValue: setDiscountValue, setPercent: setDiscountPercent },
-                      { label: "Acréscimo", kind: "ACRESCIMO", value: additionValue, percent: additionPercent, setValue: setAdditionValue, setPercent: setAdditionPercent },
-                    ] as const).map(adjustment => (
-                      <div key={adjustment.kind} className={posStyles.totalAdjustment}>
+                    {(
+                      [
+                        {
+                          label: "Desconto",
+                          kind: "DESCONTO",
+                          value: discountValue,
+                          percent: discountPercent,
+                          setValue: setDiscountValue,
+                          setPercent: setDiscountPercent,
+                        },
+                        {
+                          label: "Acréscimo",
+                          kind: "ACRESCIMO",
+                          value: additionValue,
+                          percent: additionPercent,
+                          setValue: setAdditionValue,
+                          setPercent: setAdditionPercent,
+                        },
+                      ] as const
+                    ).map((adjustment) => (
+                      <div
+                        key={adjustment.kind}
+                        className={posStyles.totalAdjustment}
+                      >
                         <span>{adjustment.label}</span>
                         <label>
                           <span aria-hidden="true">R$</span>
@@ -2308,32 +2423,61 @@ function VendasScreen() {
                             data-item-adjustment={adjustment.kind}
                             aria-label={adjustment.label + " em reais"}
                             inputMode="decimal"
-                            value={parseMoney(adjustment.value) === 0 ? "" : adjustment.value}
-                            onChange={event => adjustment.setValue(event.target.value)}
+                            value={
+                              parseMoney(adjustment.value) === 0
+                                ? ""
+                                : adjustment.value
+                            }
+                            onChange={(event) =>
+                              adjustment.setValue(event.target.value)
+                            }
                           />
                         </label>
                         <label>
                           <DecimalInput
                             aria-label={adjustment.label + " em porcentagem"}
                             inputMode="decimal"
-                            value={parseMoney(adjustment.percent) === 0 ? "" : adjustment.percent}
-                            onChange={event => {
+                            value={
+                              parseMoney(adjustment.percent) === 0
+                                ? ""
+                                : adjustment.percent
+                            }
+                            onChange={(event) => {
                               const percent = paymentAmount(event.target.value);
                               if (!Number.isFinite(percent) || percent < 0) {
-                                setError("Informe um percentual válido e positivo.");
+                                setError(
+                                  "Informe um percentual válido e positivo.",
+                                );
                                 return;
                               }
                               adjustment.setPercent(formatMoney(percent));
-                              adjustment.setValue(formatMoney(subtotal * percent / 100));
+                              adjustment.setValue(
+                                formatMoney((subtotal * percent) / 100),
+                              );
                             }}
                           />
                           <span aria-hidden="true">%</span>
                         </label>
                       </div>
                     ))}
-                    {itemAdjustments.discount > 0 && <p>Desconto anterior nos itens: {money(itemAdjustments.discount / 100)}</p>}
-                    {itemAdjustments.addition > 0 && <p>Acréscimo anterior nos itens: {money(itemAdjustments.addition / 100)}</p>}
-                    {itemAdjustments.promotion > 0 && <p className="text-emerald-700">Economia em promoção: {money(itemAdjustments.promotion / 100)}</p>}
+                    {itemAdjustments.discount > 0 && (
+                      <p>
+                        Desconto anterior nos itens:{" "}
+                        {money(itemAdjustments.discount / 100)}
+                      </p>
+                    )}
+                    {itemAdjustments.addition > 0 && (
+                      <p>
+                        Acréscimo anterior nos itens:{" "}
+                        {money(itemAdjustments.addition / 100)}
+                      </p>
+                    )}
+                    {itemAdjustments.promotion > 0 && (
+                      <p className="text-emerald-700">
+                        Economia em promoção:{" "}
+                        {money(itemAdjustments.promotion / 100)}
+                      </p>
+                    )}
                   </div>
                   <div className="mt-4 flex items-center justify-between">
                     <span className="font-black uppercase text-slate-800 dark:text-slate-100">
@@ -2346,14 +2490,27 @@ function VendasScreen() {
                         inputMode="decimal"
                         value={formatMoney(total)}
                         disabled={!cart.length}
-                        onChange={event => {
+                        onChange={(event) => {
                           try {
-                            const adjustment = adjustmentForSaleTotal(subtotal, paymentAmount(event.target.value), discountEligible, cart.some(line => line.product.allowAddition !== false && line.unitPrice > 0));
+                            const adjustment = adjustmentForSaleTotal(
+                              subtotal,
+                              paymentAmount(event.target.value),
+                              discountEligible,
+                              cart.some(
+                                (line) =>
+                                  line.product.allowAddition !== false &&
+                                  line.unitPrice > 0,
+                              ),
+                            );
                             setDiscountValue(formatMoney(adjustment.discount));
                             setAdditionValue(formatMoney(adjustment.addition));
                             setError("");
                           } catch (cause) {
-                            setError(cause instanceof Error ? cause.message : "Confira o total informado.");
+                            setError(
+                              cause instanceof Error
+                                ? cause.message
+                                : "Confira o total informado.",
+                            );
                           }
                         }}
                       />
@@ -2361,25 +2518,6 @@ function VendasScreen() {
                   </div>
                   <div ref={paymentRef} className={posStyles.payment}>
                     <PaymentPanel
-                      creatingAccount={creatingCashAccount}
-                      onCreateAccount={async () => {
-                        if (creatingCashAccount) return;
-                        setCreatingCashAccount(true);
-                        setError("");
-                        try {
-                          const account = await prepareSalesCashAccount();
-                          setBankAccounts(await getSalesReceivingAccounts());
-                          setBankAccountId(account.id);
-                        } catch (cause) {
-                          setError(
-                            cause instanceof Error
-                              ? cause.message
-                              : "Não foi possível criar o caixa.",
-                          );
-                        } finally {
-                          setCreatingCashAccount(false);
-                        }
-                      }}
                       method={payment}
                       cardPayments={cardPayments}
                       onCardDetails={setCardModal}
@@ -2414,8 +2552,6 @@ function VendasScreen() {
                       customer={selectedCustomer}
                       creditBalance={Number(customerCreditBalance)}
                       accounts={bankAccounts}
-                      accountId={bankAccountId}
-                      onAccount={setBankAccountId}
                       installments={installments}
                       onInstallments={setInstallments}
                       tender={cashTender}
@@ -2472,7 +2608,7 @@ function VendasScreen() {
                 onClick={() =>
                   document
                     .querySelector<HTMLInputElement>(
-            '[data-item-adjustment="DESCONTO"]:not(:disabled)',
+                      '[data-item-adjustment="DESCONTO"]:not(:disabled)',
                     )
                     ?.focus()
                 }
@@ -2484,7 +2620,7 @@ function VendasScreen() {
                 onClick={() =>
                   document
                     .querySelector<HTMLInputElement>(
-            '[data-item-adjustment="ACRESCIMO"]:not(:disabled)',
+                      '[data-item-adjustment="ACRESCIMO"]:not(:disabled)',
                     )
                     ?.focus()
                 }
@@ -2537,13 +2673,64 @@ function VendasScreen() {
                 </p>
               </div>
               <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-xs font-bold text-slate-600 dark:text-slate-300">
-                {visibleOpenOrders.length}{historyMore ? "+" : ""} registro(s) carregado(s)
+                {visibleOpenOrders.length}
+                {historyMore ? "+" : ""} registro(s) carregado(s)
               </span>
-              <button type="button" onClick={() => navigateView("RELATORIOS")} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold dark:border-slate-700">Relatórios</button>
+              <button
+                type="button"
+                onClick={() => navigateView("RELATORIOS")}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold dark:border-slate-700"
+              >
+                Relatórios
+              </button>
             </div>
-            <OrderListFilterBar search={openSearch} onSearch={value => setOpenSearches(current => ({ ...current, [openFilter]: value }))} value={openDates} onChange={value => setListFilters(current => ({ ...current, [openFilter]: value }))} category={openFilter} onRefresh={() => setHistoryRetry(value => value + 1)} />
-            {historyError && <div role="alert" className="m-4 rounded-xl bg-red-50 p-4 text-sm text-red-700">{historyError} <button type="button" className="font-bold underline" onClick={() => setHistoryRetry(value => value + 1)}>Tentar novamente</button></div>}
-            <div className="flex flex-wrap justify-between gap-2 border-b border-slate-200 px-4 py-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400"><span>Mais recentes primeiro</span><span>Total dos registros carregados: <strong className="text-slate-900 dark:text-white">{money(visibleOpenOrders.reduce((sum, order) => sum + Number(order.total), 0))}</strong></span></div>
+            <OrderListFilterBar
+              search={openSearch}
+              onSearch={(value) =>
+                setOpenSearches((current) => ({
+                  ...current,
+                  [openFilter]: value,
+                }))
+              }
+              value={openDates}
+              onChange={(value) =>
+                setListFilters((current) => ({
+                  ...current,
+                  [openFilter]: value,
+                }))
+              }
+              category={openFilter}
+              onRefresh={() => setHistoryRetry((value) => value + 1)}
+            />
+            {historyError && (
+              <div
+                role="alert"
+                className="m-4 rounded-xl bg-red-50 p-4 text-sm text-red-700"
+              >
+                {historyError}{" "}
+                <button
+                  type="button"
+                  className="font-bold underline"
+                  onClick={() => setHistoryRetry((value) => value + 1)}
+                >
+                  Tentar novamente
+                </button>
+              </div>
+            )}
+            <div className="flex flex-wrap justify-between gap-2 border-b border-slate-200 px-4 py-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+              <span>Mais recentes primeiro</span>
+              <span>
+                Total dos registros carregados:{" "}
+                <strong className="text-slate-900 dark:text-white">
+                  {money(
+                    visibleOpenOrders.reduce(
+                      (sum, order) => sum + Number(order.total),
+                      0,
+                    ),
+                  )}
+                </strong>
+              </span>
+            </div>
             <div className="divide-y divide-slate-200 dark:divide-slate-800">
               {visibleOpenOrders.map((order) => (
                 <article
@@ -2566,10 +2753,19 @@ function VendasScreen() {
                             (option) => option.value === order.saleType,
                           )?.label}
                     </small>
-                    <small className="block text-xs font-normal text-slate-500 dark:text-slate-400">Vendedor: {order.sellerName || "Não informado"}</small>
+                    <small className="block text-xs font-normal text-slate-500 dark:text-slate-400">
+                      Vendedor: {order.sellerName || "Não informado"}
+                    </small>
                   </span>
                   <RecordedSaleStatus status={order.status} />
-                  <span className="min-w-24 text-right"><small className="block text-[10px] uppercase text-slate-500">Total</small><strong className="tabular-nums">{money(order.total)}</strong></span>
+                  <span className="min-w-24 text-right">
+                    <small className="block text-[10px] uppercase text-slate-500">
+                      Total
+                    </small>
+                    <strong className="tabular-nums">
+                      {money(order.total)}
+                    </strong>
+                  </span>
                   {openFilter === "ATIVAS" ? (
                     <PendingSaleActions
                       order={order}
@@ -2590,7 +2786,16 @@ function VendasScreen() {
                       }}
                     />
                   ) : (
-                    <RecordedSaleActions number={order.number} onDetails={() => setDetailsOrder(order)} onReceipt={() => void showReceipt(order)} onOpen={openFilter !== "GRAVADAS" ? () => void openOrder(order) : undefined} />
+                    <RecordedSaleActions
+                      number={order.number}
+                      onDetails={() => setDetailsOrder(order)}
+                      onReceipt={() => void showReceipt(order)}
+                      onOpen={
+                        openFilter !== "GRAVADAS"
+                          ? () => void openOrder(order)
+                          : undefined
+                      }
+                    />
                   )}
                 </article>
               ))}
@@ -2609,13 +2814,16 @@ function VendasScreen() {
                   Carregar próximos 100 documentos
                 </button>
               )}
-              {!historyBusy && !historyError && !(startDate && endDate && startDate > endDate) && visibleOpenOrders.length === 0 && (
-                <p className="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
-                  {(openSearchTerm || startDate || endDate || listStatus)
-                    ? "Nenhum registro encontrado. Ajuste a busca ou o período selecionado."
-                    : "Nenhum registro nesta categoria."}
-                </p>
-              )}
+              {!historyBusy &&
+                !historyError &&
+                !(startDate && endDate && startDate > endDate) &&
+                visibleOpenOrders.length === 0 && (
+                  <p className="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+                    {openSearchTerm || startDate || endDate || listStatus
+                      ? "Nenhum registro encontrado. Ajuste a busca ou o período selecionado."
+                      : "Nenhum registro nesta categoria."}
+                  </p>
+                )}
             </div>
           </section>
         ) : activeView === "ESTORNOS" ? (
@@ -2798,7 +3006,16 @@ function VendasScreen() {
           }}
         />
       )}
-      {pendingSalesFilter && <PendingSalesModal key={pendingSalesFilter} filter={pendingSalesFilter} onClose={() => setPendingSalesFilter(null)} hasCurrent={cart.length > 0} currentId={currentEditOrderId} onOpen={order => openOrder(order, true)} />}
+      {pendingSalesFilter && (
+        <PendingSalesModal
+          key={pendingSalesFilter}
+          filter={pendingSalesFilter}
+          onClose={() => setPendingSalesFilter(null)}
+          hasCurrent={cart.length > 0}
+          currentId={currentEditOrderId}
+          onOpen={(order) => openOrder(order, true)}
+        />
+      )}
       {newSaleConfirmOpen && (
         <ConfirmationModal
           title="Salvar atendimento e iniciar nova venda?"
@@ -2809,7 +3026,9 @@ function VendasScreen() {
           busy={saving}
           busyLabel="Salvando atendimento..."
           error={error}
-          onCancel={() => { if (!savingRef.current) setNewSaleConfirmOpen(false); }}
+          onCancel={() => {
+            if (!savingRef.current) setNewSaleConfirmOpen(false);
+          }}
           onConfirm={async () => {
             const saved = await saveSale("EM_ANDAMENTO");
             if (saved) {
@@ -2822,9 +3041,21 @@ function VendasScreen() {
       )}
       {pendingNavigation && (
         <ConfirmationModal
-          title={pendingNavigation.newSale ? "Iniciar nova venda?" : "Sair do atendimento?"}
-          description={pendingNavigation.newSale ? "Os itens e valores do atendimento atual serão descartados. Deseja iniciar uma nova venda?" : "O rascunho ficará disponível nesta sessão para continuar o atendimento depois."}
-          confirmLabel={pendingNavigation.newSale ? "Iniciar nova venda" : "Sair do atendimento"}
+          title={
+            pendingNavigation.newSale
+              ? "Iniciar nova venda?"
+              : "Sair do atendimento?"
+          }
+          description={
+            pendingNavigation.newSale
+              ? "Os itens e valores do atendimento atual serão descartados. Deseja iniciar uma nova venda?"
+              : "O rascunho ficará disponível nesta sessão para continuar o atendimento depois."
+          }
+          confirmLabel={
+            pendingNavigation.newSale
+              ? "Iniciar nova venda"
+              : "Sair do atendimento"
+          }
           cancelLabel="Continuar atendimento"
           tone={pendingNavigation.newSale ? "danger" : "primary"}
           onCancel={() => setPendingNavigation(null)}
@@ -2834,7 +3065,12 @@ function VendasScreen() {
             setPendingNavigation(null);
             if (destination.newSale) {
               clearSale();
-              if (new URL(destination.href, location.origin).searchParams.get("tipo") === "TROCA") setSaleType("TROCA");
+              if (
+                new URL(destination.href, location.origin).searchParams.get(
+                  "tipo",
+                ) === "TROCA"
+              )
+                setSaleType("TROCA");
               setActiveView("POS");
             }
             router.push(destination.href);

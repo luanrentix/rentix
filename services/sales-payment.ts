@@ -75,6 +75,7 @@ export function validateSalePayment(input: {
   total: number;
   accountId: string;
   accounts: { id: string }[];
+  accountManagedByServer?: boolean;
   customer?: {
     referenceOnly?: boolean;
     isSystem: boolean;
@@ -103,6 +104,7 @@ export function validateSalePayment(input: {
       : "As formas de pagamento ultrapassam o total da venda.";
   if (
     immediate > 0 &&
+    !input.accountManagedByServer &&
     !input.accounts.some((account) => account.id === input.accountId)
   )
     return "Selecione uma conta ou caixa de recebimento válido.";

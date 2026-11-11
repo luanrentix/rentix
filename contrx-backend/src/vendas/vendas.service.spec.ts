@@ -211,6 +211,11 @@ function fixture() {
     },
     bankAccount: {
       findFirst: jest.fn().mockResolvedValue({ id: 'bank' }),
+      create: jest.fn().mockResolvedValue({
+        id: 'bank',
+        name: 'VENDAS - PADRAO AUTOMATICO',
+        type: 'CASH',
+      }),
       update: jest.fn().mockImplementation(async ({ data }) => {
         bank.currentBalance = data.currentBalance.increment
           ? bank.currentBalance.add(data.currentBalance.increment)
@@ -1035,7 +1040,7 @@ describe('Vendas: estoque, crédito e recebimentos', () => {
     expect(f.charges[0].amount.toString()).toBe('0.01');
   });
 
-  it('rejeita cliente ou produto de outra empresa e exige conta para recebimento à vista', async () => {
+  it('rejeita cliente ou produto de outra empresa e usa a conta padrão de vendas no recebimento à vista', async () => {
     const f = fixture();
     f.tx.salesCustomer.findFirst.mockResolvedValueOnce(null);
     await expect(f.service.createOrder('company', f.input())).rejects.toThrow(
@@ -1045,9 +1050,11 @@ describe('Vendas: estoque, crédito e recebimentos', () => {
     await expect(f.service.createOrder('company', f.input())).rejects.toThrow(
       'produtos',
     );
-    await expect(
-      f.service.createOrder('company', f.input({ bankAccountId: undefined })),
-    ).rejects.toThrow('conta ou caixa');
+    const order = await f.service.createOrder(
+      'company',
+      f.input({ bankAccountId: undefined }),
+    );
+    expect(order.bankAccountId).toBe('bank');
   });
 
   it.each([0, -2])(

@@ -86,10 +86,33 @@ export class VendasService {
 
   async listReceivingAccounts(companyId: string) {
     await this.ensureConfectionery(companyId);
-    return this.prisma.bankAccount.findMany({
-      where: { companyId, active: true, deletedAt: null },
-      select: { id: true, name: true, type: true },
-      orderBy: { name: 'asc' },
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockCompany(tx, companyId);
+      const account = await tx.bankAccount.findFirst({
+        where: {
+          companyId,
+          name: 'VENDAS - PADRAO AUTOMATICO',
+          type: 'CASH',
+          active: true,
+          deletedAt: null,
+        },
+      });
+      const standardAccount =
+        account ??
+        (await tx.bankAccount.create({
+          data: {
+            companyId,
+            name: 'VENDAS - PADRAO AUTOMATICO',
+            type: 'CASH',
+          },
+        }));
+      return [
+        {
+          id: standardAccount.id,
+          name: standardAccount.name,
+          type: standardAccount.type,
+        },
+      ];
     });
   }
 
@@ -2529,6 +2552,30 @@ export class VendasService {
             cardPayments: metadata?.cardPayments ?? [],
             cashTender: metadata?.cashTender ?? null,
           };
+        }
+        if (
+          ['VENDA', 'TROCA'].includes(data.saleType) &&
+          (data.status || 'CONCLUIDA') === 'CONCLUIDA'
+        ) {
+          const standardAccount = await tx.bankAccount.findFirst({
+            where: {
+              companyId,
+              name: 'VENDAS - PADRAO AUTOMATICO',
+              type: 'CASH',
+              active: true,
+              deletedAt: null,
+            },
+          });
+          const account =
+            standardAccount ??
+            (await tx.bankAccount.create({
+              data: {
+                companyId,
+                name: 'VENDAS - PADRAO AUTOMATICO',
+                type: 'CASH',
+              },
+            }));
+          data.bankAccountId = account.id;
         }
         const orderData = await this.buildOrderData(companyId, data, tx);
         const stockReserved =
