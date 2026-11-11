@@ -2,9 +2,17 @@
 
 ## Acesso pelo BAT de atualização
 
+Também é possível abrir diretamente `C:\projetos\contrx\LIMPEZA-CONTROLADA.BAT`. Esse arquivo inicia somente o menu de manutenção, sem commit, push, deploy ou migrations.
+
+### Revisão do planejamento de dependências
+
+O motor `controlled-cleanup.cjs` identifica pagamentos recebidos por `conta_receber_id`, pagamentos realizados por `conta_pagar_id` e assinaturas por `contrato_id`. Essas entidades não possuem `empresa_id` no schema Prisma. Elas só entram no plano quando a FK real do catálogo confirma o proprietário, o proprietário é candidato à exclusão, todos os demais pais referenciados também são candidatos e não existe menção à identidade protegida. A ordem remove filhos antes dos pais. Ausência da FK esperada bloqueia o plano. O campo `inheritedOwnership` explica cada inclusão no relatório.
+
+Movimentações bancárias com referências sem FK, sessões e históricos compartilhados, tabelas antigas de backup, schemas externos e recursos de Auth/Storage não recebem dispensa automática. Não é seguro apagar esses registros apenas para reduzir a contagem de bloqueios. A revisão legal continua obrigatória para dados financeiros, assinaturas e históricos. Relatórios antigos devem ser substituídos por nova simulação e nova aprovação após qualquer alteração no planejamento.
+
 No `C:\Users\MacOS\Documents\Contrx\ATUALIZA-VERSÃO.BAT`, a opção **3 — Manutenção manual** abre um menu independente: diagnóstico, simulação ou execução do plano aprovado. A opção **4** encerra o BAT. As opções 1 e 2 mantêm seus fluxos anteriores.
 
-O menu solicita explicitamente o arquivo de ambiente; caminhos relativos partem de `contrx-backend`. Diagnóstico e simulação geram relatórios novos em `contrx-backend/backups`. Para execução real, também exige relatório aprovado, arquivo de aprovação humana, ambiente local vazio para teste de restauração e digitação da confirmação exata. Todos os bloqueios do executor continuam válidos. Nenhuma manutenção é executada automaticamente ao atualizar a versão.
+O menu do BAT seleciona automaticamente `contrx-backend/.env.supabase` (produção), mostra esse destino antes da escolha e permite trocar o arquivo pela opção 4. Se o arquivo não existir, interrompe sem escolher outro silenciosamente. Caminhos relativos partem de `contrx-backend`. Diagnóstico e simulação geram relatórios novos em `contrx-backend/backups`. Para execução real, também exige relatório aprovado, arquivo de aprovação humana, ambiente local vazio para teste de restauração e digitação da confirmação exata. Todos os bloqueios do executor continuam válidos. Nenhuma manutenção é executada automaticamente ao atualizar a versão.
 
 O catálogo inicial contém somente a limpeza controlada conhecida. Scripts futuros devem ser registrados e revisados antes de serem disponibilizados; não há campo para executar comandos arbitrários.
 
@@ -36,7 +44,7 @@ Se `auth.users`, `auth.identities` ou Storage contiverem dados, a execução fic
 
 ## A — Diagnóstico e B — simulação
 
-Executar a partir de `contrx-backend`, escolhendo explicitamente um arquivo de ambiente. Não há seleção automática de `.env.supabase`, nem preferência silenciosa por `DIRECT_URL`. É utilizada somente `DATABASE_URL` desse arquivo. Não copiar credenciais para a linha de comando.
+Executar a partir de `contrx-backend`, escolhendo explicitamente um arquivo de ambiente. Nos comandos diretos abaixo o ambiente é obrigatório; o menu do BAT fornece `.env.supabase` por padrão, conforme indicado acima. Não há preferência silenciosa por `DIRECT_URL`. É utilizada somente `DATABASE_URL` desse arquivo. Não copiar credenciais para a linha de comando.
 
 ```powershell
 node scripts/maintenance/diagnose.cjs --env .env --out backups/diagnostico-novo.json

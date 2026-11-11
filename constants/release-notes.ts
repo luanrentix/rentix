@@ -16,6 +16,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "1.0.22",
+    date: "11 de Novembro de 2026",
+    title: "Relatórios gerenciais e aprimoramentos em vendas",
+    subtitle: "Novos relatórios operacionais, controles de pedidos e reforços de segurança no acesso aos dados.",
+    highlights: [
+      { category: "novo", title: "Central de relatórios gerenciais", description: "Relatórios de vendas, estoque e finanças com filtros, paginação e exportação para apoiar a operação do varejo." },
+      { category: "melhoria", title: "Fluxos de venda e caixa", description: "Aprimoramentos em preços, pagamentos, recibos, devoluções, vendas pendentes e listagens de pedidos." },
+      { category: "seguranca", title: "Permissões financeiras nos relatórios", description: "Relatórios de recebimentos e pagamentos validam as permissões financeiras antes de consultar dados." },
+      { category: "seguranca", title: "Isolamento do contrato compartilhado", description: "A consulta do link público confirma que o contrato pertence à mesma empresa do compartilhamento." },
+    ],
+  },
+  {
     version: "1.0.21",
     date: "06 de Novembro de 2026",
     title: "Varejo, produtos e gestão da equipe",

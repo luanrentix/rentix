@@ -10,6 +10,8 @@ const base = { id: '1', date: '2026-11-05T12:00:00Z', direction: 'IN', amount: 0
 const filters = { start: '2026-11-01', end: '2026-11-05', method: '', account: '', search: '' };
 const rows = Array.from({ length: 60 }, (_, i) => ({ ...base, id: String(i), orderNumber: i + 1, amount: i === 59 ? 0.3 : 0.1, direction: i === 59 ? 'OUT' : 'IN' }));
 const html = buildCashReport(rows, filters, { tradeName: 'Empresa' });
+assert.ok(!html.includes('Créditos de clientes'));
+assert.ok(!html.includes('Resumo de créditos indisponível'));
 assert.ok(html.includes('#60'), 'includes rows beyond the first page');
 assert.ok(html.includes('60 movimentação(ões)'));
 assert.ok(html.includes('5,90'));

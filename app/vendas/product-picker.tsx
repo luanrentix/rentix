@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Search, X } from "lucide-react";
 import ProductPhoto from "./product-photo";
+import { getSalesPriceOptions } from "@/services/sales-pricing";
 import type { SalesProduct } from "@/services/vendas.service";
 
 export default function ProductPicker({
@@ -21,7 +22,8 @@ export default function ProductPicker({
     const term = search.trim().toLocaleLowerCase("pt-BR");
     return products.filter(
       (product) =>
-        product.active && !product.isGridParent &&
+        product.active &&
+        !product.isGridParent &&
         product.showInSale &&
         (!term ||
           [
@@ -55,7 +57,7 @@ export default function ProductPicker({
         role="dialog"
         aria-modal="true"
         aria-labelledby="product-picker-title"
-        className="flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-xl"
+        className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white dark:bg-slate-900 shadow-xl"
       >
         <header className="flex items-center justify-between border-b p-5">
           <div>
@@ -93,7 +95,10 @@ export default function ProductPicker({
               className="w-full rounded-xl border border-slate-200 dark:border-slate-700 py-2.5 pl-10 pr-3 text-sm text-slate-800 dark:text-slate-100"
             />
           </label>
-          <p role="status" className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+          <p
+            role="status"
+            className="mt-2 text-xs text-slate-500 dark:text-slate-400"
+          >
             {matches.length} produto(s) disponível(is) para seleção
           </p>
         </div>
@@ -120,7 +125,10 @@ export default function ProductPicker({
                       onClick={() => onSelect(product)}
                       className="flex items-center gap-3 text-left font-semibold text-slate-900 dark:text-white hover:text-[var(--primary-color)]"
                     >
-                      <ProductPhoto src={product.photoUrl} name={product.name}/>
+                      <ProductPhoto
+                        src={product.photoUrl}
+                        name={product.name}
+                      />
                       {product.name}
                     </button>
                     {Boolean(product.variants?.length) && (
@@ -131,17 +139,39 @@ export default function ProductPicker({
                   </td>
                   <td className="whitespace-nowrap p-3 text-slate-700 dark:text-slate-200">
                     {product.manageStock
-                      ? (Number(product.stock) - Number(product.reservedStock || 0)).toLocaleString("pt-BR")
+                      ? (
+                          Number(product.stock) -
+                          Number(product.reservedStock || 0)
+                        ).toLocaleString("pt-BR")
                       : "Sem controle"}
-                    {product.manageStock && Number(product.stock) - Number(product.reservedStock || 0) <= 0 && (
-                      <p className="text-xs text-amber-700">Venda permitida com aviso</p>
-                    )}
+                    {product.manageStock &&
+                      Number(product.stock) -
+                        Number(product.reservedStock || 0) <=
+                        0 && (
+                        <p className="text-xs text-amber-700">
+                          Venda permitida com aviso
+                        </p>
+                      )}
                   </td>
-                  <td className="whitespace-nowrap p-3 text-slate-700 dark:text-slate-200">
+                  <td className="whitespace-nowrap p-3 text-base font-bold text-slate-800 dark:text-slate-100">
+                    <span className="block text-xs font-medium">Normal</span>
                     {getPrice(product).toLocaleString("pt-BR", {
                       style: "currency",
                       currency: "BRL",
                     })}
+                    {getSalesPriceOptions(product).promotional !== null && (
+                      <div className="mt-2 rounded-lg bg-emerald-50 px-2 py-1 font-bold text-emerald-800">
+                        <span className="block text-xs">
+                          Promocional · sem desconto
+                        </span>
+                        {getSalesPriceOptions(
+                          product,
+                        ).promotional!.toLocaleString("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                        })}
+                      </div>
+                    )}
                   </td>
                   <td className="p-3">
                     <button
@@ -156,7 +186,10 @@ export default function ProductPicker({
               ))}
               {!matches.length && (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-slate-500 dark:text-slate-400">
+                  <td
+                    colSpan={5}
+                    className="p-8 text-center text-slate-500 dark:text-slate-400"
+                  >
                     {search
                       ? "Nenhum produto encontrado para esta pesquisa."
                       : "Nenhum produto ativo e habilitado para venda cadastrado."}

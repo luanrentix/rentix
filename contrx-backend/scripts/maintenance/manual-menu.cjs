@@ -6,28 +6,41 @@ const readline = require('node:readline/promises');
 const { spawnSync } = require('node:child_process');
 
 async function main() {
+  const backendDir = path.resolve(__dirname, '../..');
+  let env = path.join(backendDir, '.env.supabase');
   const input = readline.createInterface({ input: process.stdin, output: process.stdout });
   try {
-    console.log('\nMANUTENCAO MANUAL - LIMPEZA CONTROLADA');
-    console.log('[1] Diagnostico (somente leitura)');
-    console.log('[2] Simulacao (somente leitura)');
-    console.log('[3] Executar plano aprovado (exclusao real)');
-    console.log('[0] Voltar');
-    console.log('Este menu nao executa scripts arbitrarios nem acompanha o deploy.');
-    const choice = (await input.question('Escolha: ')).trim();
-    if (choice === '0' || !choice) return;
-    const mode = { '1': 'diagnose', '2': 'dry-run', '3': 'execute' }[choice];
-    if (!mode) throw new Error('Opcao invalida.');
     const askPath = async (label, mustExist) => {
       const value = (await input.question(label)).trim().replace(/^"(.*)"$/, '$1');
       if (!value) throw new Error('Caminho obrigatorio. Operacao cancelada.');
-      const file = path.resolve(value);
+      const file = path.resolve(backendDir, value);
       if (mustExist && !fs.statSync(file).isFile()) throw new Error('Arquivo invalido.');
       return file;
     };
-    console.log('Caminhos relativos partem de contrx-backend. Nenhum ambiente e escolhido automaticamente.');
-    const env = await askPath('Arquivo de ambiente (.env local ou .env.supabase de producao): ', true);
-    const output = path.resolve('backups', `cleanup-${mode}-${Date.now()}.json`);
+    let mode;
+    while (!mode) {
+      console.log('\nMANUTENCAO MANUAL - LIMPEZA CONTROLADA');
+      console.log(`Ambiente selecionado: ${env === path.join(backendDir, '.env.supabase') ? 'PRODUCAO / SUPABASE' : 'PERSONALIZADO'}`);
+      console.log(`Arquivo: ${env}`);
+      console.log('[1] Diagnostico (somente leitura)');
+      console.log('[2] Simulacao (somente leitura)');
+      console.log('[3] Executar plano aprovado (exclusao real)');
+      console.log('[4] Usar outro arquivo de ambiente');
+      console.log('[0] Voltar');
+      console.log('Este menu nao executa scripts arbitrarios nem acompanha o deploy.');
+      const choice = (await input.question('Escolha: ')).trim();
+      if (choice === '0' || !choice) return;
+      if (choice === '4') {
+        env = await askPath('Outro arquivo de ambiente (caminho relativo a contrx-backend): ', true);
+        continue;
+      }
+      mode = { '1': 'diagnose', '2': 'dry-run', '3': 'execute' }[choice];
+      if (!mode) throw new Error('Opcao invalida.');
+    }
+    if (!fs.existsSync(env) || !fs.statSync(env).isFile()) {
+      throw new Error('Arquivo de ambiente nao encontrado. Use a opcao 4 para selecionar outro. Nenhuma conexao iniciada.');
+    }
+    const output = path.join(backendDir, 'backups', `cleanup-${mode}-${Date.now()}.json`);
     const args = ['--env', env, '--out', output];
     if (mode === 'execute') {
       console.log('EXCLUSAO REAL: exige revisao humana, janela de manutencao e backup com restauracao testada.');

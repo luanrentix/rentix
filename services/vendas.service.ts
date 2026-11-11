@@ -80,9 +80,14 @@ export type SalesProductInput = Omit<
 };
 export type SalesProductClassification = { id: string; name: string };
 export const getSalesProductUnits = () =>
-  apiFetch<SalesProductClassification[]>("/vendas/produtos/unidades", { skipCache: true });
+  apiFetch<SalesProductClassification[]>("/vendas/produtos/unidades", {
+    skipCache: true,
+  });
 export const createSalesProductUnit = (name: string) =>
-  apiFetch<SalesProductClassification>("/vendas/produtos/unidades", { method: "POST", body: JSON.stringify({ name }) });
+  apiFetch<SalesProductClassification>("/vendas/produtos/unidades", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
 export type SalesProductGrid = { id: string; name: string; values: string };
 export const getSalesProductCategories = () =>
   apiFetch<SalesProductClassification[]>("/vendas/produtos/categorias");
@@ -128,11 +133,20 @@ export type SalesSupplierInput = Omit<
 >;
 export type SalesSellerProfile = {
   personType?: "INDIVIDUAL" | "COMPANY";
-  alias?: string | null; identityNumber?: string | null; issuingAuthority?: string | null;
-  birthDate?: string | null; sex?: string | null; phone2?: string | null;
-  zipCode?: string | null; address?: string | null; number?: string | null;
-  complement?: string | null; neighborhood?: string | null; city?: string | null;
-  state?: string | null; notes?: string | null;
+  alias?: string | null;
+  identityNumber?: string | null;
+  issuingAuthority?: string | null;
+  birthDate?: string | null;
+  sex?: string | null;
+  phone2?: string | null;
+  zipCode?: string | null;
+  address?: string | null;
+  number?: string | null;
+  complement?: string | null;
+  neighborhood?: string | null;
+  city?: string | null;
+  state?: string | null;
+  notes?: string | null;
 };
 export type SalesSeller = SalesSellerProfile & {
   id: string;
@@ -211,6 +225,16 @@ export type SalesCustomerInput = {
   creditBlocked?: boolean;
 };
 export type SalesOrderItem = {
+  allowDiscount?: boolean;
+  allowAddition?: boolean;
+  barcode?: string | null;
+  unit?: string | null;
+  priceType?: "NORMAL" | "PROMOCIONAL";
+  originalUnitPrice?: string | number;
+  baseUnitPrice?: string | number;
+  discount?: string | number;
+  addition?: string | number;
+  brand?: string | null;
   variantId?: string | null;
   variantName?: string | null;
   supplierId?: string | null;
@@ -223,8 +247,29 @@ export type SalesOrderItem = {
   subtotal: string;
 };
 export type SalesOrder = {
+  customer?: Pick<
+    SalesCustomer,
+    | "name"
+    | "email"
+    | "phone2"
+    | "address"
+    | "number"
+    | "complement"
+    | "neighborhood"
+    | "city"
+    | "state"
+    | "zipCode"
+    | "phone"
+  > | null;
+  cashTender?: string;
+  lastRequestId?: string;
   originType?: string;
-  conditionalSummary?: { sent: number; returned: number; sold: number; pending: number };
+  conditionalSummary?: {
+    sent: number;
+    returned: number;
+    sold: number;
+    pending: number;
+  };
   operatorId?: string | null;
   cardPayments?: import("./sales-cards").SalesCardPayment[];
   completedAt?: string | null;
@@ -438,7 +483,27 @@ export const archiveSalesSupplier = (id: string) =>
     `/vendas/fornecedores/${encodeURIComponent(id)}`,
     { method: "DELETE" },
   );
-export async function getSalesOrders() {
+export const initializeSalesModule = () =>
+  apiFetch("/vendas/inicializar", { method: "POST" });
+export const getSalesOrderByRequest = (requestId: string) =>
+  apiFetch<SalesOrderDetails>(
+    `/vendas/pedidos/por-requisicao/${encodeURIComponent(requestId)}`,
+    { skipCache: true },
+  );
+export const getSalesOrdersPage = (
+  query: { before?: number; search?: string; filter?: string; startDate?: string; endDate?: string; status?: string } = {},
+) =>
+  apiFetch<SalesOrder[]>(
+    `/vendas/pedidos?${new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(query)
+          .filter(([, v]) => v !== undefined && v !== "")
+          .map(([k, v]) => [k, String(v)]),
+      ),
+    )}`,
+    { skipCache: true },
+  );
+export async function getSalesOrders(all = false) {
   const orders: SalesOrder[] = [];
   let before: number | undefined;
   while (true) {
@@ -447,7 +512,7 @@ export async function getSalesOrders() {
       { skipCache: true },
     );
     orders.push(...page);
-    if (page.length < 100) return orders;
+    if (!all || page.length < 100) return orders;
     const next = page[page.length - 1].number;
     if (before !== undefined && next >= before)
       throw new Error("Não foi possível carregar o histórico completo.");
@@ -455,6 +520,7 @@ export async function getSalesOrders() {
   }
 }
 export type SaveSalesOrderInput = {
+  cashTender?: string;
   refundConfirmed?: boolean;
   cardPayments?: import("./sales-cards").SalesCardPayment[];
   expectedTotal?: number;
@@ -475,6 +541,9 @@ export type SaveSalesOrderInput = {
     variantId?: string;
     quantity: number;
     unitPrice?: number;
+    priceType?: "NORMAL" | "PROMOCIONAL";
+    discount?: number;
+    addition?: number;
   }[];
   paymentMethod: string;
   discount: number;
@@ -486,11 +555,13 @@ export type SaveSalesOrderInput = {
 export const createSalesOrder = (data: SaveSalesOrderInput) =>
   apiFetch<SalesOrder>("/vendas/pedidos", {
     method: "POST",
+    signal: AbortSignal.timeout(30000),
     body: JSON.stringify(data),
   });
 export const updateSalesOrder = (id: string, data: SaveSalesOrderInput) =>
   apiFetch<SalesOrder>(`/vendas/pedidos/${encodeURIComponent(id)}`, {
     method: "PATCH",
+    signal: AbortSignal.timeout(30000),
     body: JSON.stringify(data),
   });
 export const reverseSalesOrder = (id: string, reason: string) =>
@@ -507,7 +578,10 @@ export const cancelSalesOrder = (id: string, reason: string) =>
 export const discardSalesOrder = (id: string) =>
   apiFetch<SalesOrder>(`/vendas/pedidos/${encodeURIComponent(id)}/descartar`, {
     method: "POST",
-    body: JSON.stringify({ reason: "Venda em andamento excluída pelo operador na lista de atendimento." }),
+    body: JSON.stringify({
+      reason:
+        "Venda em andamento excluída pelo operador na lista de atendimento.",
+    }),
   });
 
 export type SalesReceivingAccount = { id: string; name: string; type: string };
@@ -546,14 +620,40 @@ export const lookupSalesSupplierCompany = (cnpj: string) =>
   );
 
 export const deleteSalesCustomer = (id: string) =>
-  apiFetch<{ success: boolean }>(`/vendas/clientes/${encodeURIComponent(id)}/excluir`, { method: "DELETE" });
+  apiFetch<{ success: boolean }>(
+    `/vendas/clientes/${encodeURIComponent(id)}/excluir`,
+    { method: "DELETE" },
+  );
 
 export const deleteSalesSeller = (id: string) =>
-  apiFetch<{ success: boolean }>(`/vendas/vendedores/${encodeURIComponent(id)}/excluir`, { method: "DELETE" });
+  apiFetch<{ success: boolean }>(
+    `/vendas/vendedores/${encodeURIComponent(id)}/excluir`,
+    { method: "DELETE" },
+  );
 
 export type SalesOrderDetails = SalesOrder & {
-  events: { id: string; action: string; createdAt: string; details: Record<string, unknown> }[];
-  receivables: { id: string; amount: string; dueDate: string; cancelledAt: string | null; installmentNumber: number | null; payments: { id: string; amountPaid: string; method: string; paidAt: string }[] }[];
+  events: {
+    id: string;
+    action: string;
+    createdAt: string;
+    details: Record<string, unknown>;
+  }[];
+  receivables: {
+    id: string;
+    amount: string;
+    dueDate: string;
+    cancelledAt: string | null;
+    installmentNumber: number | null;
+    payments: {
+      id: string;
+      amountPaid: string;
+      method: string;
+      paidAt: string;
+    }[];
+  }[];
   returns: { id: string; number: number; status: string; total: string }[];
 };
-export const getSalesOrderDetails = (id: string) => apiFetch<SalesOrderDetails>(`/vendas/pedidos/${encodeURIComponent(id)}`, { skipCache: true });
+export const getSalesOrderDetails = (id: string) =>
+  apiFetch<SalesOrderDetails>(`/vendas/pedidos/${encodeURIComponent(id)}`, {
+    skipCache: true,
+  });

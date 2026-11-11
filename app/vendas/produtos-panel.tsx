@@ -1294,8 +1294,8 @@ export default function SalesProductsPanel({
           </div>
         ) : filtered.length ? (
           <div ref={listRef} role="region" aria-label="Lista de produtos com rolagem" tabIndex={0} className="min-h-[240px] flex-1 overflow-auto bg-white focus-visible:outline-2 focus-visible:outline-[var(--primary-color)] dark:bg-slate-900">
-            <table className="w-full min-w-[960px] text-left text-[13px] leading-snug [&_td]:py-2 [&_th]:py-2.5">
-              <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 text-[11px] font-semibold uppercase tracking-wide text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+            <table className="w-full min-w-[960px] text-left text-sm leading-relaxed [&_td]:py-3 [&_th]:py-3">
+              <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                 <tr>
                   {visibleColumns.includes("CODE") && (
                     <th className="px-3 py-3">

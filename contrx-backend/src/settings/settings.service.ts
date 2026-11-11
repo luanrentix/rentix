@@ -8,6 +8,43 @@ import { UpsertSettingsDto } from './dto/upsert-settings.dto';
 export class SettingsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async findRuntimeByCompany(companyId: string) {
+    const settings = await this.findByCompany(companyId);
+    const pick = (value: Prisma.JsonValue | null, keys: string[]) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value))
+        return {};
+      return Object.fromEntries(
+        keys.filter((key) => key in value).map((key) => [key, value[key]]),
+      );
+    };
+    return {
+      companyId,
+      companySettings: pick(settings.companySettings, [
+        'ramoAtividade',
+        'companyName',
+        'tradeName',
+        'logo',
+        'logoUrl',
+        'logoBase64',
+        'companyLogo',
+        'document',
+        'stateRegistration',
+        'municipalRegistration',
+        'phone',
+        'email',
+        'pixKeyType',
+        'pixKey',
+        'zipCode',
+        'address',
+        'number',
+        'neighborhood',
+        'city',
+        'state',
+      ]),
+      themeSettings: pick(settings.themeSettings, ['mode', 'accent']),
+    };
+  }
+
   async findByCompany(companyId: string) {
     await this.validateCompany(companyId);
 

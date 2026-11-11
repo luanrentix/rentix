@@ -9,7 +9,7 @@ export default function SalesPageHeader({
   compact = false,
 }: {
   title: string;
-  description: string;
+  description?: string;
   icon: LucideIcon;
   children?: ReactNode;
   compact?: boolean;
@@ -25,9 +25,9 @@ export default function SalesPageHeader({
             {title}
           </h1>
         </div>
-        <p className={`${compact ? "mt-0.5 hidden sm:block" : "mt-1"} text-xs font-semibold text-slate-500 dark:text-slate-400`}>
+        {description && <p className={`${compact ? "mt-0.5 hidden sm:block" : "mt-1"} text-xs font-semibold text-slate-500 dark:text-slate-400`}>
           {description}
-        </p>
+        </p>}
       </div>
       {children && <div className="flex flex-wrap items-center gap-2.5">{children}</div>}
     </header>

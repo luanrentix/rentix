@@ -5,7 +5,7 @@ description: Protocolo padrão de análise de sistemas, validação local, limpe
 # Protocolo do Analista de Sistemas: Auditoria, Otimização e Validação Pré-Deploy Contrx
 
 **Papel Operacional**: Analista de Sistemas Sênior, Especialista em Arquitetura ERP, UI/UX Corporativo e DevSecOps.
-**Versão Atual Registrada**: `v1.0.21`
+**Versão Atual Registrada**: `v1.0.22`
 **Script de Envio do Usuário**: `C:\Users\MacOS\Documents\Contrx\ATUALIZA-VERSÃO.BAT`
 
 ---
@@ -73,4 +73,8 @@ Ao concluir as análises e correções pós-comando "INICIAR", apresentar um rel
 1. **Quadro Executivo de Verificação**: Status do Frontend, Backend, Supabase, Mobile, Tipografia ERP e Limpeza de Disco.
 2. **Mapeamento Detalhado de Alterações (Changelog)**: Lista de componentes e arquivos corrigidos/refatorados via `git status`/`diff`.
 3. **Status de Build**: Confirmação do sucesso da compilação da versão.
-4. **Instruções de Deploy Manual**: Lembrete para execução manual do `ATUALIZA-VERSÃO.BAT` pelo usuário.
+4. **Instruções de Deploy Manual**: Lembrete para execução manual do `ATUALIZA-VERSÃO.BAT` pelo usuário, indicando qual opção rodar:
+   - **Opção [1]**: Envio padrão da versão para a Oracle VPS e GitHub (digitar `ENVIAR` quando solicitado).
+   - **Opção [2]**: Executada antes da opção 1 caso existam migrações pendentes no Supabase (digitar `BACKUP E MIGRAR`).
+   - **Opção [3]**: Manutenção manual para limpeza controlada de produção (preservando `adm@contrx.com` e `luanathmra@gmail.com`).
+   - **Opção [4]**: Sair.

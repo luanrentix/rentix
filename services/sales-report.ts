@@ -149,8 +149,15 @@ export async function downloadSalesWorkbook(
   orders: SalesOrder[],
   detailed: boolean,
 ) {
-  const zip = new JSZip();
   const rows = reportRows(orders, detailed);
+  return downloadReportWorkbook(rows, "relatorio-vendas.xlsx");
+}
+
+export async function downloadReportWorkbook(
+  rows: (string | number | null)[][],
+  filename: string,
+) {
+  const zip = new JSZip();
   const xml = (value: unknown) =>
     escapeReport(value).replace(
       /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,
@@ -184,7 +191,7 @@ export async function downloadSalesWorkbook(
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "relatorio-vendas.xlsx";
+  link.download = filename;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

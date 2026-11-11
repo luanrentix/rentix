@@ -1,4 +1,6 @@
 import { CaixaController } from './caixa.controller';
+import { ManagementReportController } from './management-report.controller';
+import { ManagementReportService } from './management-report.service';
 import { CaixaService } from './caixa.service';
 import {
   SalesCreditsController,
@@ -15,6 +17,7 @@ import { ConfectionsDashboardController } from './confections-dashboard.controll
 @Module({
   imports: [PrismaModule],
   controllers: [
+    ManagementReportController,
     VendasController,
     CaixaController,
     SalesCardsController,
@@ -22,6 +25,7 @@ import { ConfectionsDashboardController } from './confections-dashboard.controll
     ConfectionsDashboardController,
   ],
   providers: [
+    ManagementReportService,
     VendasService,
     CaixaService,
     SalesCardsService,

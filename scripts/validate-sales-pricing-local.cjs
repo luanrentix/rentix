@@ -1,0 +1,13 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const ts = require('typescript');
+const loaded = { exports: {} };
+new Function('module','exports',ts.transpileModule(fs.readFileSync('services/sales-pricing.ts','utf8'),{ compilerOptions:{ module:ts.ModuleKind.CommonJS }}).outputText)(loaded,loaded.exports);
+const { getSalesPriceOptions, adjustedUnitPrice } = loaded.exports;
+const product = { price:'100', promotionalPrice:'80', inheritGridPrice:true, variants:[{ id:'v',price:'120' }] };
+assert.deepEqual(getSalesPriceOptions(product), { normal:100,promotional:80 });
+assert.deepEqual(getSalesPriceOptions({ ...product,inheritGridPrice:false },'v'), { normal:120,promotional:null });
+for(const promotionalPrice of [null,0,100,150]) assert.equal(getSalesPriceOptions({ ...product,promotionalPrice }).promotional,null);
+assert.equal(adjustedUnitPrice(100,10,2),92);
+assert.equal(adjustedUnitPrice(0.3,0.1,0),0.2);
+console.log('APROVADO: preços normal/promocional, variação independente e ajustes em centavos.');

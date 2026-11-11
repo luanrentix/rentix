@@ -16,7 +16,7 @@ import {
   setCompanyStorageItem,
   removeCompanyStorageItem,
 } from "@/services/company-storage";
-import { getAppSettings, saveAppSettings } from "@/services/settings.service";
+import { getAppSettings, getAppRuntimeSettings, saveAppSettings } from "@/services/settings.service";
 import {
   getCachedCompanySettings,
   getCachedThemeSettings,
@@ -41,7 +41,7 @@ import {
   MINIMIZED_MODAL_CHANGE_EVENT,
   type MinimizedModalState,
 } from "@/services/minimized-modal.service";
-import { canAccessTool } from "@/services/tool-permissions";
+import { canAccessTool, canPerformAction } from "@/services/tool-permissions";
 import {
   internalToolRoutes,
   systemOwnerToolRoutes,
@@ -771,18 +771,21 @@ export default function AppShell({ children }: AppShellProps) {
   }, [companyId, user?.email]);
 
   const loadSettings = useCallback(async (currentCompanyId: string) => {
+    const settingsIdentity = `${currentCompanyId}:${user?.id}:${canPerformAction(user, "settings", "view")}`;
+    setUserSettings({ name: user?.name || "", email: user?.email || "" });
     const cachedUserSettings = getCachedUserSettings();
     const cachedCompanySettings = getCachedCompanySettings(currentCompanyId);
     const cachedThemeSettings = getCachedThemeSettings();
 
     if (
-      loadedSettingsCompanyId === currentCompanyId &&
+      loadedSettingsCompanyId === settingsIdentity &&
       (cachedUserSettings || cachedCompanySettings || cachedThemeSettings)
     ) {
       if (cachedUserSettings) {
         setUserSettings({
           ...defaultUserSettings,
           ...cachedUserSettings,
+          name: user?.name || defaultUserSettings.name,
           email: user?.email || defaultUserSettings.email,
         } as UserSettings);
       }
@@ -814,14 +817,17 @@ export default function AppShell({ children }: AppShellProps) {
     }
 
     try {
-      const settings = await getAppSettings(currentCompanyId);
+      const settings = canPerformAction(user, "settings", "view")
+        ? await getAppSettings(currentCompanyId)
+        : await getAppRuntimeSettings(currentCompanyId);
       setCachedAppSettings(settings);
-      loadedSettingsCompanyId = currentCompanyId;
+      loadedSettingsCompanyId = settingsIdentity;
       setCompanyStorageItem(currentCompanyId, "contrx_business_mode", settings.companySettings?.ramoAtividade === "CONFECCOES" ? "CONFECCOES" : "OUTRO");
 
       setUserSettings({
         ...defaultUserSettings,
         ...(settings.userSettings || {}),
+        name: user?.name || defaultUserSettings.name,
         email: user?.email || defaultUserSettings.email,
       } as UserSettings);
       const storedCompanySettings = (settings.companySettings || {}) as Record<string, unknown>;
@@ -849,6 +855,7 @@ export default function AppShell({ children }: AppShellProps) {
           setUserSettings({
             ...defaultUserSettings,
             ...cachedUserSettings,
+            name: user?.name || defaultUserSettings.name,
             email: user?.email || defaultUserSettings.email,
           } as UserSettings);
         }
@@ -884,7 +891,7 @@ export default function AppShell({ children }: AppShellProps) {
       setCompanySettings({ ...defaultCompanySettings, ramoAtividade: savedMode });
       loadSettingsFromLocalStorage();
     }
-  }, [loadSettingsFromLocalStorage, user?.email]);
+  }, [loadSettingsFromLocalStorage, user]);
 
   useEffect(() => {
     if (!companyId) {
@@ -1505,7 +1512,7 @@ export default function AppShell({ children }: AppShellProps) {
             isSidebarOpen ? "lg:ml-72" : "lg:ml-20"
           }`}
         >
-          <header className="sticky top-0 z-20 flex min-h-14 items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-3 py-2.5 backdrop-blur print:hidden sm:px-4 lg:h-20 lg:px-6 lg:py-0">
+          <header className={`sticky top-0 z-20 flex min-h-14 items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-3 py-2.5 backdrop-blur print:hidden sm:px-4 lg:h-20 lg:px-6 lg:py-0 ${pathname === "/vendas" ? "lg:hidden" : ""}`}>
             <div className="flex min-w-0 items-center gap-3">
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-orange-600 lg:text-sm">
@@ -1646,7 +1653,7 @@ export default function AppShell({ children }: AppShellProps) {
             </div>
           </header>
 
-          <main className="contrx-app-main min-w-0 flex-1 overflow-x-hidden px-3 pb-28 pt-4 sm:px-5 lg:px-6 lg:py-6">
+          <main className={`contrx-app-main min-w-0 flex-1 overflow-x-hidden px-3 pb-28 pt-4 sm:px-5 ${pathname === "/vendas" ? "lg:p-2" : "lg:px-6 lg:py-6"}`}>
             {isCommercialAccessBlocked ? (
               <CommercialAccessBlockedPanel
                 status={user?.subscriptionStatus}

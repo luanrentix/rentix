@@ -85,6 +85,45 @@ describe('ContratosService', () => {
     };
   }
 
+  it('restringe contrato compartilhado à empresa do link e seleciona somente dados necessários', async () => {
+    const shared = {
+      id: 'share-1',
+      companyId: 'company-1',
+      filterDescription: 'contract-1',
+      expiresAt: new Date('2026-06-17T12:00:00.000Z'),
+      company: {
+        id: 'company-1',
+        tradeName: 'Empresa',
+        companyName: 'Empresa Ltda',
+        document: '123',
+        phone: '999',
+        email: 'contato@example.com',
+      },
+    };
+    const contractFindFirst = jest.fn().mockResolvedValue(contract);
+    const sharedFindUnique = jest.fn().mockResolvedValue(shared);
+    const sharedDeleteMany = jest.fn().mockResolvedValue({ count: 0 });
+    const { service } = createService({
+      sharedBankStatement: {
+        findUnique: sharedFindUnique,
+        deleteMany: sharedDeleteMany,
+      } as never,
+      contract: {
+        findFirst: contractFindFirst,
+      } as never,
+    });
+
+    await service.findSharedContract('share-1');
+
+    expect(contractFindFirst).toHaveBeenCalledWith({
+      where: { id: 'contract-1', companyId: 'company-1' },
+      include: {
+        property: true,
+        tenant: true,
+      },
+    });
+  });
+
   it('cancela contrato e remove parcelas pendentes na mesma transacao', async () => {
     const { service, tx } = createService();
 

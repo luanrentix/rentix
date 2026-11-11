@@ -4,13 +4,13 @@ import { authorizeAction } from "@/services/authorize-action";
 import { useRef, useState } from "react";
 import { Printer, X } from "lucide-react";
 
-export default function CashReportModal({ html, onClose, title = "Relatório de caixa" }: { html: string; onClose: () => void; title?: string }) {
+export default function CashReportModal({ html, onClose, title = "Relatório de caixa", permission = "sales" }: { html: string; onClose: () => void; title?: string; permission?: string }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   async function print() {
     try {
-      await authorizeAction("sales", "print");
+      await authorizeAction(permission, "print");
       if (!ready || !frame.current?.contentWindow) return;
       frame.current.contentWindow.focus();
       frame.current.contentWindow.print();

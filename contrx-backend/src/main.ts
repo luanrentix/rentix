@@ -9,6 +9,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { json, NextFunction, Request, Response, urlencoded } from 'express';
 
 import { AppModule } from './app.module';
+import { validateCorsOrigin } from './common/cors-origin';
 
 type ExpressAppLike = {
   disable?: (setting: string) => void;
@@ -126,12 +127,7 @@ async function bootstrap() {
       origin: string | undefined,
       callback: (error: Error | null, allow?: boolean) => void,
     ) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-        return;
-      }
-
-      callback(new Error(`Origin ${origin} is not allowed by CORS`), false);
+      validateCorsOrigin(origin, allowedOrigins, callback);
     },
     credentials: true,
   });

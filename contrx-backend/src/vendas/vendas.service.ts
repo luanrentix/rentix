@@ -1,5 +1,7 @@
 import { scalarText } from '../common/text-normalization';
+import { orderListFilters } from './order-list-filter';
 import { validateCardPayments } from './card-payment';
+import { resolveSalesItemPrice } from './item-pricing';
 import { gtinAliases, isValidGtin } from './gtin';
 import { customerCreditBalance } from './credit-ledger';
 import { orderOrigin } from './order-history';
@@ -92,6 +94,14 @@ export class VendasService {
   }
 
   async listCustomers(companyId: string) {
+    await this.ensureConfectionery(companyId);
+    return this.prisma.salesCustomer.findMany({
+      where: { companyId, active: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  async initializeModule(companyId: string) {
     await this.ensureConfectionery(companyId);
     for (const [systemKey, name] of [
       ['CONSUMIDOR_FINAL', 'CONSUMIDOR FINAL'],
@@ -1975,7 +1985,15 @@ export class VendasService {
     };
   }
 
-  async listOrders(companyId: string, before?: string) {
+  async listOrders(
+    companyId: string,
+    before?: string,
+    search?: string,
+    filter?: string,
+    startDate?: string,
+    endDate?: string,
+    status?: string,
+  ) {
     await this.ensureConfectionery(companyId);
     if (
       before &&
@@ -1986,6 +2004,24 @@ export class VendasService {
       where: {
         companyId,
         ...(before ? { number: { lt: Number(before) } } : {}),
+        ...orderListFilters(search, startDate, endDate, status),
+        ...(filter === 'ATIVAS'
+          ? { status: 'EM_ANDAMENTO' }
+          : filter === 'GRAVADAS'
+            ? {
+                saleType: { in: ['VENDA', 'TROCA'] },
+                status: { not: 'EM_ANDAMENTO' },
+              }
+            : ['VENDA', 'TROCA', 'ORCAMENTO', 'CONDICIONAL', 'PEDIDO'].includes(
+                  filter || '',
+                )
+              ? {
+                  saleType: filter,
+                  status: { notIn: ['CANCELADA', 'ESTORNADA'] },
+                }
+              : filter === 'ESTORNAVEIS'
+                ? { status: { in: ['CONCLUIDA', 'EM_ANDAMENTO'] } }
+                : {}),
       },
       orderBy: { number: 'desc' },
       take: 100,
@@ -2026,6 +2062,25 @@ export class VendasService {
       },
     });
     if (!order) throw new NotFoundException('Venda não encontrada.');
+    const customer =
+      ['ORCAMENTO', 'CONDICIONAL'].includes(order.saleType) && order.customerId
+        ? await this.prisma.salesCustomer.findFirst({
+            where: { id: order.customerId, companyId },
+            select: {
+              name: true,
+              phone2: true,
+              email: true,
+              address: true,
+              number: true,
+              complement: true,
+              neighborhood: true,
+              city: true,
+              state: true,
+              zipCode: true,
+              phone: true,
+            },
+          })
+        : null;
     const latest = [...order.events]
       .reverse()
       .find((event) => ['CRIADA', 'ATUALIZADA'].includes(event.action));
@@ -2038,8 +2093,14 @@ export class VendasService {
           .filter((event) => ['CRIADA', 'ATUALIZADA'].includes(event.action))
           .reverse(),
       ),
+      ...(['ORCAMENTO', 'CONDICIONAL'].includes(order.saleType)
+        ? { customer }
+        : {}),
       cardPayments: metadata?.cardPayments || [],
       operatorId: metadata?.actorId ?? null,
+      lastRequestId: metadata?.requestId ?? order.requestId,
+      cashTender:
+        typeof metadata?.cashTender === 'string' ? metadata.cashTender : null,
     };
   }
 
@@ -2061,6 +2122,28 @@ export class VendasService {
           where: { id, companyId },
         });
         if (!existing) throw new NotFoundException('Venda não encontrada.');
+        const repeated = data.requestId
+          ? await tx.salesOrderEvent.findFirst({
+              where: {
+                orderId: existing.id,
+                action: 'ATUALIZADA',
+                details: { path: ['requestId'], equals: data.requestId },
+              },
+              orderBy: { createdAt: 'desc' },
+            })
+          : null;
+        if (repeated) {
+          const metadata = repeated.details as Prisma.JsonObject;
+          if (metadata.requestSignature !== this.requestSignature(data))
+            throw new BadRequestException(
+              'Esta tentativa já foi processada com outros dados. Consulte a venda gravada.',
+            );
+          return {
+            ...existing,
+            cardPayments: metadata.cardPayments || [],
+            cashTender: metadata.cashTender || null,
+          };
+        }
         if (
           existing.status !== 'EM_ANDAMENTO' &&
           !(
@@ -2135,12 +2218,15 @@ export class VendasService {
           order,
         );
         await this.recordOrderEvent(tx, order, 'ATUALIZADA', {
+          requestId: data.requestId ?? null,
+          requestSignature: this.requestSignature(data),
+          cashTender: data.cashTender ?? null,
           cardPayments,
           refundConfirmed: data.refundConfirmed === true,
           previousVersion: existing.version,
           actorId: actorId ?? null,
         });
-        return { ...order, cardPayments };
+        return { ...order, cardPayments, cashTender: data.cashTender ?? null };
       },
       { maxWait: 10000, timeout: 30000 },
     );
@@ -2156,7 +2242,7 @@ export class VendasService {
     const existing = await this.prisma.salesOrder.findFirst({
       where: { id, companyId },
     });
-    if (!existing) throw new NotFoundException('Venda n?o encontrada.');
+    if (!existing) throw new NotFoundException('Venda não encontrada.');
     if (existing.status !== 'CONCLUIDA')
       throw new BadRequestException(
         'Somente operações concluídas podem ser estornadas.',
@@ -2206,7 +2292,7 @@ export class VendasService {
     const existing = await this.prisma.salesOrder.findFirst({
       where: { id, companyId },
     });
-    if (!existing) throw new NotFoundException('Venda n?o encontrada.');
+    if (!existing) throw new NotFoundException('Venda não encontrada.');
     if (existing.status === 'ESTORNADA' || existing.status === 'CANCELADA')
       throw new BadRequestException('Esta venda j? foi encerrada.');
     return this.closeOrderAndRestoreStock(
@@ -2370,7 +2456,8 @@ export class VendasService {
             previous.status !== (data.status || 'CONCLUIDA') ||
             !previous.discount.eq(data.discount) ||
             !previous.addition.eq(data.addition) ||
-            previous.paymentMethod !== data.paymentMethod
+            previous.paymentMethod !== data.paymentMethod ||
+            (previous.notes || '') !== (data.notes?.trim() || '')
           )
             throw new BadRequestException(
               'Esta gravação já foi processada com outros dados. Abra o documento salvo ou inicie uma nova venda.',
@@ -2408,9 +2495,40 @@ export class VendasService {
               throw new BadRequestException(
                 'Esta gravação já foi processada com outros dados de cartão.',
               );
-            return { ...previous, cardPayments: saved };
+            const metadata = event?.details as Prisma.JsonObject | undefined;
+            if (
+              metadata?.requestSignature &&
+              metadata.requestSignature !== this.requestSignature(data)
+            )
+              throw new BadRequestException(
+                'Esta gravação já foi processada com outros dados.',
+              );
+            return {
+              ...previous,
+              cardPayments: saved,
+              cashTender: metadata?.cashTender ?? null,
+            };
           }
-          return previous;
+          const event = await tx.salesOrderEvent.findFirst({
+            where: {
+              orderId: previous.id,
+              action: { in: ['CRIADA', 'ATUALIZADA'] },
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+          const metadata = event?.details as Prisma.JsonObject | undefined;
+          if (
+            metadata?.requestSignature &&
+            metadata.requestSignature !== this.requestSignature(data)
+          )
+            throw new BadRequestException(
+              'Esta gravação já foi processada com outros dados.',
+            );
+          return {
+            ...previous,
+            cardPayments: metadata?.cardPayments ?? [],
+            cashTender: metadata?.cashTender ?? null,
+          };
         }
         const orderData = await this.buildOrderData(companyId, data, tx);
         const stockReserved =
@@ -2453,11 +2571,14 @@ export class VendasService {
           order,
         );
         await this.recordOrderEvent(tx, order, 'CRIADA', {
+          requestId: data.requestId ?? null,
+          requestSignature: this.requestSignature(data),
+          cashTender: data.cashTender ?? null,
           cardPayments,
           refundConfirmed: data.refundConfirmed === true,
           actorId: actorId ?? null,
         });
-        return { ...order, cardPayments };
+        return { ...order, cardPayments, cashTender: data.cashTender ?? null };
       },
       { maxWait: 10000, timeout: 30000 },
     );
@@ -2468,6 +2589,11 @@ export class VendasService {
     data: CriarVendaDto,
     tx: Prisma.TransactionClient,
   ) {
+    if (data.cashTender) {
+      const tender = new Prisma.Decimal(data.cashTender);
+      if (tender.lt(0) || tender.decimalPlaces() > 2)
+        throw new BadRequestException('Dinheiro entregue inválido.');
+    }
     if (!data.customerId || !data.sellerId)
       throw new BadRequestException(
         'Selecione um cliente e um vendedor para a venda.',
@@ -2481,7 +2607,7 @@ export class VendasService {
       },
     });
     if (products.length !== ids.length)
-      throw new NotFoundException('Um ou mais produtos n?o foram encontrados.');
+      throw new NotFoundException('Um ou mais produtos não foram encontrados.');
     if (products.some((product) => product.isGridParent))
       throw new BadRequestException(
         'Selecione o cadastro do tamanho/cor para vender. A matriz da grade não possui estoque próprio.',
@@ -2499,9 +2625,9 @@ export class VendasService {
       }),
     ]);
     if (data.customerId && !customer)
-      throw new BadRequestException('Cliente inv?lido para esta empresa.');
+      throw new BadRequestException('Cliente inválido para esta empresa.');
     if (data.sellerId && !seller)
-      throw new BadRequestException('Vendedor inv?lido para esta empresa.');
+      throw new BadRequestException('Vendedor inválido para esta empresa.');
     if (data.saleType === 'CONDICIONAL' && customer?.isSystem)
       throw new BadRequestException(
         'Selecione um cliente identificado para o condicional. CONSUMIDOR FINAL não é permitido.',
@@ -2530,19 +2656,8 @@ export class VendasService {
         throw new BadRequestException('Variação inválida para este produto.');
       if (product.variants.length && !variant)
         throw new BadRequestException('Selecione o tamanho/cor do produto.');
-      const defaultPrice =
-        !product.inheritGridPrice && variant?.price != null
-          ? variant.price
-          : product.promotionalPrice &&
-              product.promotionalPrice.gt(0) &&
-              product.promotionalPrice.lte(product.price)
-            ? product.promotionalPrice
-            : product.price;
-      const unitPrice = new Prisma.Decimal(item.unitPrice ?? defaultPrice);
-      if (product.allowDiscount === false && unitPrice.lt(defaultPrice))
-        throw new BadRequestException(`${product.name} não permite desconto.`);
-      if (product.allowAddition === false && unitPrice.gt(defaultPrice))
-        throw new BadRequestException(`${product.name} não permite acréscimo.`);
+      const pricing = resolveSalesItemPrice(product, variant, item);
+      const unitPrice = pricing.unitPrice;
       return {
         productId: product.id,
         variantId: variant?.id ?? null,
@@ -2551,7 +2666,16 @@ export class VendasService {
         name: product.name,
         sku: product.sku,
         unit: product.unit,
+        barcode: variant?.barcode ?? product.barcode ?? null,
+        allowDiscount: product.allowDiscount,
+        allowAddition: product.allowAddition,
         stockManaged: product.manageStock,
+        brand: product.brand ?? null,
+        priceType: pricing.priceType,
+        originalUnitPrice: pricing.originalUnitPrice,
+        baseUnitPrice: pricing.baseUnitPrice,
+        discount: pricing.discount,
+        addition: pricing.addition,
         supplierId: product.supplierId,
         supplierName: product.supplier?.name ?? product.supplierName,
         unitPrice: unitPrice.toString(),
@@ -2570,6 +2694,7 @@ export class VendasService {
     const addition = new Prisma.Decimal(data.addition || 0);
     const discountEligible = items.reduce(
       (sum, item) =>
+        item.priceType === 'PROMOCIONAL' ||
         productsById.get(item.productId)?.allowDiscount === false
           ? sum
           : sum.add(item.subtotal),
@@ -2588,7 +2713,7 @@ export class VendasService {
       );
     if (discount.gt(subtotal))
       throw new BadRequestException(
-        'O desconto n?o pode ser maior que o subtotal.',
+        'O desconto não pode ser maior que o subtotal.',
       );
     const returnData =
       data.saleType === 'TROCA'
@@ -2622,6 +2747,20 @@ export class VendasService {
             (data.status || 'CONCLUIDA') === 'CONCLUIDA',
           )
         : null;
+    if (
+      data.cashTender &&
+      (data.status || 'CONCLUIDA') === 'CONCLUIDA' &&
+      total.gt(0)
+    ) {
+      const cash =
+        data.paymentMethod === 'DINHEIRO'
+          ? total
+          : new Prisma.Decimal(paymentDetails?.DINHEIRO ?? 0);
+      if (new Prisma.Decimal(data.cashTender).lt(cash))
+        throw new BadRequestException(
+          'O valor entregue não cobre a parcela em dinheiro.',
+        );
+    }
     const onCredit =
       data.paymentMethod === 'CREDIARIO'
         ? total
@@ -2764,7 +2903,8 @@ export class VendasService {
         const net =
           product.commissionRule === 'VALOR_LIQUIDO' &&
           discountEligible.gt(0) &&
-          product.allowDiscount !== false
+          product.allowDiscount !== false &&
+          item.priceType !== 'PROMOCIONAL'
             ? base.mul(discountEligible.sub(discount)).div(discountEligible)
             : base;
         const amount = net
@@ -3101,6 +3241,49 @@ export class VendasService {
 
   private async lockCompany(tx: Prisma.TransactionClient, companyId: string) {
     await tx.$queryRaw`SELECT "id" FROM "empresas" WHERE "id" = ${companyId} FOR UPDATE`;
+  }
+
+  private requestSignature(data: CriarVendaDto) {
+    const payload = Object.fromEntries(
+      Object.entries(data).filter(
+        ([key]) => !['version', 'requestId'].includes(key),
+      ),
+    );
+    const canonical = (value: unknown): unknown =>
+      Array.isArray(value)
+        ? value.map(canonical)
+        : value && typeof value === 'object'
+          ? Object.fromEntries(
+              Object.entries(value)
+                .filter(([, v]) => v !== undefined)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([k, v]) => [k, canonical(v)]),
+            )
+          : value;
+    return JSON.stringify(canonical(payload));
+  }
+
+  async orderByRequest(companyId: string, requestId: string) {
+    await this.ensureConfectionery(companyId);
+    const order = await this.prisma.salesOrder.findFirst({
+      where: {
+        companyId,
+        OR: [
+          { requestId },
+          {
+            events: {
+              some: { details: { path: ['requestId'], equals: requestId } },
+            },
+          },
+        ],
+      },
+      orderBy: { number: 'desc' },
+    });
+    if (!order)
+      throw new NotFoundException(
+        'Tentativa ainda não localizada. Mantenha o atendimento e tente consultar novamente.',
+      );
+    return this.orderDetails(companyId, order.id);
   }
 
   private validateOrderPayments(
@@ -3664,7 +3847,7 @@ export class VendasService {
         throw new BadRequestException(
           direction === -1
             ? 'Estoque insuficiente para concluir a venda.'
-            : 'N?o foi poss?vel restaurar o estoque do produto.',
+            : 'Não foi possível restaurar o estoque do produto.',
         );
       await tx.salesStockMovement.create({
         data: {

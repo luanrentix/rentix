@@ -1,7 +1,7 @@
 # PROTOCOLO DE ANÁLISE DE SISTEMAS, HIGIENIZAÇÃO E PRÉ-DEPLOY CONTRX
 
 **Atuação**: Analista de Sistemas Sênior, Especialista em Arquitetura ERP, UI/UX Corporativo e DevSecOps.  
-**Versão Atual Registrada**: `v1.0.21`  
+**Versão Atual Registrada**: `v1.0.22`
 **Gatilho de Execução**: Comando explícito **"INICIAR"** (ou variações como *"iniciar nesse protocolo"*, *"iniciar"*).  
 **Script de Envio Manual**: `C:\Users\MacOS\Documents\Contrx\ATUALIZA-VERSÃO.BAT`
 
@@ -100,4 +100,59 @@ Ao finalizar a execução acionada pelo comando **"INICIAR"**, o agente deverá 
 2. **Mapeamento Detalhado de Alterações (Changelog)**:
    - Relação de arquivos modificados via `git status` / `git diff`.
 3. **Orientação para Deploy Manual**:
-   - Lembrete explícito instruindo o usuário a executar o arquivo `C:\Users\MacOS\Documents\Contrx\ATUALIZA-VERSÃO.BAT`.
+   - Lembrete explícito instruindo o usuário sobre qual opção executar no arquivo `C:\Users\MacOS\Documents\Contrx\ATUALIZA-VERSÃO.BAT`.
+
+---
+
+## 5. GUIA OPERACIONAL DAS OPÇÕES DO ATUALIZA-VERSÃO.BAT
+
+O script executável `C:\Users\MacOS\Documents\Contrx\ATUALIZA-VERSÃO.BAT` possui 4 opções centrais no menu. Siga as orientações abaixo para cada cenário de liberação:
+
+```text
+============================================================
+CONTRX - ATUALIZACAO MANUAL VALIDADA
+[1] Validar e enviar versao para VPS Oracle
+[2] Backup local dos dados e migrations do Supabase
+[3] Manutencao manual - diagnostico, simulacao e plano aprovado
+[4] Sair
+============================================================
+```
+
+### 🎯 Qual Opção Executar?
+
+#### Cenário 1: Atualização Normal de Sistema (Migrations Já Aplicadas)
+*Quando o relatório do analista informar que o Supabase já está atualizado (`pending: []`):*
+1. Escolha a **Opção [1]**.
+2. O script validará lints, builds, testes locais e auditoria de pacotes.
+3. Quando o script listar os arquivos alterados e solicitar confirmação, digite:
+   ```text
+   ENVIAR
+   ```
+4. O script fará o commit, push para o GitHub e atualizará automaticamente a Oracle VPS via Docker.
+
+---
+
+#### Cenário 2: Atualização com Novas Migrações de Banco (Supabase Pendente)
+*Quando houver novas migrations na pasta `contrx-backend/prisma/migrations`:*
+1. **1º Passo**: Escolha a **Opção [2]**.
+   - O script checará as migrations pendentes.
+   - Digite exatamente:
+     ```text
+     BACKUP E MIGRAR
+     ```
+   - Isso salvará um dump local de segurança em `contrx-backend/backups` e aplicará as alterações estruturais no Supabase.
+2. **2º Passo**: Retorne ao menu e escolha a **Opção [1]**.
+   - Digite `ENVIAR` para validar, compilar e subir a aplicação para a VPS Oracle.
+
+---
+
+#### Cenário 3: Manutenção e Limpeza Controlada de Dados
+*Para remover usuários não autorizados/antigos testes preservando `adm@contrx.com` e `luanathmra@gmail.com`:*
+1. Escolha a **Opção [3]**.
+2. No submenu de manutenção, execute primeiro o diagnóstico ou simulação (*dry-run*).
+3. Apenas com o plano revisado e aprovado, proceda para a execução controlada.
+
+---
+
+#### Opção [4]: Sair
+- Encerra a janela de atualização sem realizar nenhuma ação.

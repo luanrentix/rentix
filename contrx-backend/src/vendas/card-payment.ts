@@ -11,8 +11,34 @@ export async function validateCardPayments(
     total: Prisma.Decimal;
     paymentMethod: string;
     paymentDetails: Prisma.JsonValue | null;
+    status?: string;
+    saleType?: string;
   },
 ) {
+  const required = ['CARTAO_DEBITO', 'CARTAO_CREDITO'].filter(
+    (method) =>
+      order.status === 'CONCLUIDA' &&
+      ['VENDA', 'TROCA'].includes(order.saleType || '') &&
+      (order.paymentMethod === method
+        ? !order.total.isZero()
+        : order.paymentMethod === 'MISTO' &&
+          new Prisma.Decimal(
+            Number(
+              (order.paymentDetails as Record<string, number> | null)?.[
+                method
+              ] || 0,
+            ),
+          ).gt(0)),
+  );
+  if (
+    required.some(
+      (method) =>
+        !data.cardPayments?.some((payment) => payment.method === method),
+    )
+  )
+    throw new BadRequestException(
+      'Informe administradora, bandeira e NSU de cada pagamento em cartão antes de concluir.',
+    );
   if (!data.cardPayments?.length) return [];
   const settings = await tx.appSettings.findUnique({ where: { companyId } });
   const admins = administratorsFromSettings(settings?.companySettings);

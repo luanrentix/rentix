@@ -49,10 +49,18 @@ async function main() {
     }
     await db.query('INSERT INTO public.usuarios_sessoes (id,sessao_id,usuario_id,empresa_id,expira_em) VALUES ($1,$2,$3,$4,now()+interval \'1 day\')',[crypto.randomUUID(),crypto.randomUUID(),unwanted,unwantedCompany]);
     await db.query('INSERT INTO public.pessoas (id,empresa_id,tipo,nome,documento,atualizado_em) VALUES ($1,$2,$3,$4,$5,now())',[crypto.randomUUID(),unwantedCompany,'PESSOA_FISICA','Disposable person','00000000000']);
+    const chargeId=crypto.randomUUID();
+    await db.query(`INSERT INTO public.contas_receber
+      (id,empresa_id,imovel,inquilino,data_vencimento,valor,atualizado_em)
+      VALUES ($1,$2,'Synthetic property','Synthetic tenant',now(),100,now())`,[chargeId,unwantedCompany]);
+    await db.query(`INSERT INTO public.pagamentos_recebidos
+      (id,conta_receber_id,pago_em,forma_pagamento,valor_pago,atualizado_em)
+      VALUES ($1,$2,now(),'DINHEIRO',100,now())`,[crypto.randomUUID(),chargeId]);
     const dryFile=path.join(dir,'dry-run.json');
     run(process.execPath,['scripts/maintenance/dry-run.cjs','--env',testEnv,'--out',dryFile]);
     const dry=JSON.parse(fs.readFileSync(dryFile,'utf8')); assert.deepEqual(dry.blockers,[]);
     assert.equal(dry.totalUsers,3); assert.equal(dry.candidateUsers.length,1);
+    assert.equal(dry.inheritedOwnership.length,1);
     assert.equal((await db.query('SELECT count(*)::int AS n FROM usuarios')).rows[0].n,3);
     // Missing approval cannot delete or generate an execution backup.
     const denied=spawnSync(process.execPath,['scripts/maintenance/execute.cjs','--env',testEnv,'--out',path.join(dir,'denied.json')],{encoding:'utf8',windowsHide:true});
@@ -92,6 +100,7 @@ async function main() {
     assert.ok(await bcrypt.compare('IsolatedFixtureOnly!7',remaining[0].senha_hash));
     assert.equal((await db.query('SELECT count(*)::int AS n FROM empresas')).rows[0].n,1);
     assert.equal((await db.query('SELECT count(*)::int AS n FROM usuarios_sessoes')).rows[0].n,0);
+    assert.equal((await db.query('SELECT count(*)::int AS n FROM pagamentos_recebidos')).rows[0].n,0);
     const repeat=path.join(dir,'repeat.json'); run(process.execPath,['scripts/maintenance/dry-run.cjs','--env',testEnv,'--out',repeat]);
     assert.equal(JSON.parse(fs.readFileSync(repeat,'utf8')).order.length,0);
     testReport={passed:true,testDatabase:testName,restoreDatabase:restoreName,sourceDatabaseUnchanged:true,productionTouched:false,checks:['actual application schema cloned','read-only dry-run','missing approval rejected','concurrency rejected','schema drift rejected','unexpected trigger changes detected and transaction fully rolled back','full backup restored with matching table fingerprints','ordered cleanup committed only in isolated fixture','protected credentials active and bcrypt verified','repeat plan empty'],dryRun:dryFile,execution};

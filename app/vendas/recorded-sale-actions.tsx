@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Eye, MoreVertical, Printer } from "lucide-react";
+import { Eye, FolderOpen, MoreVertical, Printer } from "lucide-react";
 
 export function RecordedSaleStatus({ status }: { status: string }) {
   const styles: Record<string, { label: string; color: string }> = {
@@ -45,10 +45,12 @@ export default function RecordedSaleActions({
   number,
   onDetails,
   onReceipt,
+  onOpen,
 }: {
   number: number;
   onDetails: () => void;
   onReceipt: () => void;
+  onOpen?: () => void;
 }) {
   const [menu, setMenu] = useState<{ top: number; left: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -120,6 +122,7 @@ export default function RecordedSaleActions({
             className="fixed z-[150] w-56 rounded-xl border border-slate-200 bg-white p-1 text-xs shadow-xl dark:border-slate-700 dark:bg-slate-900"
           >
             {[
+              ...(onOpen ? [{ label: "Abrir atendimento", icon: FolderOpen, run: onOpen }] : []),
               { label: "Detalhes / pagamentos", icon: Eye, run: onDetails },
               {
                 label: "Visualizar comprovante",

@@ -21,6 +21,18 @@ import {
 } from 'class-validator';
 
 export class ItemVendaDto {
+  @IsOptional() @IsIn(['NORMAL', 'PROMOCIONAL']) priceType?:
+    'NORMAL' | 'PROMOCIONAL';
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  discount?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  addition?: number;
   @IsOptional() @IsUUID() variantId?: string;
   @IsString()
   productId!: string;
@@ -58,6 +70,10 @@ export class CardPaymentDto {
 }
 
 export class CriarVendaDto {
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{1,12}(\.\d{1,2})?$/)
+  cashTender?: string;
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(2)

@@ -95,6 +95,20 @@ export class VendasController {
   listCustomers(@CurrentUser() user: UsuarioAutenticado) {
     return this.service.listCustomers(user.companyId);
   }
+  @RequireToolAction('create')
+  @Post('inicializar')
+  initializeModule(@CurrentUser() user: UsuarioAutenticado) {
+    return this.service.initializeModule(user.companyId);
+  }
+
+  @RequireToolAction('view')
+  @Get('pedidos/por-requisicao/:requestId')
+  byRequest(
+    @Param('requestId') requestId: string,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    return this.service.orderByRequest(user.companyId, requestId);
+  }
   @RequireToolAction('view')
   @Get('clientes/verificar-documento')
   checkCustomerDocument(
@@ -330,8 +344,21 @@ export class VendasController {
   listOrders(
     @CurrentUser() user: UsuarioAutenticado,
     @Query('before') before?: string,
+    @Query('search') search?: string,
+    @Query('filter') filter?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('status') status?: string,
   ) {
-    return this.service.listOrders(user.companyId, before);
+    return this.service.listOrders(
+      user.companyId,
+      before,
+      search,
+      filter,
+      startDate,
+      endDate,
+      status,
+    );
   }
   @RequireToolAction('create')
   @Post('pedidos')

@@ -26,7 +26,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
      - Executar as correções recomendadas mantendo 100% das funcionalidades e regras de negócio.
      - NÃO fazer alterações destrutivas.
      - Rodar builds e validações locais (`npm run build` no frontend e backend).
-- **Envio de Versão**: Não enviar nada para produção. O envio para Oracle VPS, GitHub e Supabase é manual e realizado pelo usuário através do arquivo `C:\Users\MacOS\Documents\Contrx\ATUALIZA-VERSÃO.BAT`.
+- **Envio de Versão**: Não enviar nada para produção. O envio para Oracle VPS, GitHub e Supabase é manual e realizado pelo usuário através do arquivo `C:\Users\MacOS\Documents\Contrx\ATUALIZA-VERSÃO.BAT` (Opção [1] para deploy normal com confirmação 'ENVIAR'; Opção [2] caso haja migrations pendentes no Supabase com confirmação 'BACKUP E MIGRAR'; Opção [3] para manutenção manual/limpeza controlada).
 
 ## Áreas Obrigatórias da Auditoria ao Disparo ("INICIAR")
 

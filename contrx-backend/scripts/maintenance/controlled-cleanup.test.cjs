@@ -61,3 +61,31 @@ test('external files and protected email inside candidate row block deletion',()
   rows.pessoas[0].__mentions_protected_email=true;
   const p=plan(catalog,rows); assert.ok(p.blockers.some(b=>b.includes('External/legacy'))); assert.ok(p.blockers.some(b=>b.includes('Protected identity/email/company')));
 });
+
+test('exclusive payments follow verified ownership and are ordered before the account',()=>{
+  const {rows,catalog}=fixture();
+  rows.contas_receber=[{id:'account',empresa_id:'remove'}];
+  rows.pagamentos_recebidos=[{id:'payment',conta_receber_id:'account'}];
+  for(const child of ['contas_receber','pagamentos_recebidos']) catalog.constraints.push({schema:'public',child,type:'p',columns:['id']});
+  catalog.constraints.push({schema:'public',child:'pagamentos_recebidos',type:'f',columns:['conta_receber_id'],parent_schema:'public',parent:'contas_receber',parent_columns:['id']});
+  const p=plan(catalog,rows);
+  assert.deepEqual(p.blockers,[]);
+  assert.ok(p.order.indexOf('pagamentos_recebidos:payment') < p.order.indexOf('contas_receber:account'));
+  assert.equal(p.inheritedOwnership.length,1);
+  // A protected reference or any retained parent prevents automatic selection.
+  rows.pagamentos_recebidos[0].__mentions_protected_email=true;
+  assert.ok(!plan(catalog,rows).order.includes('pagamentos_recebidos:payment'));
+  rows.pagamentos_recebidos[0].__mentions_protected_email=false;
+  rows.pagamentos_recebidos[0].usuario_id='a';
+  assert.ok(!plan(catalog,rows).order.includes('pagamentos_recebidos:payment'));
+});
+
+test('a declared payment owner without its real FK does not authorize deletion',()=>{
+  const {rows,catalog}=fixture();
+  rows.contas_receber=[{id:'account',empresa_id:'remove'}];
+  rows.pagamentos_recebidos=[{id:'payment',conta_receber_id:'account'}];
+  for(const child of ['contas_receber','pagamentos_recebidos']) catalog.constraints.push({schema:'public',child,type:'p',columns:['id']});
+  const p=plan(catalog,rows);
+  assert.ok(!p.order.includes('pagamentos_recebidos:payment'));
+  assert.ok(p.blockers.some(b=>b.includes('Missing ownership foreign key')));
+});

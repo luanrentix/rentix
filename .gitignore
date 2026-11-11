@@ -33,6 +33,7 @@ contrx-backend/.local-postgres/
 
 # generated local exports
 /PROJETO_EXPORTADO.md
+/tmp/pdfs/
 
 # local dev logs
 /.next-dev*.log

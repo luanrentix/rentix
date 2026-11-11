@@ -18,7 +18,7 @@ async function main() {
       const company = await tx.company.create({ data: { tradeName: 'HOMOLOGAÇÃO TRANSACIONAL VENDAS' } });
       await tx.appSettings.create({ data: { companyId: company.id, companySettings: { ramoAtividade: 'CONFECCOES' } } });
       const supplier = await tx.salesSupplier.create({ data: { companyId: company.id, name: 'FORNECEDOR DO TESTE' } });
-      const customer = await tx.salesCustomer.create({ data: { companyId: company.id, name: 'CLIENTE DO TESTE', creditLimit: 500, creditDays: 30 } });
+      const customer = await tx.salesCustomer.create({ data: { companyId: company.id, name: 'CLIENTE DO TESTE', document: '52998224725', address: 'RUA DO TESTE', creditLimit: 500, creditDays: 30 } });
       const seller = await tx.salesSeller.create({ data: { companyId: company.id, name: 'VENDEDOR DO TESTE', commission: 10 } });
       const bank = await tx.bankAccount.create({ data: { companyId: company.id, name: 'CAIXA DO TESTE', type: 'CASH' } });
       const facade = new Proxy(tx, { get(target, key) { return key === '$transaction' ? async (callback) => callback(tx) : target[key]; } });
@@ -35,7 +35,8 @@ async function main() {
       await assert.rejects(() => cash.create(operator, { ...opening, amount: 21 }), /outros dados/);
       await assert.rejects(() => cash.create(operator, { ...opening, requestId: randomUUID(), direction: 'OUT', amount: 21 }), /insuficiente/);
       await cash.create(operator, { ...opening, requestId: randomUUID(), direction: 'OUT', reason: 'SANGRIA DO TESTE' });
-      const product = await service.createProduct(company.id, { name: 'CAMISA DO TESTE', price: 100, category: 'ROUPAS', brand: 'MARCA DO TESTE', supplierId: supplier.id, manageStock: true, stock: 10, variations: 'P, G', variants: [{ name: 'P', stock: 5 }, { name: 'G', stock: 5 }] });
+      // Fixture de variações legadas: novos cadastros de grade exigem SKU individual.
+      const product = await tx.salesProduct.create({ data: { companyId: company.id, name: 'CAMISA DO TESTE', price: 100, category: 'ROUPAS', brand: 'MARCA DO TESTE', supplierId: supplier.id, manageStock: true, stock: 10, variations: 'P, G', variants: { create: [{ companyId: company.id, name: 'P', stock: 5 }, { companyId: company.id, name: 'G', stock: 5 }] } }, include: { variants: true } });
       const sizeP = product.variants.find((variant) => variant.name === 'P');
       const sizeG = product.variants.find((variant) => variant.name === 'G');
       const input = (overrides = {}) => ({ requestId: randomUUID(), customerId: customer.id, sellerId: seller.id, customerName: customer.name, sellerName: seller.name, saleType: 'VENDA', items: [{ productId: product.id, variantId: sizeP.id, quantity: 1 }], paymentMethod: 'DINHEIRO', bankAccountId: bank.id, discount: 0, addition: 0, status: 'CONCLUIDA', ...overrides });
@@ -45,7 +46,11 @@ async function main() {
       const conditional = await service.createOrder(company.id, input({ saleType: 'CONDICIONAL', items: [{ productId: product.id, variantId: sizeP.id, quantity: 3 }] }));
       assert.equal(Number((await stock()).stock), 10);
       assert.equal(Number((await stock()).reservedStock), 3);
-      const sale = await service.updateOrder(company.id, conditional.id, input({ version: conditional.version, paymentMethod: 'MISTO', paymentDetails: { DINHEIRO: 50, CREDIARIO: 50 } }));
+      const saleInput = input({ version: conditional.version, paymentMethod: 'MISTO', paymentDetails: { DINHEIRO: 50, CREDIARIO: 50 }, cashTender: '75.00' });
+      const sale = await service.updateOrder(company.id, conditional.id, saleInput);
+      assert.equal((await service.updateOrder(company.id, conditional.id, saleInput)).id, sale.id);
+      assert.equal((await service.orderDetails(company.id, sale.id)).cashTender, '75.00');
+      assert.equal((await service.orderByRequest(company.id, saleInput.requestId)).id, sale.id);
       assert.equal(sale.id, conditional.id);
       assert.equal(Number((await stock()).stock), 9);
       assert.equal(Number((await stock()).reservedStock), 0);
@@ -65,12 +70,13 @@ async function main() {
       await service.reverseOrder(company.id, returned.id, 'Reverter devolução do teste');
       await service.reverseOrder(company.id, sale.id, 'Reverter venda do teste');
       assert.equal(Number((await stock()).stock), 10);
-      assert.equal(await balance(), 0);
+      assert.equal(await tx.salesRefund.count({ where: { companyId: company.id, orderId: sale.id, settledAmount: 0 } }), 1);
+      assert.equal(await balance(), 50);
       assert.equal(Number((await service.getCustomerCredit(company.id, customer.id)).balance), 0);
 
       const cashSale = await service.createOrder(company.id, input({ items: [{ productId: product.id, variantId: sizeG.id, quantity: 1 }] }));
-      const refund = await service.createOrder(company.id, input({ saleType: 'TROCA', originalOrderId: cashSale.id, returnedItems: [{ itemIndex: 0, quantity: 1 }], items: [], expectedTotal: -100, returnDisposition: 'REFUND', paymentMethod: 'PIX' }));
-      assert.equal(await balance(), 0);
+      const refund = await service.createOrder(company.id, input({ saleType: 'TROCA', originalOrderId: cashSale.id, returnedItems: [{ itemIndex: 0, quantity: 1 }], items: [], expectedTotal: -100, returnDisposition: 'REFUND', refundConfirmed: true, paymentMethod: 'PIX' }));
+      assert.equal(await balance(), 50);
       assert.equal(Number((await stock()).stock), 10);
       assert.equal((await tx.contaPagar.findFirstOrThrow({ where: { salesReturnId: refund.id } })).status, 'PAID');
       const periodStart = new Date(Date.now() - 86400000).toISOString(), periodEnd = new Date(Date.now() + 86400000).toISOString();
@@ -78,11 +84,11 @@ async function main() {
       assert.equal(statement.movements.filter(m => m.kind === 'SUPRIMENTO').length, 1);
       assert.equal(statement.movements.filter(m => m.kind === 'SANGRIA').length, 1);
       assert.equal(statement.movements.find(m => m.kind === 'SUPRIMENTO').operator, operator.name);
-      assert.equal(statement.methods.CASH.net, 100);
+      assert.equal(statement.methods.CASH.net, 150);
       assert.equal(statement.methods.PIX.net, -100);
-      assert.equal(statement.accounts.find(a => a.id === bank.id).cashBalance, 100);
-      assert.equal(statement.accounts.find(a => a.id === bank.id).balance, 0);
-      assert.ok(statement.movements.some(m => m.kind === 'ESTORNO'));
+      assert.equal(statement.accounts.find(a => a.id === bank.id).cashBalance, 150);
+      assert.equal(statement.accounts.find(a => a.id === bank.id).balance, 50);
+      assert.equal(statement.movements.some(m => m.kind === 'ESTORNO'), false); // Saida exige confirmacao financeira.
       const foreign = await tx.company.create({ data: { tradeName: 'OUTRA EMPRESA DO TESTE' } });
       assert.equal((await cash.list(foreign.id, periodStart, periodEnd)).movements.length, 0);
       await assert.rejects(() => cash.create({ ...operator, companyId: foreign.id }, { ...opening, requestId: randomUUID() }), /caixa em dinheiro ativo/);
@@ -97,13 +103,13 @@ async function main() {
       await receivables.receivePayment(charge.id, { paidAt, method: 'PIX', amountPaid: 10, bankAccountId: bank.id }, company.id);
       await receivables.receivePayment(charge.id, { paidAt, method: 'CASH', amountPaid: 20, paymentItems: [{ method: 'CASH', amount: 5 }, { method: 'PIX', amount: 15 }], bankAccountId: bank.id }, company.id);
       const updatedStatement = await cash.list(company.id, periodStart, periodEnd);
-      assert.equal(updatedStatement.methods.CASH.net, 115);
+      assert.equal(updatedStatement.methods.CASH.net, 165);
       assert.equal(updatedStatement.methods.PIX.net, -75);
-      assert.equal(updatedStatement.accounts.find(a => a.id === bank.id).cashBalance, 115);
+      assert.equal(updatedStatement.accounts.find(a => a.id === bank.id).cashBalance, 165);
       await service.reverseOrder(company.id, creditSale.id, 'ESTORNO DAS PARCELAS DO TESTE');
       const afterReverse = await cash.list(company.id, periodStart, periodEnd);
-      assert.equal(afterReverse.methods.CASH.net, 100);
-      assert.equal(afterReverse.methods.PIX.net, -100);
+      assert.equal(afterReverse.methods.CASH.net, 165);
+      assert.equal(afterReverse.methods.PIX.net, -75);
       const cashAccount = await cash.prepareAccount(company.id);
       assert.equal(cashAccount.id, bank.id);
       assert.equal((await cash.prepareAccount(company.id)).id, bank.id);
@@ -151,4 +157,4 @@ async function main() {
   }
 }
 
-main().catch((error) => { console.error(error.message); process.exitCode = 1; });
+main().catch((error) => { console.error(error); process.exitCode = 1; });

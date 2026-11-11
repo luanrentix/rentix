@@ -118,7 +118,7 @@ function plan(catalog, rows) {
       const id = row.id;
       if (id == null) continue;
       const node = key(table, id);
-      nodes.set(node, { table, row });
+      nodes.set(node, { table, row, supported });
       if (!supported) continue;
       let selected = table === 'usuarios' ? candidateIds.has(id)
         : table === 'empresas' ? companyIds.has(id)
@@ -157,6 +157,34 @@ function plan(catalog, rows) {
       if (remove.has(node) && !String(row.url || '').startsWith('data:')) blockers.push(`External/legacy file requires independent backup/recovery: ${node}`);
     }
   }
+  // Ownership is explicit, never inferred from arbitrary cascading foreign keys.
+  // These child tables have no empresa_id in the actual Prisma schema.
+  const exclusiveChildren = {
+    pagamentos_recebidos: ['conta_receber_id', 'contas_receber'],
+    pagamentos_realizados: ['conta_pagar_id', 'contas_pagar'],
+    assinaturas_contrato: ['contrato_id', 'contratos'],
+  };
+  const inheritedOwnership = [];
+  for (const [node, { table, row, supported }] of nodes) {
+    const rule = exclusiveChildren[table];
+    if (!rule || !supported || remove.has(node) || row.empresa_id != null ||
+        row.__mentions_protected_email || protectedIds.has(row.usuario_id) ||
+        protectedIds.has(row.responsavel_id)) continue;
+    const [column, parentTable] = rule;
+    const verifiedFk = fks.some(fk => fk.schema === 'public' && fk.child === table &&
+      fk.parent_schema === 'public' && fk.parent === parentTable &&
+      JSON.stringify(fk.columns) === JSON.stringify([column]) &&
+      JSON.stringify(fk.parent_columns) === JSON.stringify(['id']));
+    const parentNode = key(parentTable, row[column]);
+    if (!verifiedFk && remove.has(parentNode)) {
+      blockers.push(`Missing ownership foreign key requires review: ${node} -> ${parentNode}`);
+    }
+    const parents = edges.filter(([child]) => child === node).map(([, parent]) => parent);
+    if (!verifiedFk || !remove.has(parentNode) || !parents.length ||
+        parents.some(parent => !remove.has(parent))) continue;
+    remove.add(node);
+    inheritedOwnership.push({ node, owner: parentNode, reason: 'Verified exclusive parent; all referenced parents selected' });
+  }
   for (const [child, parent] of edges) {
     if (child !== parent && remove.has(parent) && !remove.has(child)) blockers.push(`Shared reference retained -> candidate: ${child} -> ${parent}`);
   }
@@ -178,7 +206,7 @@ function plan(catalog, rows) {
     tables: Object.entries(rows).map(([table, records]) => ({ table, total: records.length,
       remove: records.filter(r => remove.has(key(table, r.id))).map(r => ({ id: r.id, hash: r.__hash })),
       preserved: records.filter(r => !remove.has(key(table, r.id))).length })),
-    order, blockers: sorted(new Set(blockers)),
+    inheritedOwnership, order, blockers: sorted(new Set(blockers)),
   };
 }
 

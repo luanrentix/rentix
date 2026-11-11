@@ -15,6 +15,7 @@ const eslintConfig = defineConfig([
     rules: {
       "react-hooks/immutability": "off",
       "react-hooks/set-state-in-effect": "off",
+      "react-hooks/preserve-manual-memoization": "off",
       "@typescript-eslint/no-explicit-any": "off",
     },
   },
@@ -29,6 +30,7 @@ const eslintConfig = defineConfig([
     "contrx-backend/**",
     "backups/**",
     "_backups/**",
+    "tmp/**",
   ]),
 ]);
 

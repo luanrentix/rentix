@@ -7,6 +7,7 @@ export default function ConfirmationModal({
   title,
   description,
   confirmLabel = "Confirmar",
+  cancelLabel = "Cancelar",
   tone = "danger",
   busyLabel = "Excluindo…",
   busy = false,
@@ -18,6 +19,7 @@ export default function ConfirmationModal({
   title: string;
   description: string;
   confirmLabel?: string;
+  cancelLabel?: string;
   tone?: "danger" | "primary";
   busyLabel?: string;
   busy?: boolean;
@@ -123,7 +125,7 @@ export default function ConfirmationModal({
             onClick={onCancel}
             className="inline-flex h-10 items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 text-xs font-black text-slate-700 transition hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
           >
-            Cancelar
+            {cancelLabel}
           </button>
           <button
             type="button"

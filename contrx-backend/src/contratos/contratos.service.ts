@@ -1302,8 +1302,11 @@ export class ContratosService {
       );
     }
 
-    const contract = await this.prisma.contract.findUnique({
-      where: { id: shared.filterDescription || '' },
+    const contract = await this.prisma.contract.findFirst({
+      where: {
+        id: shared.filterDescription || '',
+        companyId: shared.companyId,
+      },
       include: {
         property: true,
         tenant: true,

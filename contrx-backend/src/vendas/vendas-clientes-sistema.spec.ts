@@ -2,6 +2,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { VendasService } from './vendas.service';
 
 describe('Clientes protegidos do sistema', () => {
+  it('consulta de clientes não cria cadastros', async () => {
+    const { service, prisma } = fixture();
+    await service.listCustomers('empresa');
+    expect(prisma.salesCustomer.upsert).not.toHaveBeenCalled();
+  });
   function fixture() {
     const records = new Map<string, object>();
     const prisma = {
@@ -31,8 +36,8 @@ describe('Clientes protegidos do sistema', () => {
 
   it('garante os dois cadastros por empresa sem duplicar em novas consultas', async () => {
     const { service, prisma, records } = fixture();
-    await service.listCustomers('empresa');
-    await service.listCustomers('empresa');
+    await service.initializeModule('empresa');
+    await service.initializeModule('empresa');
     expect(records.size).toBe(2);
     expect(records.get('empresa:CLIENTE_CARTAO')).toMatchObject({
       name: 'CLIENTE CARTÃO',
@@ -58,7 +63,7 @@ describe('Clientes protegidos do sistema', () => {
         where: { companyId: 'empresa', active: true },
       }),
     );
-    await service.listCustomers('outra');
+    await service.initializeModule('outra');
     expect(records.size).toBe(4);
   });
 

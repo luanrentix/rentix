@@ -2,9 +2,9 @@
 import { authorizeAction } from "@/services/authorize-action";
 
 import CashView from "./cash-view";
-import CashCreditsSummary, { type CashCreditSummary } from "./cash-credits-summary";
 import CashReportModal from "./cash-report-modal";
 import { buildCashReport } from "@/services/cash-report";
+import { cashDay, cashDayBounds } from "@/services/cash-period";
 import { useAuth } from "@/context/AuthContext";
 import { getCachedCompanySettings } from "@/services/settings-cache";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -23,18 +23,41 @@ const labels: Record<string, string> = {
   BANK_SLIP: "Boleto",
   OTHER: "Outros",
 };
-const today = () => {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-};
+const today = cashDay;
 
 export default function SalesCashPanel() {
   const { user } = useAuth();
   const [reportHtml, setReportHtml] = useState<string | null>(null);
-  const [creditSummary, setCreditSummary] = useState<CashCreditSummary | null>(null);
   const loadSequence = useRef(0);
   const [start, setStart] = useState(today),
     [end, setEnd] = useState(today);
+  const lastDay = useRef(today());
+  useEffect(() => {
+    const checkDay = () => {
+      const next = today();
+      const previous = lastDay.current;
+      if (next === previous) return;
+      lastDay.current = next;
+      if (start === previous && end === previous) {
+        loadSequence.current++;
+        setData(null);
+        setStart(next);
+        setEnd(next);
+        setPage(1);
+      }
+    };
+    const timer = window.setInterval(checkDay, 15000);
+    const midnight = window.setTimeout(checkDay, Math.max(1, new Date(cashDayBounds(today(), today())[1]).getTime() + 1 - Date.now()));
+    window.addEventListener("focus", checkDay);
+    document.addEventListener("visibilitychange", checkDay);
+    checkDay();
+    return () => {
+      window.clearInterval(timer);
+      window.clearTimeout(midnight);
+      window.removeEventListener("focus", checkDay);
+      document.removeEventListener("visibilitychange", checkDay);
+    };
+  }, [start, end]);
   const [data, setData] = useState<CashData | null>(null);
   const [busy, setBusy] = useState(false),
     [saving, setSaving] = useState(false);
@@ -52,14 +75,12 @@ export default function SalesCashPanel() {
   const load = useCallback(async () => {
     const sequence = ++loadSequence.current;
     setBusy(true);
+    setData(null);
     setError("");
     try {
       if (!start || !end || start > end)
         throw new Error("Informe um período válido.");
-      const result = await getCash(
-        new Date(`${start}T00:00:00`).toISOString(),
-        new Date(`${end}T23:59:59.999`).toISOString(),
-      );
+      const result = await getCash(...cashDayBounds(start, end));
       if (sequence === loadSequence.current) setData(result);
     } catch (error) {
       if (sequence === loadSequence.current) {
@@ -73,7 +94,7 @@ export default function SalesCashPanel() {
     } finally {
       if (sequence === loadSequence.current) setBusy(false);
     }
-  }, [start, end]);
+  }, [start, end, setData]);
   useEffect(() => {
     void load();
   }, [load]);
@@ -213,11 +234,10 @@ export default function SalesCashPanel() {
   }
   function openReport() {
     if (!data || busy) return;
-    setReportHtml(buildCashReport(rows, { start, end, method, account, search }, getCachedCompanySettings(user?.companyId) || {}, account ? data.accounts.find((item) => item.id === account)?.name || "Conta selecionada" : "Todas as contas", new Date(), creditSummary));
+    setReportHtml(buildCashReport(rows, { start, end, method, account, search }, getCachedCompanySettings(user?.companyId) || {}, account ? data.accounts.find((item) => item.id === account)?.name || "Conta selecionada" : "Todas as contas", new Date()));
   }
   return (
     <>
-    <CashCreditsSummary start={start} end={end} onSummary={setCreditSummary}/>
     <CashView
       data={data}
       rows={rows}

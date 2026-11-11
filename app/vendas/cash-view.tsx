@@ -1,6 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
+import { cashPeriodBalance, cashPreset } from "@/services/cash-period";
 import SalesPageHeader from "./sales-page-header";
 import {
   ArrowDownLeft,
@@ -80,8 +81,6 @@ const methodIcons: Record<string, LucideIcon> = {
 };
 const money = (value: number) =>
   value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const dateValue = (date: Date) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const field =
   "h-11 w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800 px-3 text-sm font-medium text-slate-700 dark:text-slate-200 outline-none transition focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-bg-light)] dark:border-slate-700";
 const secondary =
@@ -109,15 +108,8 @@ export default function CashView(props: Props) {
   } = props;
   const cashAccounts =
     data?.accounts.filter((a) => a.type === "CASH" && a.active) || [];
-  const cashBalance =
-    cashAccounts.reduce(
-      (sum, a) => sum + Math.round((a.cashBalance ?? a.balance) * 100),
-      0,
-    ) / 100;
-  const selectedCash = cashAccounts.find(
-    (a) => a.id === modalFields.cashAccount,
-  );
-  const currentCash = selectedCash?.cashBalance ?? selectedCash?.balance ?? 0;
+  const cashBalance = cashPeriodBalance(rows);
+  const currentCash = modalFields.cashAccount ? cashPeriodBalance(data?.movements || [], modalFields.cashAccount) : 0;
   const entered = Number(modalFields.amount.replace(",", "."));
   const projected =
     currentCash +
@@ -130,22 +122,15 @@ export default function CashView(props: Props) {
     props.onFilter("search", "");
   }
   function period(key: "today" | "yesterday" | "week" | "month") {
-    const end = new Date(),
-      start = new Date();
-    if (key === "yesterday") {
-      start.setDate(start.getDate() - 1);
-      end.setDate(end.getDate() - 1);
-    }
-    if (key === "week") start.setDate(start.getDate() - 6);
-    if (key === "month") start.setDate(1);
-    props.onFilter("start", dateValue(start));
-    props.onFilter("end", dateValue(end));
+    const range = cashPreset(key);
+    props.onFilter("start", range.start);
+    props.onFilter("end", range.end);
   }
   const cards = [
     {
-      label: "Dinheiro disponível",
+      label: "Dinheiro no período",
       value: cashBalance,
-      detail: "Saldo atual dos caixas ativos",
+      detail: "Entradas menos saídas em dinheiro",
       icon: Wallet,
       color: "text-[var(--primary-color)]",
       background: "bg-[var(--primary-bg-light)]",
@@ -679,7 +664,7 @@ export default function CashView(props: Props) {
                       </span>
                     </div>
                     <p className="mt-2 text-xl font-black tabular-nums text-slate-800 dark:text-slate-100 dark:text-white">
-                      {money(a.cashBalance ?? a.balance)}
+                      {money(cashPeriodBalance(rows, a.id))}
                     </p>
                   </div>
                 ))
@@ -690,8 +675,7 @@ export default function CashView(props: Props) {
                 </p>
               )}
               <p className="text-[10px] leading-5 text-slate-400">
-                Saldo físico atual, independente do período. Pix e cartões não
-                compõem o dinheiro disponível. Crediário entra quando recebido.
+                Somente movimentações em dinheiro do período selecionado, sem saldo anterior. Pix e cartões aparecem nos respectivos totais.
               </p>
             </div>
           </section>

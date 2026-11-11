@@ -1,6 +1,7 @@
 "use client";
 
 import CardPaymentModal from "./card-payment-modal";
+import { quantityAmount, saleReturnCents } from "@/services/sales-numbers";
 import type { SalesCardPayment } from "@/services/sales-cards";
 import { useEffect, useState } from "react";
 import {
@@ -11,6 +12,7 @@ import {
 import {
   getSalesReturnInfo,
   getSalesCustomerCredit,
+  getSalesOrdersPage,
   type SalesCustomer,
   type SalesOrder,
   type SalesReceivingAccount,
@@ -61,6 +63,28 @@ export default function SalesReturnModal({
   onConfirm: (decision: SalesReturnDecision) => Promise<void>;
 }) {
   const [originalId, setOriginalId] = useState("");
+  const [sourceSearch, setSourceSearch] = useState("");
+  const [sourceOrders, setSourceOrders] = useState(orders);
+  const [sourceMore, setSourceMore] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const timer = setTimeout(() => {
+      getSalesOrdersPage({ search: sourceSearch, filter: "GRAVADAS" })
+        .then((rows) => {
+          if (active) {
+            setSourceOrders(rows);
+            setSourceMore(rows.length === 100);
+          }
+        })
+        .catch((cause: Error) => {
+          if (active) setError(cause.message);
+        });
+    }, 250);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [sourceSearch]);
   const [info, setInfo] = useState<SalesReturnInfo | null>(null);
   const [quantities, setQuantities] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(false);
@@ -108,22 +132,18 @@ export default function SalesReturnModal({
     };
   }, [originalId]);
   const number = (value: string | undefined) => paymentAmount(value || "0");
+  const quantityNumber = (value: string | undefined) =>
+    quantityAmount(value || "0");
   const returned =
     info?.items
-      .filter((item) => number(quantities[item.itemIndex]) > 0)
+      .filter((item) => quantityNumber(quantities[item.itemIndex]) > 0)
       .map((item) => ({
         itemIndex: item.itemIndex,
-        quantity: number(quantities[item.itemIndex]),
+        quantity: quantityNumber(quantities[item.itemIndex]),
       })) ?? [];
   const returnValue = Math.min(
     Number(info?.remainingReturnValue || 0),
-    Math.round(
-      (info?.items.reduce(
-        (sum, item) =>
-          sum + number(quantities[item.itemIndex]) * item.unitReturnValue,
-        0,
-      ) || 0) * 100,
-    ) / 100,
+    info ? saleReturnCents(info.order, returned) / 100 : 0,
   );
   const debtOffset = Math.min(returnValue, Number(info?.outstanding || 0));
   const difference =
@@ -158,7 +178,12 @@ export default function SalesReturnModal({
   }
   async function confirm() {
     setError("");
-    if (difference < 0 && disposition === "REFUND" && !refundConfirmed) { setError("Confirme que a devolução financeira já foi efetivada, ou escolha crédito para o cliente."); return; }
+    if (difference < 0 && disposition === "REFUND" && !refundConfirmed) {
+      setError(
+        "Confirme que a devolução financeira já foi efetivada, ou escolha crédito para o cliente.",
+      );
+      return;
+    }
     if (!info || !returned.length) {
       setError("Selecione a venda e pelo menos um item devolvido.");
       return;
@@ -166,9 +191,9 @@ export default function SalesReturnModal({
     if (
       info.items.some(
         (item) =>
-          !Number.isFinite(number(quantities[item.itemIndex])) ||
-          number(quantities[item.itemIndex]) < 0 ||
-          number(quantities[item.itemIndex]) > item.available,
+          !Number.isFinite(quantityNumber(quantities[item.itemIndex])) ||
+          quantityNumber(quantities[item.itemIndex]) < 0 ||
+          quantityNumber(quantities[item.itemIndex]) > item.available,
       )
     ) {
       setError("Confira as quantidades devolvidas e os saldos disponíveis.");
@@ -260,7 +285,11 @@ export default function SalesReturnModal({
     await onConfirm({
       cardPayments: cardPayments
         .filter((row) => requiredCards.includes(row.method))
-        .map(({ administratorName, ...card }) => card),
+        .map((card) => {
+          const payload = { ...card };
+          delete payload.administratorName;
+          return payload;
+        }),
       originalOrderId: originalId,
       customer: info.customer,
       returnedItems: returned,
@@ -305,6 +334,14 @@ export default function SalesReturnModal({
           )}
           <label className="mt-4 block space-y-1 text-sm font-bold">
             Venda original
+            <input
+              className={field}
+              aria-label="Buscar venda original"
+              value={sourceSearch}
+              onChange={(event) => setSourceSearch(event.target.value)}
+              placeholder="Número ou cliente"
+              disabled={saving}
+            />
             <select
               className={field}
               value={originalId}
@@ -312,7 +349,7 @@ export default function SalesReturnModal({
               onChange={(event) => setOriginalId(event.target.value)}
             >
               <option value="">Selecione</option>
-              {orders
+              {sourceOrders
                 .filter(
                   (order) =>
                     order.status === "CONCLUIDA" &&
@@ -322,10 +359,37 @@ export default function SalesReturnModal({
                 .map((order) => (
                   <option key={order.id} value={order.id}>
                     #{order.number} · {order.customerName} ·{" "}
-                    {new Date(order.createdAt).toLocaleDateString("pt-BR")}
+                    {new Date(order.createdAt).toLocaleDateString("pt-BR", {
+                      timeZone: "America/Manaus",
+                    })}
                   </option>
                 ))}
             </select>
+            {sourceMore && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={async () => {
+                  try {
+                    const page = await getSalesOrdersPage({
+                      before: sourceOrders.at(-1)?.number,
+                      filter: "GRAVADAS",
+                      search: sourceSearch,
+                    });
+                    setSourceOrders((current) => [...current, ...page]);
+                    setSourceMore(page.length === 100);
+                  } catch (e) {
+                    setError(
+                      e instanceof Error
+                        ? e.message
+                        : "Falha ao carregar vendas.",
+                    );
+                  }
+                }}
+              >
+                Carregar mais vendas
+              </button>
+            )}
           </label>
           {loading && (
             <p className="py-4 text-sm">
@@ -513,7 +577,18 @@ export default function SalesReturnModal({
             </>
           )}
           <footer className="mt-5 flex justify-end gap-3">
-            {difference < 0 && disposition === "REFUND" && <label className="text-sm"><input type="checkbox" checked={refundConfirmed} onChange={(event) => setRefundConfirmed(event.target.checked)} disabled={saving}/> Confirmo que o dinheiro, Pix ou cartão já foi efetivamente devolvido.</label>}
+            {difference < 0 && disposition === "REFUND" && (
+              <label className="text-sm">
+                <input
+                  type="checkbox"
+                  checked={refundConfirmed}
+                  onChange={(event) => setRefundConfirmed(event.target.checked)}
+                  disabled={saving}
+                />{" "}
+                Confirmo que o dinheiro, Pix ou cartão já foi efetivamente
+                devolvido.
+              </label>
+            )}
             <button
               type="button"
               disabled={saving}

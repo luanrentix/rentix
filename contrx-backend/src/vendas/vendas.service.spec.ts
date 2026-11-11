@@ -64,7 +64,10 @@ function fixture() {
     $queryRaw: jest.fn().mockResolvedValue([{ id: 'company' }]),
     appSettings: {
       findUnique: jest.fn().mockResolvedValue({
-        companySettings: { ramoAtividade: 'CONFECCOES' },
+        companySettings: {
+          ramoAtividade: 'CONFECCOES',
+          salesCardAdministrators: [{ id: 'admin', name: 'ADMIN TESTE' }],
+        },
       }),
     },
     salesProduct: {
@@ -234,7 +237,10 @@ function fixture() {
           ),
         ),
     },
-    salesOrderEvent: { create: jest.fn().mockResolvedValue({}) },
+    salesOrderEvent: {
+      create: jest.fn().mockResolvedValue({}),
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
     salesStockMovement: { create: jest.fn().mockResolvedValue({}) },
     salesCustomerCredit: {
       create: jest.fn().mockImplementation(async ({ data }) => {
@@ -384,6 +390,134 @@ function fixture() {
 }
 
 describe('Vendas: estoque, crédito e recebimentos', () => {
+  it('não permite desconto geral em itens selecionados como promoção', async () => {
+    const f = fixture();
+    f.product.promotionalPrice = decimal(80) as never;
+    await expect(
+      f.service.createOrder(
+        'company',
+        f.input({
+          discount: 1,
+          items: [
+            {
+              productId: 'product',
+              quantity: 1,
+              priceType: 'PROMOCIONAL',
+              unitPrice: 80,
+            },
+          ],
+        }),
+      ),
+    ).rejects.toThrow('desconto supera');
+  });
+  it('mantém linhas normal e promocional separadas com ajustes nos itens', async () => {
+    const f = fixture();
+    f.product.promotionalPrice = decimal(80) as never;
+    const order = await f.service.createOrder(
+      'company',
+      f.input({
+        items: [
+          {
+            productId: 'product',
+            quantity: 1,
+            priceType: 'NORMAL',
+            discount: 10,
+            unitPrice: 90,
+          },
+          {
+            productId: 'product',
+            quantity: 1,
+            priceType: 'PROMOCIONAL',
+            unitPrice: 80,
+          },
+        ],
+      }),
+    );
+    expect(order.total.toNumber()).toBe(170);
+    expect(order.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          priceType: 'NORMAL',
+          originalUnitPrice: '100',
+          discount: '10',
+        }),
+        expect.objectContaining({
+          priceType: 'PROMOCIONAL',
+          originalUnitPrice: '100',
+          discount: '0',
+        }),
+      ]),
+    );
+    expect(f.product.stock.toNumber()).toBe(8);
+  });
+  it.each(['ORCAMENTO', 'CONDICIONAL'])(
+    'consulta endereço de %s somente na empresa autenticada',
+    async (saleType) => {
+      const f = fixture();
+      const order = await f.service.createOrder(
+        'company',
+        f.input({ saleType }),
+      );
+      f.tx.salesOrder.findFirst.mockResolvedValue({ ...order, events: [] });
+      const details = await f.service.orderDetails('company', order.id);
+      expect(details.customer?.address).toBe('RUA DE TESTE');
+      expect(details.customer?.name).toBe('CLIENTE');
+      expect(f.tx.salesCustomer.findFirst).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          where: { id: 'customer', companyId: 'company' },
+          select: expect.objectContaining({
+            name: true,
+            address: true,
+            phone: true,
+            phone2: true,
+            email: true,
+          }),
+        }),
+      );
+    },
+  );
+  it('recupera atualização já processada sem repetir estoque ou recebimento', async () => {
+    const f = fixture();
+    const draft = await f.service.createOrder(
+      'company',
+      f.input({ status: 'EM_ANDAMENTO' }),
+    );
+    const attempt = f.input({
+      requestId: 'retry-update',
+      version: draft.version,
+      cashTender: '350.00',
+    });
+    const saved = await f.service.updateOrder('company', draft.id, attempt);
+    const calls = f.tx.salesOrderEvent.create.mock.calls;
+    const event = calls[calls.length - 1][0].data;
+    f.tx.salesOrderEvent.findFirst.mockResolvedValue(event);
+    const repeated = await f.service.updateOrder('company', draft.id, attempt);
+    expect(repeated.id).toBe(saved.id);
+    expect(f.product.stock.toNumber()).toBe(7);
+    expect(f.charges).toHaveLength(1);
+    await expect(
+      f.service.updateOrder('company', draft.id, {
+        ...attempt,
+        notes: 'alterada',
+      }),
+    ).rejects.toThrow('outros dados');
+  });
+
+  it('exige metadados de cartão e rejeita dinheiro entregue insuficiente', async () => {
+    const f = fixture();
+    await expect(
+      f.service.createOrder(
+        'company',
+        f.input({ paymentMethod: 'CARTAO_DEBITO' }),
+      ),
+    ).rejects.toThrow('NSU');
+    await expect(
+      f.service.createOrder(
+        'company',
+        f.input({ requestId: 'cash', cashTender: '299.99' }),
+      ),
+    ).rejects.toThrow('parcela em dinheiro');
+  });
   it('impede reduzir preco de produto que nao permite desconto', async () => {
     const f = fixture();
     f.product.allowDiscount = false;
@@ -819,14 +953,25 @@ describe('Vendas: estoque, crédito e recebimentos', () => {
     ).resolves.toBeTruthy();
   });
 
-  it('calcula comissão líquida e usa preço promocional no servidor', async () => {
+  it('calcula comissão líquida no preço normal com ajuste por item', async () => {
     const f = fixture();
     f.product.promotionalPrice = decimal(80) as never;
     f.product.commissionEnabled = true;
     f.product.commissionRule = 'VALOR_LIQUIDO';
     const order = await f.service.createOrder(
       'company',
-      f.input({ discount: 40 }),
+      f.input({
+        discount: 40,
+        items: [
+          {
+            productId: 'product',
+            quantity: 3,
+            priceType: 'NORMAL',
+            unitPrice: 80,
+            discount: 20,
+          },
+        ],
+      }),
     );
     expect(order.subtotal.toNumber()).toBe(240);
     expect(order.commissionTotal.toNumber()).toBe(20);
@@ -839,6 +984,16 @@ describe('Vendas: estoque, crédito e recebimentos', () => {
       f.input({
         paymentMethod: 'MISTO',
         paymentDetails: { DEBITO: 100, CREDIARIO: 200 },
+        cardPayments: [
+          {
+            method: 'CARTAO_DEBITO',
+            administratorId: 'admin',
+            brand: 'Visa',
+            nsu: 'TESTE',
+            installments: 1,
+            amount: 100,
+          },
+        ],
         installments: 2,
       }),
     );

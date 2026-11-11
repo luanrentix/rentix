@@ -1,0 +1,63 @@
+{
+  "repeatPrice": {
+    "before": 10,
+    "addedPrice": 20,
+    "resultQuantity": 2,
+    "resultUnitPrice": 20,
+    "resultTotal": 40,
+    "expectedIfPreserved": 30
+  },
+  "fractionalQuantity": {
+    "result": 0.30000000000000004,
+    "dtoErrors": [
+      {
+        "field": "quantity",
+        "constraints": {
+          "isNumber": "quantity must be a number conforming to the specified constraints"
+        }
+      }
+    ]
+  },
+  "fractionalReturn": {
+    "quantity": "1,001",
+    "acceptedByReturnParser": false
+  },
+  "clearSale": {
+    "cartLength": 0,
+    "previousAccountRetained": "banco-anterior"
+  },
+  "inactiveVariantBarcode": {
+    "cartLength": 1,
+    "active": false
+  },
+  "rounding": [
+    {
+      "unitPrice": 0.75,
+      "quantity": 2.9,
+      "frontendCents": 217,
+      "backendDecimalCents": 218
+    },
+    {
+      "unitPrice": 0.87,
+      "quantity": 2.5,
+      "frontendCents": 217,
+      "backendDecimalCents": 218
+    },
+    {
+      "unitPrice": 0.9,
+      "quantity": 2.65,
+      "frontendCents": 238,
+      "backendDecimalCents": 239
+    },
+    {
+      "unitPrice": 0.95,
+      "quantity": 2.3,
+      "frontendCents": 218,
+      "backendDecimalCents": 219
+    }
+  ],
+  "parkExchange": {
+    "opensReturnModal": true
+  },
+  "cardWithoutMetadata": []
+}
