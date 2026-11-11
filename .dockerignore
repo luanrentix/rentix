@@ -11,4 +11,9 @@ _backups
 PROJETO_EXPORTADO.md
 PROJETO_COMPLETO.md
 *.log
-contrx-backend
+contrx-backend/*
+!contrx-backend/src/
+contrx-backend/src/*
+!contrx-backend/src/vendas/
+contrx-backend/src/vendas/*
+!contrx-backend/src/vendas/price-composition.ts

@@ -3,6 +3,7 @@
 const { execFileSync } = require('node:child_process');
 
 const releasePaths = [
+  '.dockerignore',
   '.agents/skills/contrx_validation_protocol/SKILL.md',
   'app/layout.tsx',
   'app/vendas/page.tsx',
