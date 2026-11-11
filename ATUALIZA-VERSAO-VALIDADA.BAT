@@ -61,7 +61,7 @@ if not "%CONFIRMACAO%"=="ENVIAR" goto MENU
 set "HAS_CHANGES="
 for /f "delims=" %%s in ('git status --porcelain') do set "HAS_CHANGES=1"
 if not defined HAS_CHANGES goto PUSH
-node scripts\stage-release-1.0.23.cjs
+node scripts\stage-release-1.0.24.cjs
 if errorlevel 1 goto FALHA
 git --no-pager diff --cached --check
 if errorlevel 1 goto FALHA

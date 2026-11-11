@@ -57,6 +57,7 @@ export default async function RootLayout({
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
+        <meta name="csp-nonce" content={nonce ?? ''} />
         <Script
           id="contrx-theme-init"
           nonce={nonce}

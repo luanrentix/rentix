@@ -26,6 +26,7 @@ export default function SaleReceiptModal({
   const { user } = useAuth();
   const frame = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
+  const [styleNonce, setStyleNonce] = useState("");
   const [format, setFormat] = useState<SalesReceiptFormat>("a4");
   const [printError, setPrintError] = useState("");
   const [printAuthorized, setPrintAuthorized] = useState(false);
@@ -72,6 +73,12 @@ export default function SaleReceiptModal({
       ? `contrx:sales-receipt-form:v1:${user.companyId}:${order.id}`
       : null;
   const quoteLoading = needsCustomer && loadingCustomer;
+  useEffect(() => {
+    const nonce = document.querySelector<HTMLMetaElement>(
+      'meta[name="csp-nonce"]',
+    )?.content;
+    setStyleNonce(nonce || "");
+  }, []);
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(formatStorageKey);
@@ -149,6 +156,7 @@ export default function SaleReceiptModal({
         tender,
         { validUntil, deliveryAddress },
         format,
+        styleNonce,
       ),
     [
       order,
@@ -158,6 +166,7 @@ export default function SaleReceiptModal({
       validUntil,
       deliveryAddress,
       format,
+      styleNonce,
     ],
   );
   function print() {
@@ -298,7 +307,7 @@ export default function SaleReceiptModal({
           </div>
         )}
         <iframe
-          key={format}
+          key={`${format}:${styleNonce}`}
           ref={frame}
           title={`${isQuote ? "Orçamento" : "Recibo do pedido"} ${order.number}`}
           srcDoc={html}

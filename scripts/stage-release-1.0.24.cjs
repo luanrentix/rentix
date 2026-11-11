@@ -35,6 +35,8 @@ const releasePaths = [
   'package.json',
   'proxy.ts',
   'services/vendas.service.ts',
+  'services/sales-receipt.ts',
+  'scripts/stage-release-1.0.24.cjs',
   'scripts/stage-release-1.0.23.cjs',
   'ATUALIZA-VERSAO-VALIDADA.BAT',
   'deploy-vps.bat',
@@ -70,10 +72,10 @@ if (!changed.length) {
 }
 
 if (process.argv.includes('--dry-run')) {
-  console.log(`Preflight da release 1.0.23 aprovado: ${changed.length} caminhos autorizados.`);
+  console.log(`Preflight da release 1.0.24 aprovado: ${changed.length} caminhos autorizados.`);
   for (const file of changed) console.log(`  ${file}`);
   process.exit(0);
 }
 
 git(['add', '--', ...changed]);
-console.log(`Arquivos da release 1.0.23 adicionados: ${changed.length}`);
+console.log(`Arquivos da release 1.0.24 adicionados: ${changed.length}`);

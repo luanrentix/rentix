@@ -16,6 +16,15 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "1.0.24",
+    date: "11 de Novembro de 2026",
+    title: "Comprovante de venda em produção",
+    subtitle: "Estilos de impressão compatíveis com a política de segurança do site.",
+    highlights: [
+      { category: "correcao", title: "Layout do comprovante", description: "Aplica o nonce de segurança ao HTML do comprovante para manter o visual A4 e térmico em produção." },
+    ],
+  },
+  {
     version: "1.0.23",
     date: "11 de Novembro de 2026",
     title: "Composicao de preco e numeracao de vendas",
