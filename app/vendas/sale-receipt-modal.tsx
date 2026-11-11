@@ -2,10 +2,13 @@
 import { authorizeAction } from "@/services/authorize-action";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Printer, X } from "lucide-react";
+import { Printer, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { getCachedCompanySettings } from "@/services/settings-cache";
-import { buildSalesReceipt, type SalesReceiptFormat } from "@/services/sales-receipt";
+import {
+  buildSalesReceipt,
+  type SalesReceiptFormat,
+} from "@/services/sales-receipt";
 import {
   getSalesOrderDetails,
   type SalesOrder,
@@ -35,16 +38,26 @@ export default function SaleReceiptModal({
     setAuthorizingPrint(true);
     setAuthorizationError("");
     authorizeAction("sales", "print")
-      .then(result => {
+      .then((result) => {
         if (!active) return;
-        if (!result.allowed) throw new Error("Usuário sem permissão para imprimir.");
+        if (!result.allowed)
+          throw new Error("Usuário sem permissão para imprimir.");
         setPrintAuthorized(true);
       })
-      .catch(cause => {
-        if (active) setAuthorizationError(cause instanceof Error ? cause.message : "Não foi possível autorizar a impressão.");
+      .catch((cause) => {
+        if (active)
+          setAuthorizationError(
+            cause instanceof Error
+              ? cause.message
+              : "Não foi possível autorizar a impressão.",
+          );
       })
-      .finally(() => { if (active) setAuthorizingPrint(false); });
-    return () => { active = false; };
+      .finally(() => {
+        if (active) setAuthorizingPrint(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [order.id, user?.id, user?.companyId, authorizationAttempt]);
   const isQuote = order.saleType === "ORCAMENTO";
   const canChooseFormat = !isQuote && order.saleType !== "CONDICIONAL";
@@ -53,7 +66,55 @@ export default function SaleReceiptModal({
   const [loadingCustomer, setLoadingCustomer] = useState(needsCustomer);
   const [validUntil, setValidUntil] = useState("");
   const [deliveryAddress, setDeliveryAddress] = useState("");
+  const formatStorageKey = `contrx:sales-receipt-format:v1:${user?.companyId || "local"}`;
+  const formStorageKey =
+    user?.companyId && user.id
+      ? `contrx:sales-receipt-form:v1:${user.companyId}:${order.id}`
+      : null;
   const quoteLoading = needsCustomer && loadingCustomer;
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(formatStorageKey);
+      if (saved === "a4" || saved === "thermal44") setFormat(saved);
+    } catch {
+      // Preferência local indisponível; mantém A4 como padrão.
+    }
+  }, [formatStorageKey]);
+  useEffect(() => {
+    if (!formStorageKey) return;
+    try {
+      const saved = window.localStorage.getItem(formStorageKey);
+      if (!saved) return;
+      const draft = JSON.parse(saved) as {
+        validUntil?: string;
+        deliveryAddress?: string;
+      };
+      setValidUntil(draft.validUntil || "");
+      setDeliveryAddress(draft.deliveryAddress || "");
+    } catch {
+      // Um rascunho local inválido não impede a emissão do comprovante.
+    }
+  }, [formStorageKey]);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(formatStorageKey, format);
+    } catch {
+      // A impressão continua disponível mesmo sem armazenamento local.
+    }
+  }, [formatStorageKey, format]);
+  function saveQuoteDraft(next: {
+    validUntil: string;
+    deliveryAddress: string;
+  }) {
+    setValidUntil(next.validUntil);
+    setDeliveryAddress(next.deliveryAddress);
+    if (!formStorageKey) return;
+    try {
+      window.localStorage.setItem(formStorageKey, JSON.stringify(next));
+    } catch {
+      // A impressão continua disponível mesmo sem armazenamento local.
+    }
+  }
   useEffect(() => {
     let active = true;
     setCustomer(order.customer);
@@ -72,7 +133,9 @@ export default function SaleReceiptModal({
               "Não foi possível carregar o endereço do cliente. Feche e abra o documento para tentar novamente.",
             );
         })
-        .finally(() => { if (active) setLoadingCustomer(false); });
+        .finally(() => {
+          if (active) setLoadingCustomer(false);
+        });
     }
     return () => {
       active = false;
@@ -87,12 +150,23 @@ export default function SaleReceiptModal({
         { validUntil, deliveryAddress },
         format,
       ),
-    [order, customer, user?.companyId, tender, validUntil, deliveryAddress, format],
+    [
+      order,
+      customer,
+      user?.companyId,
+      tender,
+      validUntil,
+      deliveryAddress,
+      format,
+    ],
   );
   function print() {
     try {
       if (!printAuthorized || !ready || quoteLoading) return;
-      if (!frame.current?.contentWindow) throw new Error("O comprovante ainda não está pronto. Feche e abra o documento novamente.");
+      if (!frame.current?.contentWindow)
+        throw new Error(
+          "O comprovante ainda não está pronto. Feche e abra o documento novamente.",
+        );
       frame.current.contentWindow.focus();
       frame.current.contentWindow.print();
       setPrintError("");
@@ -109,34 +183,16 @@ export default function SaleReceiptModal({
       <section
         role="dialog"
         aria-modal="true"
-        aria-labelledby="sale-receipt-title"
+        aria-label={isQuote ? "Imprimir orçamento" : "Imprimir comprovante"}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
             event.stopPropagation();
             onClose();
           }
         }}
-        className="flex h-[94dvh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl"
+        className="flex h-[96dvh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900"
       >
-        <header className="flex items-center justify-between gap-3 border-b p-4">
-          <div className="flex items-center gap-3">
-            <span className="rounded-2xl bg-emerald-50 p-2 text-emerald-600">
-              <CheckCircle2 size={24} />
-            </span>
-            <div>
-              <h2
-                id="sale-receipt-title"
-                className="font-black text-slate-900 dark:text-white"
-              >
-                {isQuote ? "Orçamento" : "Comprovante"} #{order.number}
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {isQuote
-                  ? "Modelo A4. Validade e entrega são opções desta impressão."
-                  : "Documento gravado. Confira o comprovante e escolha a impressão."}
-              </p>
-            </div>
-          </div>
+        <header className="flex justify-end border-b px-3 py-2">
           <button
             autoFocus
             type="button"
@@ -148,28 +204,34 @@ export default function SaleReceiptModal({
           </button>
         </header>
         {canChooseFormat && (
-          <div className="border-b bg-slate-50 p-3 dark:bg-slate-800">
-            <fieldset className="flex flex-wrap gap-2">
-              <legend className="mb-2 text-xs font-bold">Formato de impressão</legend>
-              {([
-                ["a4", "Folha A4"],
-                ["thermal44", "Térmica 44 mm"],
-              ] as const).map(([value, label]) => (
-                <label key={value} className={`flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold ${format === value ? "border-orange-500 bg-orange-50 text-orange-900" : "border-slate-300 bg-white text-slate-700"}`}>
-                  <input type="radio" name="receipt-format" value={value} checked={format === value} onChange={() => {
-                    setReady(false);
-                    setPrintError("");
-                    setFormat(value);
-                  }} />
+          <div className="border-b bg-slate-50 px-4 py-2 dark:bg-slate-800">
+            <fieldset className="flex flex-wrap items-center gap-2">
+              <legend className="sr-only">Formato de impressão</legend>
+              {(
+                [
+                  ["a4", "Folha A4"],
+                  ["thermal44", "Térmica 44 mm"],
+                ] as const
+              ).map(([value, label]) => (
+                <label
+                  key={value}
+                  className={`flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold ${format === value ? "border-orange-500 bg-orange-50 text-orange-900" : "border-slate-300 bg-white text-slate-700"}`}
+                >
+                  <input
+                    type="radio"
+                    name="receipt-format"
+                    value={value}
+                    checked={format === value}
+                    onChange={() => {
+                      setReady(false);
+                      setPrintError("");
+                      setFormat(value);
+                    }}
+                  />
                   {label}
                 </label>
               ))}
             </fieldset>
-            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-              {format === "thermal44"
-                ? "Na impressão, selecione a impressora e o papel de 44 mm, escala 100%, sem margens e sem cabeçalhos/rodapés."
-                : "Papel A4 em orientação retrato. A prévia abaixo acompanha o formato selecionado."}
-            </p>
           </div>
         )}
         {isQuote && (
@@ -181,7 +243,10 @@ export default function SaleReceiptModal({
                 value={validUntil}
                 onChange={(event) => {
                   setReady(false);
-                  setValidUntil(event.target.value);
+                  saveQuoteDraft({
+                    validUntil: event.target.value,
+                    deliveryAddress,
+                  });
                 }}
                 className="mt-1 block w-full rounded-lg border bg-white p-2 text-sm text-slate-900"
               />
@@ -194,7 +259,10 @@ export default function SaleReceiptModal({
                 placeholder="Informe se houver entrega"
                 onChange={(event) => {
                   setReady(false);
-                  setDeliveryAddress(event.target.value);
+                  saveQuoteDraft({
+                    validUntil,
+                    deliveryAddress: event.target.value,
+                  });
                 }}
                 className="mt-1 block w-full rounded-lg border bg-white p-2 text-sm text-slate-900"
               />
@@ -215,9 +283,18 @@ export default function SaleReceiptModal({
           </p>
         )}
         {authorizationError && (
-          <div role="alert" className="m-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
+          <div
+            role="alert"
+            className="m-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-800"
+          >
             {authorizationError}
-            <button type="button" className="ml-2 font-bold underline" onClick={() => setAuthorizationAttempt(attempt => attempt + 1)}>Tentar autorizar novamente</button>
+            <button
+              type="button"
+              className="ml-2 font-bold underline"
+              onClick={() => setAuthorizationAttempt((attempt) => attempt + 1)}
+            >
+              Tentar autorizar novamente
+            </button>
           </div>
         )}
         <iframe
@@ -239,11 +316,17 @@ export default function SaleReceiptModal({
           <button
             type="button"
             onClick={print}
-            disabled={!ready || quoteLoading || !printAuthorized || authorizingPrint}
+            disabled={
+              !ready || quoteLoading || !printAuthorized || authorizingPrint
+            }
             className="inline-flex items-center gap-2 rounded-2xl bg-[var(--primary-color)] px-5 py-3 text-xs font-black text-white shadow-lg shadow-[var(--primary-bg-light)] transition hover:bg-[var(--primary-hover)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Printer size={17} />
-            {authorizingPrint ? "Autorizando impressão..." : format === "thermal44" ? "Imprimir térmica 44 mm" : "Imprimir A4"}
+            {authorizingPrint
+              ? "Autorizando impressão..."
+              : format === "thermal44"
+                ? "Imprimir térmica 44 mm"
+                : "Imprimir A4"}
           </button>
         </footer>
       </section>

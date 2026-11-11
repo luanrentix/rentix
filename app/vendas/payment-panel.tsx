@@ -161,12 +161,6 @@ export default function PaymentPanel(props: {
       </section>
       <details
         key={method}
-        open={
-          method === "MISTO" ||
-          method === "CREDIARIO" ||
-          method === "SALDO_CLIENTE" ||
-          immediate > 0
-        }
         className="rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700"
       >
         <summary className="cursor-pointer text-[11px] font-bold text-[var(--primary-color)]">

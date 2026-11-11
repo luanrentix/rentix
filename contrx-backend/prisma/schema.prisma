@@ -74,6 +74,7 @@ model Company {
   systemFiles        SystemFile[]
   errorLogs          SystemErrorLog[]
   salesProducts      SalesProduct[]
+  salesPriceCompositionTemplate SalesPriceCompositionTemplate?
   salesOrders        SalesOrder[]
   salesCustomers     SalesCustomer[]
   salesSellers       SalesSeller[]
@@ -138,6 +139,7 @@ model SalesProduct {
   name         String   @map("nome")
   sku          String?  @map("codigo")
   price        Decimal  @db.Decimal(10, 2) @map("preco")
+  priceComposition Json? @map("composicao_preco")
   allowDiscount Boolean @default(true) @map("permite_desconto")
   allowAddition Boolean @default(true) @map("permite_acrescimo")
   priceHistory SalesProductPriceHistory[]
@@ -345,6 +347,27 @@ model SalesOrder {
   @@index([companyId, originalOrderId])
   @@index([companyId, createdAt])
   @@map("vendas_pedidos")
+}
+
+model SalesOrderNumberReservation {
+  companyId String   @map("empresa_id")
+  userId    String   @map("usuario_id")
+  number    Int      @unique @map("numero")
+  expiresAt DateTime @map("expira_em")
+  createdAt DateTime @default(now()) @map("criado_em")
+
+  @@id([companyId, userId])
+  @@index([expiresAt])
+  @@map("vendas_reservas_numeracao")
+}
+
+model SalesPriceCompositionTemplate {
+  companyId String   @id @map("empresa_id")
+  template  Json     @map("modelo")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("vendas_modelo_composicao_preco")
 }
 
 model SalesOrderEvent {

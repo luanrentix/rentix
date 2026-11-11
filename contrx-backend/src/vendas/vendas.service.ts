@@ -31,6 +31,10 @@ import { CriarFornecedorVendaDto } from './dto/criar-fornecedor-venda.dto';
 import { AtualizarFornecedorVendaDto } from './dto/atualizar-fornecedor-venda.dto';
 import { CriarClassificacaoProdutoDto } from './dto/criar-classificacao-produto.dto';
 import { CriarGradeProdutoDto } from './dto/criar-grade-produto.dto';
+import {
+  toSalesPriceCompositionTemplate,
+  validateSalesPriceComposition,
+} from './price-composition';
 
 const paymentSignature = (details: Record<string, number> | null) =>
   JSON.stringify(
@@ -698,6 +702,96 @@ export class VendasService {
           : null) ??
         null,
     }));
+  }
+
+  async getProductPriceComposition(companyId: string, productId: string) {
+    await this.ensureConfectionery(companyId);
+    const product = await this.prisma.salesProduct.findFirst({
+      where: { id: productId, companyId },
+      select: {
+        priceComposition: true,
+        priceHistory: {
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: 1,
+          select: { createdAt: true },
+        },
+      },
+    });
+    if (!product) throw new NotFoundException('Produto não encontrado.');
+    if (
+      product.priceComposition &&
+      !validateSalesPriceComposition(product.priceComposition)
+    )
+      throw new ServiceUnavailableException(
+        'A composição salva possui formato inválido. Reconfigure os parâmetros antes de salvar novamente.',
+      );
+    return {
+      composition: product.priceComposition,
+      priceUpdatedAt: product.priceHistory[0]?.createdAt.toISOString() ?? null,
+    };
+  }
+
+  async saveProductPriceComposition(
+    companyId: string,
+    productId: string,
+    actorId: string,
+    composition: unknown,
+  ) {
+    await this.ensureConfectionery(companyId);
+    if (!validateSalesPriceComposition(composition))
+      throw new BadRequestException(
+        'Confira os parâmetros da composição de preços.',
+      );
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`
+        SELECT set_config('contrx.price_actor_id', ${actorId}, true),
+               set_config('contrx.price_origin', ${'COMPOSICAO_PRECOS'}, true)
+      `;
+      const updated = await tx.salesProduct.updateMany({
+        where: { id: productId, companyId },
+        data: { priceComposition: composition },
+      });
+      if (!updated.count)
+        throw new NotFoundException('Produto não encontrado.');
+      const saved = await tx.salesProduct.findFirstOrThrow({
+        where: { id: productId, companyId },
+        select: {
+          priceComposition: true,
+          priceHistory: {
+            orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+            take: 1,
+            select: { createdAt: true },
+          },
+        },
+      });
+      return {
+        composition: saved.priceComposition,
+        priceUpdatedAt: saved.priceHistory[0]?.createdAt.toISOString() ?? null,
+      };
+    });
+  }
+
+  async getPriceCompositionTemplate(companyId: string) {
+    await this.ensureConfectionery(companyId);
+    const saved = await this.prisma.salesPriceCompositionTemplate.findUnique({
+      where: { companyId },
+    });
+    return { template: saved?.template ?? null };
+  }
+
+  async savePriceCompositionTemplate(companyId: string, composition: unknown) {
+    await this.ensureConfectionery(companyId);
+    if (!validateSalesPriceComposition(composition))
+      throw new BadRequestException(
+        'Confira os parâmetros da composição de preços.',
+      );
+    const template = toSalesPriceCompositionTemplate(composition);
+    const saved = await this.prisma.salesPriceCompositionTemplate.upsert({
+      where: { companyId },
+      create: { companyId, template },
+      update: { template },
+    });
+    return { template: saved.template };
   }
 
   async listProductCategories(companyId: string) {
@@ -2067,6 +2161,59 @@ export class VendasService {
     }));
   }
 
+  async reserveOrderNumber(companyId: string, userId: string) {
+    await this.ensureConfectionery(companyId);
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockCompany(tx, companyId);
+      const reservation = await tx.salesOrderNumberReservation.findUnique({
+        where: { companyId_userId: { companyId, userId } },
+      });
+      if (
+        reservation &&
+        reservation.expiresAt > new Date() &&
+        !(await tx.salesOrder.findFirst({
+          where: { companyId, number: reservation.number },
+          select: { id: true },
+        }))
+      )
+        return { number: reservation.number, expiresAt: reservation.expiresAt };
+
+      const highestOrder = await tx.salesOrder.aggregate({
+        _max: { number: true },
+      });
+      const highestSequence = await tx.$queryRaw<
+        Array<{ number: bigint | number | null }>
+      >`
+        SELECT last_value::integer AS number FROM public.vendas_pedidos_numero_seq
+      `;
+      const highestReservation = await tx.salesOrderNumberReservation.aggregate(
+        {
+          _max: { number: true },
+        },
+      );
+      const number =
+        Math.max(
+          highestOrder._max.number ?? 0,
+          Number(highestSequence[0]?.number ?? 0),
+          highestReservation._max.number ?? 0,
+        ) + 1;
+      await tx.$queryRaw`
+        SELECT setval(
+          pg_get_serial_sequence('public.vendas_pedidos', 'numero'),
+          GREATEST(COALESCE((SELECT MAX(numero) FROM public.vendas_pedidos), 0), ${number}),
+          true
+        )
+      `;
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const saved = await tx.salesOrderNumberReservation.upsert({
+        where: { companyId_userId: { companyId, userId } },
+        create: { companyId, userId, number, expiresAt },
+        update: { number, expiresAt },
+      });
+      return { number: saved.number, expiresAt: saved.expiresAt };
+    });
+  }
+
   async orderDetails(companyId: string, id: string) {
     await this.ensureConfectionery(companyId);
     const order = await this.prisma.salesOrder.findFirst({
@@ -2553,6 +2700,21 @@ export class VendasService {
             cashTender: metadata?.cashTender ?? null,
           };
         }
+        let reservedNumber: number | undefined;
+        if (data.reservedNumber !== undefined) {
+          const reservation = await tx.salesOrderNumberReservation.findUnique({
+            where: { companyId_userId: { companyId, userId: actorId ?? '' } },
+          });
+          if (
+            !reservation ||
+            reservation.number !== data.reservedNumber ||
+            reservation.expiresAt <= new Date()
+          )
+            throw new BadRequestException(
+              'O número reservado para esta venda expirou. Atualize a tela e tente novamente.',
+            );
+          reservedNumber = reservation.number;
+        }
         if (
           ['VENDA', 'TROCA'].includes(data.saleType) &&
           (data.status || 'CONCLUIDA') === 'CONCLUIDA'
@@ -2599,12 +2761,17 @@ export class VendasService {
         const order = await tx.salesOrder.create({
           data: {
             companyId,
+            ...(reservedNumber !== undefined ? { number: reservedNumber } : {}),
             ...orderData,
             stockApplied,
             stockReserved,
             requestId: data.requestId,
           },
         });
+        if (reservedNumber !== undefined)
+          await tx.salesOrderNumberReservation.delete({
+            where: { companyId_userId: { companyId, userId: actorId ?? '' } },
+          });
         await this.createOrderFinancials(
           tx,
           companyId,
@@ -3293,7 +3460,7 @@ export class VendasService {
   private requestSignature(data: CriarVendaDto) {
     const payload = Object.fromEntries(
       Object.entries(data).filter(
-        ([key]) => !['version', 'requestId'].includes(key),
+        ([key]) => !['version', 'requestId', 'reservedNumber'].includes(key),
       ),
     );
     const canonical = (value: unknown): unknown =>

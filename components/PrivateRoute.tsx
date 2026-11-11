@@ -19,12 +19,13 @@ export function PrivateRoute({ children }: PrivateRouteProps) {
   }, [isAuthenticated, isLoading, router]);
 
   if (isLoading) {
+    // Uma section evita hidratar o div hidden de metadados inserido pelo Next no body.
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
+      <section aria-label="Carregando sessão" className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
         <div className="rounded-2xl border border-white/10 bg-white/10 px-6 py-4 shadow-xl backdrop-blur">
           Carregando Contrx...
         </div>
-      </div>
+      </section>
     );
   }
 

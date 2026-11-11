@@ -2,11 +2,19 @@
 import { useEffect, useState } from "react";
 import { api } from "@/services/api";
 
-type Values = Record<string, number | null>;
+type Values = Record<string, unknown>;
 type Entry = { id: string; actorName: string | null; createdAt: string; previous: Values | null; current: Values };
 type Result = { records: Entry[]; nextCursor: string | null };
-const labels: Record<string, string> = { purchaseCost: "Custo de compra", additionalCost: "Custos adicionais", price: "Preço de venda", promotionalPrice: "Preço promocional", markupMultiplier: "Markup" };
-const format = (key: string, value: number | null | undefined) => value == null ? "—" : key === "markupMultiplier" ? `${Number(value).toLocaleString("pt-BR")}x` : Number(value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const labels: Record<string, string> = { purchaseCost: "Custo de compra", additionalCost: "Custos adicionais", price: "Preço de venda", promotionalPrice: "Preço promocional", markupMultiplier: "Markup", marginPercent: "Margem efetiva", priceComposition: "Parâmetros da composição", origin: "Origem" };
+const format = (key: string, value: unknown) => {
+  if (value == null) return "—";
+  if (key === "origin") return String(value);
+  if (key === "priceComposition") return "Composição registrada";
+  if (key === "marginPercent") return `${Number(value).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+  if (key === "markupMultiplier") return `${Number(value).toLocaleString("pt-BR")}x`;
+  return Number(value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+};
+const sameValue = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
 
 export default function ProductPriceHistory({ productId }: { productId: string | null }) {
   const [records, setRecords] = useState<Entry[]>([]);
@@ -39,7 +47,7 @@ export default function ProductPriceHistory({ productId }: { productId: string |
     {!loading && !error && !records.length && <p className="py-8 text-center text-sm text-slate-500">Nenhuma alteração de preço registrada.</p>}
     {records.length > 0 && <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700"><table className="w-full min-w-[600px] text-left text-xs">
       <thead className="bg-slate-50 text-slate-500 dark:bg-slate-800"><tr>{["Data e hora", "Usuário", "Campo", "Anterior", "Atual"].map(label => <th key={label} className="px-3 py-2">{label}</th>)}</tr></thead>
-      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{records.flatMap(entry => Object.keys(labels).filter(key => !entry.previous || entry.previous[key] !== entry.current[key]).map((key, index) => <tr key={`${entry.id}-${key}`}>
+      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{records.flatMap(entry => Object.keys(labels).filter(key => !entry.previous || !sameValue(entry.previous[key], entry.current[key])).map((key, index) => <tr key={`${entry.id}-${key}`}>
         <td className="whitespace-nowrap px-3 py-2">{index === 0 ? new Date(entry.createdAt).toLocaleString("pt-BR") : ""}</td>
         <td className="px-3 py-2">{index === 0 ? entry.actorName || "Sistema" : ""}</td>
         <td className="px-3 py-2">{labels[key]}</td><td className="px-3 py-2 tabular-nums">{format(key, entry.previous?.[key])}</td><td className="px-3 py-2 font-semibold tabular-nums">{format(key, entry.current[key])}</td>

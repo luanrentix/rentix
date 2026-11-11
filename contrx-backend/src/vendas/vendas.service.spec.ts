@@ -93,6 +93,10 @@ function fixture() {
     },
     salesSeller: { findFirst: jest.fn().mockResolvedValue(seller) },
     salesOrder: {
+      aggregate: jest.fn().mockImplementation(async () => ({
+        _max: { number: orders.length || null },
+      })),
+      findUnique: jest.fn().mockResolvedValue(null),
       count: jest
         .fn()
         .mockImplementation(
@@ -147,6 +151,13 @@ function fixture() {
         return { count: 1 };
       }),
     },
+    salesOrderNumberReservation: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      upsert: jest.fn().mockImplementation(async ({ create }) => create),
+      delete: jest.fn().mockResolvedValue({}),
+      aggregate: jest.fn().mockResolvedValue({ _max: { number: null } }),
+    },
+    $executeRaw: jest.fn().mockResolvedValue(1),
     contaReceber: {
       count: jest
         .fn()
@@ -1449,5 +1460,26 @@ describe('Vendas: estoque, crédito e recebimentos', () => {
     }
     expect(f.bank.currentBalance.toNumber()).toBe(0);
     expect(f.product.stock.toNumber()).toBe(10);
+  });
+});
+
+describe('Vendas: reserva do nÃºmero', () => {
+  it('usa uma consulta que retorna as linhas da sequÃªncia PostgreSQL', async () => {
+    const f = fixture();
+
+    const reservation = await f.service.reserveOrderNumber('company', 'user');
+
+    expect(reservation.number).toBe(1);
+    expect(f.tx.salesOrderNumberReservation.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          companyId: 'company',
+          userId: 'user',
+          number: 1,
+        }),
+      }),
+    );
+    expect(f.tx.$queryRaw).toHaveBeenCalled();
+    expect(f.tx.$executeRaw).not.toHaveBeenCalled();
   });
 });

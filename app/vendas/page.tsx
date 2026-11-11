@@ -92,6 +92,7 @@ import {
   deleteSalesProduct,
   cancelSalesOrder,
   createSalesOrder,
+  reserveSalesOrderNumber,
   createSalesProduct,
   getSalesCustomers,
   getSalesOrders,
@@ -193,6 +194,7 @@ function VendasScreen() {
   const [historyMore, setHistoryMore] = useState(false);
   const [legacyOpen, setLegacyOpen] = useState(false);
   const historySequence = useRef(0);
+  const historyLoaded = useRef(false);
   const draftReady = useRef(false);
   const live = useRef({ dirty: false, busy: false });
   const [priceChoice, setPriceChoice] = useState<{
@@ -240,6 +242,9 @@ function VendasScreen() {
   const receivingAccountId = bankAccountId || bankAccounts[0]?.id || "";
   const [installments, setInstallments] = useState(1);
   const [orderVersion, setOrderVersion] = useState<number | undefined>();
+  const [reservedSaleNumber, setReservedSaleNumber] = useState<number | null>(null);
+  const [saleNumberLoading, setSaleNumberLoading] = useState(false);
+  const saleNumberRequestInFlight = useRef(false);
   const requestIdRef = useRef<string | null>(null);
   const savingRef = useRef(false);
   const [payment, setPayment] = useState<PayMethod>("DINHEIRO");
@@ -295,71 +300,73 @@ function VendasScreen() {
   const quantityRef = useRef<HTMLInputElement>(null);
   const initialized = useRef(false);
 
+  const loadHistory = useCallback(async (force = false) => {
+    if (historyLoaded.current && !force) return;
+    historyLoaded.current = true;
+    try {
+      const rows = await getSalesOrders();
+      setOrders(rows);
+      setHistoryMore(rows.length === 100);
+    } catch (cause) {
+      historyLoaded.current = false;
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Histórico indisponível. Tente atualizar novamente.",
+      );
+    }
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      if (!initialized.current && canPerformAction(user, "sales", "create")) {
-        await initializeSalesModule();
-        initialized.current = true;
-      }
-      const [p, o] = await Promise.allSettled([
+      const initialize =
+        !initialized.current && canPerformAction(user, "sales", "create");
+      const [p, sellerResult, customerResult] = await Promise.allSettled([
         getSalesProducts(),
-        getSalesOrders(),
+        getSalesSellers(),
+        initialize ? initializeSalesModule() : getSalesCustomers(),
       ]);
+      if (initialize && customerResult.status === "fulfilled")
+        initialized.current = true;
       const failures: string[] = [];
       if (p.status === "fulfilled") setProducts(p.value);
       else failures.push("Catálogo indisponível. Tente atualizar novamente.");
-      if (o.status === "fulfilled") {
-        setOrders(o.value);
-        setHistoryMore(o.value.length === 100);
-      } else
-        failures.push(
-          "Histórico indisponível. O catálogo disponível foi preservado.",
-        );
-      setError(failures.join(" "));
-      try {
-        const [sellerResult, customerResult] = await Promise.allSettled([
-          getSalesSellers(),
-          getSalesCustomers(),
-        ]);
-        const salesSellers =
-          sellerResult.status === "fulfilled" ? sellerResult.value : null;
-        const salesCustomers =
-          customerResult.status === "fulfilled" ? customerResult.value : null;
-        if (
-          sellerResult.status === "rejected" ||
-          customerResult.status === "rejected"
-        )
-          setError(
-            [
-              ...failures,
-              "Parte dos cadastros está indisponível. Os dados carregados foram preservados.",
-            ].join(" "),
-          );
-        if (salesCustomers) setRegisteredCustomers(salesCustomers);
-        if (salesSellers) {
-          setRegisteredSellers(salesSellers);
-          setSeller((current) =>
-            current && salesSellers.some((item) => item.id === current)
-              ? current
-              : salesSellers.length === 1
-                ? salesSellers[0].id
-                : "",
-          );
+      const salesSellers =
+        sellerResult.status === "fulfilled" ? sellerResult.value : null;
+      let salesCustomers =
+        customerResult.status === "fulfilled" ? customerResult.value : null;
+      if (initialize && !salesCustomers) {
+        try {
+          salesCustomers = await getSalesCustomers();
+        } catch {
+          // Preserva os dados carregados e informa a indisponibilidade abaixo.
         }
-        if (salesCustomers)
-          setCustomer((current) =>
-            current && salesCustomers.some((item) => item.id === current)
-              ? current
-              : salesCustomers.find(
-                  (item) => item.systemKey === "CONSUMIDOR_FINAL",
-                )?.id || "",
-          );
-      } catch {
-        setError(
-          "Não foi possível carregar clientes e vendedores. Atualize a tela para tentar novamente.",
+      }
+      if (!salesSellers || !salesCustomers)
+        failures.push(
+          "Parte dos cadastros está indisponível. Os dados carregados foram preservados.",
+        );
+      if (salesCustomers) setRegisteredCustomers(salesCustomers);
+      if (salesSellers) {
+        setRegisteredSellers(salesSellers);
+        setSeller((current) =>
+          current && salesSellers.some((item) => item.id === current)
+            ? current
+            : salesSellers.length === 1
+              ? salesSellers[0].id
+              : "",
         );
       }
+      if (salesCustomers)
+        setCustomer((current) =>
+          current && salesCustomers.some((item) => item.id === current)
+            ? current
+            : salesCustomers.find(
+                (item) => item.systemKey === "CONSUMIDOR_FINAL",
+              )?.id || "",
+        );
+      setError(failures.join(" "));
     } catch (e) {
       setError(
         e instanceof Error
@@ -370,10 +377,37 @@ function VendasScreen() {
       setLoading(false);
     }
   }, [user]);
+
+  const reserveSaleNumber = useCallback(async () => {
+    if (
+      currentEditOrderId ||
+      reservedSaleNumber !== null ||
+      saleNumberRequestInFlight.current
+    )
+      return;
+    saleNumberRequestInFlight.current = true;
+    setSaleNumberLoading(true);
+    try {
+      const reservation = await reserveSalesOrderNumber();
+      setReservedSaleNumber(reservation.number);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível definir o número da venda.");
+    } finally {
+      saleNumberRequestInFlight.current = false;
+      setSaleNumberLoading(false);
+    }
+  }, [currentEditOrderId, reservedSaleNumber]);
   useEffect(() => {
     void load();
     void loadReceivingAccounts();
   }, [load, loadReceivingAccounts]);
+  useEffect(() => {
+    if (!loading && !currentEditOrderId && reservedSaleNumber === null)
+      void reserveSaleNumber();
+  }, [loading, activeView, currentEditOrderId, reservedSaleNumber, reserveSaleNumber]);
+  useEffect(() => {
+    if (activeView === "ESTORNOS") void loadHistory();
+  }, [activeView, loadHistory]);
   useEffect(() => {
     const requestedView = searchParams.get("view");
     const requestedType = searchParams.get("tipo");
@@ -439,7 +473,7 @@ function VendasScreen() {
   }, [searchParams, loadReceivingAccounts]);
 
   live.current = {
-    dirty: cart.length > 0 || notes.trim().length > 0,
+    dirty: activeView === "POS" && (cart.length > 0 || notes.trim().length > 0),
     busy: saving || deletingSale,
   };
   const draftKey = `contrx-sales-draft:${user?.companyId}:${user?.id}`;
@@ -777,7 +811,7 @@ function VendasScreen() {
     return () => {
       current = false;
     };
-  }, [customer, orders]);
+  }, [customer]);
   useEffect(() => {
     setCashTender("");
   }, [payment, total, paymentParts.DINHEIRO, customer]);
@@ -824,7 +858,11 @@ function VendasScreen() {
   }
   const saleNumber = editingOrder
     ? String(editingOrder.number)
-    : "Após gravação";
+    : reservedSaleNumber !== null
+      ? String(reservedSaleNumber)
+      : saleNumberLoading
+        ? "Obtendo número..."
+        : "Indisponível";
   const today = new Intl.DateTimeFormat("pt-BR", {
     timeZone: "America/Manaus",
   }).format(
@@ -1331,6 +1369,7 @@ function VendasScreen() {
     setMessage("");
     try {
       requestIdRef.current ??= crypto.randomUUID();
+      const activeReservedSaleNumber = reservedSaleNumber;
       const orderData: SaveSalesOrderInput = {
         cashTender:
           !exchange &&
@@ -1364,6 +1403,7 @@ function VendasScreen() {
         refundConfirmed: exchange?.refundConfirmed,
         expectedTotal: exchange?.difference,
         requestId: requestIdRef.current!,
+        reservedNumber: currentEditOrderId ? undefined : activeReservedSaleNumber ?? undefined,
         version: orderVersion,
         bankAccountId:
           exchange?.bankAccountId ?? (receivingAccountId || undefined),
@@ -1409,6 +1449,7 @@ function VendasScreen() {
           ? await updateSalesOrder(currentEditOrderId, orderData)
           : await createSalesOrder(orderData);
       requestIdRef.current = null;
+      setReservedSaleNumber(null);
       if (status === "CONCLUIDA") {
         setSaveConfirmOpen(false);
         setReceiptTender(exchange ? "" : cashTender);
@@ -1440,6 +1481,7 @@ function VendasScreen() {
     setPriceChoice(null);
     setBankAccountId("");
     requestIdRef.current = null;
+    setReservedSaleNumber(null);
     setOrderVersion(undefined);
     setCashTender("");
     setSearch("");
@@ -1904,7 +1946,7 @@ function VendasScreen() {
         )}
         {loading && (
           <p role="status" className="p-3 text-sm">
-            Atualizando catálogo, cadastros e histórico…
+            Carregando catálogo, clientes e vendedores…
           </p>
         )}
         {message && (
@@ -2034,9 +2076,12 @@ function VendasScreen() {
                       <span className="text-xs font-black uppercase text-slate-600 dark:text-slate-300">
                         Nº venda
                       </span>
-                      <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 px-3 py-2 text-sm">
+                      <output
+                        aria-label="Número da venda"
+                        className="block rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm dark:border-slate-800 dark:bg-slate-800"
+                      >
                         {saleNumber}
-                      </div>
+                      </output>
                     </div>
                   </section>
 
@@ -2833,7 +2878,7 @@ function VendasScreen() {
               onCompleted={async (message) => {
                 setMessage(message);
                 setError("");
-                await load();
+                await Promise.all([load(), loadHistory(true)]);
               }}
             />
             <CustomerCreditsPanel

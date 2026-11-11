@@ -93,6 +93,7 @@ export class CriarVendaDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   expectedTotal?: number;
   @IsOptional() @IsUUID() requestId?: string;
+  @IsOptional() @IsInt() @Min(1) reservedNumber?: number;
   @IsOptional() @IsInt() @Min(1) version?: number;
   @IsOptional() @IsUUID() bankAccountId?: string;
   @IsOptional() @IsInt() @Min(1) @Max(60) installments?: number;

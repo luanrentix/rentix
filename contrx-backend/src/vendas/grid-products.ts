@@ -18,7 +18,9 @@ export function formatCatalogProduct(
     include: typeof productCatalogInclude;
   }>,
 ) {
-  const { supplier, gridChildren, parentProduct, ...result } = product;
+  const { supplier, gridChildren, parentProduct, priceComposition, ...result } =
+    product;
+  void priceComposition;
   if (!product.isGridParent)
     return {
       ...result,

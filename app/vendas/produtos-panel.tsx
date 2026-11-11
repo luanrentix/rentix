@@ -4,6 +4,7 @@ import SalesPageHeader from "./sales-page-header";
 import ProductPhoto from "./product-photo";
 import ToggleSwitch from "@/components/ui/toggle-switch";
 import ProductPriceHistory from "./product-price-history";
+import PriceCompositionModal from "./price-composition-modal";
 import { useAuth } from "@/context/AuthContext";
 import { getCompanyStorageKey } from "@/services/company-storage";
 import { isValidGtin, gtinAliases } from "@/lib/gtin";
@@ -31,6 +32,7 @@ import {
   ChevronRight,
   Columns3,
   Copy,
+  Calculator,
   FileText,
   ImagePlus,
   MoreVertical,
@@ -300,6 +302,8 @@ export default function SalesProductsPanel({
   const [savingClassification, setSavingClassification] = useState(false);
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [priceCompositionOpen, setPriceCompositionOpen] = useState(false);
+  const [priceCompositionNotice, setPriceCompositionNotice] = useState("");
   const [tab, setTab] = useState<ProductTab>("GERAL");
   const [priceTab, setPriceTab] = useState<"VALUES" | "HISTORY">("VALUES");
   const [form, setForm] = useState<ProductForm>(empty);
@@ -507,6 +511,8 @@ export default function SalesProductsPanel({
     );
   }
   function startNew() {
+    setPriceCompositionOpen(false);
+    setPriceCompositionNotice("");
     setPriceTab("VALUES");
     setGtinCheck(null);
     attachmentRequest.current += 1;
@@ -523,6 +529,8 @@ export default function SalesProductsPanel({
     setOpen(true);
   }
   function startEdit(product: SalesProduct) {
+    setPriceCompositionOpen(false);
+    setPriceCompositionNotice("");
     setPriceTab("VALUES");
     setGtinCheck(null);
     setAttachments([]);
@@ -1721,13 +1729,14 @@ export default function SalesProductsPanel({
               )}
               {tab === "PRECOS" && (
                 <div className="space-y-4">
+                  {priceCompositionNotice && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">{priceCompositionNotice}</p>}
                   <div role="tablist" aria-label="Preços do produto" className="flex gap-1 border-b border-slate-200 dark:border-slate-700">
                     {([["VALUES", "Preços e permissões"], ["HISTORY", "Histórico de alterações"]] as const).map(([key, label]) => <button key={key} type="button" role="tab" aria-selected={priceTab === key} aria-controls={`product-price-${key}`} onClick={() => setPriceTab(key)} className={`border-b-2 px-3 py-2 text-xs font-semibold ${priceTab === key ? "border-[var(--primary-color)] text-[var(--primary-color)]" : "border-transparent text-slate-500"}`}>{label}</button>)}
                   </div>
                   {priceTab === "HISTORY" ? <div id="product-price-HISTORY" role="tabpanel"><ProductPriceHistory productId={editingId} /></div> : <div id="product-price-VALUES" role="tabpanel">
                 <section className="space-y-5">
                   <div>
-                    <h4 className="text-sm font-black">Composição de preços</h4>
+                    <h4 className="text-sm font-black">Custos e preço padrão</h4>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       Informe os custos e o multiplicador para calcular o preço
                       de venda.
@@ -2162,6 +2171,7 @@ export default function SalesProductsPanel({
             </div>
             <footer className="flex flex-wrap items-center gap-3 border-t bg-slate-50 px-5 py-3">
               <div className="mr-auto"><ToggleSwitch label="Produto ativo" checked={form.active} onChange={value => set("active", value)} disabled={saving || uploading} /></div>
+              {tab === "PRECOS" && <button type="button" onClick={() => { setPriceCompositionNotice(""); setPriceCompositionOpen(true); }} className="inline-flex items-center gap-2 rounded-xl border border-[var(--primary-color)] bg-white px-3 py-2.5 text-xs font-bold text-[var(--primary-color)] transition hover:bg-[var(--primary-bg-light)] dark:bg-slate-900"><Calculator size={15} />Composição de Preços</button>}
               <button
                 type="button"
                 disabled={saving || uploading}
@@ -2179,6 +2189,29 @@ export default function SalesProductsPanel({
               </button>
             </footer>
           </form>
+          {priceCompositionOpen && (
+            <PriceCompositionModal
+              product={{
+                id: editingId,
+                code: form.sku,
+                name: form.name,
+                unit: form.unit,
+                purchaseCost: Number(form.purchaseCost || 0),
+                additionalCost: Number(form.additionalCost || 0),
+                currentPrice: Number(form.price || 0),
+                updatedAt: form.expectedUpdatedAt,
+                commissionEnabled: Boolean(form.commissionEnabled),
+                commissionType: form.commissionType,
+                commissionRule: form.commissionRule,
+                commission: Number(form.commission || 0),
+              }}
+              onClose={() => setPriceCompositionOpen(false)}
+              onApplyPrice={(price) => {
+                updateSalePrice(String(price));
+                setPriceCompositionNotice("Preço aplicado ao cadastro. Clique em Gravar Produto para persistir a alteração.");
+              }}
+            />
+          )}
         </div>
       )}
       {gridDialogOpen && (

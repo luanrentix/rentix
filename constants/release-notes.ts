@@ -16,6 +16,17 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "1.0.23",
+    date: "11 de Novembro de 2026",
+    title: "Composicao de preco e numeracao de vendas",
+    subtitle: "Markup acima de 100%, numeracao reservada no checkout e protecao de scripts por nonce.",
+    highlights: [
+      { category: "novo", title: "Composicao de preco", description: "Custos detalhados e markup de lucro sobre o custo, inclusive acima de 100%, com calculo de preco e margem efetiva." },
+      { category: "correcao", title: "Numero da venda no checkout", description: "Corrige a consulta da sequencia e exibe o numero reservado antes de concluir a venda." },
+      { category: "seguranca", title: "Politica de scripts", description: "A CSP de producao usa nonce por requisicao para scripts inline permitidos pelo Next.js." },
+    ],
+  },
+  {
     version: "1.0.22",
     date: "11 de Novembro de 2026",
     title: "Relatórios gerenciais e aprimoramentos em vendas",

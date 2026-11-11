@@ -1,5 +1,13 @@
 ﻿import { apiFetch } from "./api";
 
+import type { SalesPriceComposition } from "../contrx-backend/src/vendas/price-composition";
+import type { SalesPriceCompositionTemplate } from "../contrx-backend/src/vendas/price-composition";
+
+export type SalesProductPriceCompositionRecord = {
+  composition: SalesPriceComposition | null;
+  priceUpdatedAt: string | null;
+};
+
 export type SalesVariant = {
   expectedUpdatedAt?: string;
   sku?: string | null;
@@ -302,6 +310,31 @@ export type SalesOrder = {
 };
 export const getSalesProducts = () =>
   apiFetch<SalesProduct[]>("/vendas/produtos");
+export const getSalesProductPriceComposition = (id: string) =>
+  apiFetch<SalesProductPriceCompositionRecord>(
+    `/vendas/produtos/${encodeURIComponent(id)}/composicao-preco`,
+    { skipCache: true },
+  );
+export const saveSalesProductPriceComposition = (
+  id: string,
+  composition: SalesPriceComposition,
+) =>
+  apiFetch<SalesProductPriceCompositionRecord>(
+    `/vendas/produtos/${encodeURIComponent(id)}/composicao-preco`,
+    { method: "PATCH", body: JSON.stringify({ composition }) },
+  );
+export const getSalesPriceCompositionTemplate = () =>
+  apiFetch<{ template: SalesPriceCompositionTemplate | null }>(
+    "/vendas/composicao-preco/modelo",
+    { skipCache: true },
+  );
+export const saveSalesPriceCompositionTemplate = (
+  composition: SalesPriceComposition,
+) =>
+  apiFetch<{ template: SalesPriceCompositionTemplate }>(
+    "/vendas/composicao-preco/modelo",
+    { method: "PUT", body: JSON.stringify({ composition }) },
+  );
 export const getSalesCustomers = () =>
   apiFetch<SalesCustomer[]>("/vendas/clientes");
 export type SalesCustomerDocumentCheck = { exists: boolean };
@@ -484,11 +517,16 @@ export const archiveSalesSupplier = (id: string) =>
     { method: "DELETE" },
   );
 export const initializeSalesModule = () =>
-  apiFetch("/vendas/inicializar", { method: "POST" });
+  apiFetch<SalesCustomer[]>("/vendas/inicializar", { method: "POST" });
 export const getSalesOrderByRequest = (requestId: string) =>
   apiFetch<SalesOrderDetails>(
     `/vendas/pedidos/por-requisicao/${encodeURIComponent(requestId)}`,
     { skipCache: true },
+  );
+export const reserveSalesOrderNumber = () =>
+  apiFetch<{ number: number; expiresAt: string }>(
+    "/vendas/pedidos/reservar-numero",
+    { method: "POST", body: "{}", skipCache: true },
   );
 export const getSalesOrdersPage = (
   query: { before?: number; search?: string; filter?: string; startDate?: string; endDate?: string; status?: string } = {},
@@ -528,6 +566,7 @@ export type SaveSalesOrderInput = {
   returnedItems?: { itemIndex: number; quantity: number }[];
   returnDisposition?: "REFUND" | "CREDIT";
   requestId?: string;
+  reservedNumber?: number;
   version?: number;
   bankAccountId?: string;
   installments?: number;

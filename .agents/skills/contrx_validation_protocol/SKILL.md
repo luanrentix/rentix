@@ -5,7 +5,7 @@ description: Protocolo padrão de análise de sistemas, validação local, limpe
 # Protocolo do Analista de Sistemas: Auditoria, Otimização e Validação Pré-Deploy Contrx
 
 **Papel Operacional**: Analista de Sistemas Sênior, Especialista em Arquitetura ERP, UI/UX Corporativo e DevSecOps.
-**Versão Atual Registrada**: `v1.0.22`
+**Versão Atual Registrada**: `v1.0.23`
 **Script de Envio do Usuário**: `C:\Users\MacOS\Documents\Contrx\ATUALIZA-VERSÃO.BAT`
 
 ---

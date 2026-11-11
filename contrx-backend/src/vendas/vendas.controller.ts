@@ -7,6 +7,7 @@
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -32,6 +33,7 @@ import { CriarClassificacaoProdutoDto } from './dto/criar-classificacao-produto.
 import { CriarGradeProdutoDto } from './dto/criar-grade-produto.dto';
 import { VendasService } from './vendas.service';
 import { CriarUnidadeProdutoDto } from './dto/criar-unidade-produto.dto';
+import { SalvarComposicaoPrecoProdutoDto } from './dto/salvar-composicao-preco-produto.dto';
 
 @Controller('vendas')
 @RequireToolPermission('sales')
@@ -216,6 +218,44 @@ export class VendasController {
   listProducts(@CurrentUser() user: UsuarioAutenticado) {
     return this.service.listProducts(user.companyId);
   }
+  @RequireToolAction('view')
+  @Get('produtos/:id/composicao-preco')
+  productPriceComposition(
+    @Param('id') id: string,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    return this.service.getProductPriceComposition(user.companyId, id);
+  }
+  @RequireToolAction('view')
+  @Get('composicao-preco/modelo')
+  getPriceCompositionTemplate(@CurrentUser() user: UsuarioAutenticado) {
+    return this.service.getPriceCompositionTemplate(user.companyId);
+  }
+  @RequireToolAction('edit')
+  @Put('composicao-preco/modelo')
+  savePriceCompositionTemplate(
+    @Body() data: SalvarComposicaoPrecoProdutoDto,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    return this.service.savePriceCompositionTemplate(
+      user.companyId,
+      data.composition,
+    );
+  }
+  @RequireToolAction('edit')
+  @Patch('produtos/:id/composicao-preco')
+  saveProductPriceComposition(
+    @Param('id') id: string,
+    @Body() data: SalvarComposicaoPrecoProdutoDto,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    return this.service.saveProductPriceComposition(
+      user.companyId,
+      id,
+      user.id,
+      data.composition,
+    );
+  }
   @RequireToolAction('create')
   @Post('produtos')
   createProduct(
@@ -359,6 +399,11 @@ export class VendasController {
       endDate,
       status,
     );
+  }
+  @RequireToolAction('create')
+  @Post('pedidos/reservar-numero')
+  reserveOrderNumber(@CurrentUser() user: UsuarioAutenticado) {
+    return this.service.reserveOrderNumber(user.companyId, user.id);
   }
   @RequireToolAction('create')
   @Post('pedidos')

@@ -61,8 +61,15 @@ if not "%CONFIRMACAO%"=="ENVIAR" goto MENU
 set "HAS_CHANGES="
 for /f "delims=" %%s in ('git status --porcelain') do set "HAS_CHANGES=1"
 if not defined HAS_CHANGES goto PUSH
-git add .
+node scripts\stage-release-1.0.23.cjs
 if errorlevel 1 goto FALHA
+git --no-pager diff --cached --check
+if errorlevel 1 goto FALHA
+git --no-pager diff --cached --name-only
+echo Revise a lista staged acima antes de continuar.
+set "CONFIRMACAO_FINAL="
+set /p "CONFIRMACAO_FINAL=Digite ENVIAR novamente para confirmar apenas estes arquivos: "
+if not "%CONFIRMACAO_FINAL%"=="ENVIAR" goto MENU
 git commit -m "Atualiza versao Contrx e aplica correcoes validadas"
 if errorlevel 1 goto FALHA
 :PUSH
