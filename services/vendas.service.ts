@@ -441,6 +441,42 @@ export const createSalesCustomer = (data: SalesCustomerInput) =>
     method: "POST",
     body: JSON.stringify(data),
   });
+export type SalesCustomerRegistrationInfo = {
+  companyName: string;
+  expiresAt: string;
+};
+export type PublicSalesCustomerRegistrationInput = Pick<
+  SalesCustomerInput,
+  | "personType"
+  | "name"
+  | "document"
+  | "phone"
+  | "email"
+  | "zipCode"
+  | "address"
+  | "number"
+  | "complement"
+  | "neighborhood"
+  | "city"
+  | "state"
+> & { token: string; consented: boolean };
+export const createSalesCustomerRegistrationLink = (phone: string) =>
+  apiFetch<{ token: string; expiresAt: string }>(
+    "/vendas/clientes/links-cadastro",
+    { method: "POST", body: JSON.stringify({ phone }) },
+  );
+export const getPublicSalesCustomerRegistration = (token: string) =>
+  apiFetch<SalesCustomerRegistrationInfo>(
+    "/vendas/clientes-cadastro-publico/consultar",
+    { method: "POST", body: JSON.stringify({ token }), skipCache: true },
+  );
+export const submitPublicSalesCustomerRegistration = (
+  data: PublicSalesCustomerRegistrationInput,
+) =>
+  apiFetch<{ success: boolean }>("/vendas/clientes-cadastro-publico/enviar", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 export const updateSalesCustomer = (id: string, data: SalesCustomerInput) =>
   apiFetch<SalesCustomer>(`/vendas/clientes/${encodeURIComponent(id)}`, {
     method: "PATCH",

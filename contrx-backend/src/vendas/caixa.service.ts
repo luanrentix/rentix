@@ -1,3 +1,4 @@
+import { ensureRetailCashAccount } from './retail-cash-account';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -24,16 +25,7 @@ export class CaixaService {
   async prepareAccount(companyId: string) {
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM empresas WHERE id = ${companyId} FOR UPDATE`;
-      const existing = await tx.bankAccount.findFirst({
-        where: { companyId, type: 'CASH', active: true, deletedAt: null },
-        orderBy: { createdAt: 'asc' },
-      });
-      return (
-        existing ??
-        tx.bankAccount.create({
-          data: { companyId, name: 'CAIXA LOJA', type: 'CASH' },
-        })
-      );
+      return ensureRetailCashAccount(tx, companyId);
     });
   }
 
@@ -67,13 +59,13 @@ export class CaixaService {
     to: Date,
   ) {
     const accounts = await tx.bankAccount.findMany({
-      where: { companyId, deletedAt: null },
+      where: { companyId, deletedAt: null, isRetailCash: true },
       orderBy: { name: 'asc' },
     });
     // Read source records in one snapshot: receipts and reversals must never be counted twice.
     const records = await tx.bankTransaction.findMany({
       where: {
-        bankAccount: { companyId },
+        bankAccount: { companyId, isRetailCash: true },
         status: 'CONFIRMED',
         OR: [
           { bankAccount: { type: 'CASH' } },
@@ -335,6 +327,7 @@ export class CaixaService {
           where: {
             companyId: user.companyId,
             type: 'CASH',
+            isRetailCash: true,
             active: true,
             deletedAt: null,
             ...(body.accountId ? { id: body.accountId } : {}),
@@ -346,13 +339,7 @@ export class CaixaService {
             'Selecione um caixa em dinheiro ativo da empresa.',
           );
         if (!account)
-          account = await tx.bankAccount.create({
-            data: {
-              companyId: user.companyId,
-              name: 'CAIXA LOJA',
-              type: 'CASH',
-            },
-          });
+          account = await ensureRetailCashAccount(tx, user.companyId);
         if (body.direction === 'OUT') {
           const summary = await this.read(
             tx,

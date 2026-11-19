@@ -22,6 +22,7 @@ import type { UsuarioAutenticado } from '../autenticacao/types/usuario-autentica
 import { AtualizarProdutoVendaDto } from './dto/atualizar-produto-venda.dto';
 import { AtualizarClienteVendaDto } from './dto/atualizar-cliente-venda.dto';
 import { CriarClienteVendaDto } from './dto/criar-cliente-venda.dto';
+import { CriarLinkCadastroClienteDto } from './dto/criar-link-cadastro-cliente.dto';
 import { CriarProdutoVendaDto } from './dto/criar-produto-venda.dto';
 import { CriarVendedorVendaDto } from './dto/criar-vendedor-venda.dto';
 import { AtualizarVendedorVendaDto } from './dto/atualizar-vendedor-venda.dto';
@@ -147,6 +148,18 @@ export class VendasController {
     @CurrentUser() user: UsuarioAutenticado,
   ) {
     return this.service.createCustomer(user.companyId, data);
+  }
+
+  @RequireToolAction('create')
+  @Post('clientes/links-cadastro')
+  createCustomerRegistrationLink(
+    @Body() dto: CriarLinkCadastroClienteDto,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    return this.service.createCustomerRegistrationLink(
+      user.companyId,
+      dto.phone,
+    );
   }
   @RequireToolAction('edit')
   @Patch('clientes/:id')

@@ -522,6 +522,7 @@ export class ContasReceberService {
         where: {
           id: payment.bankAccountId,
           companyId,
+          isRetailCash: true,
           active: true,
           deletedAt: null,
         },

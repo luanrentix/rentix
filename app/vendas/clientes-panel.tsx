@@ -4,9 +4,10 @@ import SalesPageHeader from "./sales-page-header";
 import CustomerActions from "./cliente-acoes";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { ArrowLeft, FileText, MapPin, Paperclip, Plus, Search, ShoppingCart, Trash2, UploadCloud, UserRound, UsersRound, WalletCards, X } from "lucide-react";
-import { checkSalesCustomerDocument, createSalesCustomer, getSalesCustomers, lookupSalesAddress, lookupSalesCompany, updateSalesCustomer, type SalesCustomer, type SalesCustomerInput } from "@/services/vendas.service";
+import { ArrowLeft, ClipboardCopy, FileText, Link2, MapPin, Paperclip, Plus, Search, ShoppingCart, Trash2, UploadCloud, UserRound, UsersRound, WalletCards, X } from "lucide-react";
+import { checkSalesCustomerDocument, createSalesCustomer, createSalesCustomerRegistrationLink, getSalesCustomers, lookupSalesAddress, lookupSalesCompany, updateSalesCustomer, type SalesCustomer, type SalesCustomerInput } from "@/services/vendas.service";
 import { api } from "@/services/api";
+import { openWhatsAppMessage } from "@/services/whatsapp.service";
 
 type CustomerForm = {
   referenceOnly: boolean;
@@ -56,6 +57,12 @@ export default function SalesCustomersPanel({ selectionMode = false, requireIden
   const [form, setForm] = useState<CustomerForm>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [registrationModalOpen, setRegistrationModalOpen] = useState(false);
+  const [registrationPhone, setRegistrationPhone] = useState("");
+  const [registrationUrl, setRegistrationUrl] = useState("");
+  const [registrationError, setRegistrationError] = useState("");
+  const [creatingRegistrationLink, setCreatingRegistrationLink] = useState(false);
+  const [copiedRegistrationLink, setCopiedRegistrationLink] = useState(false);
   const [tab, setTab] = useState<CustomerTab>("GERAL");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -85,6 +92,45 @@ export default function SalesCustomersPanel({ selectionMode = false, requireIden
   }, [customers, query, selectionMode, requireIdentifiedCustomer]);
 
   function startNew() { setEditingId(null); setForm(emptyForm); documentValueRef.current = ""; setDocumentFeedback(""); setTab("GERAL"); setFormOpen(true); setMessage(""); setError(""); }
+
+  async function handleCreateRegistrationLink(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const digitsOnly = registrationPhone.replace(/\D/g, "");
+    if (![10, 11, 12, 13].includes(digitsOnly.length)) {
+      setRegistrationError("Informe um WhatsApp válido com DDD.");
+      return;
+    }
+    setCreatingRegistrationLink(true);
+    setRegistrationError("");
+    setCopiedRegistrationLink(false);
+    try {
+      const result = await createSalesCustomerRegistrationLink(registrationPhone);
+      const url = `${window.location.origin}/cadastro-cliente#${result.token}`;
+      setRegistrationUrl(url);
+      openWhatsAppMessage({
+        phone: registrationPhone,
+        message: `Olá! Para agilizar seu atendimento, preencha seus dados neste link de cadastro. Ele é válido por 7 dias e pode ser usado uma única vez:\n\n${url}`,
+      });
+    } catch (cause) {
+      setRegistrationError(
+        cause instanceof Error
+          ? cause.message
+          : "Não foi possível gerar o link de cadastro.",
+      );
+    } finally {
+      setCreatingRegistrationLink(false);
+    }
+  }
+
+  async function copyRegistrationLink() {
+    if (!registrationUrl) return;
+    try {
+      await navigator.clipboard.writeText(registrationUrl);
+      setCopiedRegistrationLink(true);
+    } catch {
+      setRegistrationError("Não foi possível copiar o link neste navegador.");
+    }
+  }
   function startEdit(customer: SalesCustomer) {
     setEditingId(customer.id);
     documentValueRef.current = normalizedDocument(customer.document || "", customer.personType);
@@ -221,7 +267,7 @@ export default function SalesCustomersPanel({ selectionMode = false, requireIden
   }
 
   return <div className="space-y-6">
-    <SalesPageHeader title="Clientes" description={selectionMode ? "Selecione um cliente cadastrado para usar nesta venda." : "Consulte os cadastros, os contatos e as condições de crediário dos clientes."} icon={UsersRound}><div className="flex items-center gap-2">{selectionMode && <button type="button" onClick={onCancelSelection} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50"><ArrowLeft className="h-4 w-4"/>Voltar para venda</button>}<button type="button" onClick={startNew} className="inline-flex items-center gap-2 rounded-2xl bg-[var(--primary-color)] px-5 py-3 text-xs font-black text-white hover:bg-[var(--primary-hover)] shadow-lg shadow-[var(--primary-bg-light)] transition active:scale-95"><Plus className="h-4 w-4"/>Novo cliente</button></div></SalesPageHeader>
+    <SalesPageHeader title="Clientes" description={selectionMode ? "Selecione um cliente cadastrado para usar nesta venda." : "Consulte os cadastros, os contatos e as condições de crediário dos clientes."} icon={UsersRound}><div className="flex items-center gap-2">{selectionMode && <button type="button" onClick={onCancelSelection} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50"><ArrowLeft className="h-4 w-4"/>Voltar para venda</button>}{!selectionMode && <button type="button" onClick={() => { setRegistrationPhone(""); setRegistrationUrl(""); setRegistrationError(""); setRegistrationModalOpen(true); }} className="inline-flex items-center gap-2 rounded-2xl border border-[var(--primary-border-light)] bg-white px-4 py-3 text-xs font-black text-[var(--primary-color)] shadow-sm transition hover:bg-[var(--primary-bg-light)]"><Link2 className="h-4 w-4"/>Enviar link</button>}<button type="button" onClick={startNew} className="inline-flex items-center gap-2 rounded-2xl bg-[var(--primary-color)] px-5 py-3 text-xs font-black text-white hover:bg-[var(--primary-hover)] shadow-lg shadow-[var(--primary-bg-light)] transition active:scale-95"><Plus className="h-4 w-4"/>Novo cliente</button></div></SalesPageHeader>
     {error && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"><span>{error}</span>{!formOpen && <button type="button" disabled={loading} onClick={() => void load()} className="shrink-0 rounded-xl border border-red-300 px-3 py-2 text-xs font-bold hover:bg-red-100 disabled:opacity-50">{loading ? "Carregando…" : "Tentar novamente"}</button>}</div>}{message && <div role="status" className="rounded-xl border border-[var(--primary-border-light)] bg-[var(--primary-bg-light)] px-4 py-3 text-sm font-semibold text-[var(--primary-color)]">{message}</div>}
     {formOpen && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-3 sm:p-6" onMouseDown={(event) => { if (event.target === event.currentTarget) setFormOpen(false); }}>
       <form onSubmit={(event) => void handleSubmit(event)} onKeyDown={(event) => { if (event.key === "Escape") setFormOpen(false); }} role="dialog" aria-modal="true" aria-label={editingId ? "Editar cliente" : "Novo cliente"} className="flex max-h-[calc(100vh-1.5rem)] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl sm:max-h-[calc(100vh-3rem)]">
@@ -257,5 +303,19 @@ export default function SalesCustomersPanel({ selectionMode = false, requireIden
     <section className="space-y-6"><div className="flex flex-wrap items-center gap-3 p-5 rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"><div className="flex items-center gap-2"><UsersRound className="h-5 w-5 text-[var(--primary-color)]"/><strong>Lista de clientes</strong><span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-bold text-slate-500 dark:text-slate-400">{customers.length}</span></div><label className="relative ml-auto w-full sm:max-w-xs"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400"/><input className={`${field} pl-9`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar cliente..."/></label></div>
       {loading ? <p className="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">Carregando clientes...</p> : filtered.length ? <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"><table className="w-full min-w-[850px] text-left text-xs"><thead className="border-b border-slate-100 bg-slate-50/75 text-[11px] font-black uppercase tracking-wider text-slate-500 dark:border-slate-800 dark:bg-slate-800/50 dark:text-slate-400"><tr><th className="px-4 py-3">Código</th><th className="px-4 py-3">Cliente</th><th className="px-4 py-3">CPF / CNPJ</th><th className="px-4 py-3">Telefone</th><th className="px-4 py-3">E-mail</th><th className="px-4 py-3 text-right">Ações</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">{filtered.map((customer) => <tr key={customer.id} className="hover:bg-slate-50/70"><td className="px-4 py-3 text-slate-500 dark:text-slate-400">{customer.code}</td><td className="px-4 py-3"><span className="block font-bold text-slate-800 dark:text-slate-100">{customer.name}</span>{customer.alias && <span className="block text-xs text-slate-500 dark:text-slate-400">{customer.alias}</span>}</td><td className="px-4 py-3 text-slate-600 dark:text-slate-300">{customer.document || "—"}</td><td className="px-4 py-3 text-slate-600 dark:text-slate-300">{customer.phone || "—"}</td><td className="px-4 py-3 text-slate-600 dark:text-slate-300">{customer.email || "—"}</td><td className="px-4 py-3"><div className="flex justify-end gap-1">{selectionMode && <button type="button" onClick={() => onSelectCustomer?.(customer)} className="inline-flex items-center gap-1.5 rounded-2xl bg-[var(--primary-color)] px-3 py-2 text-xs font-black text-white hover:bg-[var(--primary-hover)] shadow-lg shadow-[var(--primary-bg-light)] transition active:scale-95"><ShoppingCart className="h-3.5 w-3.5"/>Selecionar</button>}{!selectionMode && <CustomerActions customer={customer} onEdit={() => startEdit(customer)} onChanged={async (message) => { setMessage(message); await load(); }} />}</div></td></tr>)}</tbody></table></div> : error ? <p className="px-4 py-12 text-center text-sm text-slate-500">Lista indisponível. Tente carregar novamente.</p> : <div className="px-4 py-12 text-center"><UsersRound className="mx-auto h-10 w-10 text-slate-300"/><p className="mt-3 font-bold text-slate-700 dark:text-slate-200">{query ? "Nenhum cliente encontrado" : "Nenhum cliente cadastrado"}</p><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{query ? "Tente outro termo de busca." : "Cadastre clientes para agilizar o preenchimento das vendas."}</p>{!query && <button type="button" onClick={startNew} className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-[var(--primary-color)] px-5 py-2 text-xs font-black text-white shadow-lg shadow-[var(--primary-bg-light)] transition hover:bg-[var(--primary-hover)] active:scale-95"><Plus className="h-4 w-4"/>Cadastrar primeiro cliente</button>}</div>}
     </section>
+    {registrationModalOpen && <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !creatingRegistrationLink) setRegistrationModalOpen(false); }}>
+      <section role="dialog" aria-modal="true" aria-labelledby="customer-registration-link-title" className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+        <div className="flex items-start justify-between gap-4">
+          <div><h2 id="customer-registration-link-title" className="text-lg font-black text-slate-900 dark:text-white">Enviar link para cadastro</h2><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">O cliente poderá escolher CPF ou CNPJ e preencher os próprios dados.</p></div>
+          <button type="button" aria-label="Fechar" disabled={creatingRegistrationLink} onClick={() => setRegistrationModalOpen(false)} className="rounded-xl p-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-50"><X className="h-5 w-5"/></button>
+        </div>
+        <form onSubmit={(event) => void handleCreateRegistrationLink(event)} className="mt-5 space-y-4">
+          <label className="block space-y-1.5"><span className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">WhatsApp do destinatário <b className="text-red-600">*</b></span><input autoFocus required inputMode="tel" maxLength={30} value={registrationPhone} onChange={(event) => setRegistrationPhone(event.target.value)} placeholder="DDD + número" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm font-semibold outline-none focus:border-[var(--primary-color)] dark:border-slate-700 dark:bg-slate-800 dark:text-white"/><span className="block text-xs text-slate-400">Informe o número com DDD. O link expira em 7 dias e só pode ser usado uma vez.</span></label>
+          {registrationError && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">{registrationError}</div>}
+          {registrationUrl && <div className="space-y-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-3"><p className="text-sm font-bold text-emerald-800">Link gerado e WhatsApp aberto.</p><input aria-label="Link de cadastro" readOnly value={registrationUrl} className="w-full rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs text-slate-600"/><div className="flex flex-wrap gap-2"><button type="button" onClick={() => void copyRegistrationLink()} className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-bold text-emerald-800"><ClipboardCopy className="h-3.5 w-3.5"/>{copiedRegistrationLink ? "Copiado" : "Copiar link"}</button><button type="button" onClick={() => openWhatsAppMessage({ phone: registrationPhone, message: `Olá! Para agilizar seu atendimento, preencha seus dados neste link de cadastro. Ele é válido por 7 dias e pode ser usado uma única vez:\n\n${registrationUrl}` })} className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-bold text-emerald-800">Abrir WhatsApp novamente</button></div></div>}
+          <div className="flex justify-end gap-2 pt-1"><button type="button" onClick={() => setRegistrationModalOpen(false)} className="rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-200">Fechar</button>{registrationUrl ? <button type="button" onClick={() => { setRegistrationUrl(""); setRegistrationError(""); setCopiedRegistrationLink(false); }} className="rounded-xl bg-[var(--primary-color)] px-4 py-2.5 text-sm font-bold text-white hover:bg-[var(--primary-hover)]">Gerar outro link</button> : <button type="submit" disabled={creatingRegistrationLink} className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary-color)] px-4 py-2.5 text-sm font-bold text-white hover:bg-[var(--primary-hover)] disabled:opacity-60">{creatingRegistrationLink ? "Gerando…" : <><Link2 className="h-4 w-4"/>Gerar e abrir WhatsApp</>}</button>}</div>
+        </form>
+      </section>
+    </div>}
   </div>;
 }

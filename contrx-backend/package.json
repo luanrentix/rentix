@@ -1,6 +1,6 @@
 {
   "name": "contrx-backend",
-  "version": "1.0.24",
+  "version": "1.0.25",
   "description": "",
   "author": "",
   "private": true,
@@ -80,6 +80,7 @@
   "overrides": {
     "@hono/node-server": "^2.0.4",
     "hono": "^4.12.23",
+    "effect": "^3.22.1",
     "minimatch@>=7 <11": "^11.0.1",
     "multer": "^2.5.0",
     "glob@>=9 <14.0.2": "^14.0.2"

@@ -344,7 +344,7 @@ export default function PaymentPanel(props: {
             <div className="rounded-lg border border-slate-200 p-3 text-xs dark:border-slate-700">
               <p className="font-bold">Conta padrão de vendas</p>
               <p className="mt-1 text-slate-600 dark:text-slate-300">
-                {accounts[0]?.name || "VENDAS - PADRAO AUTOMATICO"} ·{" "}
+                {accounts[0]?.name || "CAIXA GERAL"} ·{" "}
                 {money(immediate)}
                 será registrado automaticamente nesta conta.
               </p>

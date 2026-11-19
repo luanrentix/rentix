@@ -214,6 +214,7 @@ export class DashboardService {
       }),
       this.prisma.bankAccount.findMany({
         where: {
+          isRetailCash: false,
           companyId,
           active: true,
           deletedAt: null,

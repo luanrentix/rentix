@@ -250,6 +250,10 @@ function VendasScreen() {
   const [payment, setPayment] = useState<PayMethod>("DINHEIRO");
   const [cashTender, setCashTender] = useState("");
   const [search, setSearch] = useState("");
+  const [pendingProduct, setPendingProduct] = useState<{
+    product: SalesProduct;
+    variantId?: string;
+  } | null>(null);
   const [quantity, setQuantity] = useState("1,00");
   const [, setUnitPrice] = useState("");
   const [discountValue, setDiscountValue] = useState("0,00");
@@ -995,6 +999,26 @@ function VendasScreen() {
   ) {
     setter(base > 0 ? formatMoney((value / base) * 100) : "0,00");
   }
+  function selectProduct(product: SalesProduct, variantId?: string) {
+    if (savingRef.current || saving) return;
+    setPendingProduct({ product, variantId });
+    setSearch(product.name);
+    setProductPickerOpen(false);
+    setError("");
+    requestAnimationFrame(() => {
+      quantityRef.current?.focus();
+      quantityRef.current?.select();
+    });
+  }
+
+  function confirmPendingProduct() {
+    if (pendingProduct) {
+      addProduct(pendingProduct.product, pendingProduct.variantId);
+    } else {
+      selectSearchedProduct();
+    }
+  }
+
   function addProduct(
     product: SalesProduct,
     variantId?: string,
@@ -1066,6 +1090,7 @@ function VendasScreen() {
         : [...remaining, addedLine];
     });
     setPriceChoice(null);
+    setPendingProduct(null);
     setSearch("");
     setUnitPrice("");
     setQuantity("1,00");
@@ -1076,10 +1101,15 @@ function VendasScreen() {
   function handleProductKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key !== "Enter") return;
     event.preventDefault();
-    addSearchedProduct();
+    if (pendingProduct) {
+      quantityRef.current?.focus();
+      quantityRef.current?.select();
+    } else {
+      selectSearchedProduct();
+    }
   }
 
-  function addSearchedProduct() {
+  function selectSearchedProduct() {
     const term = search.trim().toLocaleLowerCase("pt-BR");
     if (!term) {
       setProductPickerOpen(true);
@@ -1108,8 +1138,8 @@ function VendasScreen() {
       .find(
         ({ variant }) => variant.barcode?.toLocaleLowerCase("pt-BR") === term,
       );
-    if (variantMatch) addProduct(variantMatch.product, variantMatch.variant.id);
-    else if (match) addProduct(match);
+    if (variantMatch) selectProduct(variantMatch.product, variantMatch.variant.id);
+    else if (match) selectProduct(match);
     else {
       setError(
         filteredProducts.length > 1
@@ -1478,6 +1508,7 @@ function VendasScreen() {
   }
 
   function clearSale() {
+    setPendingProduct(null);
     setPriceChoice(null);
     setBankAccountId("");
     requestIdRef.current = null;
@@ -1771,7 +1802,10 @@ function VendasScreen() {
           ?.querySelector<HTMLButtonElement>("button:not(:disabled)")
           ?.focus();
       }
-      if (event.key === "Escape") setSearch("");
+      if (event.key === "Escape") {
+        setSearch("");
+        setPendingProduct(null);
+      }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -2098,7 +2132,10 @@ function VendasScreen() {
                           aria-label="Produto: digite o código"
                           className={`${field} pr-9`}
                           value={search}
-                          onChange={(event) => setSearch(event.target.value)}
+                          onChange={(event) => {
+                            setSearch(event.target.value);
+                            setPendingProduct(null);
+                          }}
                           onKeyDown={handleProductKeyDown}
                           placeholder="Digite o código ou código de barras exato (ENTER)..."
                         />
@@ -2110,13 +2147,13 @@ function VendasScreen() {
                         >
                           <Search className="h-4 w-4" />
                         </button>
-                        {search && filteredProducts.length > 0 && (
+                        {search && !pendingProduct && filteredProducts.length > 0 && (
                           <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl">
                             {filteredProducts.slice(0, 8).map((product) => (
                               <button
                                 type="button"
                                 key={product.id}
-                                onClick={() => addProduct(product)}
+                                onClick={() => selectProduct(product)}
                                 className="flex w-full items-center justify-between gap-3 border-b border-slate-100 px-3 py-2 text-left last:border-0 hover:bg-[var(--primary-bg-light)]"
                               >
                                 <span>
@@ -2153,6 +2190,11 @@ function VendasScreen() {
                           value={quantity}
                           onChange={(event) => setQuantity(event.target.value)}
                           onFocus={(event) => event.currentTarget.select()}
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter") return;
+                            event.preventDefault();
+                            confirmPendingProduct();
+                          }}
                         />
                       </label>
                       <label className="space-y-1">
@@ -2168,7 +2210,7 @@ function VendasScreen() {
                       </label>
                       <button
                         type="button"
-                        onClick={addSearchedProduct}
+                        onClick={confirmPendingProduct}
                         title="Adicionar produto: informe o código ou abra a lista de produtos"
                         className="inline-flex h-[38px] items-center justify-center gap-2 rounded-xl bg-[var(--primary-color)] px-5 text-xs font-extrabold text-white shadow-sm hover:bg-[var(--primary-hover)] shadow-lg shadow-[var(--primary-bg-light)] transition active:scale-95"
                       >
@@ -3214,7 +3256,7 @@ function VendasScreen() {
         <ProductPicker
           products={products}
           getPrice={getProductSalePrice}
-          onSelect={addProduct}
+          onSelect={selectProduct}
           onClose={() => {
             setProductPickerOpen(false);
             requestAnimationFrame(() => searchRef.current?.focus());

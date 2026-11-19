@@ -37,6 +37,27 @@ function isNoiseOrProbeRoute(route: string | null): boolean {
   return NOISE_ROUTE_PATTERNS.some((pattern) => lower.includes(pattern));
 }
 
+function sanitizeRequestPayload(value: unknown, depth = 0): unknown {
+  if (depth >= 8) return '[truncated]';
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, 100)
+      .map((item) => sanitizeRequestPayload(item, depth + 1));
+  }
+  if (!value || typeof value !== 'object') return value;
+
+  const sensitiveKey =
+    /(password|senha|token|secret|authorization|cookie|cpf|cnpj|e-?mail|telefone|phone|whatsapp|endere[cç]o|address|cep|nascimento|birth|documento|identity|inscri[cç][aã]o|raz[aã]o|nome|name)/i;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [
+      key,
+      sensitiveKey.test(key)
+        ? '[redacted]'
+        : sanitizeRequestPayload(item, depth + 1),
+    ]),
+  );
+}
+
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger('AllExceptionsFilter');
@@ -81,15 +102,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const companyId = user?.companyId || user?.empresaId || null;
 
     let requestPayload: string | null = null;
-    if (request.body && typeof request.body === 'object') {
+    const isPublicCustomerRegistration = request.path?.startsWith(
+      '/vendas/clientes-cadastro-publico/',
+    );
+    if (
+      !isPublicCustomerRegistration &&
+      request.body &&
+      typeof request.body === 'object'
+    ) {
       try {
-        const body = { ...request.body };
-        delete body.password;
-        delete body.senha;
-        delete body.token;
-        delete body.accessToken;
-        delete body.refreshToken;
-        requestPayload = JSON.stringify(body).slice(0, 4000);
+        requestPayload = JSON.stringify(
+          sanitizeRequestPayload(request.body),
+        ).slice(0, 4000);
       } catch {
         requestPayload = null;
       }

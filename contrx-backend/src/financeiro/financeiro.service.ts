@@ -131,6 +131,7 @@ export class FinanceiroService {
       }),
       this.prisma.bankAccount.findMany({
         where: {
+          isRetailCash: false,
           companyId,
           active: true,
           deletedAt: null,

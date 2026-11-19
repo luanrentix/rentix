@@ -207,12 +207,16 @@ async function executeApiFetch<TResponse>(
     const errorMessage =
       errorBody?.message || `Request failed with status ${response.status}`;
 
-    if (response.status === 401 && options.auth !== false && token && getStoredToken() === token) {
+    if (response.status === 401 && options.auth !== false && token) {
       const sessionMessage = errorBody?.code === 'NEW_LOGIN' || (!errorBody?.code && isSessionReplacedMessage(String(errorMessage)))
         ? SESSION_REPLACED_NOTICE
         : SESSION_EXPIRED_NOTICE;
 
-      dispatchSessionReplaced(sessionMessage);
+      // Respostas pendentes continuam sendo erros de sessão após o logout.
+      // Apenas a sessão que originou a requisição pode ser encerrada.
+      if (getStoredToken() === token) {
+        dispatchSessionReplaced(sessionMessage);
+      }
       throw new SessionReplacedError(sessionMessage);
     }
 

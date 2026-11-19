@@ -16,6 +16,18 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "1.0.25",
+    date: "19 de Novembro de 2026",
+    title: "Cadastro de clientes e segurança no varejo",
+    subtitle: "Cadastro por link, isolamento do caixa e proteções adicionais para operações e logs.",
+    highlights: [
+      { category: "novo", title: "Cadastro de clientes por link", description: "Envie um link temporário para que o cliente preencha os próprios dados, com escolha entre CPF e CNPJ." },
+      { category: "melhoria", title: "Isolamento do caixa de varejo", description: "Separa as contas internas de caixa das contas bancárias exibidas nas operações financeiras." },
+      { category: "seguranca", title: "Proteção de uploads e registros de erro", description: "Limita tentativas de envio de arquivos e mascara campos sensíveis registrados nos logs." },
+      { category: "seguranca", title: "Atualização de dependência transitiva", description: "Atualiza a dependência effect para uma versão corrigida, sem alterar a versão principal do Prisma." },
+    ],
+  },
+  {
     version: "1.0.24",
     date: "11 de Novembro de 2026",
     title: "Comprovante de venda em produção",

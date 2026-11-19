@@ -42,14 +42,14 @@ export class BancosService {
 
   async findAllAccounts(companyId: string) {
     return this.prisma.bankAccount.findMany({
-      where: { companyId, deletedAt: null },
+      where: { companyId, deletedAt: null, isRetailCash: false },
       orderBy: { name: 'asc' },
     });
   }
 
   async findOneAccount(id: string, companyId: string) {
     const account = await this.prisma.bankAccount.findFirst({
-      where: { id, companyId, deletedAt: null },
+      where: { id, companyId, deletedAt: null, isRetailCash: false },
     });
     if (!account) {
       throw new NotFoundException('Conta bancária não encontrada.');
@@ -206,7 +206,7 @@ export class BancosService {
     const transaction = await this.prisma.bankTransaction.findFirst({
       where: {
         id,
-        bankAccount: { companyId, deletedAt: null },
+        bankAccount: { companyId, deletedAt: null, isRetailCash: false },
       },
       include: { bankAccount: true },
     });
@@ -280,6 +280,7 @@ export class BancosService {
   ) {
     const where: Prisma.BankTransactionWhereInput = {
       bankAccount: {
+        isRetailCash: false,
         companyId,
         deletedAt: null,
       },
@@ -351,6 +352,7 @@ export class BancosService {
       where: {
         id,
         bankAccount: {
+          isRetailCash: false,
           companyId,
         },
       },
@@ -511,6 +513,9 @@ export class BancosService {
   }
 
   async shareStatement(dto: CompartilharExtratoDto, companyId: string) {
+    if (dto.bankAccountId)
+      await this.findOneAccount(dto.bankAccountId, companyId);
+
     // Limpa extratos expirados para evitar acúmulo de lixo no banco de dados
     await this.prisma.sharedBankStatement
       .deleteMany({
@@ -574,6 +579,7 @@ export class BancosService {
 
     const where: any = {
       bankAccount: {
+        isRetailCash: false,
         companyId: shared.companyId,
       },
     };
@@ -633,6 +639,7 @@ export class BancosService {
       this.prisma.bankAccount.findMany({
         where: {
           companyId: shared.companyId,
+          isRetailCash: false,
           active: true,
           id: shared.bankAccountId || undefined,
         },

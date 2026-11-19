@@ -223,7 +223,7 @@ export class ManagementReportService {
   ): Promise<ReportTable> {
     const accounts = this.bounded(
       await tx.bankAccount.findMany({
-        where: { companyId, deletedAt: null },
+        where: { companyId, deletedAt: null, isRetailCash: true },
         select: { currentBalance: true },
         take: LIMIT + 1,
       }),
@@ -320,6 +320,7 @@ export class ManagementReportService {
   ): Promise<ReportTable> {
     const accountWhere: Prisma.BankAccountWhereInput = {
       companyId,
+      isRetailCash: true,
       ...(q.account
         ? { name: { contains: q.account, mode: 'insensitive' } }
         : {}),

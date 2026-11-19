@@ -20,6 +20,7 @@ import { SystemFileEntity } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotFoundException } from '@nestjs/common';
 import { assertAccess } from '../autenticacao/access-policy';
+import { RateLimitGuard } from '../autenticacao/guards/rate-limit.guard';
 
 @Controller('files')
 @UseGuards(JwtGuardAutenticacao)
@@ -77,6 +78,7 @@ export class FilesController {
   }
 
   @Post('upload')
+  @UseGuards(RateLimitGuard)
   @UseInterceptors(FileInterceptor('file'))
   async uploadFile(
     @CurrentUser() user: UsuarioAutenticado,

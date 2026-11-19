@@ -8,9 +8,9 @@ datasource db {
 
 enum UserRole {
   SYSTEM_OWNER @map("DONO_SISTEMA")
-  OWNER   @map("PROPRIETARIO")
-  ADMIN   @map("ADMINISTRADOR")
-  MANAGER @map("GERENTE")
+  OWNER        @map("PROPRIETARIO")
+  ADMIN        @map("ADMINISTRADOR")
+  MANAGER      @map("GERENTE")
   USER
 
   @@map("papel_usuario")
@@ -41,14 +41,14 @@ enum PersonStatus {
 }
 
 model Company {
-  id          String  @id @default(uuid())
-  code        String  @unique @default(dbgenerated()) @map("codigo_empresa")
-  tradeName   String  @map("nome_fantasia")
-  companyName String? @map("razao_social")
-  document    String? @map("documento")
-  phone       String? @map("telefone")
-  email       String?
-  isActive    Boolean @default(true) @map("ativo")
+  id                 String             @id @default(uuid())
+  code               String             @unique @default(dbgenerated()) @map("codigo_empresa")
+  tradeName          String             @map("nome_fantasia")
+  companyName        String?            @map("razao_social")
+  document           String?            @map("documento")
+  phone              String?            @map("telefone")
+  email              String?
+  isActive           Boolean            @default(true) @map("ativo")
   subscriptionStatus SubscriptionStatus @default(TRIAL) @map("status_assinatura")
   trialStartsAt      DateTime?          @map("teste_inicia_em")
   trialEndsAt        DateTime?          @map("teste_termina_em")
@@ -58,41 +58,42 @@ model Company {
   createdAt DateTime @default(now()) @map("criado_em")
   updatedAt DateTime @updatedAt @map("atualizado_em")
 
-  users              User[]
-  people             Person[]
-  properties         Property[]
-  contracts          Contract[]
-  receivableAccounts ContaReceber[]
-  payableAccounts    ContaPagar[]
-  scheduleItems       ScheduleItem[]
-  propertyMovements   PropertyMovement[]
-  settings           AppSettings?
-  commercialHistories CommercialHistory[]
-  bankAccounts       BankAccount[]
-  supportTickets     SupportTicket[]
-  sharedBankStatements SharedBankStatement[]
-  systemFiles        SystemFile[]
-  errorLogs          SystemErrorLog[]
-  salesProducts      SalesProduct[]
-  salesPriceCompositionTemplate SalesPriceCompositionTemplate?
-  salesOrders        SalesOrder[]
-  salesCustomers     SalesCustomer[]
-  salesSellers       SalesSeller[]
-  salesCreditAdjustments SalesCreditAdjustment[]
-  salesRefunds SalesRefund[]
-  salesRefundSettlements SalesRefundSettlement[]
-  salesSuppliers    SalesSupplier[]
-  salesProductCategories SalesProductCategory[]
-  salesProductBrands SalesProductBrand[]
-  salesProductUnits SalesProductUnit[]
-  salesProductGrids SalesProductGrid[]
+  users                          User[]
+  people                         Person[]
+  properties                     Property[]
+  contracts                      Contract[]
+  receivableAccounts             ContaReceber[]
+  payableAccounts                ContaPagar[]
+  scheduleItems                  ScheduleItem[]
+  propertyMovements              PropertyMovement[]
+  settings                       AppSettings?
+  commercialHistories            CommercialHistory[]
+  bankAccounts                   BankAccount[]
+  supportTickets                 SupportTicket[]
+  sharedBankStatements           SharedBankStatement[]
+  systemFiles                    SystemFile[]
+  errorLogs                      SystemErrorLog[]
+  salesProducts                  SalesProduct[]
+  salesPriceCompositionTemplate  SalesPriceCompositionTemplate?
+  salesOrders                    SalesOrder[]
+  salesCustomers                 SalesCustomer[]
+  salesCustomerRegistrationLinks SalesCustomerRegistrationLink[]
+  salesSellers                   SalesSeller[]
+  salesCreditAdjustments         SalesCreditAdjustment[]
+  salesRefunds                   SalesRefund[]
+  salesRefundSettlements         SalesRefundSettlement[]
+  salesSuppliers                 SalesSupplier[]
+  salesProductCategories         SalesProductCategory[]
+  salesProductBrands             SalesProductBrand[]
+  salesProductUnits              SalesProductUnit[]
+  salesProductGrids              SalesProductGrid[]
 
   @@map("empresas")
 }
 
 model CommercialHistory {
-  id        String @id @default(uuid())
-  companyId String @map("empresa_id")
+  id        String  @id @default(uuid())
+  companyId String  @map("empresa_id")
   userId    String? @map("usuario_id")
 
   action      String @map("acao")
@@ -127,56 +128,56 @@ model AppSettings {
 }
 
 model SalesProduct {
-  id           String   @id @default(uuid())
-  companyId    String   @map("empresa_id")
-  isGridParent Boolean @default(false) @map("matriz_grade")
-  parentProductId String? @map("produto_grade_id")
-  gridValue String? @map("valor_grade")
-  gridId String? @map("grade_id")
-  grid SalesProductGrid? @relation(fields: [gridId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: Cascade)
-  parentProduct SalesProduct? @relation("SalesGridProducts", fields: [parentProductId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: Cascade)
-  gridChildren SalesProduct[] @relation("SalesGridProducts")
-  name         String   @map("nome")
-  sku          String?  @map("codigo")
-  price        Decimal  @db.Decimal(10, 2) @map("preco")
-  priceComposition Json? @map("composicao_preco")
-  allowDiscount Boolean @default(true) @map("permite_desconto")
-  allowAddition Boolean @default(true) @map("permite_acrescimo")
-  priceHistory SalesProductPriceHistory[]
-  purchaseCost Decimal  @default(0) @db.Decimal(10, 2) @map("custo_compra")
-  additionalCost Decimal @default(0) @db.Decimal(10, 2) @map("custo_adicional")
-  markupMultiplier Decimal @default(1) @db.Decimal(7, 2) @map("markup_multiplicador")
-  promotionalPrice Decimal? @db.Decimal(10, 2) @map("preco_promocional")
-  reference    String?  @map("referencia")
-  barcode      String?  @map("codigo_barras")
-  factoryCode  String?  @map("codigo_fabrica")
-  unit         String   @default("UN") @map("unidade")
-  kind         String   @default("PRODUTO") @map("tipo")
-  description  String?  @map("descricao")
-  showInSale   Boolean  @default(true) @map("mostrar_venda")
-  category     String?  @map("categoria")
-  subcategory  String?  @map("subcategoria")
-  brand        String?  @map("marca")
-  productType  String   @default("REVENDA") @map("tipo_produto")
-  internalNote String?  @map("observacao_interna")
-  stock        Decimal  @default(0) @db.Decimal(12, 3) @map("estoque")
-  reservedStock Decimal @default(0) @db.Decimal(12, 3) @map("estoque_reservado")
-  minimumStock Decimal  @default(0) @db.Decimal(12, 3) @map("estoque_minimo")
-  manageStock  Boolean  @default(false) @map("controlar_estoque")
-  variations   String?  @map("variacoes")
-  inheritGridPrice Boolean @default(true) @map("herdar_preco_grade")
-  commission   Decimal  @default(0) @db.Decimal(5, 2) @map("comissao")
-  commissionEnabled Boolean @default(false) @map("gerar_comissao")
-  commissionType String @default("VENDEDOR") @map("tipo_comissao")
-  commissionRule String @default("PADRAO") @map("regra_comissao")
-  supplierName String?  @map("fornecedor")
-  supplierId   String?  @map("fornecedor_id")
-  supplier SalesSupplier? @relation(fields: [supplierId, companyId], references: [id, companyId])
-  stockMovements SalesStockMovement[]
-  variants SalesProductVariant[]
-  active       Boolean  @default(true) @map("ativo")
-  createdAt    DateTime @default(now()) @map("criado_em")
-  updatedAt    DateTime @updatedAt @map("atualizado_em")
+  id                String                     @id @default(uuid())
+  companyId         String                     @map("empresa_id")
+  isGridParent      Boolean                    @default(false) @map("matriz_grade")
+  parentProductId   String?                    @map("produto_grade_id")
+  gridValue         String?                    @map("valor_grade")
+  gridId            String?                    @map("grade_id")
+  grid              SalesProductGrid?          @relation(fields: [gridId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: Cascade)
+  parentProduct     SalesProduct?              @relation("SalesGridProducts", fields: [parentProductId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: Cascade)
+  gridChildren      SalesProduct[]             @relation("SalesGridProducts")
+  name              String                     @map("nome")
+  sku               String?                    @map("codigo")
+  price             Decimal                    @map("preco") @db.Decimal(10, 2)
+  priceComposition  Json?                      @map("composicao_preco")
+  allowDiscount     Boolean                    @default(true) @map("permite_desconto")
+  allowAddition     Boolean                    @default(true) @map("permite_acrescimo")
+  priceHistory      SalesProductPriceHistory[]
+  purchaseCost      Decimal                    @default(0) @map("custo_compra") @db.Decimal(10, 2)
+  additionalCost    Decimal                    @default(0) @map("custo_adicional") @db.Decimal(10, 2)
+  markupMultiplier  Decimal                    @default(1) @map("markup_multiplicador") @db.Decimal(7, 2)
+  promotionalPrice  Decimal?                   @map("preco_promocional") @db.Decimal(10, 2)
+  reference         String?                    @map("referencia")
+  barcode           String?                    @map("codigo_barras")
+  factoryCode       String?                    @map("codigo_fabrica")
+  unit              String                     @default("UN") @map("unidade")
+  kind              String                     @default("PRODUTO") @map("tipo")
+  description       String?                    @map("descricao")
+  showInSale        Boolean                    @default(true) @map("mostrar_venda")
+  category          String?                    @map("categoria")
+  subcategory       String?                    @map("subcategoria")
+  brand             String?                    @map("marca")
+  productType       String                     @default("REVENDA") @map("tipo_produto")
+  internalNote      String?                    @map("observacao_interna")
+  stock             Decimal                    @default(0) @map("estoque") @db.Decimal(12, 3)
+  reservedStock     Decimal                    @default(0) @map("estoque_reservado") @db.Decimal(12, 3)
+  minimumStock      Decimal                    @default(0) @map("estoque_minimo") @db.Decimal(12, 3)
+  manageStock       Boolean                    @default(false) @map("controlar_estoque")
+  variations        String?                    @map("variacoes")
+  inheritGridPrice  Boolean                    @default(true) @map("herdar_preco_grade")
+  commission        Decimal                    @default(0) @map("comissao") @db.Decimal(5, 2)
+  commissionEnabled Boolean                    @default(false) @map("gerar_comissao")
+  commissionType    String                     @default("VENDEDOR") @map("tipo_comissao")
+  commissionRule    String                     @default("PADRAO") @map("regra_comissao")
+  supplierName      String?                    @map("fornecedor")
+  supplierId        String?                    @map("fornecedor_id")
+  supplier          SalesSupplier?             @relation(fields: [supplierId, companyId], references: [id, companyId])
+  stockMovements    SalesStockMovement[]
+  variants          SalesProductVariant[]
+  active            Boolean                    @default(true) @map("ativo")
+  createdAt         DateTime                   @default(now()) @map("criado_em")
+  updatedAt         DateTime                   @updatedAt @map("atualizado_em")
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
@@ -189,21 +190,21 @@ model SalesProduct {
 }
 
 model SalesSupplier {
-  id        String   @id @default(uuid())
-  code      Int      @unique @default(autoincrement()) @map("codigo")
-  companyId String   @map("empresa_id")
-  name      String   @map("nome")
-  document  String?  @map("documento")
-  contact   String?  @map("contato")
-  phone     String?  @map("telefone")
-  email     String?  @map("email")
-  address   String?  @map("endereco")
-  notes     String?  @map("observacoes")
-  active    Boolean  @default(true) @map("ativo")
-  createdAt DateTime @default(now()) @map("criado_em")
-  updatedAt DateTime @updatedAt @map("atualizado_em")
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  products SalesProduct[]
+  id        String         @id @default(uuid())
+  code      Int            @unique @default(autoincrement()) @map("codigo")
+  companyId String         @map("empresa_id")
+  name      String         @map("nome")
+  document  String?        @map("documento")
+  contact   String?        @map("contato")
+  phone     String?        @map("telefone")
+  email     String?        @map("email")
+  address   String?        @map("endereco")
+  notes     String?        @map("observacoes")
+  active    Boolean        @default(true) @map("ativo")
+  createdAt DateTime       @default(now()) @map("criado_em")
+  updatedAt DateTime       @updatedAt @map("atualizado_em")
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  products  SalesProduct[]
 
   @@unique([id, companyId])
   @@unique([companyId, document])
@@ -212,30 +213,32 @@ model SalesSupplier {
 }
 
 model SalesProductPriceHistory {
-  id String @id @default(dbgenerated("(gen_random_uuid())::text"))
-  companyId String @map("empresa_id")
-  productId String @map("produto_id")
-  actorId String? @map("usuario_id")
-  actorName String? @map("usuario_nome")
-  previous Json? @map("valores_anteriores")
-  current Json @map("valores_atuais")
-  createdAt DateTime @default(now()) @map("criado_em")
-  product SalesProduct @relation(fields: [productId, companyId], references: [id, companyId], onDelete: Cascade)
+  id        String       @id @default(dbgenerated("(gen_random_uuid())::text"))
+  companyId String       @map("empresa_id")
+  productId String       @map("produto_id")
+  actorId   String?      @map("usuario_id")
+  actorName String?      @map("usuario_nome")
+  previous  Json?        @map("valores_anteriores")
+  current   Json         @map("valores_atuais")
+  createdAt DateTime     @default(now()) @map("criado_em")
+  product   SalesProduct @relation(fields: [productId, companyId], references: [id, companyId], onDelete: Cascade)
+
   @@index([companyId, productId, createdAt], map: "vendas_precos_empresa_produto_data_idx")
   @@map("vendas_produtos_historico_precos")
 }
 
 model SalesProductVariant {
-  id String @id @default(uuid())
-  companyId String @map("empresa_id")
-  productId String @map("produto_id")
-  name String @map("nome")
-  barcode String? @map("codigo_barras")
-  price Decimal? @db.Decimal(10, 2) @map("preco")
-  stock Decimal @default(0) @db.Decimal(12, 3) @map("estoque")
-  reservedStock Decimal @default(0) @db.Decimal(12, 3) @map("estoque_reservado")
-  active Boolean @default(true) @map("ativo")
-  product SalesProduct @relation(fields: [productId], references: [id])
+  id            String       @id @default(uuid())
+  companyId     String       @map("empresa_id")
+  productId     String       @map("produto_id")
+  name          String       @map("nome")
+  barcode       String?      @map("codigo_barras")
+  price         Decimal?     @map("preco") @db.Decimal(10, 2)
+  stock         Decimal      @default(0) @map("estoque") @db.Decimal(12, 3)
+  reservedStock Decimal      @default(0) @map("estoque_reservado") @db.Decimal(12, 3)
+  active        Boolean      @default(true) @map("ativo")
+  product       SalesProduct @relation(fields: [productId], references: [id])
+
   @@unique([companyId, barcode])
   @@unique([productId, name])
   @@index([companyId, productId, active])
@@ -258,7 +261,7 @@ model SalesProductCategory {
 model SalesProductUnit {
   id        String   @id @default(uuid())
   companyId String   @map("empresa_id")
-  name      String   @db.VarChar(12) @map("nome")
+  name      String   @map("nome") @db.VarChar(12)
   active    Boolean  @default(true) @map("ativo")
   createdAt DateTime @default(now()) @map("criado_em")
   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -282,66 +285,65 @@ model SalesProductBrand {
 }
 
 model SalesProductGrid {
-  id        String   @id @default(uuid())
-  companyId String   @map("empresa_id")
-  name      String   @map("nome")
-  values    String   @map("valores")
-  active    Boolean  @default(true) @map("ativo")
-  createdAt DateTime @default(now()) @map("criado_em")
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  products SalesProduct[]
+  id        String         @id @default(uuid())
+  companyId String         @map("empresa_id")
+  name      String         @map("nome")
+  values    String         @map("valores")
+  active    Boolean        @default(true) @map("ativo")
+  createdAt DateTime       @default(now()) @map("criado_em")
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  products  SalesProduct[]
 
   @@unique([id, companyId])
-
   @@unique([companyId, name])
   @@index([companyId, active, name])
   @@map("vendas_grades_produtos")
 }
 
 model SalesOrder {
-  id            String   @id @default(uuid())
-  number        Int      @unique @default(autoincrement()) @map("numero")
-  companyId     String   @map("empresa_id")
-  sellerId      String?  @map("vendedor_id")
-  customerId    String?  @map("cliente_id")
-  sellerName    String   @map("vendedor")
-  customerName  String   @map("cliente")
-  saleType      String   @default("VENDA") @map("tipo_venda")
-  items          Json     @map("itens")
-  subtotal       Decimal  @db.Decimal(10, 2) @map("subtotal")
-  discount       Decimal  @default(0) @db.Decimal(10, 2) @map("desconto")
-  addition       Decimal  @default(0) @db.Decimal(10, 2) @map("acrescimo")
-  total          Decimal  @db.Decimal(10, 2) @map("total")
-  paymentMethod String   @map("forma_pagamento")
-  paymentDetails Json?   @map("detalhes_pagamento")
-  status         String   @default("CONCLUIDA") @map("status")
-  stockApplied   Boolean  @default(false) @map("estoque_aplicado")
-  stockReserved  Boolean  @default(false) @map("estoque_reservado")
-  version        Int      @default(1) @map("versao")
-  requestId      String?  @map("requisicao_id")
-  bankAccountId  String?  @map("conta_bancaria_id")
-  commissionTotal Decimal @default(0) @db.Decimal(10, 2) @map("total_comissao")
-  originalOrderId String? @map("venda_original_id")
-  returnedItems Json? @map("itens_devolvidos")
-  returnTotal Decimal @default(0) @db.Decimal(10, 2) @map("total_devolvido")
-  debtOffset Decimal @default(0) @db.Decimal(10, 2) @map("divida_compensada")
-  returnDisposition String? @map("destino_devolucao")
-  returnAdjustments Json? @map("ajustes_devolucao")
-  installments Int @default(1) @map("parcelas")
-  completedAt DateTime? @map("concluido_em")
-  notes          String?  @map("observacoes")
-  createdAt      DateTime @default(now()) @map("criado_em")
+  id                String    @id @default(uuid())
+  number            Int       @unique @default(autoincrement()) @map("numero")
+  companyId         String    @map("empresa_id")
+  sellerId          String?   @map("vendedor_id")
+  customerId        String?   @map("cliente_id")
+  sellerName        String    @map("vendedor")
+  customerName      String    @map("cliente")
+  saleType          String    @default("VENDA") @map("tipo_venda")
+  items             Json      @map("itens")
+  subtotal          Decimal   @map("subtotal") @db.Decimal(10, 2)
+  discount          Decimal   @default(0) @map("desconto") @db.Decimal(10, 2)
+  addition          Decimal   @default(0) @map("acrescimo") @db.Decimal(10, 2)
+  total             Decimal   @map("total") @db.Decimal(10, 2)
+  paymentMethod     String    @map("forma_pagamento")
+  paymentDetails    Json?     @map("detalhes_pagamento")
+  status            String    @default("CONCLUIDA") @map("status")
+  stockApplied      Boolean   @default(false) @map("estoque_aplicado")
+  stockReserved     Boolean   @default(false) @map("estoque_reservado")
+  version           Int       @default(1) @map("versao")
+  requestId         String?   @map("requisicao_id")
+  bankAccountId     String?   @map("conta_bancaria_id")
+  commissionTotal   Decimal   @default(0) @map("total_comissao") @db.Decimal(10, 2)
+  originalOrderId   String?   @map("venda_original_id")
+  returnedItems     Json?     @map("itens_devolvidos")
+  returnTotal       Decimal   @default(0) @map("total_devolvido") @db.Decimal(10, 2)
+  debtOffset        Decimal   @default(0) @map("divida_compensada") @db.Decimal(10, 2)
+  returnDisposition String?   @map("destino_devolucao")
+  returnAdjustments Json?     @map("ajustes_devolucao")
+  installments      Int       @default(1) @map("parcelas")
+  completedAt       DateTime? @map("concluido_em")
+  notes             String?   @map("observacoes")
+  createdAt         DateTime  @default(now()) @map("criado_em")
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  seller  SalesSeller? @relation(fields: [sellerId], references: [id], onDelete: SetNull)
-  customer SalesCustomer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  receivables ContaReceber[]
-  events SalesOrderEvent[]
-  originalOrder SalesOrder? @relation("SalesReturns", fields: [originalOrderId], references: [id])
-  returns SalesOrder[] @relation("SalesReturns")
-  returnPayables ContaPagar[]
+  company           Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  seller            SalesSeller?            @relation(fields: [sellerId], references: [id], onDelete: SetNull)
+  customer          SalesCustomer?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  receivables       ContaReceber[]
+  events            SalesOrderEvent[]
+  originalOrder     SalesOrder?             @relation("SalesReturns", fields: [originalOrderId], references: [id])
+  returns           SalesOrder[]            @relation("SalesReturns")
+  returnPayables    ContaPagar[]
   creditAdjustments SalesCreditAdjustment[]
-  refunds SalesRefund[]
+  refunds           SalesRefund[]
 
   @@unique([companyId, requestId])
   @@index([companyId, originalOrderId])
@@ -365,72 +367,75 @@ model SalesPriceCompositionTemplate {
   companyId String   @id @map("empresa_id")
   template  Json     @map("modelo")
   updatedAt DateTime @updatedAt @map("atualizado_em")
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@map("vendas_modelo_composicao_preco")
 }
 
 model SalesOrderEvent {
-  id String @id @default(uuid())
-  orderId String @map("venda_id")
-  action String @map("acao")
-  details Json @map("detalhes")
-  createdAt DateTime @default(now()) @map("criado_em")
-  order SalesOrder @relation(fields: [orderId], references: [id])
+  id        String     @id @default(uuid())
+  orderId   String     @map("venda_id")
+  action    String     @map("acao")
+  details   Json       @map("detalhes")
+  createdAt DateTime   @default(now()) @map("criado_em")
+  order     SalesOrder @relation(fields: [orderId], references: [id])
+
   @@index([orderId, createdAt])
   @@map("vendas_eventos")
 }
 
 model SalesStockMovement {
-  id String @id @default(uuid())
-  companyId String @map("empresa_id")
-  productId String @map("produto_id")
-  stockChange Decimal @db.Decimal(12, 3) @map("variacao_estoque")
-  reservedChange Decimal @db.Decimal(12, 3) @map("variacao_reserva")
-  reason String @map("motivo")
-  createdAt DateTime @default(now()) @map("criado_em")
-  product SalesProduct @relation(fields: [productId], references: [id])
+  id             String       @id @default(uuid())
+  companyId      String       @map("empresa_id")
+  productId      String       @map("produto_id")
+  stockChange    Decimal      @map("variacao_estoque") @db.Decimal(12, 3)
+  reservedChange Decimal      @map("variacao_reserva") @db.Decimal(12, 3)
+  reason         String       @map("motivo")
+  createdAt      DateTime     @default(now()) @map("criado_em")
+  product        SalesProduct @relation(fields: [productId], references: [id])
+
   @@index([companyId, productId, createdAt])
   @@map("vendas_movimentos_estoque")
 }
 
 model SalesCustomer {
-  id           String   @id @default(uuid())
-  code         Int      @unique @default(autoincrement()) @map("codigo")
-  companyId    String   @map("empresa_id")
-  personType   String   @default("INDIVIDUAL") @map("tipo_pessoa")
-  name         String   @map("nome")
-  referenceOnly Boolean @default(false) @map("apenas_referencia")
-  alias        String?  @map("apelido_fantasia")
-  document     String?  @map("documento")
-  identityNumber String? @map("rg")
-  issuingAuthority String? @map("orgao_expedidor")
-  birthDate    DateTime? @map("data_nascimento") @db.Date
-  sex          String?  @map("sexo")
-  email        String?  @map("email")
-  phone        String?  @map("telefone")
-  phone2       String?  @map("telefone_2")
-  zipCode      String?  @map("cep")
-  address      String?  @map("endereco")
-  number       String?  @map("numero")
-  complement   String?  @map("complemento")
-  neighborhood String?  @map("bairro")
-  city         String?  @map("cidade")
-  state        String?  @map("uf")
-  notes        String?  @map("observacoes")
-  creditLimit  Decimal  @default(0) @map("limite_credito") @db.Decimal(10, 2)
-  creditDays   Int?     @map("prazo_crediario")
-  creditBlocked Boolean @default(false) @map("crediario_bloqueado")
-  active       Boolean  @default(true) @map("ativo")
-  isSystem     Boolean  @default(false) @map("sistema")
-  systemKey    String?  @map("chave_sistema")
-  createdAt    DateTime @default(now()) @map("criado_em")
-  updatedAt    DateTime @updatedAt @map("atualizado_em")
+  id               String    @id @default(uuid())
+  code             Int       @unique @default(autoincrement()) @map("codigo")
+  companyId        String    @map("empresa_id")
+  personType       String    @default("INDIVIDUAL") @map("tipo_pessoa")
+  name             String    @map("nome")
+  referenceOnly    Boolean   @default(false) @map("apenas_referencia")
+  alias            String?   @map("apelido_fantasia")
+  document         String?   @map("documento")
+  identityNumber   String?   @map("rg")
+  issuingAuthority String?   @map("orgao_expedidor")
+  birthDate        DateTime? @map("data_nascimento") @db.Date
+  sex              String?   @map("sexo")
+  email            String?   @map("email")
+  phone            String?   @map("telefone")
+  phone2           String?   @map("telefone_2")
+  zipCode          String?   @map("cep")
+  address          String?   @map("endereco")
+  number           String?   @map("numero")
+  complement       String?   @map("complemento")
+  neighborhood     String?   @map("bairro")
+  city             String?   @map("cidade")
+  state            String?   @map("uf")
+  notes            String?   @map("observacoes")
+  creditLimit      Decimal   @default(0) @map("limite_credito") @db.Decimal(10, 2)
+  creditDays       Int?      @map("prazo_crediario")
+  creditBlocked    Boolean   @default(false) @map("crediario_bloqueado")
+  active           Boolean   @default(true) @map("ativo")
+  isSystem         Boolean   @default(false) @map("sistema")
+  systemKey        String?   @map("chave_sistema")
+  createdAt        DateTime  @default(now()) @map("criado_em")
+  updatedAt        DateTime  @updatedAt @map("atualizado_em")
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  orders  SalesOrder[]
-  credits SalesCustomerCredit[]
+  company           Company                        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  orders            SalesOrder[]
+  credits           SalesCustomerCredit[]
   creditAdjustments SalesCreditAdjustment[]
+  registrationLink  SalesCustomerRegistrationLink?
 
   @@unique([companyId, document])
   @@unique([companyId, systemKey])
@@ -438,16 +443,34 @@ model SalesCustomer {
   @@map("vendas_clientes")
 }
 
+model SalesCustomerRegistrationLink {
+  id                String    @id @default(uuid())
+  tokenHash         String    @unique(map: "vendas_links_cadastro_cliente_token_hash_key") @map("token_hash")
+  companyId         String    @map("empresa_id")
+  createdCustomerId String?   @unique(map: "vendas_links_cadastro_cliente_cliente_criado_key") @map("cliente_criado_id")
+  expiresAt         DateTime  @map("expira_em")
+  usedAt            DateTime? @map("usado_em")
+  consentedAt       DateTime? @map("consentido_em")
+  createdAt         DateTime  @default(now()) @map("criado_em")
+
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdCustomer SalesCustomer? @relation(fields: [createdCustomerId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, expiresAt], map: "vendas_links_cadastro_cliente_empresa_expira_idx")
+  @@map("vendas_links_cadastro_cliente")
+}
+
 model SalesCustomerCredit {
-  id String @id @default(uuid())
-  companyId String @map("empresa_id")
-  customerId String @map("cliente_id")
-  orderId String @map("venda_id")
-  amount Decimal @db.Decimal(10, 2) @map("valor")
-  reason String @map("motivo")
-  reversedAt DateTime? @map("estornado_em")
-  createdAt DateTime @default(now()) @map("criado_em")
-  customer SalesCustomer @relation(fields: [customerId], references: [id])
+  id         String        @id @default(uuid())
+  companyId  String        @map("empresa_id")
+  customerId String        @map("cliente_id")
+  orderId    String        @map("venda_id")
+  amount     Decimal       @map("valor") @db.Decimal(10, 2)
+  reason     String        @map("motivo")
+  reversedAt DateTime?     @map("estornado_em")
+  createdAt  DateTime      @default(now()) @map("criado_em")
+  customer   SalesCustomer @relation(fields: [customerId], references: [id])
+
   @@index([companyId, customerId, reversedAt])
   @@index([orderId])
   @@map("vendas_creditos_clientes")
@@ -455,90 +478,93 @@ model SalesCustomerCredit {
 
 // Estruturas complementares de Confecções; sem alteração das tabelas financeiras.
 model SalesCreditAdjustment {
-  id String @id @default(uuid())
-  companyId String @map("empresa_id")
-  customerId String @map("cliente_id")
-  orderId String? @map("venda_id")
-  amount Decimal @db.Decimal(10, 2) @map("valor")
-  reason String @map("motivo")
-  actorId String @map("usuario_id")
-  requestId String @map("requisicao_id")
-  createdAt DateTime @default(now()) @map("criado_em")
-  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  customer SalesCustomer @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  order SalesOrder? @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  id         String        @id @default(uuid())
+  companyId  String        @map("empresa_id")
+  customerId String        @map("cliente_id")
+  orderId    String?       @map("venda_id")
+  amount     Decimal       @map("valor") @db.Decimal(10, 2)
+  reason     String        @map("motivo")
+  actorId    String        @map("usuario_id")
+  requestId  String        @map("requisicao_id")
+  createdAt  DateTime      @default(now()) @map("criado_em")
+  company    Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  customer   SalesCustomer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  order      SalesOrder?   @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  actor      User          @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
   @@unique([companyId, requestId])
   @@index([companyId, customerId, createdAt])
   @@map("vendas_ajustes_credito")
 }
 
 model SalesRefund {
-  id String @id @default(uuid())
-  companyId String @map("empresa_id")
-  orderId String @map("venda_id")
-  transactionId String @unique @map("transacao_id")
-  amount Decimal @db.Decimal(10, 2) @map("valor")
-  settledAmount Decimal @default(0) @db.Decimal(10, 2) @map("valor_liquidado")
-  actorId String? @map("usuario_id")
-  reason String @map("motivo")
-  createdAt DateTime @default(now()) @map("criado_em")
-  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  order SalesOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  transaction BankTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
-  actor User? @relation(fields: [actorId], references: [id], onDelete: Restrict)
-  settlements SalesRefundSettlement[]
+  id            String                  @id @default(uuid())
+  companyId     String                  @map("empresa_id")
+  orderId       String                  @map("venda_id")
+  transactionId String                  @unique @map("transacao_id")
+  amount        Decimal                 @map("valor") @db.Decimal(10, 2)
+  settledAmount Decimal                 @default(0) @map("valor_liquidado") @db.Decimal(10, 2)
+  actorId       String?                 @map("usuario_id")
+  reason        String                  @map("motivo")
+  createdAt     DateTime                @default(now()) @map("criado_em")
+  company       Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  order         SalesOrder              @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  transaction   BankTransaction         @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  actor         User?                   @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  settlements   SalesRefundSettlement[]
+
   @@index([companyId, orderId])
   @@map("vendas_reembolsos")
 }
 
 model SalesRefundSettlement {
-  id String @id @default(uuid())
-  companyId String @map("empresa_id")
-  refundId String @map("reembolso_id")
-  amount Decimal @db.Decimal(10, 2) @map("valor")
-  disposition String @map("destino")
-  actorId String @map("usuario_id")
-  reason String @map("motivo")
-  requestId String @map("requisicao_id")
-  createdAt DateTime @default(now()) @map("criado_em")
-  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  refund SalesRefund @relation(fields: [refundId], references: [id], onDelete: Restrict)
-  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  id          String      @id @default(uuid())
+  companyId   String      @map("empresa_id")
+  refundId    String      @map("reembolso_id")
+  amount      Decimal     @map("valor") @db.Decimal(10, 2)
+  disposition String      @map("destino")
+  actorId     String      @map("usuario_id")
+  reason      String      @map("motivo")
+  requestId   String      @map("requisicao_id")
+  createdAt   DateTime    @default(now()) @map("criado_em")
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  refund      SalesRefund @relation(fields: [refundId], references: [id], onDelete: Restrict)
+  actor       User        @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
   @@unique([companyId, requestId])
   @@index([companyId, refundId])
   @@map("vendas_liquidacoes_reembolso")
 }
 
 model SalesSeller {
-  personType String @default("INDIVIDUAL") @map("tipo_pessoa")
-  alias String? @map("nome_fantasia")
-  identityNumber String? @map("identidade")
-  issuingAuthority String? @map("orgao_emissor")
-  birthDate String? @map("data_nascimento")
-  sex String? @map("sexo")
-  phone2 String? @map("telefone_secundario")
-  zipCode String? @map("cep")
-  address String? @map("endereco")
-  number String? @map("numero")
-  complement String? @map("complemento")
-  neighborhood String? @map("bairro")
-  city String? @map("cidade")
-  state String? @map("uf")
-  notes String? @map("observacoes")
-  id          String   @id @default(uuid())
-  code        Int      @unique @default(autoincrement()) @map("codigo")
-  companyId   String   @map("empresa_id")
-  name        String   @map("nome")
-  document    String?  @map("cpf")
-  phone       String?  @map("telefone")
-  email       String?  @map("email")
-  commission  Decimal  @default(0) @map("comissao") @db.Decimal(5, 2)
-  active      Boolean  @default(true) @map("ativo")
-  createdAt   DateTime @default(now()) @map("criado_em")
-  updatedAt   DateTime @updatedAt @map("atualizado_em")
+  personType       String   @default("INDIVIDUAL") @map("tipo_pessoa")
+  alias            String?  @map("nome_fantasia")
+  identityNumber   String?  @map("identidade")
+  issuingAuthority String?  @map("orgao_emissor")
+  birthDate        String?  @map("data_nascimento")
+  sex              String?  @map("sexo")
+  phone2           String?  @map("telefone_secundario")
+  zipCode          String?  @map("cep")
+  address          String?  @map("endereco")
+  number           String?  @map("numero")
+  complement       String?  @map("complemento")
+  neighborhood     String?  @map("bairro")
+  city             String?  @map("cidade")
+  state            String?  @map("uf")
+  notes            String?  @map("observacoes")
+  id               String   @id @default(uuid())
+  code             Int      @unique @default(autoincrement()) @map("codigo")
+  companyId        String   @map("empresa_id")
+  name             String   @map("nome")
+  document         String?  @map("cpf")
+  phone            String?  @map("telefone")
+  email            String?  @map("email")
+  commission       Decimal  @default(0) @map("comissao") @db.Decimal(5, 2)
+  active           Boolean  @default(true) @map("ativo")
+  createdAt        DateTime @default(now()) @map("criado_em")
+  updatedAt        DateTime @updatedAt @map("atualizado_em")
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   orders  SalesOrder[]
 
   @@unique([companyId, document])
@@ -547,33 +573,33 @@ model SalesSeller {
 }
 
 model User {
-  id           String @id @default(uuid())
-  companyId    String @map("empresa_id")
-  name         String @map("nome")
-  email        String? @unique
-  emailLoginEnabled Boolean @default(true) @map("login_email_habilitado")
-  userLoginEnabled Boolean @default(true) @map("login_usuario_habilitado")
-  username     String? @map("usuario_login")
-  maxConcurrentSessions Int @default(1) @map("limite_sessoes")
-  actionPermissions Json? @map("permissoes_acoes")
-  passwordHash String @map("senha_hash")
+  id                    String  @id @default(uuid())
+  companyId             String  @map("empresa_id")
+  name                  String  @map("nome")
+  email                 String? @unique
+  emailLoginEnabled     Boolean @default(true) @map("login_email_habilitado")
+  userLoginEnabled      Boolean @default(true) @map("login_usuario_habilitado")
+  username              String? @map("usuario_login")
+  maxConcurrentSessions Int     @default(1) @map("limite_sessoes")
+  actionPermissions     Json?   @map("permissoes_acoes")
+  passwordHash          String  @map("senha_hash")
 
-  role     UserRole @default(USER) @map("papel")
-  isActive Boolean  @default(true) @map("ativo")
-  permissions Json? @map("permissoes")
-  activeSessionId String? @map("sessao_ativa_id")
-  passwordResetTokenHash String? @map("token_recuperacao_senha_hash")
+  role                   UserRole  @default(USER) @map("papel")
+  isActive               Boolean   @default(true) @map("ativo")
+  permissions            Json?     @map("permissoes")
+  activeSessionId        String?   @map("sessao_ativa_id")
+  passwordResetTokenHash String?   @map("token_recuperacao_senha_hash")
   passwordResetExpiresAt DateTime? @map("token_recuperacao_senha_expira_em")
   lastLoginAt            DateTime? @map("ultimo_login_em")
 
   createdAt DateTime @default(now()) @map("criado_em")
   updatedAt DateTime @updatedAt @map("atualizado_em")
 
-  company Company @relation(fields: [companyId], references: [id])
-  sessions UserSession[]
-  supportTickets SupportTicket[]
+  company                Company                 @relation(fields: [companyId], references: [id])
+  sessions               UserSession[]
+  supportTickets         SupportTicket[]
   salesCreditAdjustments SalesCreditAdjustment[]
-  salesRefunds SalesRefund[]
+  salesRefunds           SalesRefund[]
   salesRefundSettlements SalesRefundSettlement[]
 
   @@unique([companyId, username])
@@ -582,18 +608,19 @@ model User {
 }
 
 model UserSession {
-  id String @id @default(uuid())
-  sessionId String @unique @map("sessao_id")
-  userId String @map("usuario_id")
-  companyId String @map("empresa_id")
-  createdAt DateTime @default(now()) @map("criado_em")
-  lastSeenAt DateTime @default(now()) @map("ultima_atividade_em")
-  expiresAt DateTime @map("expira_em")
-  revokedAt DateTime? @map("encerrado_em")
-  reason String? @map("motivo")
-  revokedBy String? @map("responsavel_id")
-  device String? @map("dispositivo")
-  user User @relation(fields: [userId, companyId], references: [id, companyId], onDelete: Restrict, map: "usuarios_sessoes_usuario_empresa_fk")
+  id         String    @id @default(uuid())
+  sessionId  String    @unique @map("sessao_id")
+  userId     String    @map("usuario_id")
+  companyId  String    @map("empresa_id")
+  createdAt  DateTime  @default(now()) @map("criado_em")
+  lastSeenAt DateTime  @default(now()) @map("ultima_atividade_em")
+  expiresAt  DateTime  @map("expira_em")
+  revokedAt  DateTime? @map("encerrado_em")
+  reason     String?   @map("motivo")
+  revokedBy  String?   @map("responsavel_id")
+  device     String?   @map("dispositivo")
+  user       User      @relation(fields: [userId, companyId], references: [id, companyId], onDelete: Restrict, map: "usuarios_sessoes_usuario_empresa_fk")
+
   @@index([companyId, userId, revokedAt, createdAt], map: "usuarios_sessoes_empresa_usuario_ativas_idx")
   @@map("usuarios_sessoes")
 }
@@ -630,7 +657,7 @@ model Person {
   tenantContracts    Contract[]     @relation("ContractTenant")
   receivableAccounts ContaReceber[]
   payableAccounts    ContaPagar[]
-  scheduleItems       ScheduleItem[]
+  scheduleItems      ScheduleItem[]
 
   @@index([companyId])
   @@index([document])
@@ -642,24 +669,24 @@ model Property {
   companyId String  @map("empresa_id")
   ownerId   String? @map("proprietario_id")
 
-  title       String   @map("titulo")
-  code        String?  @map("codigo")
-  type        String?  @map("tipo")
-  purpose     String?  @map("finalidade")
-  assetCategory String? @map("categoria_ativo")
-  brand       String?  @map("marca")
-  model       String?  @map("modelo")
-  serialNumber String? @map("numero_serie")
-  licensePlate String? @map("placa")
-  manufactureYear Int? @map("ano_fabricacao")
-  condition   String? @map("condicao")
-  patrimonyCode String? @map("codigo_patrimonial")
-  rentalValue Decimal? @map("valor_aluguel") @db.Decimal(10, 2)
-  operationalStatus String @default("AVAILABLE") @map("status_operacional")
-  managementMode String @default("OWNED") @map("modo_gestao")
+  title                       String   @map("titulo")
+  code                        String?  @map("codigo")
+  type                        String?  @map("tipo")
+  purpose                     String?  @map("finalidade")
+  assetCategory               String?  @map("categoria_ativo")
+  brand                       String?  @map("marca")
+  model                       String?  @map("modelo")
+  serialNumber                String?  @map("numero_serie")
+  licensePlate                String?  @map("placa")
+  manufactureYear             Int?     @map("ano_fabricacao")
+  condition                   String?  @map("condicao")
+  patrimonyCode               String?  @map("codigo_patrimonial")
+  rentalValue                 Decimal? @map("valor_aluguel") @db.Decimal(10, 2)
+  operationalStatus           String   @default("AVAILABLE") @map("status_operacional")
+  managementMode              String   @default("OWNED") @map("modo_gestao")
   administrationFeePercentage Decimal? @map("taxa_administracao_percentual") @db.Decimal(5, 2)
-  ownerPayoutDay Int? @map("dia_repasse_proprietario")
-  autoCreateOwnerPayable Boolean @default(true) @map("gerar_repasse_proprietario")
+  ownerPayoutDay              Int?     @map("dia_repasse_proprietario")
+  autoCreateOwnerPayable      Boolean  @default(true) @map("gerar_repasse_proprietario")
 
   zipCode    String? @map("cep")
   city       String? @map("cidade")
@@ -681,12 +708,12 @@ model Property {
   createdAt DateTime @default(now()) @map("criado_em")
   updatedAt DateTime @updatedAt @map("atualizado_em")
 
-  company   Company    @relation(fields: [companyId], references: [id])
-  owner     Person?    @relation(fields: [ownerId], references: [id])
-  contracts Contract[]
-  movements PropertyMovement[]
+  company         Company            @relation(fields: [companyId], references: [id])
+  owner           Person?            @relation(fields: [ownerId], references: [id])
+  contracts       Contract[]
+  movements       PropertyMovement[]
   payableAccounts ContaPagar[]
-  scheduleItems ScheduleItem[]
+  scheduleItems   ScheduleItem[]
 
   @@index([companyId])
   @@index([ownerId])
@@ -694,8 +721,8 @@ model Property {
 }
 
 model PropertyMovement {
-  id        String @id @default(uuid())
-  companyId String @map("empresa_id")
+  id         String @id @default(uuid())
+  companyId  String @map("empresa_id")
   propertyId String @map("imovel_id")
 
   propertyName String @map("nome_imovel")
@@ -758,9 +785,9 @@ model Contract {
   renewedAt      DateTime? @map("renovado_em")
   renewalHistory Json?     @map("historico_renovacoes")
 
-  finishedAt   DateTime? @map("finalizado_em")
-  finishReason String?   @map("motivo_finalizacao")
-  signedContractPdf String? @map("contrato_assinado_pdf")
+  finishedAt        DateTime? @map("finalizado_em")
+  finishReason      String?   @map("motivo_finalizacao")
+  signedContractPdf String?   @map("contrato_assinado_pdf")
 
   createdAt DateTime @default(now()) @map("criado_em")
   updatedAt DateTime @updatedAt @map("atualizado_em")
@@ -798,13 +825,13 @@ enum PaymentMethod {
 }
 
 model ContaReceber {
-  id         String  @id @default(uuid())
-  companyId  String  @map("empresa_id")
-  contractId String? @map("contrato_id")
-  tenantId   String? @map("inquilino_id")
-  salesOrderId String? @map("venda_id")
-  salesCustomerId String? @map("cliente_venda_id")
-  cancelledAt DateTime? @map("cancelado_em")
+  id              String    @id @default(uuid())
+  companyId       String    @map("empresa_id")
+  contractId      String?   @map("contrato_id")
+  tenantId        String?   @map("inquilino_id")
+  salesOrderId    String?   @map("venda_id")
+  salesCustomerId String?   @map("cliente_venda_id")
+  cancelledAt     DateTime? @map("cancelado_em")
 
   propertyName String @map("imovel")
   tenantName   String @map("inquilino")
@@ -823,11 +850,11 @@ model ContaReceber {
   createdAt DateTime @default(now()) @map("criado_em")
   updatedAt DateTime @updatedAt @map("atualizado_em")
 
-  company  Company             @relation(fields: [companyId], references: [id])
-  contract Contract?           @relation(fields: [contractId], references: [id])
-  tenant   Person?             @relation(fields: [tenantId], references: [id])
-  payments PagamentoRecebido[]
-  salesOrder SalesOrder? @relation(fields: [salesOrderId], references: [id])
+  company    Company             @relation(fields: [companyId], references: [id])
+  contract   Contract?           @relation(fields: [contractId], references: [id])
+  tenant     Person?             @relation(fields: [tenantId], references: [id])
+  payments   PagamentoRecebido[]
+  salesOrder SalesOrder?         @relation(fields: [salesOrderId], references: [id])
 
   @@index([companyId, salesCustomerId, cancelledAt])
   @@index([salesOrderId])
@@ -861,13 +888,13 @@ model PagamentoRecebido {
 }
 
 model ContaPagar {
-  id         String  @id @default(uuid())
-  companyId  String  @map("empresa_id")
-  salesReturnId String? @map("devolucao_venda_id")
-  cancelledAt DateTime? @map("cancelado_em")
-  personId   String? @map("pessoa_id")
-  propertyId String? @map("imovel_id")
-  personName String? @map("pessoa")
+  id            String    @id @default(uuid())
+  companyId     String    @map("empresa_id")
+  salesReturnId String?   @map("devolucao_venda_id")
+  cancelledAt   DateTime? @map("cancelado_em")
+  personId      String?   @map("pessoa_id")
+  propertyId    String?   @map("imovel_id")
+  personName    String?   @map("pessoa")
 
   description String                 @map("descricao")
   category    String?                @map("categoria")
@@ -885,11 +912,11 @@ model ContaPagar {
   createdAt DateTime @default(now()) @map("criado_em")
   updatedAt DateTime @updatedAt @map("atualizado_em")
 
-  company  Company              @relation(fields: [companyId], references: [id])
-  person   Person?              @relation(fields: [personId], references: [id])
-  property Property?            @relation(fields: [propertyId], references: [id], onDelete: SetNull)
-  payments PagamentoRealizado[]
-  salesReturn SalesOrder? @relation(fields: [salesReturnId], references: [id])
+  company     Company              @relation(fields: [companyId], references: [id])
+  person      Person?              @relation(fields: [personId], references: [id])
+  property    Property?            @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  payments    PagamentoRealizado[]
+  salesReturn SalesOrder?          @relation(fields: [salesReturnId], references: [id])
 
   @@index([companyId, salesReturnId, cancelledAt])
   @@index([companyId])
@@ -925,19 +952,19 @@ model ScheduleItem {
   id        String @id @default(uuid())
   companyId String @map("empresa_id")
 
-  title           String @map("titulo")
-  personId        String? @map("pessoa_id")
-  propertyId      String? @map("imovel_id")
-  customerName    String @default("") @map("cliente")
-  propertyName    String @default("") @map("imovel")
+  title           String   @map("titulo")
+  personId        String?  @map("pessoa_id")
+  propertyId      String?  @map("imovel_id")
+  customerName    String   @default("") @map("cliente")
+  propertyName    String   @default("") @map("imovel")
   date            DateTime @map("data")
-  time            String @map("horario")
-  type            String @map("tipo")
-  status          String @default("scheduled") @map("status")
-  priority        String @default("medium") @map("prioridade")
-  responsibleName String @map("responsavel")
-  reminder        String @map("lembrete")
-  notes           String? @map("observacoes")
+  time            String   @map("horario")
+  type            String   @map("tipo")
+  status          String   @default("scheduled") @map("status")
+  priority        String   @default("medium") @map("prioridade")
+  responsibleName String   @map("responsavel")
+  reminder        String   @map("lembrete")
+  notes           String?  @map("observacoes")
 
   createdAt DateTime @default(now()) @map("criado_em")
   updatedAt DateTime @updatedAt @map("atualizado_em")
@@ -1003,6 +1030,7 @@ enum BankTransactionStatus {
 
 model BankAccount {
   id             String          @id @default(uuid())
+  isRetailCash   Boolean         @default(false) @map("caixa_varejo")
   companyId      String          @map("empresa_id")
   name           String          @map("nome")
   type           BankAccountType @default(CHECKING) @map("tipo")
@@ -1016,36 +1044,36 @@ model BankAccount {
   currency       String          @default("BRL") @map("moeda")
   active         Boolean         @default(true) @map("ativo")
   deletedAt      DateTime?       @map("deletado_em")
-  
-  createdAt      DateTime        @default(now()) @map("criado_em")
-  updatedAt      DateTime        @updatedAt @map("atualizado_em")
 
-  company        Company           @relation(fields: [companyId], references: [id])
-  transactions   BankTransaction[]
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+
+  company      Company           @relation(fields: [companyId], references: [id])
+  transactions BankTransaction[]
 
   @@index([companyId])
   @@map("contas_bancarias")
 }
 
 model BankTransaction {
-  id            String                @id @default(uuid())
-  bankAccountId String                @map("conta_bancaria_id")
-  type          BankTransactionType   @map("tipo")
-  status        BankTransactionStatus @default(PENDING) @map("status")
-  amount        Decimal               @map("valor") @db.Decimal(10, 2)
-  fee           Decimal               @default(0) @map("taxa") @db.Decimal(10, 2)
-  description   String                @map("descricao")
-  competenceDate DateTime             @map("data_competencia")
-  paymentDate   DateTime?             @map("data_pagamento")
-  category      String?               @map("categoria")
-  referenceType String?               @map("tipo_referencia")
-  referenceId   String?               @map("id_referencia")
-  transferGroupId String?             @map("grupo_transferencia_id")
-  
-  createdAt     DateTime              @default(now()) @map("criado_em")
-  updatedAt     DateTime              @updatedAt @map("atualizado_em")
+  id              String                @id @default(uuid())
+  bankAccountId   String                @map("conta_bancaria_id")
+  type            BankTransactionType   @map("tipo")
+  status          BankTransactionStatus @default(PENDING) @map("status")
+  amount          Decimal               @map("valor") @db.Decimal(10, 2)
+  fee             Decimal               @default(0) @map("taxa") @db.Decimal(10, 2)
+  description     String                @map("descricao")
+  competenceDate  DateTime              @map("data_competencia")
+  paymentDate     DateTime?             @map("data_pagamento")
+  category        String?               @map("categoria")
+  referenceType   String?               @map("tipo_referencia")
+  referenceId     String?               @map("id_referencia")
+  transferGroupId String?               @map("grupo_transferencia_id")
 
-  bankAccount   BankAccount           @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
+
+  bankAccount BankAccount  @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
   salesRefund SalesRefund?
 
   @@index([bankAccountId])
@@ -1073,22 +1101,22 @@ model SupportTicket {
 }
 
 model SharedBankStatement {
-  id                String    @id @default(uuid())
-  companyId         String    @map("empresa_id")
-  bankAccountId     String?   @map("conta_bancaria_id")
-  documentType      String?   @default("EXTRATO_BANCARIO") @map("tipo_documento")
-  tenantId          String?   @map("cliente_id")
-  filterStartDate   String?   @map("data_inicio")
-  filterEndDate     String?   @map("data_fim")
-  filterType        String?   @map("tipo")
-  filterDue         String?   @map("filtro_vencimento")
-  filterStatus      String?   @map("status")
-  filterCategory    String?   @map("categoria")
-  filterDescription String?   @map("descricao")
-  expiresAt         DateTime  @map("expira_em")
-  createdAt         DateTime  @default(now()) @map("criado_em")
+  id                String   @id @default(uuid())
+  companyId         String   @map("empresa_id")
+  bankAccountId     String?  @map("conta_bancaria_id")
+  documentType      String?  @default("EXTRATO_BANCARIO") @map("tipo_documento")
+  tenantId          String?  @map("cliente_id")
+  filterStartDate   String?  @map("data_inicio")
+  filterEndDate     String?  @map("data_fim")
+  filterType        String?  @map("tipo")
+  filterDue         String?  @map("filtro_vencimento")
+  filterStatus      String?  @map("status")
+  filterCategory    String?  @map("categoria")
+  filterDescription String?  @map("descricao")
+  expiresAt         DateTime @map("expira_em")
+  createdAt         DateTime @default(now()) @map("criado_em")
 
-  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@map("impressos_compartilhados")
@@ -1110,19 +1138,19 @@ enum SystemFileEntity {
 }
 
 model SystemFile {
-  id         String           @id @default(uuid())
-  companyId  String           @map("empresa_id")
-  entityType SystemFileEntity @map("tipo_entidade")
-  entityId   String           @map("entidade_id")
-  url        String           @map("url")
-  type       SystemFileType   @map("tipo_arquivo")
-  size       Int?             @map("tamanho")
-  originalName String?        @map("nome_original")
+  id           String           @id @default(uuid())
+  companyId    String           @map("empresa_id")
+  entityType   SystemFileEntity @map("tipo_entidade")
+  entityId     String           @map("entidade_id")
+  url          String           @map("url")
+  type         SystemFileType   @map("tipo_arquivo")
+  size         Int?             @map("tamanho")
+  originalName String?          @map("nome_original")
 
-  createdAt  DateTime         @default(now()) @map("criado_em")
-  updatedAt  DateTime         @updatedAt @map("atualizado_em")
+  createdAt DateTime @default(now()) @map("criado_em")
+  updatedAt DateTime @updatedAt @map("atualizado_em")
 
-  company    Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@index([entityType, entityId])
@@ -1144,7 +1172,7 @@ model SystemErrorLog {
   ipAddress      String?  @map("ip")
   createdAt      DateTime @default(now()) @map("criado_em")
 
-  company        Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
   @@index([createdAt])

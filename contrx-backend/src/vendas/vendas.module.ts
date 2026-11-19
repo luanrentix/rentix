@@ -13,6 +13,7 @@ import { VendasController } from './vendas.controller';
 import { VendasService } from './vendas.service';
 import { ConfectionsDashboardService } from './confections-dashboard.service';
 import { ConfectionsDashboardController } from './confections-dashboard.controller';
+import { ClientesCadastroPublicoController } from './clientes-cadastro-publico.controller';
 
 @Module({
   imports: [PrismaModule],
@@ -23,6 +24,7 @@ import { ConfectionsDashboardController } from './confections-dashboard.controll
     SalesCardsController,
     SalesCreditsController,
     ConfectionsDashboardController,
+    ClientesCadastroPublicoController,
   ],
   providers: [
     ManagementReportService,

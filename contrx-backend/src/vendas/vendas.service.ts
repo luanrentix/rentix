@@ -1,3 +1,4 @@
+import { ensureRetailCashAccount } from './retail-cash-account';
 import { scalarText } from '../common/text-normalization';
 import { orderListFilters } from './order-list-filter';
 import { validateCardPayments } from './card-payment';
@@ -18,10 +19,11 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { PaymentMethod, Prisma } from '@prisma/client';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AtualizarProdutoVendaDto } from './dto/atualizar-produto-venda.dto';
 import { AtualizarClienteVendaDto } from './dto/atualizar-cliente-venda.dto';
+import { EnviarCadastroClientePublicoDto } from './dto/enviar-cadastro-cliente-publico.dto';
 import { CriarClienteVendaDto } from './dto/criar-cliente-venda.dto';
 import { CriarProdutoVendaDto } from './dto/criar-produto-venda.dto';
 import { CriarVendedorVendaDto } from './dto/criar-vendedor-venda.dto';
@@ -92,24 +94,7 @@ export class VendasService {
     await this.ensureConfectionery(companyId);
     return this.prisma.$transaction(async (tx) => {
       await this.lockCompany(tx, companyId);
-      const account = await tx.bankAccount.findFirst({
-        where: {
-          companyId,
-          name: 'VENDAS - PADRAO AUTOMATICO',
-          type: 'CASH',
-          active: true,
-          deletedAt: null,
-        },
-      });
-      const standardAccount =
-        account ??
-        (await tx.bankAccount.create({
-          data: {
-            companyId,
-            name: 'VENDAS - PADRAO AUTOMATICO',
-            type: 'CASH',
-          },
-        }));
+      const standardAccount = await ensureRetailCashAccount(tx, companyId);
       return [
         {
           id: standardAccount.id,
@@ -126,6 +111,202 @@ export class VendasService {
       where: { companyId, active: true },
       orderBy: { name: 'asc' },
     });
+  }
+
+  async createCustomerRegistrationLink(companyId: string, phone: string) {
+    await this.ensureConfectionery(companyId);
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (![10, 11, 12, 13].includes(phoneDigits.length)) {
+      throw new BadRequestException(
+        'Informe um WhatsApp válido com DDD para enviar o link.',
+      );
+    }
+
+    const token = randomBytes(32).toString('base64url');
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await this.prisma.salesCustomerRegistrationLink.create({
+      data: {
+        tokenHash: this.hashRegistrationToken(token),
+        companyId,
+        expiresAt,
+      },
+    });
+
+    return { token, expiresAt };
+  }
+
+  async getPublicCustomerRegistration(token: string) {
+    const link = await this.findPublicCustomerRegistrationLink(token);
+    if (!link || !link.company.isActive) {
+      throw new NotFoundException('Este link é inválido ou expirou.');
+    }
+    try {
+      await this.ensureConfectionery(link.companyId);
+    } catch (error) {
+      if (error instanceof ForbiddenException) {
+        throw new NotFoundException('Este link é inválido ou expirou.');
+      }
+      throw error;
+    }
+
+    return {
+      companyName:
+        link.company.tradeName || link.company.companyName || 'Empresa',
+      expiresAt: link.expiresAt,
+    };
+  }
+
+  async submitPublicCustomerRegistration(
+    data: EnviarCadastroClientePublicoDto,
+  ) {
+    const link = await this.findPublicCustomerRegistrationLink(data.token);
+    if (!link || !link.company.isActive) {
+      throw new NotFoundException('Este link é inválido ou expirou.');
+    }
+    try {
+      await this.ensureConfectionery(link.companyId);
+    } catch (error) {
+      if (error instanceof ForbiddenException) {
+        throw new NotFoundException('Este link é inválido ou expirou.');
+      }
+      throw error;
+    }
+
+    if (data.consented !== true) {
+      throw new BadRequestException(
+        'É necessário aceitar o aviso de privacidade para enviar o cadastro.',
+      );
+    }
+    if (!data.name.trim()) {
+      throw new BadRequestException(
+        'Informe o nome completo ou a razão social.',
+      );
+    }
+    if (!data.address.trim()) {
+      throw new BadRequestException('Informe o endereço do cliente.');
+    }
+
+    const phoneDigits = data.phone.replace(/\D/g, '');
+    if (![10, 11, 12, 13].includes(phoneDigits.length)) {
+      throw new BadRequestException('Informe um telefone válido com DDD.');
+    }
+
+    const document = this.normalizeDocument(data.document);
+    this.validateCustomerDocument(data.personType, document);
+    const normalizedName = data.name.trim().toLocaleUpperCase('pt-BR');
+    if (
+      ['CONSUMIDOR FINAL', 'CLIENTE CARTAO'].includes(
+        normalizedName.normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
+      )
+    ) {
+      throw new BadRequestException(
+        'Não foi possível concluir o cadastro. Confira os dados ou fale com a empresa.',
+      );
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const currentLink = await tx.salesCustomerRegistrationLink.findFirst({
+          where: {
+            id: link.id,
+            usedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+          select: { id: true },
+        });
+        if (!currentLink) {
+          throw new BadRequestException(
+            'Não foi possível concluir o cadastro. Confira os dados ou fale com a empresa.',
+          );
+        }
+
+        const duplicate = await tx.salesCustomer.findFirst({
+          where: { companyId: link.companyId, document },
+          select: { id: true },
+        });
+        if (duplicate) {
+          throw new BadRequestException(
+            'Não foi possível concluir o cadastro. Confira os dados ou fale com a empresa.',
+          );
+        }
+
+        const customer = await tx.salesCustomer.create({
+          data: {
+            companyId: link.companyId,
+            personType: data.personType,
+            name: normalizedName,
+            document,
+            phone: data.phone.trim(),
+            email: data.email?.trim().toLowerCase() || null,
+            zipCode: data.zipCode?.trim() || null,
+            address: data.address.trim().toLocaleUpperCase('pt-BR'),
+            number: data.number?.trim().toLocaleUpperCase('pt-BR') || null,
+            complement:
+              data.complement?.trim().toLocaleUpperCase('pt-BR') || null,
+            neighborhood:
+              data.neighborhood?.trim().toLocaleUpperCase('pt-BR') || null,
+            city: data.city?.trim().toLocaleUpperCase('pt-BR') || null,
+            state: data.state?.trim().toUpperCase() || null,
+            referenceOnly: false,
+            creditLimit: 0,
+            creditDays: null,
+            creditBlocked: false,
+          },
+        });
+
+        const now = new Date();
+        const consumed = await tx.salesCustomerRegistrationLink.updateMany({
+          where: {
+            id: link.id,
+            usedAt: null,
+            expiresAt: { gt: now },
+          },
+          data: {
+            usedAt: now,
+            consentedAt: now,
+            createdCustomerId: customer.id,
+          },
+        });
+        if (consumed.count !== 1) {
+          throw new BadRequestException(
+            'Não foi possível concluir o cadastro. Confira os dados ou fale com a empresa.',
+          );
+        }
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new BadRequestException(
+          'Não foi possível concluir o cadastro. Confira os dados ou fale com a empresa.',
+        );
+      }
+      throw error;
+    }
+
+    return { success: true };
+  }
+
+  private hashRegistrationToken(token: string) {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  private async findPublicCustomerRegistrationLink(token: string) {
+    if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
+    const link = await this.prisma.salesCustomerRegistrationLink.findUnique({
+      where: { tokenHash: this.hashRegistrationToken(token) },
+      include: {
+        company: {
+          select: {
+            tradeName: true,
+            companyName: true,
+            isActive: true,
+          },
+        },
+      },
+    });
+    return !link || link.usedAt || link.expiresAt <= new Date() ? null : link;
   }
 
   async initializeModule(companyId: string) {
@@ -2719,24 +2900,7 @@ export class VendasService {
           ['VENDA', 'TROCA'].includes(data.saleType) &&
           (data.status || 'CONCLUIDA') === 'CONCLUIDA'
         ) {
-          const standardAccount = await tx.bankAccount.findFirst({
-            where: {
-              companyId,
-              name: 'VENDAS - PADRAO AUTOMATICO',
-              type: 'CASH',
-              active: true,
-              deletedAt: null,
-            },
-          });
-          const account =
-            standardAccount ??
-            (await tx.bankAccount.create({
-              data: {
-                companyId,
-                name: 'VENDAS - PADRAO AUTOMATICO',
-                type: 'CASH',
-              },
-            }));
+          const account = await ensureRetailCashAccount(tx, companyId);
           data.bankAccountId = account.id;
         }
         const orderData = await this.buildOrderData(companyId, data, tx);
@@ -3092,6 +3256,7 @@ export class VendasService {
         where: {
           id: data.bankAccountId,
           companyId,
+          isRetailCash: true,
           active: true,
           deletedAt: null,
         },
