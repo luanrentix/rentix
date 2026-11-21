@@ -113,10 +113,10 @@ export class VendasService {
     });
   }
 
-  async createCustomerRegistrationLink(companyId: string, phone: string) {
+  async createCustomerRegistrationLink(companyId: string, phone?: string) {
     await this.ensureConfectionery(companyId);
-    const phoneDigits = phone.replace(/\D/g, '');
-    if (![10, 11, 12, 13].includes(phoneDigits.length)) {
+    const phoneDigits = phone?.replace(/\D/g, '') ?? '';
+    if (phone && ![10, 11, 12, 13].includes(phoneDigits.length)) {
       throw new BadRequestException(
         'Informe um WhatsApp válido com DDD para enviar o link.',
       );
@@ -149,9 +149,29 @@ export class VendasService {
       throw error;
     }
 
+    const settings = await this.prisma.appSettings.findUnique({
+      where: { companyId: link.companyId },
+      select: { companySettings: true },
+    });
+    const companySettings = settings?.companySettings as Record<
+      string,
+      unknown
+    > | null;
+    const setting = (...keys: string[]) => {
+      for (const key of keys) {
+        const value = companySettings?.[key];
+        if (typeof value === 'string' && value.trim()) return value.trim();
+      }
+      return null;
+    };
     return {
       companyName:
         link.company.tradeName || link.company.companyName || 'Empresa',
+      companyPhone: link.company.phone,
+      companyEmail: link.company.email,
+      companyDocument: link.company.document,
+      logo: setting('logo', 'logoUrl', 'logoBase64'),
+      website: setting('website', 'site', 'siteUrl', 'websiteUrl'),
       expiresAt: link.expiresAt,
     };
   }
@@ -301,6 +321,9 @@ export class VendasService {
           select: {
             tradeName: true,
             companyName: true,
+            phone: true,
+            email: true,
+            document: true,
             isActive: true,
           },
         },

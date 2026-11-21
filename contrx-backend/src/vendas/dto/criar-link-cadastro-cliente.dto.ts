@@ -1,8 +1,8 @@
-import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CriarLinkCadastroClienteDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @MaxLength(30)
-  phone!: string;
+  phone?: string;
 }

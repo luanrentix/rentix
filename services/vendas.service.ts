@@ -443,6 +443,11 @@ export const createSalesCustomer = (data: SalesCustomerInput) =>
   });
 export type SalesCustomerRegistrationInfo = {
   companyName: string;
+  companyPhone?: string | null;
+  companyEmail?: string | null;
+  companyDocument?: string | null;
+  logo?: string | null;
+  website?: string | null;
   expiresAt: string;
 };
 export type PublicSalesCustomerRegistrationInput = Pick<
@@ -460,7 +465,7 @@ export type PublicSalesCustomerRegistrationInput = Pick<
   | "city"
   | "state"
 > & { token: string; consented: boolean };
-export const createSalesCustomerRegistrationLink = (phone: string) =>
+export const createSalesCustomerRegistrationLink = (phone?: string) =>
   apiFetch<{ token: string; expiresAt: string }>(
     "/vendas/clientes/links-cadastro",
     { method: "POST", body: JSON.stringify({ phone }) },
