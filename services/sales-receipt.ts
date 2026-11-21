@@ -12,7 +12,7 @@ const escape = (value: unknown) =>
 const styleTag = (nonce?: string) =>
   `<style${nonce ? ` nonce="${escape(nonce)}"` : ''}>`;
 const receiptSharedStyles =
-  '.receipt-promo-note{display:block;font-weight:bold;color:#065f46}.receipt-adjustment-note{display:block}.col-4{width:4%}.col-8{width:8%}.col-9{width:9%}.col-10{width:10%}.col-11{width:11%}.col-12{width:12%}.col-13-5{width:13.5%}.col-14{width:14%}.col-19{width:19%}.col-25{width:25%}.col-38{width:38%}.col-49{width:49%}';
+  '.receipt-adjustment-note{display:block}.col-4{width:4%}.col-8{width:8%}.col-9{width:9%}.col-10{width:10%}.col-11{width:11%}.col-12{width:12%}.col-13-5{width:13.5%}.col-14{width:14%}.col-19{width:19%}.col-25{width:25%}.col-38{width:38%}.col-49{width:49%}';
 const money = (value: unknown) =>
   Number(value || 0).toLocaleString("pt-BR", {
     style: "currency",
@@ -38,8 +38,7 @@ const types: Record<string, string> = {
 };
 
 function itemPriceNote(item: SalesOrder["items"][number]) {
-  if (item.priceType === "PROMOCIONAL")
-    return `<small class="receipt-promo-note">PROMOÇÃO · original ${money(item.originalUnitPrice)} · sem desconto adicional</small>`;
+  if (item.priceType === "PROMOCIONAL") return "";
   const adjustments = [
     Number(item.discount || 0) > 0
       ? `Desconto/un.: ${money(item.discount)}`

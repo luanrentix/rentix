@@ -57,7 +57,11 @@ git --no-pager status --short
 echo Confira todos os arquivos acima. Nenhum envio foi realizado ainda.
 set "CONFIRMACAO="
 set /p "CONFIRMACAO=Digite ENVIAR para autorizar commit, push e deploy: "
-if not "%CONFIRMACAO%"=="ENVIAR" goto MENU
+if /I "%CONFIRMACAO%"=="ENVIAR" goto CONFIRMACAO_INICIAL_OK
+echo Confirmacao nao reconhecida. Digite apenas ENVIAR e pressione Enter.
+pause
+goto MENU
+:CONFIRMACAO_INICIAL_OK
 set "HAS_CHANGES="
 for /f "delims=" %%s in ('git status --porcelain') do set "HAS_CHANGES=1"
 if not defined HAS_CHANGES goto PUSH
@@ -66,10 +70,7 @@ if errorlevel 1 goto FALHA
 git --no-pager diff --cached --check
 if errorlevel 1 goto FALHA
 git --no-pager diff --cached --name-only
-echo Revise a lista staged acima antes de continuar.
-set "CONFIRMACAO_FINAL="
-set /p "CONFIRMACAO_FINAL=Digite ENVIAR novamente para confirmar apenas estes arquivos: "
-if not "%CONFIRMACAO_FINAL%"=="ENVIAR" goto MENU
+echo Arquivos preparados e validados. Iniciando commit, push e deploy.
 git commit -m "Atualiza versao Contrx e aplica correcoes validadas"
 if errorlevel 1 goto FALHA
 :PUSH

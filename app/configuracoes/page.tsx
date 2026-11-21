@@ -715,8 +715,12 @@ export default function ConfiguracoesPage() {
       });
       setInitialCompanySettings(companySettings);
       setIsSaveSuccessModalOpen(true);
-    } catch {
-      setSuccessMessage("Erro ao salvar cadastro da empresa.");
+    } catch (error) {
+      setSuccessMessage(
+        error instanceof Error
+          ? error.message
+          : "Erro ao salvar cadastro da empresa.",
+      );
     } finally {
       setIsSavingCompanySettings(false);
     }

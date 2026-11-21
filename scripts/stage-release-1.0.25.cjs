@@ -7,6 +7,7 @@ const releasePaths = [
   '.agents/skills/contrx_validation_protocol/SKILL.md',
   'ATUALIZA-VERSAO-VALIDADA.BAT',
   'app/cadastro-cliente',
+  'app/configuracoes/page.tsx',
   'app/vendas/clientes-panel.tsx',
   'app/layout.tsx',
   'app/vendas/page.tsx',

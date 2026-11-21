@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { CheckCircle2, LoaderCircle, UserRound } from "lucide-react";
 import {
   getPublicSalesCustomerRegistration,
+  lookupSalesAddress,
   submitPublicSalesCustomerRegistration,
   type PublicSalesCustomerRegistrationInput,
   type SalesCustomerRegistrationInfo,
@@ -54,6 +55,7 @@ export default function CustomerRegistrationPage({ initialToken = "" }: { initia
   const [consented, setConsented] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [lookingUpZipCode, setLookingUpZipCode] = useState(false);
   const [error, setError] = useState("");
   const [complete, setComplete] = useState(false);
 
@@ -80,6 +82,42 @@ export default function CustomerRegistrationPage({ initialToken = "" }: { initia
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function lookupZipCode(value: string) {
+    const zipCode = value.replace(/\D/g, "");
+    if (zipCode.length !== 8) return;
+
+    setLookingUpZipCode(true);
+    try {
+      const address = await lookupSalesAddress(zipCode);
+      setForm((current) =>
+        (current.zipCode || "").replace(/\D/g, "") === zipCode
+          ? {
+              ...current,
+              zipCode: address.zipCode || current.zipCode,
+              address: address.address || current.address,
+              complement: address.complement || current.complement,
+              neighborhood: address.neighborhood || current.neighborhood,
+              city: address.city || current.city,
+              state: address.state || current.state,
+            }
+          : current,
+      );
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Não foi possível consultar o CEP.",
+      );
+    } finally {
+      setLookingUpZipCode(false);
+    }
+  }
+
+  function handleZipCodeChange(value: string) {
+    update("zipCode", value);
+    void lookupZipCode(value);
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -203,8 +241,8 @@ export default function CustomerRegistrationPage({ initialToken = "" }: { initia
                 <h2 className="mb-4 text-base font-black text-slate-900">Endereço</h2>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="space-y-1.5">
-                    <span className="block text-sm font-bold text-slate-800">CEP</span>
-                    <input className={fieldClass} autoComplete="postal-code" inputMode="numeric" maxLength={12} value={form.zipCode || ""} onChange={(event) => update("zipCode", event.target.value)} />
+                    <span className="flex items-center gap-2 text-sm font-bold text-slate-800">CEP {lookingUpZipCode && <LoaderCircle className="h-3.5 w-3.5 animate-spin text-orange-600" aria-label="Buscando endereço" />}</span>
+                    <input className={fieldClass} autoComplete="postal-code" inputMode="numeric" maxLength={12} value={form.zipCode || ""} onChange={(event) => handleZipCodeChange(event.target.value)} />
                   </label>
                   <label className="space-y-1.5 sm:col-span-2">
                     <span className="block text-sm font-bold text-slate-800">Logradouro <b className="text-red-600">*</b></span>
