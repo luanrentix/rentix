@@ -165,12 +165,11 @@ export class VendasService {
       return null;
     };
     return {
-      companyName:
-        link.company.tradeName || link.company.companyName || 'Empresa',
-      companyPhone: link.company.phone,
-      companyEmail: link.company.email,
-      companyDocument: link.company.document,
-      logo: setting('logo', 'logoUrl', 'logoBase64'),
+      companyName: setting('tradeName', 'companyName') || 'Empresa',
+      companyPhone: setting('phone'),
+      companyEmail: setting('email'),
+      companyDocument: setting('document'),
+      logo: setting('logo', 'logoUrl', 'logoBase64', 'companyLogo'),
       website: setting('website', 'site', 'siteUrl', 'websiteUrl'),
       expiresAt: link.expiresAt,
     };
