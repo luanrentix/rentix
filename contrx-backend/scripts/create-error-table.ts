@@ -3,12 +3,11 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 
 async function main() {
-  const dbUrl =
-    'postgresql://postgres.fzmqrrxnxczeyxxrzjrv:ContrxERP2026Lh@aws-1-us-west-2.pooler.supabase.com:5432/postgres';
-  const pool = new Pool({
-    connectionString: dbUrl,
-    ssl: { rejectUnauthorized: false },
-  });
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) throw new Error('DATABASE_URL obrigatoria');
+  if (!['127.0.0.1', 'localhost'].includes(new URL(dbUrl).hostname)) throw new Error('Execucao permitida somente no banco local');
+  const { databaseConnectionOptions } = require('./lib/database-connection.cjs');
+  const pool = new Pool(databaseConnectionOptions(dbUrl));
   const adapter = new PrismaPg(pool);
   const prisma = new PrismaClient({ adapter });
 
@@ -41,7 +40,7 @@ async function main() {
     `);
     console.log('Table error and indexes created successfully in database!');
   } catch (err) {
-    console.error('Error creating table error:', err);
+    console.error('Error creating table error:', err); process.exitCode = 1;
   } finally {
     await prisma.$disconnect();
     await pool.end();

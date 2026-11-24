@@ -16,7 +16,9 @@ function tool(name,args,url,caPath){
   const configured=process.env.PG_BIN|| (process.platform==='win32'?'C:\\Program Files\\PostgreSQL\\18\\bin':null);
   const binary=configured?path.join(configured,name+(process.platform==='win32'?'.exe':'')):name;
   const remote=!['localhost','127.0.0.1','[::1]'].includes(url.hostname);
-  const result=spawnSync(binary,[...args,'--host',url.hostname,'--port',url.port||'5432','--username',decodeURIComponent(url.username),'--dbname',decodeURIComponent(url.pathname.slice(1)),'--no-password'],{windowsHide:true,encoding:'utf8',timeout:600000,maxBuffer:8*1024*1024,
+  const archiveOnly=name==='pg_restore' && args.includes('--list');
+  const commandArgs=archiveOnly?args:[...args,'--host',url.hostname,'--port',url.port||'5432','--username',decodeURIComponent(url.username),'--dbname',decodeURIComponent(url.pathname.slice(1)),'--no-password'];
+  const result=spawnSync(binary,commandArgs,{windowsHide:true,encoding:'utf8',timeout:600000,maxBuffer:8*1024*1024,
     env:{...process.env,PGPASSWORD:decodeURIComponent(url.password),PGSSLMODE:remote?'verify-full':'prefer',...(caPath?{PGSSLROOTCERT:caPath}:{})}});
   if(result.error||result.status!==0)throw new Error(name+' failed; review PostgreSQL tool, permissions and TLS settings privately.');
   return result.stdout;

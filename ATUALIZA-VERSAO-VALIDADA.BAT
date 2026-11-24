@@ -76,7 +76,7 @@ if errorlevel 1 goto FALHA
 :PUSH
 git push origin main
 if errorlevel 1 goto FALHA
-"%GIT_BASH%" -lc "ssh -i %SSH_KEY% ubuntu@163.176.163.165 'cd /opt/contrx && git pull --ff-only origin main && docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build && docker compose -f docker-compose.prod.yml ps && docker image prune -af --filter \"until=24h\" && docker builder prune -af --filter \"until=24h\" && curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-connrefused -I https://www.contrx.com.br && curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-connrefused -I https://api.contrx.com.br'"
+"%GIT_BASH%" -lc "ssh -i %SSH_KEY% ubuntu@163.176.163.165 'cd /opt/contrx && git pull --ff-only origin main && docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build && docker compose -f docker-compose.prod.yml ps && curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-connrefused -I https://www.contrx.com.br && curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-connrefused -I https://api.contrx.com.br'"
 if errorlevel 1 goto FALHA
 echo Envio concluido. Valide login e operacoes essenciais antes de encerrar a janela de manutencao.
 pause
@@ -91,10 +91,10 @@ if not "%MANUTENCAO_RESULT%"=="0" goto FALHA
 pause
 goto MENU
 :SUPABASE
-echo Esta opcao exporta os dados reais da aplicacao, incluindo dados pessoais
-echo e hashes de credenciais, para contrx-backend\backups no computador local.
+echo Esta opcao cria backup completo local e copias datadas das tabelas no Supabase.
+echo O backup local inclui dados reais e hashes de credenciais em contrx-backend\backups.
 echo Proteja essa pasta com ACL e criptografia. Nao a envie para GitHub.
-echo Depois aplica migrations; nao executa limpeza de usuarios ou exclusao de movimentacoes.
+echo Depois aplica migrations pendentes; nao executa limpeza de usuarios ou exclusao de movimentacoes.
 echo Garanta tambem backup/PITR do provedor para os schemas gerenciados e recursos externos.
 node contrx-backend\scripts\manual-supabase-update.cjs --env contrx-backend\.env.supabase --check
 if errorlevel 1 goto FALHA
