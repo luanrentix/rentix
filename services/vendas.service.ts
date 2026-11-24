@@ -76,6 +76,7 @@ export type SalesProductInput = Omit<
   | "minimumStock"
   | "commission"
 > & {
+  adjustmentReason?: string;
   expectedUpdatedAt?: string;
   price: number;
   purchaseCost: number;
@@ -255,6 +256,8 @@ export type SalesOrderItem = {
   subtotal: string;
 };
 export type SalesOrder = {
+  expiresAt?: string | null;
+  voucherCode?: string | null;
   customer?: Pick<
     SalesCustomer,
     | "name"
@@ -599,6 +602,7 @@ export async function getSalesOrders(all = false) {
   }
 }
 export type SaveSalesOrderInput = {
+  expiresAt?: string;
   cashTender?: string;
   refundConfirmed?: boolean;
   cardPayments?: import("./sales-cards").SalesCardPayment[];
@@ -690,6 +694,19 @@ export const getSalesReturnInfo = (id: string) =>
 export const getSalesCustomerCredit = (id: string) =>
   apiFetch<{ balance: string }>(
     `/vendas/clientes/${encodeURIComponent(id)}/saldo`,
+    { skipCache: true },
+  );
+
+export type SalesCreditVoucher = {
+  code: string;
+  balance: string;
+  anonymous: boolean;
+  customerId: string;
+  sourceOrderId: string;
+};
+export const getSalesCreditVoucher = (code: string) =>
+  apiFetch<SalesCreditVoucher>(
+    `/vendas/creditos/vale/${encodeURIComponent(code.trim().toUpperCase())}`,
     { skipCache: true },
   );
 

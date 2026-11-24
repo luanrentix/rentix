@@ -100,6 +100,14 @@ export const internalToolRoutes: AppToolRoute[] = [
     scope: "internal",
     category: "PRINCIPAL",
   },
+  {
+    label: "Estoque",
+    href: "/estoque",
+    icon: "📦",
+    permissionKey: "sales",
+    scope: "internal",
+    category: "PRINCIPAL",
+  },
 ];
 
 export const systemOwnerToolRoutes: AppToolRoute[] = [];

@@ -15,36 +15,14 @@ export async function validateCardPayments(
     saleType?: string;
   },
 ) {
-  const required = ['CARTAO_DEBITO', 'CARTAO_CREDITO'].filter(
-    (method) =>
-      order.status === 'CONCLUIDA' &&
-      ['VENDA', 'TROCA'].includes(order.saleType || '') &&
-      (order.paymentMethod === method
-        ? !order.total.isZero()
-        : order.paymentMethod === 'MISTO' &&
-          new Prisma.Decimal(
-            Number(
-              (order.paymentDetails as Record<string, number> | null)?.[
-                method
-              ] || 0,
-            ),
-          ).gt(0)),
-  );
-  if (
-    required.some(
-      (method) =>
-        !data.cardPayments?.some((payment) => payment.method === method),
-    )
-  )
-    throw new BadRequestException(
-      'Informe administradora, bandeira e NSU de cada pagamento em cartão antes de concluir.',
-    );
   if (!data.cardPayments?.length) return [];
   const settings = await tx.appSettings.findUnique({ where: { companyId } });
   const admins = administratorsFromSettings(settings?.companySettings);
   const seen = new Set<string>();
   return data.cardPayments.map((payment: CardPaymentDto) => {
-    const admin = admins.find((item) => item.id === payment.administratorId);
+    const admin = payment.administratorId
+      ? admins.find((item) => item.id === payment.administratorId)
+      : undefined;
     const expected =
       order.paymentMethod === 'MISTO'
         ? new Prisma.Decimal(
@@ -58,7 +36,7 @@ export async function validateCardPayments(
           ? order.total.abs()
           : new Prisma.Decimal(0);
     if (
-      !admin ||
+      (payment.administratorId && !admin) ||
       seen.has(payment.method) ||
       expected.lte(0) ||
       !expected.eq(payment.amount) ||
@@ -67,17 +45,15 @@ export async function validateCardPayments(
       throw new BadRequestException(
         'Confira a administradora, o valor e as parcelas do cartão.',
       );
-    if (!payment.brand.trim() || !payment.nsu.trim())
-      throw new BadRequestException('Informe a bandeira e o NSU da transação.');
     seen.add(payment.method);
     return {
       method: payment.method,
-      administratorId: admin.id,
-      administratorName: admin.name,
-      brand: payment.brand.trim(),
+      administratorId: admin?.id || null,
+      administratorName: admin?.name || null,
+      brand: payment.brand?.trim() || null,
       lastFour: payment.lastFour || null,
       holderName: payment.holderName?.trim() || null,
-      nsu: payment.nsu.trim(),
+      nsu: payment.nsu?.trim() || null,
       authorizationCode: payment.authorizationCode?.trim() || null,
       installments: payment.installments,
       amount: payment.amount,

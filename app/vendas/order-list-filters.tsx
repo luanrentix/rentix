@@ -22,10 +22,11 @@ export default function OrderListFilterBar({ search, onSearch, value, onChange, 
       <label className="text-xs font-bold">Data inicial<input type="date" className={input} value={value.startDate} max={value.endDate || "9999-12-31"} onChange={event => onChange({ ...value, startDate: event.target.value })} /></label>
       <label className="text-xs font-bold">Data final<input type="date" className={input} value={value.endDate} min={value.startDate || undefined} max="9999-12-31" onChange={event => onChange({ ...value, endDate: event.target.value })} /></label>
       <label className="text-xs font-bold">Situação<select className={input} value={value.status} disabled={category === "ATIVAS"} onChange={event => onChange({ ...value, status: event.target.value })}>
-        <option value="">{category === "ATIVAS" ? "Em andamento" : "Todas da categoria"}</option>
-        {category !== "GRAVADAS" && <option value="EM_ANDAMENTO">Em andamento</option>}
+        <option value="">{category === "ATIVAS" || ["ORCAMENTO", "CONDICIONAL", "PEDIDO"].includes(category) ? "Em andamento" : "Todas da categoria"}</option>
+        {!['ORCAMENTO', 'CONDICIONAL', 'PEDIDO', 'ATIVAS'].includes(category) && <option value="EM_ANDAMENTO">Em andamento</option>}
         <option value="CONCLUIDA">Concluída</option>
-        {category === "GRAVADAS" && <><option value="CANCELADA">Cancelada</option><option value="ESTORNADA">Estornada</option></>}
+        {(category === "GRAVADAS" || ["ORCAMENTO", "CONDICIONAL", "PEDIDO"].includes(category)) && <option value="ESTORNADA">Estornada</option>}
+        {category === "GRAVADAS" && <option value="CANCELADA">Cancelada</option>}
       </select></label>
     </div>
     <div className="flex flex-wrap items-center gap-2">

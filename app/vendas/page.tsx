@@ -32,6 +32,7 @@ import {
   type SalesReceivingAccount,
 } from "@/services/vendas.service";
 import PaymentPanel from "./payment-panel";
+import MixedPaymentModal from "./mixed-payment-modal";
 import posStyles from "./pos.module.css";
 import {
   validateSalePayment,
@@ -141,11 +142,11 @@ const saleTypeOptions = [
   { value: "ORCAMENTO", label: "Orçamento" },
   { value: "CONDICIONAL", label: "Condicional" },
   { value: "PEDIDO", label: "Pedido" },
-  { value: "TROCA", label: "Troca de venda" },
 ];
 const openOrderOptions = [
   { value: "ORCAMENTO", label: "Orçamentos" },
   { value: "CONDICIONAL", label: "Condicionais" },
+  { value: "PEDIDO", label: "Pedidos" },
   { value: "ATIVAS", label: "Em andamento" },
   { value: "GRAVADAS", label: "Vendas gravadas" },
 ];
@@ -171,11 +172,16 @@ function VendasScreen() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [returnModalOpen, setReturnModalOpen] = useState(false);
+  const [mixedPaymentModalOpen, setMixedPaymentModalOpen] = useState(false);
+  const [refundOrderIdToSettle, setRefundOrderIdToSettle] = useState<string | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [pendingSalesFilter, setPendingSalesFilter] =
     useState<SalesListFilter | null>(null);
   const [newSaleConfirmOpen, setNewSaleConfirmOpen] = useState(false);
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
+  const [conditionalOrderChoice, setConditionalOrderChoice] =
+    useState<SalesOrder | null>(null);
+  const [budgetExpiry, setBudgetExpiry] = useState("");
   const [pendingNavigation, setPendingNavigation] = useState<{
     href: string;
     newSale: boolean;
@@ -226,7 +232,7 @@ function VendasScreen() {
     | "VENDEDORES"
     | "FORNECEDORES"
   >("POS");
-  const [openFilter, setOpenFilter] = useState("ORCAMENTO");
+  const [openFilter, setOpenFilter] = useState("CONDICIONAL");
   const [listFilters, setListFilters] = useState<
     Record<string, OrderListFilters>
   >({});
@@ -415,6 +421,7 @@ function VendasScreen() {
   useEffect(() => {
     const requestedView = searchParams.get("view");
     const requestedType = searchParams.get("tipo");
+    const requestedAction = searchParams.get("acao");
     if (
       [
         "POS",
@@ -437,7 +444,7 @@ function VendasScreen() {
         setOpenFilter(
           openOrderOptions.some((option) => option.value === requestedType)
             ? requestedType!
-            : "ORCAMENTO",
+            : "CONDICIONAL",
         );
       setCatalogOpen(false);
       if (requestedView === "POS" || requestedView === "CAIXA") {
@@ -467,8 +474,10 @@ function VendasScreen() {
             ),
           );
       }
-      if (requestedView === "POS" && requestedType === "TROCA") {
+      if (requestedView === "POS" && requestedAction === "TROCA") {
+        clearSale();
         setSaleType("TROCA");
+        setReturnModalOpen(true);
       } else if (requestedView === "CAIXA") setSaleType("VENDA");
     } else if (!requestedView) {
       setActiveView("POS");
@@ -961,10 +970,10 @@ function VendasScreen() {
               ["VENDA", "TROCA"].includes(order.saleType) &&
               order.status !== "EM_ANDAMENTO"
             );
+          if (["ORCAMENTO", "CONDICIONAL", "PEDIDO"].includes(openFilter))
+            return order.saleType === openFilter && order.status === (listStatus || "EM_ANDAMENTO");
           if (order.status === "ESTORNADA" || order.status === "CANCELADA")
             return false;
-          if (openFilter === "ORCAMENTO" || openFilter === "CONDICIONAL")
-            return order.saleType === openFilter;
           if (openFilter === "ATIVAS") return order.status === "EM_ANDAMENTO";
           return (
             order.status === "CONCLUIDA" &&
@@ -1245,22 +1254,10 @@ function VendasScreen() {
       );
       return;
     }
-    if (saleType === "VENDA") {
-      const missing = (["DEBITO", "CREDITO"] as const).find(
-        (method) =>
-          amounts[method] > 0 &&
-          !cardPayments.some(
-            (card) =>
-              card.method ===
-                (method === "DEBITO" ? "CARTAO_DEBITO" : "CARTAO_CREDITO") &&
-              Math.round(card.amount * 100) ===
-                Math.round(amounts[method] * 100),
-          ),
-      );
-      if (missing) {
-        setCardModal(missing);
-        return;
-      }
+    if (saleType === "ORCAMENTO" && !budgetExpiry) {
+      const date = new Date();
+      date.setDate(date.getDate() + 7);
+      setBudgetExpiry(date.toISOString().slice(0, 10));
     }
     setSaveConfirmOpen(true);
   }
@@ -1443,6 +1440,7 @@ function VendasScreen() {
         sellerName: registeredSellers.find((item) => item.id === seller)!.name,
         customerName: saleCustomer.name,
         saleType,
+        expiresAt: saleType === "ORCAMENTO" ? budgetExpiry : undefined,
         items: cart.map((line) => ({
           productId: line.product.id,
           variantId: line.variantId,
@@ -1488,7 +1486,9 @@ function VendasScreen() {
       }
       clearSale();
       setMessage(
-        savedOrder.saleType === "CONDICIONAL"
+        savedOrder.voucherCode
+          ? `Crédito gerado: ${money(Math.abs(Number(savedOrder.total)))}. Código do vale: ${savedOrder.voucherCode}.`
+          : savedOrder.saleType === "CONDICIONAL"
           ? "Condicional gravado. Estoque reservado até a devolução ou conversão em venda."
           : status === "EM_ANDAMENTO"
             ? "Venda salva em andamento. Use Abrir para retomá-la depois."
@@ -1537,6 +1537,7 @@ function VendasScreen() {
     setDiscountPercent("0,00");
     setAdditionValue("0,00");
     setAdditionPercent("0,00");
+    setBudgetExpiry("");
     setCurrentEditOrderId(null);
     setSeller(registeredSellers.length === 1 ? registeredSellers[0].id : "");
     setCustomer(
@@ -1574,7 +1575,11 @@ function VendasScreen() {
     }
   }
 
-  async function openOrder(selected: SalesOrder, discardConfirmed = false) {
+  async function openOrder(
+    selected: SalesOrder,
+    discardConfirmed = false,
+    conditionalChoice?: "KEEP" | "CONVERT",
+  ) {
     if (
       !discardConfirmed &&
       cart.length &&
@@ -1597,6 +1602,11 @@ function VendasScreen() {
     }
     if (["ESTORNADA", "CANCELADA"].includes(order.status)) {
       setDetailsOrder(order);
+      return;
+    }
+    if (order.saleType === "CONDICIONAL" && !conditionalChoice) {
+      setPendingSalesFilter(null);
+      setConditionalOrderChoice(order);
       return;
     }
     setOrders((current) =>
@@ -1669,7 +1679,12 @@ function VendasScreen() {
           ?.id ||
         "",
     );
-    setSaleType(order.saleType);
+    setBudgetExpiry(order.expiresAt ? order.expiresAt.slice(0, 10) : "");
+    setSaleType(
+      order.saleType === "CONDICIONAL" && conditionalChoice === "CONVERT"
+        ? "VENDA"
+        : order.saleType,
+    );
     setNotes(order.notes || "");
     setDiscountValue(formatMoney(Number(order.discount)));
     setAdditionValue(formatMoney(Number(order.addition)));
@@ -1768,7 +1783,7 @@ function VendasScreen() {
         deleteConfirmOpen
       )
         return;
-      if (event.key === "F9") {
+      if (event.key === "F10") {
         event.preventDefault();
         requestFinalizeSale();
       }
@@ -2609,6 +2624,9 @@ function VendasScreen() {
                       cardPayments={cardPayments}
                       onCardDetails={setCardModal}
                       onMethod={(method) => {
+                        const finalConsumer = registeredCustomers.find(
+                          (item) => item.systemKey === "CONSUMIDOR_FINAL",
+                        );
                         if (method === "CREDITO" || method === "DEBITO") {
                           const cardCustomer = registeredCustomers.find(
                             (item) => item.systemKey === "CLIENTE_CARTAO",
@@ -2630,9 +2648,15 @@ function VendasScreen() {
                           )
                             selectSaleCustomer(cardCustomer);
                           setCardModal(method);
+                        } else if (
+                          selectedCustomer?.systemKey === "CLIENTE_CARTAO" &&
+                          finalConsumer
+                        ) {
+                          selectSaleCustomer(finalConsumer);
                         }
                         setPayment(method);
                       }}
+                      onOpenMixedPayment={() => setMixedPaymentModalOpen(true)}
                       parts={paymentParts}
                       onParts={setPaymentParts}
                       total={total}
@@ -2660,7 +2684,7 @@ function VendasScreen() {
                     className={`${posStyles.save} mt-3 inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[var(--primary-color)] px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-[var(--primary-hover)] disabled:cursor-not-allowed disabled:bg-slate-400`}
                   >
                     <Save className="h-4 w-4" />
-                    {saving ? "Gravando..." : "Gravar Venda (F9)"}
+                    {saving ? "Gravando..." : "Gravar (F10)"}
                   </button>
                   {receiptOrder && (
                     <button
@@ -2729,7 +2753,7 @@ function VendasScreen() {
                 onClick={requestFinalizeSale}
                 disabled={saving}
               >
-                <kbd>F9</kbd> Gravar
+                <kbd>F10</kbd> Gravar
               </button>
               <button type="button" onClick={() => setSearch("")}>
                 <kbd>Esc</kbd> Limpar busca
@@ -2917,10 +2941,11 @@ function VendasScreen() {
           <>
             <SalesReversalsPanel
               orders={orders}
-              onCompleted={async (message) => {
+              onCompleted={async (message, refundOrderId) => {
                 setMessage(message);
                 setError("");
                 await Promise.all([load(), loadHistory(true)]);
+                setRefundOrderIdToSettle(refundOrderId || null);
               }}
             />
             <CustomerCreditsPanel
@@ -2928,6 +2953,8 @@ function VendasScreen() {
                 .map((order) => `${order.id}:${order.version}`)
                 .join(",")}
               refundsOnly
+              autoOpenRefundOrderId={refundOrderIdToSettle}
+              onAutoOpenRefundHandled={() => setRefundOrderIdToSettle(null)}
             />
           </>
         ) : activeView === "RELATORIOS" ? (
@@ -3093,6 +3120,21 @@ function VendasScreen() {
           }}
         />
       )}
+      {mixedPaymentModalOpen && (
+        <MixedPaymentModal
+          total={total}
+          initialParts={paymentParts}
+          customer={selectedCustomer}
+          creditBalance={Number(customerCreditBalance)}
+          onCardDetails={setCardModal}
+          onClose={() => setMixedPaymentModalOpen(false)}
+          onConfirm={(parts) => {
+            setPaymentParts(parts);
+            setPayment("MISTO");
+            setMixedPaymentModalOpen(false);
+          }}
+        />
+      )}
       {pendingSalesFilter && (
         <PendingSalesModal
           key={pendingSalesFilter}
@@ -3187,6 +3229,27 @@ function VendasScreen() {
           onConfirm={() => void saveSale("CONCLUIDA")}
           onCancel={() => {
             if (!saving) setSaveConfirmOpen(false);
+          }}
+        >
+          {saleType === "ORCAMENTO" && <label className="block space-y-1"><span className="text-xs font-bold text-slate-700">Validade do orçamento <b className="text-red-600">*</b></span><input required type="date" min={new Date().toISOString().slice(0, 10)} value={budgetExpiry} onChange={(event) => setBudgetExpiry(event.target.value)} className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" /><span className="text-xs text-slate-500">Após esta data, o orçamento será estornado automaticamente.</span></label>}
+        </ConfirmationModal>
+      )}
+      {conditionalOrderChoice && (
+        <ConfirmationModal
+          tone="primary"
+          title="Abrir condicional"
+          description="Como deseja continuar este atendimento? Você pode manter o documento como condicional ou convertê-lo em venda antes de gravar."
+          confirmLabel="Converter em venda"
+          cancelLabel="Manter condicional"
+          onConfirm={() => {
+            const order = conditionalOrderChoice;
+            setConditionalOrderChoice(null);
+            void openOrder(order, true, "CONVERT");
+          }}
+          onCancel={() => {
+            const order = conditionalOrderChoice;
+            setConditionalOrderChoice(null);
+            void openOrder(order, true, "KEEP");
           }}
         />
       )}

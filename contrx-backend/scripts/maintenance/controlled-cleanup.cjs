@@ -12,7 +12,7 @@ const PROTECTED = Object.freeze(['adm@contrx.com', 'luanathmra@gmail.com']);
 const qi = value => '"' + String(value).replaceAll('"', '""') + '"';
 const digest = value => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const key = (table, id) => `${table}:${id}`;
-const knownTables = new Set(Prisma.dmmf.datamodel.models.map(m => m.dbName || m.name));
+const knownTables = new Set([...Prisma.dmmf.datamodel.models.map(m => m.dbName || m.name), 'vendas_produtos_historico']);
 const normalize = value => String(value || '').trim().toLowerCase();
 const sorted = values => [...values].sort();
 
@@ -52,7 +52,7 @@ async function inventory(client) {
   const otherTables = (await client.query(`SELECT n.nspname AS schema,c.relname AS name
     FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
     WHERE c.relkind IN ('r','p','f') AND n.nspname NOT LIKE 'pg_%'
-    AND n.nspname NOT IN ('information_schema','public') ORDER BY n.nspname,c.relname`)).rows;
+    AND n.nspname NOT IN ('information_schema','public','auth','storage','realtime','vault','graphql','extensions','pgbouncer') ORDER BY n.nspname,c.relname`)).rows;
   const rules = (await client.query(`SELECT schemaname,tablename,rulename,definition FROM pg_rules
     WHERE schemaname='public' ORDER BY tablename,rulename`)).rows;
   return { tables, columns, constraints, triggers, policies, functions, indexes, extensions, schemas, otherTables, rules };
@@ -101,21 +101,21 @@ function plan(catalog, rows) {
       if (!companies.some(c => c.id === matches[0].empresa_id)) blockers.push(`Missing protected company: ${email}`);
     }
   }
-  const protectedIds = new Set(protectedUsers.map(u => u.id));
   const protectedCompanies = new Set(protectedUsers.map(u => u.empresa_id));
-  const candidateUsers = users.filter(u => !PROTECTED.includes(normalize(u.email)));
+  const allProtectedUsers = users.filter(u => protectedCompanies.has(u.empresa_id));
+  const protectedIds = new Set(allProtectedUsers.map(u => u.id));
+  const candidateUsers = users.filter(u => !protectedCompanies.has(u.empresa_id));
   const candidateIds = new Set(candidateUsers.map(u => u.id));
-  // A company with no known users has uncertain ownership and is preserved.
-  const candidateCompanies = companies.filter(c => !protectedCompanies.has(c.id) && candidateUsers.some(u => u.empresa_id === c.id));
+  const candidateCompanies = companies.filter(c => !protectedCompanies.has(c.id));
   const companyIds = new Set(candidateCompanies.map(c => c.id));
   const nodes = new Map();
   const remove = new Set();
   for (const [table, items] of Object.entries(rows)) {
     const pk = catalog.constraints.find(c => c.schema === 'public' && c.child === table && c.type === 'p');
-    const supported = knownTables.has(table) && pk?.columns.length === 1 && pk.columns[0] === 'id';
-    if (!supported && items.length && table !== '_prisma_migrations') blockers.push(`Unknown table/primary key requires review: ${table}`);
+    const supported = knownTables.has(table) && ((pk?.columns.length === 1 && pk.columns[0] === 'id') || table === 'vendas_reservas_numeracao');
+    if (!supported && items.length && table !== '_prisma_migrations' && !table.startsWith('backup_')) blockers.push(`Unknown table/primary key requires review: ${table}`);
     for (const row of items) {
-      const id = row.id;
+      const id = row.id != null ? row.id : (table === 'vendas_reservas_numeracao' ? `${row.empresa_id}_${row.usuario_id}` : null);
       if (id == null) continue;
       const node = key(table, id);
       nodes.set(node, { table, row, supported });
@@ -124,9 +124,10 @@ function plan(catalog, rows) {
         : table === 'empresas' ? companyIds.has(id)
           : row.empresa_id != null ? companyIds.has(row.empresa_id)
             : row.usuario_id != null && candidateIds.has(row.usuario_id);
-      if (protectedIds.has(row.usuario_id) || protectedIds.has(row.responsavel_id)) selected = false;
-      if (table !== 'usuarios' && protectedCompanies.has(row.empresa_id)) selected = false;
-      if (selected && row.__mentions_protected_email) {
+      if (protectedCompanies.has(row.empresa_id)) selected = false;
+      if (table === 'usuarios' && protectedIds.has(id)) selected = false;
+      if (row.empresa_id == null && (protectedIds.has(row.usuario_id) || protectedIds.has(row.responsavel_id))) selected = false;
+      if (selected && row.__mentions_protected_email && (table === 'usuarios' || !companyIds.has(row.empresa_id))) {
         blockers.push(`Protected identity/email/company mentioned in proposed deletion: ${node}`); selected = false;
       }
       if (selected) remove.add(node);
@@ -163,6 +164,8 @@ function plan(catalog, rows) {
     pagamentos_recebidos: ['conta_receber_id', 'contas_receber'],
     pagamentos_realizados: ['conta_pagar_id', 'contas_pagar'],
     assinaturas_contrato: ['contrato_id', 'contratos'],
+    movimentacoes_bancarias: ['conta_bancaria_id', 'contas_bancarias'],
+    vendas_eventos: ['pedido_id', 'vendas_pedidos'],
   };
   const inheritedOwnership = [];
   for (const [node, { table, row, supported }] of nodes) {
@@ -199,7 +202,7 @@ function plan(catalog, rows) {
     for (const deps of pending.values()) for (const node of leaves) deps.delete(node);
   }
   return {
-    protectedUsers: protectedUsers.map(u => ({ id: u.id, email: u.email, companyId: u.empresa_id, active: u.ativo })),
+    protectedUsers: allProtectedUsers.map(u => ({ id: u.id, email: u.email, companyId: u.empresa_id, active: u.ativo })),
     candidateUsers: candidateUsers.map(u => ({ id: u.id, email: u.email, companyId: u.empresa_id })),
     protectedCompanies: sorted(protectedCompanies), candidateCompanies: candidateCompanies.map(c => ({ id: c.id, name: c.nome_fantasia })),
     orphanCompaniesPreserved: companies.filter(c => !protectedCompanies.has(c.id) && !companyIds.has(c.id)).map(c => c.id),
@@ -264,7 +267,8 @@ function connection(envFile, variable = 'DATABASE_URL') {
 }
 
 function pgTool(tool, args, config, extraEnv = {}) {
-  const binary = process.env.PG_BIN ? path.join(process.env.PG_BIN, tool + (process.platform === 'win32' ? '.exe' : '')) : tool;
+  const configured = process.env.PG_BIN || (process.platform === 'win32' && fs.existsSync('C:\\Program Files\\PostgreSQL\\18\\bin') ? 'C:\\Program Files\\PostgreSQL\\18\\bin' : null);
+  const binary = configured ? path.join(configured, tool + (process.platform === 'win32' ? '.exe' : '')) : tool;
   const u = config.url;
   const result = spawnSync(binary, [...args, '--host', u.hostname, '--port', u.port || '5432', '--username', decodeURIComponent(u.username), '--dbname', decodeURIComponent(u.pathname.slice(1)), '--no-password'], {
     env: { ...process.env, ...extraEnv, PGPASSWORD: decodeURIComponent(u.password), PGSSLMODE: u.searchParams.get('sslmode') || 'prefer' },

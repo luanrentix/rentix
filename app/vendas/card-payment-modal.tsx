@@ -100,9 +100,6 @@ export default function CardPaymentModal({
           event.preventDefault();
           const admin = admins.find((item) => item.id === form.administratorId);
           if (
-            !admin ||
-            !form.brand.trim() ||
-            !form.nsu.trim() ||
             (form.lastFour && !/^\d{4}$/.test(form.lastFour)) ||
             amount <= 0 ||
             !Number.isFinite(amount)
@@ -116,9 +113,12 @@ export default function CardPaymentModal({
             ...form,
             method,
             amount,
-            administratorName: admin.name,
+            administratorId: form.administratorId || undefined,
+            administratorName: admin?.name,
+            brand: form.brand.trim() || undefined,
             lastFour: form.lastFour || undefined,
             holderName: form.holderName || undefined,
+            nsu: form.nsu.trim() || undefined,
             authorizationCode: form.authorizationCode || undefined,
           });
         }}
@@ -134,7 +134,7 @@ export default function CardPaymentModal({
                 Cartão de {method === "CARTAO_CREDITO" ? "crédito" : "débito"}
               </h2>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                Selecione a administradora e informe os dados do comprovante.
+                Os dados do comprovante são opcionais.
               </p>
             </div>
           </div>
@@ -171,11 +171,10 @@ export default function CardPaymentModal({
           <div className="flex items-end gap-2">
           <label className="min-w-0 flex-1 space-y-1">
             <span className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-              Administradora *
+              Administradora (opcional)
             </span>
             <select
               autoFocus
-              required
               disabled={loading || creating}
               className={field}
               value={form.administratorId}
@@ -229,10 +228,9 @@ export default function CardPaymentModal({
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="space-y-1">
               <span className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                Bandeira *
+                Bandeira (opcional)
               </span>
               <input
-                required
                 list="card-brands"
                 maxLength={40}
                 className={field}
@@ -287,10 +285,9 @@ export default function CardPaymentModal({
             </label>
             <label className="space-y-1">
               <span className="text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                NSU / número da transação *
+                NSU / número da transação (opcional)
               </span>
               <input
-                required
                 maxLength={80}
                 className={field}
                 value={form.nsu}
@@ -315,7 +312,6 @@ export default function CardPaymentModal({
                 Parcelas no cartão
               </span>
               <input
-                required
                 type="number"
                 min="1"
                 max={method === "CARTAO_DEBITO" ? "1" : "60"}

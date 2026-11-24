@@ -78,6 +78,14 @@ export class VendasController {
     return this.service.getCustomerCredit(user.companyId, id);
   }
   @RequireToolAction('view')
+  @Get('creditos/vale/:code')
+  creditVoucher(
+    @Param('code') code: string,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    return this.service.getCreditVoucher(user.companyId, code);
+  }
+  @RequireToolAction('view')
   @Get('pedidos/:id/devolucao')
   returnInfo(@Param('id') id: string, @CurrentUser() user: UsuarioAutenticado) {
     return this.service.getReturnInfo(user.companyId, id);
@@ -285,6 +293,14 @@ export class VendasController {
     @CurrentUser() user: UsuarioAutenticado,
   ) {
     return this.service.updateProduct(user.companyId, id, data, user.id);
+  }
+  @RequireToolAction('view')
+  @Get('produtos/:id/historico')
+  productHistory(
+    @Param('id') id: string,
+    @CurrentUser() user: UsuarioAutenticado,
+  ) {
+    return this.service.listProductHistory(user.companyId, id);
   }
   @RequireToolAction('view')
   @Get('produtos/:id/historico-precos')

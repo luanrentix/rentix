@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
 import AppFrame from '@/components/layout/app-frame';
+import SystemErrorReporter from '@/components/system-error-reporter';
 
 const siteUrl = 'https://www.contrx.com.br';
 const siteDescription = 'Contrx Gestão de Contratos SaaS';
@@ -69,6 +70,7 @@ export default async function RootLayout({
       </head>
       <body suppressHydrationWarning>
         <AuthProvider>
+          <SystemErrorReporter />
           <AppFrame>{children}</AppFrame>
         </AuthProvider>
       </body>

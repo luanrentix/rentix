@@ -15,7 +15,10 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
+  OnModuleDestroy,
+  OnModuleInit,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { PaymentMethod, Prisma } from '@prisma/client';
@@ -87,8 +90,22 @@ function hasValidCnpj(value: string) {
 }
 
 @Injectable()
-export class VendasService {
+export class VendasService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(VendasService.name);
+  private budgetExpirationTimer?: NodeJS.Timeout;
+
   constructor(private readonly prisma: PrismaService) {}
+
+  onModuleInit() {
+    void this.expireDueBudgetsForAllCompanies();
+    this.budgetExpirationTimer = setInterval(() => {
+      void this.expireDueBudgetsForAllCompanies();
+    }, 60_000);
+  }
+
+  onModuleDestroy() {
+    if (this.budgetExpirationTimer) clearInterval(this.budgetExpirationTimer);
+  }
 
   async listReceivingAccounts(companyId: string) {
     await this.ensureConfectionery(companyId);
@@ -1212,6 +1229,8 @@ export class VendasService {
         );
         if (actorId)
           await tx.$queryRaw`SELECT set_config('contrx.price_actor_id', ${actorId}, true)`;
+        if (actorId)
+          await tx.$queryRaw`SELECT set_config('contrx.product_actor_id', ${actorId}, true)`;
         const codes = await tx.salesProduct.findMany({
           where: { companyId },
           select: { sku: true },
@@ -1305,6 +1324,8 @@ export class VendasService {
         await this.lockCompany(tx, companyId);
         if (actorId)
           await tx.$queryRaw`SELECT set_config('contrx.price_actor_id', ${actorId}, true)`;
+        if (actorId)
+          await tx.$queryRaw`SELECT set_config('contrx.product_actor_id', ${actorId}, true)`;
         const supplier = await this.resolveProductSupplier(companyId, data);
         if (
           data.gridId &&
@@ -1469,7 +1490,9 @@ export class VendasService {
               productId: id,
               stockChange: new Prisma.Decimal(nextStock).sub(existing.stock),
               reservedChange: 0,
-              reason: 'AJUSTE MANUAL NO CADASTRO',
+              reason: data.adjustmentReason?.trim()
+                ? `AJUSTE MANUAL NO CADASTRO: ${data.adjustmentReason.trim()}`
+                : 'AJUSTE MANUAL NO CADASTRO',
             },
           });
         const updated = await tx.salesProduct.findFirstOrThrow({
@@ -1598,6 +1621,69 @@ export class VendasService {
     });
     if (product)
       throw new BadRequestException('Já existe um produto com este código.');
+  }
+
+  async listProductHistory(companyId: string, productId: string) {
+    const product = await this.prisma.salesProduct.findFirst({
+      where: { id: productId, companyId },
+      select: { id: true },
+    });
+    if (!product) throw new NotFoundException('Produto não encontrado.');
+    const [changes, movements, prices] = await Promise.all([
+      this.prisma.$queryRaw<
+        Array<{
+          id: string;
+          tipo: string;
+          usuario_nome: string | null;
+          valores_anteriores: Prisma.JsonValue | null;
+          valores_atuais: Prisma.JsonValue | null;
+          criado_em: Date;
+        }>
+      >`
+        SELECT id, tipo, usuario_nome, valores_anteriores, valores_atuais, criado_em FROM vendas_produtos_historico
+        WHERE empresa_id = ${companyId} AND produto_id = ${productId} ORDER BY criado_em DESC LIMIT 200`,
+      this.prisma.salesStockMovement.findMany({
+        where: { companyId, productId },
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+      }),
+      this.prisma.salesProductPriceHistory.findMany({
+        where: { companyId, productId },
+        orderBy: { createdAt: 'desc' },
+        take: 200,
+      }),
+    ]);
+    return {
+      records: [
+        ...changes.map((row) => ({
+          id: `audit-${row.id}`,
+          type: row.tipo,
+          actorName: row.usuario_nome,
+          previous: row.valores_anteriores,
+          current: row.valores_atuais,
+          createdAt: row.criado_em,
+        })),
+        ...movements.map((row) => ({
+          id: `stock-${row.id}`,
+          type: row.reason,
+          actorName: 'Sistema',
+          previous: null,
+          current: {
+            stockChange: row.stockChange,
+            reservedChange: row.reservedChange,
+          },
+          createdAt: row.createdAt,
+        })),
+        ...prices.map((row) => ({
+          id: `price-${row.id}`,
+          type: 'ALTERAÇÃO DE PREÇO',
+          actorName: row.actorName,
+          previous: row.previous,
+          current: row.current,
+          createdAt: row.createdAt,
+        })),
+      ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
+    };
   }
 
   async listProductPriceHistory(
@@ -2315,6 +2401,7 @@ export class VendasService {
     status?: string,
   ) {
     await this.ensureConfectionery(companyId);
+    await this.expireDueBudgets(companyId);
     if (
       before &&
       (!/^\d+$/.test(before) || !Number.isSafeInteger(Number(before)))
@@ -2332,16 +2419,19 @@ export class VendasService {
                 saleType: { in: ['VENDA', 'TROCA'] },
                 status: { not: 'EM_ANDAMENTO' },
               }
-            : ['VENDA', 'TROCA', 'ORCAMENTO', 'CONDICIONAL', 'PEDIDO'].includes(
-                  filter || '',
-                )
+            : ['ORCAMENTO', 'CONDICIONAL', 'PEDIDO'].includes(filter || '')
               ? {
                   saleType: filter,
-                  status: { notIn: ['CANCELADA', 'ESTORNADA'] },
+                  status: status || 'EM_ANDAMENTO',
                 }
-              : filter === 'ESTORNAVEIS'
-                ? { status: { in: ['CONCLUIDA', 'EM_ANDAMENTO'] } }
-                : {}),
+              : ['VENDA', 'TROCA'].includes(filter || '')
+                ? {
+                    saleType: filter,
+                    status: { notIn: ['CANCELADA', 'ESTORNADA'] },
+                  }
+                : filter === 'ESTORNAVEIS'
+                  ? { status: { in: ['CONCLUIDA', 'EM_ANDAMENTO'] } }
+                  : {}),
       },
       orderBy: { number: 'desc' },
       take: 100,
@@ -2362,6 +2452,42 @@ export class VendasService {
         (events[0]?.details as Prisma.JsonObject | undefined)?.cardPayments ||
         [],
     }));
+  }
+
+  private async expireDueBudgets(companyId: string) {
+    const expired = await this.prisma.salesOrder.findMany({
+      where: {
+        companyId,
+        saleType: 'ORCAMENTO',
+        status: 'EM_ANDAMENTO',
+        expiresAt: { lte: new Date() },
+      },
+    });
+    for (const order of expired)
+      await this.closeOrderAndRestoreStock(
+        companyId,
+        order,
+        'ESTORNADA',
+        'Validade do orçamento expirada automaticamente.',
+        'Estorno automático por validade expirada',
+      );
+  }
+
+  private async expireDueBudgetsForAllCompanies() {
+    const companies = await this.prisma.company.findMany({
+      where: { isActive: true },
+      select: { id: true },
+    });
+    for (const company of companies) {
+      try {
+        await this.expireDueBudgets(company.id);
+      } catch (error) {
+        this.logger.error(
+          `Não foi possível expirar os orçamentos da empresa ${company.id}.`,
+          error instanceof Error ? error.stack : undefined,
+        );
+      }
+    }
   }
 
   async reserveOrderNumber(companyId: string, userId: string) {
@@ -2616,9 +2742,15 @@ export class VendasService {
       where: { id, companyId },
     });
     if (!existing) throw new NotFoundException('Venda não encontrada.');
-    if (existing.status !== 'CONCLUIDA')
+    if (
+      existing.status !== 'CONCLUIDA' &&
+      !(
+        existing.status === 'EM_ANDAMENTO' &&
+        ['ORCAMENTO', 'CONDICIONAL', 'PEDIDO'].includes(existing.saleType)
+      )
+    )
       throw new BadRequestException(
-        'Somente operações concluídas podem ser estornadas.',
+        'Somente operações concluídas ou documentos comerciais em andamento podem ser estornados.',
       );
     return this.closeOrderAndRestoreStock(
       companyId,
@@ -3119,6 +3251,11 @@ export class VendasService {
       data.saleType === 'TROCA'
         ? await this.prepareReturn(tx, companyId, data)
         : null;
+    const voucherCode =
+      data.saleType === 'TROCA' && data.returnDisposition === 'CREDIT'
+        ? data.voucherCode?.trim().toUpperCase() ||
+          `V${randomBytes(6).toString('hex').toUpperCase()}`
+        : null;
     const total = subtotal
       .sub(discount)
       .add(addition)
@@ -3316,8 +3453,22 @@ export class VendasService {
         return sum.add(amount);
       }, new Prisma.Decimal(0))
       .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+    const expiresAt =
+      data.saleType === 'ORCAMENTO' && data.expiresAt
+        ? new Date(`${data.expiresAt}T23:59:59-04:00`)
+        : null;
+    if (
+      data.saleType === 'ORCAMENTO' &&
+      (!expiresAt ||
+        !Number.isFinite(expiresAt.getTime()) ||
+        expiresAt <= new Date())
+    )
+      throw new BadRequestException(
+        'Informe uma validade futura para o orçamento.',
+      );
     return {
       completedAt: finalizedSale ? new Date() : null,
+      expiresAt,
       installments: data.installments ?? 1,
       sellerId: seller?.id ?? null,
       customerId: customer?.id ?? null,
@@ -3337,7 +3488,10 @@ export class VendasService {
       paymentDetails: paymentDetails
         ? (paymentDetails as Prisma.InputJsonValue)
         : Prisma.DbNull,
-      status: data.status || 'CONCLUIDA',
+      voucherCode,
+      status: ['ORCAMENTO', 'CONDICIONAL', 'PEDIDO'].includes(data.saleType)
+        ? 'EM_ANDAMENTO'
+        : data.status || 'CONCLUIDA',
       notes: data.notes?.trim() || null,
       ...(returnData
         ? {
@@ -3364,6 +3518,31 @@ export class VendasService {
       balance: (
         await this.customerCreditBalance(this.prisma, companyId, customerId)
       ).toString(),
+    };
+  }
+
+  async getCreditVoucher(companyId: string, rawCode: string) {
+    const voucherCode = rawCode.trim().toUpperCase();
+    if (!/^[A-Z0-9]{6,32}$/.test(voucherCode))
+      throw new BadRequestException('Código de vale inválido.');
+    const entries = await this.prisma.salesCustomerCredit.findMany({
+      where: { companyId, voucherCode, reversedAt: null },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!entries.length) throw new NotFoundException('Vale não encontrado.');
+    const balance = entries.reduce(
+      (sum, entry) => sum.add(entry.amount),
+      new Prisma.Decimal(0),
+    );
+    const source = entries.find((entry) => entry.amount.gt(0));
+    if (!source || balance.lte(0))
+      throw new BadRequestException('Este vale não possui saldo disponível.');
+    return {
+      code: voucherCode,
+      balance: balance.toString(),
+      anonymous: source.anonymous,
+      customerId: source.customerId,
+      sourceOrderId: source.orderId,
     };
   }
 
@@ -3789,6 +3968,8 @@ export class VendasService {
             companyId,
             customerId: order.customerId!,
             orderId: order.id,
+            voucherCode: order.voucherCode,
+            anonymous: false,
             amount: order.total.neg(),
             reason: 'CRÉDITO POR TROCA/DEVOLUÇÃO',
           },

@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { BadgeDollarSign, CircleDollarSign, Filter, History, RefreshCw, Search, WalletCards } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import {
   adjustCustomerCredit,
@@ -15,8 +16,12 @@ const money = (value: string | number) =>
 const field = "w-full rounded-xl border bg-white p-2 text-sm dark:bg-slate-900";
 export default function CustomerCreditsPanel({
   refundsOnly = false,
+  autoOpenRefundOrderId,
+  onAutoOpenRefundHandled,
 }: {
   refundsOnly?: boolean;
+  autoOpenRefundOrderId?: string | null;
+  onAutoOpenRefundHandled?: () => void;
 }) {
   const { user } = useAuth();
   const allowed = ["OWNER", "ADMIN", "SYSTEM_OWNER", "DONO_SISTEMA"].includes(
@@ -29,6 +34,8 @@ export default function CustomerCreditsPanel({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");
+  const [refundQuery, setRefundQuery] = useState("");
+  const [refundStatus, setRefundStatus] = useState<"ALL" | "PENDING" | "SETTLED">("ALL");
   const [showAll, setShowAll] = useState(false);
   const [selected, setSelected] = useState<CreditCustomer | null>(null);
   const [action, setAction] = useState<{
@@ -64,6 +71,26 @@ export default function CustomerCreditsPanel({
   useEffect(() => {
     void load();
   }, [load]);
+  useEffect(() => {
+    if (!autoOpenRefundOrderId || loading || action) return;
+    const refund = refunds.find(
+      (item) =>
+        item.orderId === autoOpenRefundOrderId &&
+        Number(item.amount) > Number(item.settledAmount),
+    );
+    if (!refund) return;
+    setAction({ refund, requestId: crypto.randomUUID() });
+    setReason("");
+    setAmount(
+      (Number(refund.amount) - Number(refund.settledAmount))
+        .toFixed(2)
+        .replace(".", ","),
+    );
+    setDirection("ADD");
+    setDisposition("REFUND");
+    setError("");
+    onAutoOpenRefundHandled?.();
+  }, [action, autoOpenRefundOrderId, loading, onAutoOpenRefundHandled, refunds]);
   function start(next: { customer?: CreditCustomer; refund?: Refund }) {
     setAction({ ...next, requestId: crypto.randomUUID() });
     setReason("");
@@ -122,9 +149,26 @@ export default function CustomerCreditsPanel({
       setBusy(false);
     }
   }
+  const customerBalance = customers.reduce(
+    (sum, item) => sum + Number(item.balance),
+    0,
+  );
+  const filteredCustomers = customers.filter(
+    (item) =>
+      (showAll || Number(item.balance) > 0) &&
+      item.name.toLocaleLowerCase("pt-BR").includes(query.toLocaleLowerCase("pt-BR")),
+  );
+  const filteredRefunds = refunds.filter((item) => {
+    const pending = Number(item.amount) > Number(item.settledAmount);
+    const term = `${item.order.number} ${item.order.customerName} ${item.order.paymentMethod} ${item.reason}`.toLocaleLowerCase("pt-BR");
+    return (
+      (refundStatus === "ALL" || (refundStatus === "PENDING" ? pending : !pending)) &&
+      term.includes(refundQuery.toLocaleLowerCase("pt-BR"))
+    );
+  });
   return (
-    <section className="space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-3">
+    <section className="space-y-6">
+      <header className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <h2 className="text-xl font-black">
           {refundsOnly ? "Devoluções financeiras" : "Créditos de Clientes"}
         </h2>
@@ -132,8 +176,9 @@ export default function CustomerCreditsPanel({
           type="button"
           onClick={() => void load()}
           disabled={loading}
-          className="rounded-xl border px-3 py-2"
+          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
         >
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           Atualizar
         </button>
       </header>
@@ -145,6 +190,11 @@ export default function CustomerCreditsPanel({
       {message && <p role="status">{message}</p>}
       {!refundsOnly && (
         <>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <article className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4"><div className="flex items-center justify-between text-emerald-700"><span className="text-xs font-black uppercase">Saldo de créditos</span><CircleDollarSign className="h-5 w-5" /></div><strong className="mt-3 block text-2xl font-black text-emerald-800">{money(customerBalance)}</strong><p className="mt-1 text-xs text-emerald-700">Valor devido aos clientes.</p></article>
+            <article className="rounded-2xl border border-blue-100 bg-blue-50 p-4"><div className="flex items-center justify-between text-blue-700"><span className="text-xs font-black uppercase">Clientes com saldo</span><BadgeDollarSign className="h-5 w-5" /></div><strong className="mt-3 block text-2xl font-black text-blue-800">{customers.filter((item) => Number(item.balance) > 0).length}</strong><p className="mt-1 text-xs text-blue-700">Créditos disponíveis para uso futuro.</p></article>
+            <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="flex items-center justify-between text-slate-600"><span className="text-xs font-black uppercase">Atenção</span><Filter className="h-5 w-5" /></div><p className="mt-3 text-sm font-semibold text-slate-700">Crédito não representa entrada de dinheiro no caixa.</p></article>
+          </div>
           <p className="rounded-xl border p-3">
             Saldo de créditos devido aos clientes:{" "}
             <b>
@@ -174,14 +224,7 @@ export default function CustomerCreditsPanel({
           {loading ? (
             <p>Carregando...</p>
           ) : (
-            customers
-              .filter(
-                (item) =>
-                  (showAll || Number(item.balance) > 0) &&
-                  item.name
-                    .toLocaleLowerCase("pt-BR")
-                    .includes(query.toLocaleLowerCase("pt-BR")),
-              )
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{filteredCustomers
               .map((item) => (
                 <article
                   key={item.id}
@@ -209,17 +252,21 @@ export default function CustomerCreditsPanel({
                     </button>
                   )}
                 </article>
-              ))
+              ))}</div>
           )}
         </>
       )}
-      <h3 className="font-black">Reembolsos solicitados e confirmações</h3>
+      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-wrap gap-3"><label className="relative min-w-[220px] flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-slate-400"/><input className={`${field} pl-9`} aria-label="Buscar reembolso" placeholder="Buscar venda, cliente ou motivo" value={refundQuery} onChange={(event) => setRefundQuery(event.target.value)}/></label><select aria-label="Situação do reembolso" className="rounded-xl border bg-white px-3 py-2 text-sm dark:bg-slate-900" value={refundStatus} onChange={(event) => setRefundStatus(event.target.value as typeof refundStatus)}><option value="ALL">Todos os reembolsos</option><option value="PENDING">Pendentes</option><option value="SETTLED">Liquidados</option></select></div>
+      </section>
+      <div className="flex items-center justify-between"><div><h3 className="font-black text-slate-900 dark:text-white">Reembolsos solicitados e confirmações</h3><p className="mt-1 text-xs text-slate-500">{filteredRefunds.length} registro(s) encontrado(s)</p></div><History className="h-5 w-5 text-[var(--primary-color)]"/></div>
       <p className="text-sm text-slate-500">
         Confirme somente após a devolução efetiva em dinheiro, Pix ou cartão. É
         possível liquidar parte do valor ou conceder crédito a cliente
         identificado.
       </p>
-      {refunds.map((refund) => (
+      <div className="grid gap-4 xl:grid-cols-2">
+      {filteredRefunds.map((refund) => (
         <article
           key={refund.id}
           className="space-y-2 rounded-2xl border bg-white p-4 dark:bg-slate-900"
@@ -255,7 +302,8 @@ export default function CustomerCreditsPanel({
           )}
         </article>
       ))}
-      {!loading && !refunds.length && (
+      </div>
+      {!loading && !filteredRefunds.length && (
         <p className="text-sm text-slate-500">Nenhum reembolso solicitado.</p>
       )}
       {selected && (

@@ -374,6 +374,9 @@ export default function ConfiguracoesPage() {
   const [passwordSettings, setPasswordSettings] = useState<PasswordSettings>(defaultPasswordSettings);
   const [validationErrors, setValidationErrors] = useState<SettingsValidationErrors>({});
   const [successMessage, setSuccessMessage] = useState("");
+  const [settingsConnectionError, setSettingsConnectionError] = useState("");
+  const [companySettingsError, setCompanySettingsError] = useState("");
+  const [isRetryingSettings, setIsRetryingSettings] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [logoUploadError, setLogoUploadError] = useState("");
   const [documentLookupError, setDocumentLookupError] = useState("");
@@ -522,6 +525,7 @@ export default function ConfiguracoesPage() {
     async (currentCompanyId: string) => {
       try {
         const settings = await getAppSettings(currentCompanyId);
+        setSettingsConnectionError("");
         setCachedAppSettings(settings);
 
         const nextUserSettings = {
@@ -566,8 +570,13 @@ export default function ConfiguracoesPage() {
         setPrintTemplates(nextPrintTemplates);
         setInitialPrintTemplates(nextPrintTemplates);
         setIntegrationSettings(nextIntegrations);
-      } catch {
+      } catch (error) {
         console.warn("Settings API unavailable. Local cached settings loaded.");
+        setSettingsConnectionError(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível conectar à API. As configurações exibidas são locais e ainda não podem ser salvas.",
+        );
         loadSettingsFromLocalStorage();
       }
     },
@@ -581,6 +590,23 @@ export default function ConfiguracoesPage() {
     }
     loadSettings(companyId);
   }, [companyId, loadSettings, loadSettingsFromLocalStorage]);
+
+  const handleRetrySettingsConnection = useCallback(async () => {
+    if (!companyId) return;
+    setIsRetryingSettings(true);
+    try {
+      await getAppSettings(companyId);
+      setSettingsConnectionError("");
+    } catch (error) {
+      setSettingsConnectionError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível conectar à API. Tente novamente em alguns instantes.",
+      );
+    } finally {
+      setIsRetryingSettings(false);
+    }
+  }, [companyId]);
 
   const loadCompanyUsers = useCallback(async () => {
     if (!canManageCompanyUsers) {
@@ -705,18 +731,17 @@ export default function ConfiguracoesPage() {
   async function handleSaveCompanySettings() {
     setIsSavingCompanySettings(true);
     setSuccessMessage("");
+    setCompanySettingsError("");
     try {
       await saveAppSettings({
         companyId: companyId || "",
-        userSettings: { ...userSettings, email: lockedUserEmail },
         companySettings,
-        printTemplates,
-        themeSettings,
       });
       setInitialCompanySettings(companySettings);
+      setSettingsConnectionError("");
       setIsSaveSuccessModalOpen(true);
     } catch (error) {
-      setSuccessMessage(
+      setCompanySettingsError(
         error instanceof Error
           ? error.message
           : "Erro ao salvar cadastro da empresa.",
@@ -1153,6 +1178,24 @@ export default function ConfiguracoesPage() {
             />
 
             <section className="min-w-0 flex-1 p-4 sm:p-5 lg:p-8">
+              {settingsConnectionError && (
+                <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800 sm:flex-row sm:items-center sm:justify-between">
+                  <span>{settingsConnectionError}</span>
+                  <button
+                    type="button"
+                    onClick={() => void handleRetrySettingsConnection()}
+                    disabled={isRetryingSettings}
+                    className="shrink-0 rounded-xl border border-amber-300 bg-white px-3 py-2 text-xs font-black text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isRetryingSettings ? "Reconectando..." : "Tentar novamente"}
+                  </button>
+                </div>
+              )}
+              {companySettingsError && (
+                <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                  {companySettingsError}
+                </div>
+              )}
               {successMessage && (
                 <div className="mb-5 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
                   {successMessage}

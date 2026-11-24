@@ -4,8 +4,8 @@ import Link from "next/link";
 import { CONFECTIONS_HOME, isBusinessRouteAllowed } from "@/services/business-navigation";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { AlertTriangle, Bell, ChartNoAxesCombined, Clock3, Command, ContactRound, Loader2, Maximize2, Package, RotateCcw, Search, ShoppingCart, Star, Store, Truck, Users, X } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { AlertTriangle, Bell, Boxes, ChartNoAxesCombined, ChevronDown, Clock3, Command, ContactRound, Loader2, Maximize2, Package, RotateCcw, Search, ShoppingCart, Star, Store, Truck, Users, Wrench, X } from "lucide-react";
 import AuthGuard from "@/components/auth/auth-guard";
 import { useAuth } from "@/context/AuthContext";
 import { changePasswordRequest } from "@/services/auth";
@@ -458,6 +458,7 @@ function CommercialAccessBlockedPanel({
 export default function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, logout } = useAuth();
   const companyId = user?.companyId;
   const [settingsCompanyId, setSettingsCompanyId] = useState<string | null>(null);
@@ -502,6 +503,17 @@ export default function AppShell({ children }: AppShellProps) {
   const [quickSearchQuery, setQuickSearchQuery] = useState("");
   const [favoriteHrefs, setFavoriteHrefs] = useState<string[]>([]);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
+  const [isStockMenuExpanded, setIsStockMenuExpanded] = useState(false);
+  const [isSalesMenuExpanded, setIsSalesMenuExpanded] = useState(false);
+
+  useEffect(() => {
+    if (pathname === "/estoque") {
+      setIsStockMenuExpanded(true);
+    }
+    if (pathname === "/vendas") {
+      setIsSalesMenuExpanded(true);
+    }
+  }, [pathname]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -558,8 +570,8 @@ export default function AppShell({ children }: AppShellProps) {
       if (!settingsReady) return [];
       const confectioneryOnly = companySettings.ramoAtividade === "CONFECCOES";
       const allowedMenuItems = internalToolRoutes.filter((item) =>
-        (!confectioneryOnly || [CONFECTIONS_HOME, "/vendas"].includes(item.href)) &&
-        (confectioneryOnly || ![CONFECTIONS_HOME, "/vendas"].includes(item.href)) &&
+        (!confectioneryOnly || [CONFECTIONS_HOME, "/vendas", "/estoque"].includes(item.href)) &&
+        (confectioneryOnly || ![CONFECTIONS_HOME, "/vendas", "/estoque"].includes(item.href)) &&
         canAccessTool(user?.role, user?.permissions, toolKeyByHref[item.href]),
       );
 
@@ -1351,7 +1363,120 @@ export default function AppShell({ children }: AppShellProps) {
                   </div>
                   {sectionItems.map((item) => {
                     const isActive = isActiveRoute(item.href);
+                    const isSalesReportRoute = item.href === "/vendas" && pathname === "/vendas" && searchParams.get("view") === "RELATORIOS";
                     const isFav = favoriteHrefs.includes(item.href);
+
+                    if (item.href === "/estoque" && companySettings.ramoAtividade === "CONFECCOES") {
+                      const activeStockView = searchParams.get("view");
+                      return (
+                        <div key={item.href} className="space-y-1">
+                          <div className="relative group/navitem">
+                            <details
+                            className="group/stock"
+                            open={isStockMenuExpanded}
+                            onToggle={(event) => setIsStockMenuExpanded(event.currentTarget.open)}
+                          >
+                            <summary
+                              title={!isSidebarOpen ? item.label : undefined}
+                              className={`group flex cursor-pointer list-none items-center overflow-hidden rounded-2xl px-3 py-2.5 text-sm font-bold transition-colors duration-200 ${
+                                isActive
+                                  ? "bg-orange-500 text-white shadow-md shadow-orange-100"
+                                  : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                              }`}
+                            >
+                              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors duration-200 ${isActive ? "bg-white/20" : "bg-slate-100 group-hover:bg-orange-100"}`}>
+                                <Boxes className="h-4 w-4" />
+                              </span>
+                              <span className={`ml-3 flex-1 whitespace-nowrap transition-all duration-300 ease-in-out ${isSidebarOpen ? "max-w-48 translate-x-0 opacity-100" : "max-w-0 -translate-x-2 overflow-hidden opacity-0"}`}>
+                                {item.label}
+                              </span>
+                              {isSidebarOpen && <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open/stock:rotate-180" />}
+                            </summary>
+                            {isSidebarOpen && (
+                              <div className="ml-4 mt-1 space-y-1 border-l border-slate-200 pl-3">
+                                <Link href="/estoque?view=COMPRAS" onClick={handleCloseMobileSidebar} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${activeStockView === "COMPRAS" ? "bg-orange-50 text-orange-600" : "text-slate-500 hover:bg-orange-50 hover:text-orange-600"}`}><Package className="h-3.5 w-3.5" />Compras</Link>
+                                <Link href="/estoque?view=AJUSTE" onClick={handleCloseMobileSidebar} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${activeStockView === "AJUSTE" ? "bg-orange-50 text-orange-600" : "text-slate-500 hover:bg-orange-50 hover:text-orange-600"}`}><Wrench className="h-3.5 w-3.5" />Ajuste de Estoque</Link>
+                              </div>
+                            )}
+                            </details>
+                          </div>
+                          <div className="relative group/navitem">
+                            <Link
+                              href="/vendas?view=RELATORIOS"
+                              data-menu-item="/vendas?view=RELATORIOS"
+                              prefetch={menuLinkPrefetch}
+                              title={!isSidebarOpen ? "Relatórios" : undefined}
+                              onClick={handleCloseMobileSidebar}
+                              className={`group flex items-center overflow-hidden rounded-2xl px-3 py-2.5 text-sm font-bold transition-colors duration-200 ${
+                                pathname === "/vendas" && searchParams.get("view") === "RELATORIOS"
+                                  ? "bg-orange-500 text-white shadow-md shadow-orange-100"
+                                  : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                              }`}
+                            >
+                              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors duration-200 ${pathname === "/vendas" && searchParams.get("view") === "RELATORIOS" ? "bg-white/20" : "bg-slate-100 group-hover:bg-orange-100"}`}>
+                                <ChartNoAxesCombined className="h-4 w-4" />
+                              </span>
+                              <span className={`ml-3 flex-1 whitespace-nowrap transition-all duration-300 ease-in-out ${isSidebarOpen ? "max-w-48 translate-x-0 opacity-100" : "max-w-0 -translate-x-2 overflow-hidden opacity-0"}`}>
+                                Relatórios
+                              </span>
+                            </Link>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    if (item.href === "/vendas" && companySettings.ramoAtividade === "CONFECCOES") {
+                      return (
+                        <div key={item.href} className="relative group/navitem">
+                          <details
+                            className="group/sales"
+                            open={isSalesMenuExpanded}
+                            onToggle={(event) => setIsSalesMenuExpanded(event.currentTarget.open)}
+                          >
+                            <summary
+                              title={!isSidebarOpen ? item.label : undefined}
+                              className={`group flex cursor-pointer list-none items-center overflow-hidden rounded-2xl px-3 py-2.5 text-sm font-bold transition-colors duration-200 ${
+                                isActive && !isSalesReportRoute
+                                  ? "bg-orange-500 text-white shadow-md shadow-orange-100"
+                                  : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                              }`}
+                            >
+                              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-colors duration-200 ${isActive && !isSalesReportRoute ? "bg-white/20" : "bg-slate-100 group-hover:bg-orange-100"}`}>
+                                {item.icon}
+                              </span>
+                              <span className={`ml-3 flex-1 whitespace-nowrap transition-all duration-300 ease-in-out ${isSidebarOpen ? "max-w-48 translate-x-0 opacity-100" : "max-w-0 -translate-x-2 overflow-hidden opacity-0"}`}>
+                                {item.label}
+                              </span>
+                              {isSidebarOpen && <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open/sales:rotate-180" />}
+                            </summary>
+                            {isSidebarOpen && (
+                              <div className="ml-4 mt-1 space-y-1 border-l border-slate-200 pl-3">
+                                <Link href="/vendas?view=POS" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-slate-600 hover:bg-orange-50 hover:text-orange-600"><ShoppingCart className="h-4 w-4"/>Nova venda</Link>
+                                <details className="group/sales-abrir"><summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-slate-600 hover:bg-orange-50 hover:text-orange-600"><Clock3 className="h-4 w-4"/>Abrir</summary><div className="ml-4 mt-1 space-y-1 border-l border-slate-200 pl-3"><Link href="/vendas?view=ABRIR&tipo=ORCAMENTO" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600">Orçamentos</Link><Link href="/vendas?view=ABRIR&tipo=CONDICIONAL" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600">Condicionais</Link><Link href="/vendas?view=ABRIR&tipo=PEDIDO" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600">Pedidos</Link><Link href="/vendas?view=ABRIR&tipo=ATIVAS" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600">Em andamento</Link><Link href="/vendas?view=ABRIR&tipo=GRAVADAS" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600">Vendas gravadas</Link></div></details>
+                                <details className="group/sales-cadastros">
+                                  <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-slate-600 hover:bg-orange-50 hover:text-orange-600"><ContactRound className="h-4 w-4"/>Cadastros</summary>
+                                  <div className="ml-4 mt-1 space-y-1 border-l border-slate-200 pl-3">
+                                    <Link href="/vendas?view=CLIENTES" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><Users className="h-3.5 w-3.5"/>Clientes</Link>
+                                    <Link href="/vendas?view=PRODUTOS" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><Package className="h-3.5 w-3.5"/>Produtos</Link>
+                                    <Link href="/vendas?view=VENDEDORES" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><ContactRound className="h-3.5 w-3.5"/>Vendedores</Link>
+                                    <Link href="/vendas?view=FORNECEDORES" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><Truck className="h-3.5 w-3.5"/>Fornecedores</Link>
+                                  </div>
+                                </details>
+                                <details className="group/sales-caixa">
+                                  <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-slate-600 hover:bg-orange-50 hover:text-orange-600"><Store className="h-4 w-4"/>Caixa</summary>
+                                  <div className="ml-4 mt-1 space-y-1 border-l border-slate-200 pl-3">
+                                    <Link href="/vendas?view=CAIXA" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><Store className="h-3.5 w-3.5"/>Operação de caixa</Link>
+                                    <Link href="/vendas?view=CREDITOS" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><Users className="h-3.5 w-3.5"/>Créditos de Clientes</Link>
+                                    <Link href="/vendas?view=ESTORNOS" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><RotateCcw className="h-3.5 w-3.5"/>Estornos</Link>
+                                    <Link href="/vendas?view=POS&acao=TROCA" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><ShoppingCart className="h-3.5 w-3.5"/>Troca / devolução</Link>
+                                  </div>
+                                </details>
+                              </div>
+                            )}
+                          </details>
+                        </div>
+                      );
+                    }
 
                     return (
                       <div key={item.href} className="relative group/navitem">
@@ -1410,32 +1535,6 @@ export default function AppShell({ children }: AppShellProps) {
                             </button>
                           )}
                         </Link>
-                        {item.href === "/vendas" && companySettings.ramoAtividade === "CONFECCOES" && isSidebarOpen && (
-                          <div className="ml-4 mt-1 space-y-1 border-l border-slate-200 pl-3">
-                            <Link href="/vendas?view=POS" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-slate-600 hover:bg-orange-50 hover:text-orange-600"><ShoppingCart className="h-4 w-4"/>Nova venda</Link>
-                            <details className="group/sales-abrir"><summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-slate-600 hover:bg-orange-50 hover:text-orange-600"><Clock3 className="h-4 w-4"/>Abrir</summary><div className="ml-4 mt-1 space-y-1 border-l border-slate-200 pl-3"><Link href="/vendas?view=ABRIR&tipo=ORCAMENTO" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600">Orçamentos</Link><Link href="/vendas?view=ABRIR&tipo=CONDICIONAL" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600">Condicionais</Link><Link href="/vendas?view=ABRIR&tipo=ATIVAS" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600">Em andamento</Link><Link href="/vendas?view=ABRIR&tipo=GRAVADAS" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600">Vendas gravadas</Link></div></details>
-                            <details className="group/sales-cadastros">
-                              <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-slate-600 hover:bg-orange-50 hover:text-orange-600"><ContactRound className="h-4 w-4"/>Cadastros</summary>
-                              <div className="ml-4 mt-1 space-y-1 border-l border-slate-200 pl-3">
-                                <Link href="/vendas?view=CLIENTES" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><Users className="h-3.5 w-3.5"/>Clientes</Link>
-                                <Link href="/vendas?view=PRODUTOS" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><Package className="h-3.5 w-3.5"/>Produtos</Link>
-                                <Link href="/vendas?view=VENDEDORES" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><ContactRound className="h-3.5 w-3.5"/>Vendedores</Link>
-                                <Link href="/vendas?view=FORNECEDORES" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><Truck className="h-3.5 w-3.5"/>Fornecedores</Link>
-                              </div>
-                            </details>
-                            <details className="group/sales-caixa">
-                              <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-slate-600 hover:bg-orange-50 hover:text-orange-600"><Store className="h-4 w-4"/>Caixa</summary>
-                              <div className="ml-4 mt-1 space-y-1 border-l border-slate-200 pl-3">
-                                <Link href="/vendas?view=CAIXA" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><Store className="h-3.5 w-3.5"/>Operação de caixa</Link>
-                                <Link href="/vendas?view=CREDITOS" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><Users className="h-3.5 w-3.5"/>Créditos de Clientes</Link>
-
-                                <Link href="/vendas?view=ESTORNOS" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><RotateCcw className="h-3.5 w-3.5"/>Estornos</Link>
-                                <Link href="/vendas?view=POS&tipo=TROCA" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-orange-50 hover:text-orange-600"><ShoppingCart className="h-3.5 w-3.5"/>Troca de venda</Link>
-                              </div>
-                            </details>
-                            <Link href="/vendas?view=RELATORIOS" onClick={handleCloseMobileSidebar} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-slate-600 hover:bg-orange-50 hover:text-orange-600"><ChartNoAxesCombined className="h-4 w-4"/>Relatórios</Link>
-                          </div>
-                        )}
                       </div>
                     );
                   })}

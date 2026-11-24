@@ -16,7 +16,6 @@ import {
   Max,
   MaxLength,
   Min,
-  MinLength,
   ValidateNested,
 } from 'class-validator';
 
@@ -59,17 +58,19 @@ export class ItemDevolvidoDto {
 
 export class CardPaymentDto {
   @IsIn(['CARTAO_CREDITO', 'CARTAO_DEBITO']) method!: string;
-  @IsUUID() administratorId!: string;
-  @IsString() @MinLength(1) @MaxLength(40) brand!: string;
+  @IsOptional() @IsUUID() administratorId?: string;
+  @IsOptional() @IsString() @MaxLength(40) brand?: string;
   @IsOptional() @Matches(/^\d{4}$/) lastFour?: string;
   @IsOptional() @IsString() @MaxLength(120) holderName?: string;
-  @IsString() @MinLength(1) @MaxLength(80) nsu!: string;
+  @IsOptional() @IsString() @MaxLength(80) nsu?: string;
   @IsOptional() @IsString() @MaxLength(80) authorizationCode?: string;
   @IsInt() @Min(1) @Max(60) installments!: number;
   @IsNumber({ maxDecimalPlaces: 2 }) @Min(0.01) amount!: number;
 }
 
 export class CriarVendaDto {
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) expiresAt?: string;
+  @IsOptional() @Matches(/^[A-Z0-9]{6,32}$/) voucherCode?: string;
   @IsOptional()
   @IsString()
   @Matches(/^\d{1,12}(\.\d{1,2})?$/)

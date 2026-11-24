@@ -35,6 +35,9 @@ contrx-backend/.local-postgres/
 /PROJETO_EXPORTADO.md
 /tmp/pdfs/
 
+# scripts operacionais pontuais, mantidos somente na maquina local
+/scripts/excluir-empresa-kit-net-do-jura.sql
+
 # local dev logs
 /.next-dev*.log
 /.backend-*.log

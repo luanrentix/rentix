@@ -4,6 +4,7 @@ import SalesPageHeader from "./sales-page-header";
 import ProductPhoto from "./product-photo";
 import ToggleSwitch from "@/components/ui/toggle-switch";
 import ProductPriceHistory from "./product-price-history";
+import ProductHistory from "./product-history";
 import PriceCompositionModal from "./price-composition-modal";
 import { useAuth } from "@/context/AuthContext";
 import { getCompanyStorageKey } from "@/services/company-storage";
@@ -75,7 +76,8 @@ type ProductTab =
   | "VARIACOES"
   | "COMISSAO"
   | "FORNECEDOR"
-  | "ANEXOS";
+  | "ANEXOS"
+  | "HISTORICO";
 type ClassificationKind = "CATEGORY" | "BRAND" | "UNIT";
 type ProductStatusFilter = "TODOS" | "ATIVOS" | "INATIVOS";
 type ProductSearchField = "ALL" | "NAME" | "CODE" | "BARCODE" | "REFERENCE";
@@ -96,6 +98,7 @@ const tabs: { id: ProductTab; label: string; icon: typeof Package }[] = [
   { id: "COMISSAO", label: "Comissão", icon: Tags },
   { id: "FORNECEDOR", label: "Fornecedores", icon: Truck },
   { id: "ANEXOS", label: "Fotos / Anexos", icon: ImagePlus },
+  { id: "HISTORICO", label: "Histórico", icon: FileText },
 ];
 const field =
   "w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100 uppercase outline-none transition placeholder:text-slate-400 focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-bg-light)]";
@@ -1727,6 +1730,7 @@ export default function SalesProductsPanel({
                   </section>
                 </div>
               )}
+              {tab === "HISTORICO" && <ProductHistory productId={editingId} />}
               {tab === "PRECOS" && (
                 <div className="space-y-4">
                   {priceCompositionNotice && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">{priceCompositionNotice}</p>}

@@ -56,7 +56,7 @@ describe('Filtros das listas de vendas', () => {
         '2026-11-11',
         'CONCLUIDA',
       );
-      const query = findMany.mock.calls[0][0];
+      const query = findMany.mock.calls[findMany.mock.calls.length - 1][0];
       expect(query.where.companyId).toBe('empresa-a');
       expect(query.where.number).toEqual({ lt: 200 });
       expect(query.where.AND[0]).toEqual({ status: 'CONCLUIDA' });

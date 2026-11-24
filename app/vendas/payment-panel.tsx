@@ -44,6 +44,7 @@ export default function PaymentPanel(props: {
   cardPayments: import("@/services/sales-cards").SalesCardPayment[];
   method: SalePaymentMethod;
   onMethod: (value: SalePaymentMethod) => void;
+  onOpenMixedPayment: () => void;
   parts: SalePaymentParts;
   onParts: (value: SalePaymentParts) => void;
   total: number;
@@ -118,7 +119,11 @@ export default function PaymentPanel(props: {
                   (key === "CREDIARIO" && !creditAllowed) ||
                   (key === "SALDO_CLIENTE" && !storeCreditAllowed)
                 }
-                onClick={() => props.onMethod(key as SalePaymentMethod)}
+                onClick={() =>
+                  key === "MISTO"
+                    ? props.onOpenMixedPayment()
+                    : props.onMethod(key as SalePaymentMethod)
+                }
                 className={`flex min-h-9 items-center gap-2 rounded-lg border px-2 py-2 text-left text-[11px] font-bold disabled:cursor-not-allowed disabled:opacity-40 ${method === key ? "border-[var(--primary-color)] bg-[var(--primary-bg-light)] text-[var(--primary-color)] ring-1 ring-[var(--primary-color)]" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200"}`}
                 title={
                   key === "CREDIARIO" && !creditAllowed

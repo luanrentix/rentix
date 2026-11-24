@@ -58,9 +58,18 @@ export async function reportSystemErrorLog(
 ): Promise<boolean> {
   try {
     const payload = {
-      ...dto,
       level: dto.level || 'ERROR',
+      companyId: dto.companyId,
+      message: dto.message,
+      stack: dto.stackTrace,
+      route: dto.endpoint || dto.module,
+      method: dto.httpMethod,
+      requestPayload:
+        dto.requestPayload && typeof dto.requestPayload === 'object'
+          ? JSON.stringify(dto.requestPayload).slice(0, 4000)
+          : dto.requestPayload,
       userAgent: dto.userAgent || (typeof window !== 'undefined' ? navigator.userAgent : undefined),
+      ipAddress: dto.ipAddress,
     };
 
     await apiFetch('/admin/errors', {

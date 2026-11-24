@@ -65,7 +65,7 @@ goto MENU
 set "HAS_CHANGES="
 for /f "delims=" %%s in ('git status --porcelain') do set "HAS_CHANGES=1"
 if not defined HAS_CHANGES goto PUSH
-node scripts\stage-release-1.0.25.cjs
+node scripts\stage-release-1.0.26.cjs
 if errorlevel 1 goto FALHA
 git --no-pager diff --cached --check
 if errorlevel 1 goto FALHA
@@ -76,7 +76,7 @@ if errorlevel 1 goto FALHA
 :PUSH
 git push origin main
 if errorlevel 1 goto FALHA
-"%GIT_BASH%" -lc "ssh -i %SSH_KEY% ubuntu@163.176.163.165 'cd /opt/contrx && git pull --ff-only origin main && docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build && docker compose -f docker-compose.prod.yml ps && curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-connrefused -I https://www.contrx.com.br && curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-connrefused -I https://api.contrx.com.br'"
+"%GIT_BASH%" -lc "ssh -i %SSH_KEY% ubuntu@163.176.163.165 'cd /opt/contrx && git pull --ff-only origin main && docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build && docker compose -f docker-compose.prod.yml ps && docker image prune -af --filter \"until=24h\" && docker builder prune -af --filter \"until=24h\" && curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-connrefused -I https://www.contrx.com.br && curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-connrefused -I https://api.contrx.com.br'"
 if errorlevel 1 goto FALHA
 echo Envio concluido. Valide login e operacoes essenciais antes de encerrar a janela de manutencao.
 pause

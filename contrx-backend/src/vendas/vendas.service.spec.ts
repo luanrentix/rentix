@@ -386,6 +386,7 @@ function fixture() {
     addition: 0,
     status: 'CONCLUIDA',
     refundConfirmed: true,
+    expiresAt: '2099-12-31',
     ...overrides,
   });
   return {
@@ -519,14 +520,13 @@ describe('Vendas: estoque, crédito e recebimentos', () => {
     ).rejects.toThrow('outros dados');
   });
 
-  it('exige metadados de cartão e rejeita dinheiro entregue insuficiente', async () => {
+  it('permite venda em cartão sem metadados e rejeita dinheiro entregue insuficiente', async () => {
     const f = fixture();
-    await expect(
-      f.service.createOrder(
-        'company',
-        f.input({ paymentMethod: 'CARTAO_DEBITO' }),
-      ),
-    ).rejects.toThrow('NSU');
+    const cardSale = await f.service.createOrder(
+      'company',
+      f.input({ paymentMethod: 'CARTAO_DEBITO' }),
+    );
+    expect(cardSale.cardPayments).toEqual([]);
     await expect(
       f.service.createOrder(
         'company',

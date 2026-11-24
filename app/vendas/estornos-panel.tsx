@@ -9,7 +9,7 @@ const types: Record<string, string> = { VENDA: "Venda", CONDICIONAL: "Condiciona
 const money = (value: string | number) => Number(value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const field = "w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2.5 text-sm text-slate-800 outline-none focus:border-[var(--primary-color)] focus:ring-2 focus:ring-[var(--primary-bg-light)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
 
-export default function SalesReversalsPanel({ orders, onCompleted }: { orders: SalesOrder[]; onCompleted: (message: string) => Promise<void> }) {
+export default function SalesReversalsPanel({ orders, onCompleted: onCompletedCallback }: { orders: SalesOrder[]; onCompleted: (message: string, refundOrderId?: string) => Promise<void> }) {
   const [type, setType] = useState("");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<SalesOrder | null>(null);
@@ -20,6 +20,9 @@ export default function SalesReversalsPanel({ orders, onCompleted }: { orders: S
   const [documents, setDocuments] = useState(orders);
   const [loading, setLoading] = useState(false);
   const [more, setMore] = useState(false);
+  const refundOrderIdAfterReversal = useRef<string | undefined>(undefined);
+  const onCompleted = (message: string) =>
+    onCompletedCallback(message, refundOrderIdAfterReversal.current);
   useEffect(() => { let active = true; const timer = setTimeout(() => { setLoading(true); getSalesOrdersPage({ search: query, filter: type || 'ESTORNAVEIS' }).then((rows) => { if (active) { setDocuments(rows); setMore(rows.length === 100); } }).catch((cause: Error) => { if (active) setError(cause.message); }).finally(() => { if (active) setLoading(false); }); }, 250); return () => { active = false; clearTimeout(timer); }; }, [query, type]);
   async function loadMore() { if (loading || !documents.length) return; setLoading(true); try { const rows = await getSalesOrdersPage({ search: query, filter: type || 'ESTORNAVEIS', before: documents[documents.length - 1].number }); setDocuments((current) => [...current, ...rows]); setMore(rows.length === 100); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Falha ao consultar documentos.'); } finally { setLoading(false); } }
   const available = documents.filter((order) => !["ESTORNADA", "CANCELADA"].includes(order.status));
@@ -32,8 +35,13 @@ export default function SalesReversalsPanel({ orders, onCompleted }: { orders: S
     submitting.current = true;
     setBusy(true); setError("");
     try {
-      if (selected.status === "EM_ANDAMENTO") await cancelSalesOrder(selected.id, reason.trim());
+      const commercialDocument = ["CONDICIONAL", "ORCAMENTO", "PEDIDO"].includes(selected.saleType);
+      if (selected.status === "EM_ANDAMENTO" && !commercialDocument) await cancelSalesOrder(selected.id, reason.trim());
       else await reverseSalesOrder(selected.id, reason.trim());
+      refundOrderIdAfterReversal.current =
+        selected.status !== "EM_ANDAMENTO" && selected.paymentMethod === "DINHEIRO"
+          ? selected.id
+          : undefined;
       await onCompleted(`${types[selected.saleType] || "Movimentação"} #${selected.number} ${selected.status === "EM_ANDAMENTO" ? "cancelada" : "estornada"} com sucesso.`);
       setDocuments((current) => current.filter((order) => order.id !== selected.id));
       setSelected(null); setReason("");

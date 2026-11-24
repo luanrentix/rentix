@@ -316,6 +316,7 @@ model SalesOrder {
   total             Decimal   @map("total") @db.Decimal(10, 2)
   paymentMethod     String    @map("forma_pagamento")
   paymentDetails    Json?     @map("detalhes_pagamento")
+  voucherCode       String?   @map("codigo_vale")
   status            String    @default("CONCLUIDA") @map("status")
   stockApplied      Boolean   @default(false) @map("estoque_aplicado")
   stockReserved     Boolean   @default(false) @map("estoque_reservado")
@@ -331,6 +332,7 @@ model SalesOrder {
   returnAdjustments Json?     @map("ajustes_devolucao")
   installments      Int       @default(1) @map("parcelas")
   completedAt       DateTime? @map("concluido_em")
+  expiresAt         DateTime? @map("expira_em")
   notes             String?   @map("observacoes")
   createdAt         DateTime  @default(now()) @map("criado_em")
 
@@ -465,6 +467,8 @@ model SalesCustomerCredit {
   companyId  String        @map("empresa_id")
   customerId String        @map("cliente_id")
   orderId    String        @map("venda_id")
+  voucherCode String?      @map("codigo_vale")
+  anonymous  Boolean       @default(false) @map("anonimo")
   amount     Decimal       @map("valor") @db.Decimal(10, 2)
   reason     String        @map("motivo")
   reversedAt DateTime?     @map("estornado_em")
@@ -472,6 +476,8 @@ model SalesCustomerCredit {
   customer   SalesCustomer @relation(fields: [customerId], references: [id])
 
   @@index([companyId, customerId, reversedAt])
+  @@unique([companyId, voucherCode])
+  @@index([companyId, voucherCode, reversedAt])
   @@index([orderId])
   @@map("vendas_creditos_clientes")
 }

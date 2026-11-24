@@ -16,6 +16,19 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "1.0.26",
+    date: "24 de Novembro de 2026",
+    title: "Vales de crédito, auditoria de produtos e otimização VPS",
+    subtitle: "Vales ao portador, histórico de alterações de produtos, expiração de orçamentos e limpeza contínua.",
+    highlights: [
+      { category: "novo", title: "Vales de crédito e pagamento misto", description: "Suporte a vales de troca anônimos com código único e pagamento flexível com múltiplos meios e cartões." },
+      { category: "novo", title: "Auditoria e histórico de produtos", description: "Rastreamento detalhado de alterações cadastrais, movimentações de estoque e reajustes de preço com identificação do operador." },
+      { category: "melhoria", title: "Controle e expiração de orçamentos", description: "Definição de validade obrigatória para orçamentos e cancelamento automático de propostas vencidas." },
+      { category: "melhoria", title: "Navegação rápida de estoque e vendas", description: "Submenus retráteis e organizados no menu lateral corporativo para itens de estoque e operações comerciais." },
+      { category: "seguranca", title: "Limpeza de disco VPS e blindagem de dados", description: "Rotina automática de expurgo de imagens Docker órfãs na Oracle VPS e proteção estrita de contas ativas." },
+    ],
+  },
+  {
     version: "1.0.25",
     date: "19 de Novembro de 2026",
     title: "Cadastro de clientes e segurança no varejo",

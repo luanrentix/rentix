@@ -1288,3 +1288,11 @@ body.dark .person-name-btn:hover,
 
 
 
+/* A busca do ajuste de estoque usa a lupa acionável à direita. */
+div:has(> input[placeholder="Busque por código, descrição ou GTIN"]) > svg.pointer-events-none {
+  display: none;
+}
+
+div:has(> input[placeholder="Busque por código, descrição ou GTIN"]) > input {
+  padding-left: 0.75rem;
+}
